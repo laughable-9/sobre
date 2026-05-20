@@ -54,6 +54,16 @@ impl Fixture {
     fn mint(&self, to: &Address, amount: i128) {
         token::StellarAssetClient::new(&self.env, &self.payment_token).mint(to, &amount);
     }
+
+    /// Initialized + alice minted 1000 tokens + 100 deposited (envelopes at
+    /// [50, 30, 20]). Starting state for any spend/withdraw test.
+    #[allow(dead_code)]
+    fn funded() -> Self {
+        let f = Self::new();
+        f.mint(&f.admin, 1000 * STROOPS_PER_TOKEN);
+        f.client().deposit(&f.admin, &(100 * STROOPS_PER_TOKEN));
+        f
+    }
 }
 
 #[test]
@@ -118,8 +128,6 @@ fn set_envelopes_rejects_bad_sum() {
     let f = Fixture::new();
     f.client().set_envelopes(&vec![&f.env, 50u32, 30u32, 30u32]);
 }
-
-// ─── Phase 3: deposit ─────────────────────────────────────────────────────
 
 #[test]
 fn deposit_splits_per_percents() {
