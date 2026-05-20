@@ -1,6 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractimpl, contracttype, panic_with_error, vec, Address, Env, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
+    vec, Address, Env, Vec,
 };
 
 const ENVELOPE_COUNT: u32 = 3;
@@ -39,6 +40,20 @@ pub struct WalletState {
     pub balances: Vec<i128>,
 }
 
+/// Emitted by `deposit`. Topic list: ("Deposit", from). Data map:
+/// {amount, groceries, tuition, savings}. The frontend filters on the
+/// "Deposit" topic to drive the live transaction feed.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct Deposit {
+    #[topic]
+    pub from: Address,
+    pub amount: i128,
+    pub groceries: i128,
+    pub tuition: i128,
+    pub savings: i128,
+}
+
 /// Explicit discriminants pin the wire format. Frontends match on these
 /// numeric codes — do not renumber or reorder.
 #[contracterror]
@@ -50,6 +65,7 @@ pub enum Error {
     InvalidPercents = 3,
     DuplicateMember = 4,
     MemberLimitReached = 5,
+    InvalidAmount = 6,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -121,6 +137,58 @@ impl SobreContract {
         require_admin_auth(&env);
         validate_percents(&env, &percents);
         env.storage().instance().set(&DataKey::Percents, &percents);
+    }
+
+    /// Splits the inflow across envelopes by the stored percentages. The
+    /// last envelope absorbs any rounding remainder so `sum(balances) ==
+    /// amount`. Emits a `Deposit` event the dashboard filters on for the
+    /// live transaction feed.
+    pub fn deposit(env: Env, from: Address, amount: i128) {
+        from.require_auth();
+
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+
+        let inst = env.storage().instance();
+        let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+        let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
+        let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+
+        // Auth from from.require_auth() above is reused for this nested
+        // transfer — no second Freighter popup for the user.
+        token::Client::new(&env, &payment_token).transfer(
+            &from,
+            &env.current_contract_address(),
+            &amount,
+        );
+
+        // Integer division floors each split; savings absorbs the remainder
+        // so the deposit is conserved (no dust loss).
+        let total = PERCENT_TOTAL as i128;
+        let split = |pct: u32| amount * (pct as i128) / total;
+        let groceries = split(percents.get(0).unwrap());
+        let tuition = split(percents.get(1).unwrap());
+        let savings = amount - groceries - tuition;
+
+        inst.set(
+            &DataKey::Balances,
+            &vec![
+                &env,
+                balances.get(0).unwrap() + groceries,
+                balances.get(1).unwrap() + tuition,
+                balances.get(2).unwrap() + savings,
+            ],
+        );
+
+        Deposit {
+            from,
+            amount,
+            groceries,
+            tuition,
+            savings,
+        }
+        .publish(&env);
     }
 
     /// Polled by both dashboards every 2-3s. All reads come from instance
