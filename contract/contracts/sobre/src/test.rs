@@ -1,12 +1,11 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, vec, Env};
+use soroban_sdk::{testutils::Address as _, token, vec, Env};
 
-/// All Phase 2 tests start from "initialized wallet with admin + default
-/// 50/30/20 split." Re-creating the client is cheap — it just wraps the
-/// stored `contract_id` — so each test calls `f.client()` per invocation
-/// rather than holding a client field (which would force a self-referential
-/// struct and lifetime headaches).
+/// All tests start from "initialized wallet with admin + default 50/30/20
+/// split + a real SEP-41 payment token alice can mint and deposit." The
+/// token is a real Stellar Asset Contract registered in the test env so
+/// `deposit()` can exercise the live SEP-41 sub-call path.
 struct Fixture {
     env: Env,
     contract_id: Address,
@@ -18,9 +17,15 @@ impl Fixture {
     fn new() -> Self {
         let env = Env::default();
         env.mock_all_auths();
+
+        // Real Stellar Asset Contract so token::Client::transfer in deposit()
+        // actually hits a working SEP-41 token implementation.
+        let token_admin = Address::generate(&env);
+        let token_contract = env.register_stellar_asset_contract_v2(token_admin);
+        let payment_token = token_contract.address();
+
         let contract_id = env.register(SobreContract, ());
         let admin = Address::generate(&env);
-        let payment_token = Address::generate(&env);
         let client = SobreContractClient::new(&env, &contract_id);
         client.init(&admin, &payment_token, &vec![&env, 50u32, 30u32, 20u32]);
         Self {
@@ -33,6 +38,15 @@ impl Fixture {
 
     fn client(&self) -> SobreContractClient<'_> {
         SobreContractClient::new(&self.env, &self.contract_id)
+    }
+
+    fn token(&self) -> token::Client<'_> {
+        token::Client::new(&self.env, &self.payment_token)
+    }
+
+    /// Mint tokens into an account for tests that need deposit-able balance.
+    fn mint(&self, to: &Address, amount: i128) {
+        token::StellarAssetClient::new(&self.env, &self.payment_token).mint(to, &amount);
     }
 }
 
