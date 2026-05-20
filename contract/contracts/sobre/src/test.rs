@@ -1,6 +1,12 @@
 #![cfg(test)]
 use super::*;
-use soroban_sdk::{testutils::Address as _, token, vec, Env};
+use soroban_sdk::{
+    testutils::{Address as _, Events as _},
+    token, vec, Env,
+};
+
+/// SEP-41 tokens on Stellar use 7 decimals. 1 token = 10_000_000 stroops.
+const STROOPS_PER_TOKEN: i128 = 10_000_000;
 
 /// All tests start from "initialized wallet with admin + default 50/30/20
 /// split + a real SEP-41 payment token alice can mint and deposit." The
@@ -111,4 +117,77 @@ fn set_envelopes_updates_split() {
 fn set_envelopes_rejects_bad_sum() {
     let f = Fixture::new();
     f.client().set_envelopes(&vec![&f.env, 50u32, 30u32, 30u32]);
+}
+
+// ─── Phase 3: deposit ─────────────────────────────────────────────────────
+
+#[test]
+fn deposit_splits_per_percents() {
+    let f = Fixture::new();
+    f.mint(&f.admin, 1000 * STROOPS_PER_TOKEN);
+
+    f.client().deposit(&f.admin, &(100 * STROOPS_PER_TOKEN));
+
+    // env.events().all() returns events from the LAST invocation, so we
+    // assert event emission immediately after deposit, before any view call.
+    let sobre_events = f.env.events().all().filter_by_contract(&f.contract_id);
+    assert_eq!(sobre_events.events().len(), 1);
+
+    let state = f.client().get_state();
+    // 50/30/20 of 100 tokens.
+    assert_eq!(state.balances.get(0).unwrap(), 50 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(1).unwrap(), 30 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(2).unwrap(), 20 * STROOPS_PER_TOKEN);
+
+    // Token actually moved: alice's balance went down, contract's went up.
+    assert_eq!(f.token().balance(&f.admin), 900 * STROOPS_PER_TOKEN);
+    assert_eq!(f.token().balance(&f.contract_id), 100 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn deposit_accumulates_across_calls() {
+    let f = Fixture::new();
+    f.mint(&f.admin, 1000 * STROOPS_PER_TOKEN);
+
+    f.client().deposit(&f.admin, &(100 * STROOPS_PER_TOKEN));
+    f.client().deposit(&f.admin, &(100 * STROOPS_PER_TOKEN));
+
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 100 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(1).unwrap(), 60 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(2).unwrap(), 40 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn deposit_assigns_rounding_remainder_to_savings() {
+    let f = Fixture::new();
+    f.mint(&f.admin, 1_000);
+
+    // 101 stroops 50/30/20 = 50 + 30 + 21 (savings absorbs the leftover stroop).
+    f.client().deposit(&f.admin, &101);
+
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 50);
+    assert_eq!(state.balances.get(1).unwrap(), 30);
+    assert_eq!(state.balances.get(2).unwrap(), 21);
+
+    // No dust loss: sum equals deposit.
+    let sum = state.balances.get(0).unwrap()
+        + state.balances.get(1).unwrap()
+        + state.balances.get(2).unwrap();
+    assert_eq!(sum, 101);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn deposit_rejects_zero() {
+    let f = Fixture::new();
+    f.client().deposit(&f.admin, &0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn deposit_rejects_negative() {
+    let f = Fixture::new();
+    f.client().deposit(&f.admin, &-100);
 }
