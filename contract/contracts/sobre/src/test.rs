@@ -2,7 +2,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Events as _},
-    token, vec, Env,
+    token, vec, Env, String,
 };
 
 /// SEP-41 tokens on Stellar use 7 decimals. 1 token = 10_000_000 stroops.
@@ -57,7 +57,6 @@ impl Fixture {
 
     /// Initialized + alice minted 1000 tokens + 100 deposited (envelopes at
     /// [50, 30, 20]). Starting state for any spend/withdraw test.
-    #[allow(dead_code)]
     fn funded() -> Self {
         let f = Self::new();
         f.mint(&f.admin, 1000 * STROOPS_PER_TOKEN);
@@ -198,4 +197,94 @@ fn deposit_rejects_zero() {
 fn deposit_rejects_negative() {
     let f = Fixture::new();
     f.client().deposit(&f.admin, &-100);
+}
+
+// ─── Phase 4: spend ───────────────────────────────────────────────────────
+
+#[test]
+fn spend_deducts_from_envelope_and_returns_tokens() {
+    let f = Fixture::funded();
+
+    f.client().spend(
+        &f.admin,
+        &Envelope::Groceries,
+        &(10 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "Groceries at SM Manila"),
+    );
+
+    let sobre_events = f.env.events().all().filter_by_contract(&f.contract_id);
+    assert_eq!(sobre_events.events().len(), 1);
+
+    let state = f.client().get_state();
+    // Groceries dropped from 50 to 40; tuition/savings untouched.
+    assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(1).unwrap(), 30 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(2).unwrap(), 20 * STROOPS_PER_TOKEN);
+
+    // Tokens moved back to alice: started 1000, deposited 100, spent 10 → 910.
+    assert_eq!(f.token().balance(&f.admin), 910 * STROOPS_PER_TOKEN);
+    assert_eq!(f.token().balance(&f.contract_id), 90 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #7)")]
+fn spend_rejects_non_member() {
+    let f = Fixture::funded();
+    let stranger = Address::generate(&f.env);
+
+    f.client().spend(
+        &stranger,
+        &Envelope::Groceries,
+        &(10 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "outsider"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn spend_rejects_insufficient_balance() {
+    let f = Fixture::funded();
+
+    // Groceries holds 50 tokens, ask for 60.
+    f.client().spend(
+        &f.admin,
+        &Envelope::Groceries,
+        &(60 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "too much"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn spend_rejects_zero() {
+    let f = Fixture::funded();
+    f.client().spend(
+        &f.admin,
+        &Envelope::Groceries,
+        &0,
+        &String::from_str(&f.env, ""),
+    );
+}
+
+#[test]
+fn spend_works_across_envelopes_independently() {
+    let f = Fixture::funded();
+
+    f.client().spend(
+        &f.admin,
+        &Envelope::Tuition,
+        &(5 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "school fee"),
+    );
+    f.client().spend(
+        &f.admin,
+        &Envelope::Savings,
+        &(2 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "savings draw"),
+    );
+
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 50 * STROOPS_PER_TOKEN); // groceries untouched
+    assert_eq!(state.balances.get(1).unwrap(), 25 * STROOPS_PER_TOKEN); // tuition 30 - 5
+    assert_eq!(state.balances.get(2).unwrap(), 18 * STROOPS_PER_TOKEN); // savings 20 - 2
 }
