@@ -50,7 +50,7 @@ One transaction, one signature, one atomic state change visible to everyone in t
 | Phase 1: contract skeleton (`init`, `get_state`) | ✅ on testnet |
 | Phase 2: admin mutators (`add_member`, `set_envelopes`) | ✅ on testnet |
 | Phase 3: `deposit` with atomic envelope split and event emission | ✅ on testnet |
-| Phase 4: `spend` + structured tx-feed events | not started |
+| Phase 4: `spend` with member-gating, balance check, and Spend event | ✅ on testnet |
 | Phase 5: Next.js dashboard with Freighter wallet integration | not started |
 | Mainnet deployment | not started |
 
@@ -58,12 +58,12 @@ One transaction, one signature, one atomic state change visible to everyone in t
 
 | | |
 |---|---|
-| Contract ID | `CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV` |
+| Contract ID | `CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR` |
 | Network | Test SDF Network ; September 2015 (testnet) |
-| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV) |
+| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR) |
 | Payment token | XLM native (Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`) |
-| Exports | `init`, `add_member`, `set_envelopes`, `deposit`, `get_state` |
-| Wasm size | 9,240 bytes |
+| Exports | `init`, `add_member`, `set_envelopes`, `deposit`, `spend`, `get_state` |
+| Wasm size | 11,358 bytes |
 
 You can interact with the deployed contract directly via the Stellar CLI:
 
@@ -77,9 +77,18 @@ stellar contract invoke \
 # Deposit 10 XLM (the hero feature). Splits per the configured percentages
 # and emits a Deposit event the dashboard listens to.
 stellar contract invoke \
-  --id CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV \
+  --id CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR \
   --network testnet --source YOUR_IDENTITY \
   -- deposit --from YOUR_IDENTITY --amount 100000000
+
+# Spend 2 XLM from the Groceries envelope (must be a wallet member).
+# Emits a Spend event with topics (Spend, caller, envelope) for the
+# dashboard's transaction feed.
+stellar contract invoke \
+  --id CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR \
+  --network testnet --source YOUR_IDENTITY \
+  -- spend --caller YOUR_IDENTITY --envelope Groceries \
+     --amount 20000000 --memo '"groceries at SM"'
 ```
 
 ## Architecture
