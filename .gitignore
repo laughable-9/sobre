@@ -36,3 +36,10 @@ pnpm-debug.log*
 
 # --- Misc editor swap files ---
 *.swp
+
+# --- Claude Code personal settings (shared settings.json is fine to commit) ---
+.claude/settings.local.json
+
+# --- Claude Code project notes (kept local, not pushed to public repo) ---
+CLAUDE.md
+notes/
