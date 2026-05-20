@@ -1,0 +1,38 @@
+# --- Rust / Soroban ---
+target/
+**/target/
+.soroban/
+.stellar/
+
+# --- Node / Next.js (for upcoming web/) ---
+node_modules/
+.next/
+out/
+dist/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# --- Env files (never commit secrets) ---
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# --- OS / WSL / IDE noise ---
+.DS_Store
+Thumbs.db
+*:Zone.Identifier
+.vscode/
+.idea/
+
+# --- Logs ---
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# --- Misc editor swap files ---
+*.swp
