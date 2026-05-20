@@ -49,7 +49,7 @@ One transaction, one signature, one atomic state change visible to everyone in t
 |---|---|
 | Phase 1: contract skeleton (`init`, `get_state`) | ✅ on testnet |
 | Phase 2: admin mutators (`add_member`, `set_envelopes`) | ✅ on testnet |
-| Phase 3: `deposit` with atomic envelope split and event emission | in progress |
+| Phase 3: `deposit` with atomic envelope split and event emission | ✅ on testnet |
 | Phase 4: `spend` + structured tx-feed events | not started |
 | Phase 5: Next.js dashboard with Freighter wallet integration | not started |
 | Mainnet deployment | not started |
@@ -58,21 +58,28 @@ One transaction, one signature, one atomic state change visible to everyone in t
 
 | | |
 |---|---|
-| Contract ID | `CB4NAT3FUUJAHPLT6K26WADQXYY5PXXKSYXGFHIBTPAEFAB7NVW6F4QI` |
+| Contract ID | `CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV` |
 | Network | Test SDF Network ; September 2015 (testnet) |
-| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CB4NAT3FUUJAHPLT6K26WADQXYY5PXXKSYXGFHIBTPAEFAB7NVW6F4QI) |
+| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV) |
 | Payment token | XLM native (Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`) |
-| Exports | `init`, `add_member`, `set_envelopes`, `get_state` |
-| Wasm size | 4,730 bytes |
+| Exports | `init`, `add_member`, `set_envelopes`, `deposit`, `get_state` |
+| Wasm size | 9,240 bytes |
 
 You can interact with the deployed contract directly via the Stellar CLI:
 
 ```bash
 # Read full wallet state (admin, members, percents, balances)
 stellar contract invoke \
-  --id CB4NAT3FUUJAHPLT6K26WADQXYY5PXXKSYXGFHIBTPAEFAB7NVW6F4QI \
+  --id CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV \
   --network testnet --source YOUR_IDENTITY \
   -- get_state
+
+# Deposit 10 XLM (the hero feature). Splits per the configured percentages
+# and emits a Deposit event the dashboard listens to.
+stellar contract invoke \
+  --id CCIEFZGJAPN7WI43PHAKBYMUTVKUNUBQ3K5OFG5OFVSLD3EB227CYKSV \
+  --network testnet --source YOUR_IDENTITY \
+  -- deposit --from YOUR_IDENTITY --amount 100000000
 ```
 
 ## Architecture
