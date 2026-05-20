@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
-    vec, Address, Env, Vec,
+    vec, Address, Env, String, Vec,
 };
 
 const ENVELOPE_COUNT: u32 = 3;
@@ -10,12 +10,26 @@ const MAX_MEMBERS: u32 = 2;
 
 // ─── Domain types ─────────────────────────────────────────────────────────
 
+/// Variant order is wire contract: the `balances` Vec<i128> and the `percents`
+/// Vec<u32> are indexed [Groceries, Tuition, Savings]. Reordering or inserting
+/// would silently break every dashboard reading deployed contracts.
 #[contracttype]
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum Envelope {
     Groceries,
     Tuition,
     Savings,
+}
+
+impl Envelope {
+    /// The wire-order index used everywhere balances/percents are accessed.
+    fn index(self) -> u32 {
+        match self {
+            Envelope::Groceries => 0,
+            Envelope::Tuition => 1,
+            Envelope::Savings => 2,
+        }
+    }
 }
 
 #[contracttype]
@@ -54,6 +68,20 @@ pub struct Deposit {
     pub savings: i128,
 }
 
+/// Emitted by `spend`. Topic list: ("Spend", caller, envelope). Data map:
+/// {amount, memo}. Both caller and envelope are topics so the dashboard can
+/// filter the live feed by member or by envelope via RPC's getEvents.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct Spend {
+    #[topic]
+    pub caller: Address,
+    #[topic]
+    pub envelope: Envelope,
+    pub amount: i128,
+    pub memo: String,
+}
+
 /// Explicit discriminants pin the wire format. Frontends match on these
 /// numeric codes — do not renumber or reorder.
 #[contracterror]
@@ -66,6 +94,8 @@ pub enum Error {
     DuplicateMember = 4,
     MemberLimitReached = 5,
     InvalidAmount = 6,
+    NotAMember = 7,
+    InsufficientBalance = 8,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -89,6 +119,16 @@ fn require_admin_auth(env: &Env) {
         .get(&DataKey::Admin)
         .unwrap_or_else(|| panic_with_error!(env, Error::NotInitialized));
     admin.require_auth();
+}
+
+/// Panics `NotAMember` if `addr` isn't in the wallet's member list. The
+/// admin is included as the first member at init, so any participant (admin
+/// or family member) passes this check.
+fn require_member(env: &Env, addr: &Address) {
+    let members: Vec<Address> = env.storage().instance().get(&DataKey::Members).unwrap();
+    if !members.contains(addr) {
+        panic_with_error!(env, Error::NotAMember);
+    }
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────
@@ -187,6 +227,45 @@ impl SobreContract {
             groceries,
             tuition,
             savings,
+        }
+        .publish(&env);
+    }
+
+    /// Members-only. Deducts `amount` from `envelope`'s balance and transfers
+    /// the tokens out to `caller`. Emits a `Spend` event with the memo so the
+    /// dashboard can render a tx-feed row ("X spent Y from Z — memo").
+    pub fn spend(env: Env, caller: Address, envelope: Envelope, amount: i128, memo: String) {
+        caller.require_auth();
+
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        require_member(&env, &caller);
+
+        let inst = env.storage().instance();
+        let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+
+        let index = envelope.index();
+        let current = balances.get(index).unwrap();
+        if current < amount {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+
+        token::Client::new(&env, &payment_token).transfer(
+            &env.current_contract_address(),
+            &caller,
+            &amount,
+        );
+
+        balances.set(index, current - amount);
+        inst.set(&DataKey::Balances, &balances);
+
+        Spend {
+            caller,
+            envelope,
+            amount,
+            memo,
         }
         .publish(&env);
     }
