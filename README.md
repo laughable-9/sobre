@@ -106,9 +106,13 @@ To deploy your own copy of the contracts, see the commands at the bottom of this
 
 ## 👨‍💻 Team
 
+**Team Legends** — UP Baguio 🦅
+
 | Name | Role | GitHub |
 |---|---|---|
-| Kyle Clarence | Lead developer (contract + frontend) | [@laughable-9](https://github.com/laughable-9) |
+| Clarence Kyle Pagunsan | Lead developer (contract + frontend) | [@laughable-9](https://github.com/laughable-9) |
+| Elfritz Angelo Peralta | Contributor | _tbd_ |
+| Lance Gabriel Sacdalan | Contributor | _tbd_ |
 
 ## 📜 License
 
