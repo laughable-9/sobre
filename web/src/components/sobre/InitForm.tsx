@@ -8,6 +8,7 @@ import {
   DEFAULT_ENVELOPE_NAMES,
   EnvelopeNamesEditor,
   isValidEnvelopeNames,
+  lockSavings,
   type EnvelopeNames,
 } from "@/components/sobre/EnvelopeNamesEditor";
 import {
@@ -49,7 +50,9 @@ export function InitForm({
     e.preventDefault();
     if (!valid) return;
     try {
-      const trimmed = envelopeNames.map((n) => n.trim()) as EnvelopeNames;
+      const trimmed = lockSavings(
+        envelopeNames.map((n) => n.trim()) as EnvelopeNames,
+      );
       const newContractId = await createSobre({
         walletName: walletName.trim(),
         adminName,

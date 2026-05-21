@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   EnvelopeNamesEditor,
   isValidEnvelopeNames,
+  lockSavings,
   namesEqual,
   toEnvelopeNames,
   type EnvelopeNames,
@@ -59,11 +60,11 @@ export function EnvelopeNamesForm({
   if (!userAddress) return null;
   if (!isAdmin) return <ReadOnly names={toEnvelopeNames(current)} />;
 
-  const trimmed: EnvelopeNames = [
+  const trimmed: EnvelopeNames = lockSavings([
     names[0].trim(),
     names[1].trim(),
     names[2].trim(),
-  ];
+  ]);
   const valid = isValidEnvelopeNames(names);
   const dirty = !namesEqual(trimmed, toEnvelopeNames(current));
 
