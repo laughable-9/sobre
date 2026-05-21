@@ -38,6 +38,9 @@ import {
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, rememberJoinedSobre } from "@/lib/joinedSobres";
 
+type Tab = "envelopes" | "settings";
+const SETTINGS_HASH = "#settings";
+
 interface RouteParams {
   contractId: string;
 }
@@ -70,15 +73,11 @@ function Dashboard({ contractId }: { contractId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const joinParam = searchParams.get("join");
-  const expiresParam = searchParams.get("expires");
-  const inviteExpiresAt = expiresParam ? Number(expiresParam) : null;
-  // No expiry param → treat as expired so legacy / hand-edited links can't
-  // sneak past. Past expiry → also expired. Only a future-dated, numeric
-  // expires=… is considered live.
+  // Missing, non-numeric, or past-dated expiry is treated as expired so old
+  // links and hand-edited URLs can't bypass the 30-min window.
+  const inviteExpiresAt = Number(searchParams.get("expires"));
   const inviteExpired =
-    !inviteExpiresAt ||
-    !Number.isFinite(inviteExpiresAt) ||
-    inviteExpiresAt * 1000 < Date.now();
+    !Number.isFinite(inviteExpiresAt) || inviteExpiresAt * 1000 < Date.now();
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -96,10 +95,10 @@ function Dashboard({ contractId }: { contractId: string }) {
   // localStorage joined-Sobre entry so "My Sobres" stops listing it.
   useEffect(() => {
     if (!state || !address) return;
-    if (searchParams.get("join") === contractId) return;
+    if (joinParam === contractId) return;
     if (isMember) return;
     forgetJoinedSobre(address, contractId);
-  }, [state, address, isMember, contractId, searchParams]);
+  }, [state, address, isMember, contractId, joinParam]);
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
@@ -108,24 +107,25 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
   const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
-  const [tab, setTab] = useState<"envelopes" | "settings">("envelopes");
+  const [tab, setTab] = useState<Tab>("envelopes");
   // Hash-sync the tab so refresh + back-button keep the user where they were.
-  // Read once on mount and on subsequent hash changes; write when tab changes.
   useEffect(() => {
-    const fromHash = () =>
-      window.location.hash === "#settings" ? "settings" : "envelopes";
+    const fromHash = (): Tab =>
+      window.location.hash === SETTINGS_HASH ? "settings" : "envelopes";
     setTab(fromHash());
     const handler = () => setTab(fromHash());
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
-  const switchTab = (next: "envelopes" | "settings") => {
+  const switchTab = (next: Tab) => {
     if (next === tab) return;
     setTab(next);
     history.replaceState(
       null,
       "",
-      next === "settings" ? "#settings" : window.location.pathname + window.location.search,
+      next === "settings"
+        ? SETTINGS_HASH
+        : window.location.pathname + window.location.search,
     );
   };
   const [celebration, setCelebration] = useState<

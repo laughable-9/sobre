@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Info, Lock } from "lucide-react";
 
+import { SAVINGS_NAME } from "@/components/sobre/EnvelopeNamesEditor";
 import { useSetPolicy } from "@/hooks/useSetPolicy";
 import type { SpendPolicy } from "@/hooks/useWalletState";
 import {
@@ -15,10 +16,9 @@ import {
 
 type Unit = "PHP" | "XLM";
 
-/** Savings is permanently admin-protected (it's the long-horizon envelope
- *  with the APY label). The UI shows it locked-on and the contract receives
- *  it in protected_envelopes regardless of what the admin toggles. */
-const ALWAYS_PROTECTED: readonly EnvelopeName[] = ["Savings"];
+/** Savings is permanently admin-protected — its APY-bearing balance always
+ *  needs admin approval to spend. */
+const ALWAYS_PROTECTED: readonly EnvelopeName[] = [SAVINGS_NAME];
 
 function formatLimitLabel(stroops: bigint | null, unit: Unit): string {
   if (stroops === null) return "no limit";
@@ -154,9 +154,7 @@ export function PolicySettingsForm({
     setProtectedSet(next);
   };
 
-  // Effective protected set always includes Savings, and when require_all_sigs
-  // is on every envelope is effectively protected. The contract receives this
-  // expanded set so server state matches what the UI displays.
+  // Contract receives the expanded set so server state matches the UI.
   const effectiveProtected = requireAllSigs
     ? new Set<EnvelopeName>(ENVELOPE_LABELS)
     : new Set<EnvelopeName>([...protectedSet, ...ALWAYS_PROTECTED]);

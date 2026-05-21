@@ -138,6 +138,12 @@ export function percentsScVal(
   return xdr.ScVal.scvVec(percents.map((p) => xdr.ScVal.scvU32(p)));
 }
 
+/** Encode a `Vec<String>` — used for envelope_names in create_sobre +
+ *  set_envelope_names. Soroban contract-side String maps to scvString. */
+export function stringVecScVal(strings: readonly string[]): xdr.ScVal {
+  return xdr.ScVal.scvVec(strings.map((s) => xdr.ScVal.scvString(s)));
+}
+
 /**
  * Encode a SpendPolicy struct as an ScVal map. Field order matters — Soroban
  * sorts struct map entries alphabetically by key:

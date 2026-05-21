@@ -1,9 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { xdr } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { invokeWrite, stringVecScVal } from "@/lib/contract";
 
 export interface UseSetEnvelopeNamesResult {
   setEnvelopeNames: (names: [string, string, string]) => Promise<string>;
@@ -25,13 +24,10 @@ export function useSetEnvelopeNames(
       setPending(true);
       setError(null);
       try {
-        const args = [
-          xdr.ScVal.scvVec(names.map((n) => xdr.ScVal.scvString(n))),
-        ];
         const { hash } = await invokeWrite(
           contractId,
           "set_envelope_names",
-          args,
+          [stringVecScVal(names)],
           adminAddress,
         );
         return hash;

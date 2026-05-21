@@ -60,17 +60,20 @@ export function EnvelopeNamesForm({
   if (!userAddress) return null;
   if (!isAdmin) return <ReadOnly names={toEnvelopeNames(current)} />;
 
-  const trimmed: EnvelopeNames = lockSavings([
-    names[0].trim(),
-    names[1].trim(),
-    names[2].trim(),
-  ]);
   const valid = isValidEnvelopeNames(names);
-  const dirty = !namesEqual(trimmed, toEnvelopeNames(current));
+  const dirty = !namesEqual(
+    [names[0].trim(), names[1].trim(), names[2].trim()],
+    toEnvelopeNames(current),
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !dirty) return;
+    const trimmed = lockSavings([
+      names[0].trim(),
+      names[1].trim(),
+      names[2].trim(),
+    ]);
     try {
       await setEnvelopeNames(trimmed);
       onSuccess();
