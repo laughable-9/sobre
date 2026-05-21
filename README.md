@@ -97,15 +97,17 @@ The web app talks to the live testnet factory by default, so once `npm run dev` 
 
 | | |
 |---|---|
-| **SobreFactory** | `CDDGY2WGKGTEV7477Y4N4PQF66LMST4LC3V5PONVPRUQOZBOFYL5UEEH` |
-| **SobreContract wasm hash** | `1bb448b9824e4b4ca035b2f3877d168458080a9f10bb232f00f5f90a0de47133` |
+| **SobreFactory** | `CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X` |
+| **SobreContract wasm hash** | `7e10bb8904ff29d51ee40a60fca74758bd444825fb427086a83bd281b5a453ec` |
 | **Payment token** | XLM native Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | **Network passphrase** | `Test SDF Network ; September 2015` |
-| **Factory explorer** | [stellar.expert/explorer/testnet/contract/CDDGY2WGKGTEV7477Y4N4PQF66LMST4LC3V5PONVPRUQOZBOFYL5UEEH](https://stellar.expert/explorer/testnet/contract/CDDGY2WGKGTEV7477Y4N4PQF66LMST4LC3V5PONVPRUQOZBOFYL5UEEH) |
+| **Factory explorer** | [stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X](https://stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X) |
 
-**SobreContract exports:** `init`, `join_wallet`, `remove_member`, `set_wallet_name`, `close_wallet`, `set_envelopes`, `set_envelope_names`, `set_policy`, `deposit`, `spend`, `approve_request`, `deny_request`, `get_state`. Wasm size 26,571 bytes.
+**SobreContract exports:** `init`, `join_wallet`, `remove_member`, `set_wallet_name`, `close_wallet`, `upgrade`, `set_envelopes`, `set_envelope_names`, `set_policy`, `deposit`, `spend`, `approve_request`, `deny_request`, `get_state`. Wasm size 27,639 bytes.
 
-**SobreFactory exports:** `init`, `create_sobre`, `sobres_of_admin`. Wasm size 4,294 bytes.
+**SobreFactory exports:** `init`, `set_sobre_wasm`, `current_sobre_wasm`, `create_sobre`, `sobres_of_admin`. Wasm size 5,559 bytes.
+
+**Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code. See [the upgrade rationale in the README appendix](#appendix-deploying-your-own-factory) for the industry pattern this implements.
 
 📸 Screenshot, Stellar Expert (Testnet)
 ![Testnet Screenshot](./screenshots/testnet.png)

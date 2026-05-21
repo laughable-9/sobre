@@ -9,7 +9,7 @@
  * only the entry point for opening new ones + listing the user's wallets.
  */
 export const FACTORY_CONTRACT_ID =
-  "CDDGY2WGKGTEV7477Y4N4PQF66LMST4LC3V5PONVPRUQOZBOFYL5UEEH";
+  "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
  *  Deterministic per network. On testnet it's always this address. */
