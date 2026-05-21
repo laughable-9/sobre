@@ -5,6 +5,7 @@ import { Check, Hourglass, X } from "lucide-react";
 import { useApproveRequest } from "@/hooks/useApproveRequest";
 import { useDenyRequest } from "@/hooks/useDenyRequest";
 import type { PendingRequest } from "@/hooks/useWalletState";
+import { displayEnvelopeName } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 export function PendingRequestsPanel({
@@ -12,12 +13,14 @@ export function PendingRequestsPanel({
   contractId,
   isAdmin,
   pending,
+  envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
   contractId: string;
   isAdmin: boolean;
   pending: PendingRequest[];
+  envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const {
@@ -97,7 +100,7 @@ export function PendingRequestsPanel({
                 <span style={{ color: "var(--text-1)" }}>
                   {shortenAddress(req.caller)} wants{" "}
                   <b className="tabular">{formatPhpLocale(req.amount)}</b>{" "}
-                  from <b>{req.envelope}</b>
+                  from <b>{displayEnvelopeName(req.envelope, envelopeNames)}</b>
                 </span>
               </div>
               {req.memo ? (

@@ -14,6 +14,7 @@ import {
   ENVELOPE_LABELS,
   PHP_PER_XLM,
   STROOPS_PER_XLM,
+  displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
@@ -49,6 +50,7 @@ export function SpendModal({
   }) => void;
 }) {
   const idx = ENVELOPE_LABELS.indexOf(envelope);
+  const displayName = displayEnvelopeName(envelope, state.envelope_names);
   const balanceStroops = state.balances[idx] ?? 0n;
   const balanceXlm = Number(balanceStroops) / STROOPS_PER_XLM;
   const balancePhp = balanceXlm * PHP_PER_XLM;
@@ -111,7 +113,7 @@ export function SpendModal({
           >
             {ICONS[envelope]}
           </div>
-          <h2 style={{ margin: 0 }}>Spend from {envelope}</h2>
+          <h2 style={{ margin: 0 }}>Spend from {displayName}</h2>
         </div>
         <p className="sub">
           Available:{" "}
@@ -133,7 +135,7 @@ export function SpendModal({
               {requireAllSigs
                 ? "All non-admin spends need admin approval right now."
                 : envProtected
-                  ? `${envelope} is admin-protected.`
+                  ? `${displayName} is admin-protected.`
                   : "This amount is over the daily limit."}{" "}
               Admin reviews the request before the funds move.
             </div>

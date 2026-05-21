@@ -8,10 +8,17 @@ import {
   ENVELOPE_LABELS,
   PHP_PER_XLM,
   STROOPS_PER_XLM,
+  displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 
-function PolicyReadOnly({ current }: { current: SpendPolicy }) {
+function PolicyReadOnly({
+  current,
+  envelopeNames,
+}: {
+  current: SpendPolicy;
+  envelopeNames: string[];
+}) {
   const dailyLabel =
     current.daily_limit === null
       ? "no limit"
@@ -19,7 +26,9 @@ function PolicyReadOnly({ current }: { current: SpendPolicy }) {
   const protectedLabel =
     current.protected_envelopes.length === 0
       ? "none"
-      : current.protected_envelopes.join(", ");
+      : current.protected_envelopes
+          .map((e) => displayEnvelopeName(e, envelopeNames))
+          .join(", ");
   return (
     <div className="text-sm space-y-1.5">
       <Row label="Admin approval for every spend" value={current.require_all_sigs ? "Yes" : "No"} />
@@ -48,12 +57,14 @@ export function PolicySettingsForm({
   contractId,
   isAdmin,
   current,
+  envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
   contractId: string;
   isAdmin: boolean;
   current: SpendPolicy;
+  envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const [requireAllSigs, setRequireAllSigs] = useState(
@@ -93,7 +104,8 @@ export function PolicySettingsForm({
   }, [policySig]);
 
   if (!userAddress) return null;
-  if (!isAdmin) return <PolicyReadOnly current={current} />;
+  if (!isAdmin)
+    return <PolicyReadOnly current={current} envelopeNames={envelopeNames} />;
 
   const toggle = (e: EnvelopeName) => {
     if (requireAllSigs) return;
@@ -208,7 +220,7 @@ export function PolicySettingsForm({
               disabled={pending || requireAllSigs}
               className="w-4 h-4 accent-[var(--sobre-primary)]"
             />
-            <span>{envelope}</span>
+            <span>{displayEnvelopeName(envelope, envelopeNames)}</span>
           </label>
         ))}
       </fieldset>

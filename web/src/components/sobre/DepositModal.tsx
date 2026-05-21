@@ -8,6 +8,7 @@ import {
   ENVELOPE_LABELS,
   PHP_PER_XLM,
   STROOPS_PER_XLM,
+  displayEnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
 
@@ -138,13 +139,14 @@ export function DepositModal({
             {ENVELOPE_LABELS.map((env, i) => {
               const portion = (xlm * state.percents[i]) / 100;
               const portionPhp = portion * PHP_PER_XLM;
+              const label = displayEnvelopeName(env, state.envelope_names);
               return (
                 <div
                   key={env}
                   className="flex justify-between items-center py-1.5 text-[14px]"
                 >
                   <span style={{ color: "var(--text-1)" }}>
-                    {env}{" "}
+                    {label}{" "}
                     <span style={{ color: "var(--text-3)" }}>
                       · {state.percents[i]}%
                     </span>

@@ -5,6 +5,7 @@ import { ArrowDownToLine, ShoppingBag, Hourglass, CheckCheck, X as XIcon } from 
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
+import { displayEnvelopeName } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
@@ -35,6 +36,7 @@ interface ActivityFeedProps {
   newestTxHash: string | null;
   /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
   members: Member[];
+  envelopeNames: string[];
 }
 
 export function ActivityFeed({
@@ -43,6 +45,7 @@ export function ActivityFeed({
   error,
   newestTxHash,
   members,
+  envelopeNames,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -105,6 +108,7 @@ export function ActivityFeed({
                 ev={ev}
                 isNew={ev.txHash === newestTxHash}
                 labelFor={labelFor}
+                envelopeNames={envelopeNames}
               />
             ))}
           </div>
@@ -118,10 +122,12 @@ function ActivityRow({
   ev,
   isNew,
   labelFor,
+  envelopeNames,
 }: {
   ev: FeedEvent;
   isNew: boolean;
   labelFor: (addr: string) => string;
+  envelopeNames: string[];
 }) {
   const time = fmtTime(ev.ledgerClosedAt);
   const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
@@ -176,7 +182,7 @@ function ActivityRow({
             <div className="who">
               {labelFor(ev.caller)} spent{" "}
               <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
-              from {ev.envelope}
+              from {displayEnvelopeName(ev.envelope, envelopeNames)}
             </div>
             {ev.memo ? <div className="where">&quot;{ev.memo}&quot;</div> : null}
             <div className="meta">{time} · view tx ↗</div>
@@ -194,7 +200,7 @@ function ActivityRow({
             <div className="who">
               {labelFor(ev.caller)} requested{" "}
               <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
-              from {ev.envelope}
+              from {displayEnvelopeName(ev.envelope, envelopeNames)}
             </div>
             {ev.memo ? <div className="where">&quot;{ev.memo}&quot;</div> : null}
             <div className="meta">

@@ -14,6 +14,7 @@ import {
   ENVELOPE_LABELS,
   PHP_PER_XLM,
   STROOPS_PER_XLM,
+  displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
@@ -34,6 +35,7 @@ export function EnvelopeCard({
   approvalRequired,
   events,
   members,
+  envelopeNames,
 }: {
   index: number;
   balanceStroops: bigint;
@@ -46,16 +48,18 @@ export function EnvelopeCard({
   events: FeedEvent[];
   /** Used to render the actor's name on the last-activity blurb. */
   members: Member[];
+  envelopeNames: string[];
 }) {
-  const name = ENVELOPE_LABELS[index];
+  const slot = ENVELOPE_LABELS[index];
+  const name = displayEnvelopeName(slot, envelopeNames);
   const xlm = Number(balanceStroops) / STROOPS_PER_XLM;
   const php = xlm * PHP_PER_XLM;
-  const isSavings = name === "Savings";
+  const isSavings = slot === "Savings";
   const isEmpty = balanceStroops === 0n;
 
   const { spentThisMonthStroops, lastActivity } = useEnvelopeStats(
     events,
-    name,
+    slot,
     members,
   );
 
@@ -71,7 +75,7 @@ export function EnvelopeCard({
         .join(" ")}
     >
       <div className="row1">
-        <div className="ic">{ICON_BY_NAME[name]}</div>
+        <div className="ic">{ICON_BY_NAME[slot]}</div>
         <h3>{name}</h3>
         <div className="meta-right">
           {approvalRequired ? (

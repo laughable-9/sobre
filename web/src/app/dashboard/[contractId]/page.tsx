@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ChevronLeft } from "lucide-react";
 
+import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
@@ -29,6 +30,7 @@ import {
   ENVELOPE_LABELS,
   PHP_PER_XLM,
   STROOPS_PER_XLM,
+  displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
@@ -159,13 +161,16 @@ function Dashboard({ contractId }: { contractId: string }) {
     setSpendOpen(null);
     const php = (Number(info.amount) / STROOPS_PER_XLM) * PHP_PER_XLM;
     const fmtPhp = `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    const envLabel = state
+      ? displayEnvelopeName(info.envelope, state.envelope_names)
+      : info.envelope;
     if (info.willGoPending) {
       flash(
-        `Withdrawal request for ${fmtPhp} from ${info.envelope} sent for approval`,
+        `Withdrawal request for ${fmtPhp} from ${envLabel} sent for approval`,
         "warn",
       );
     } else {
-      flash(`Spent ${fmtPhp} from ${info.envelope}`, "ok");
+      flash(`Spent ${fmtPhp} from ${envLabel}`, "ok");
     }
     refreshAll();
   };
@@ -402,6 +407,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 approvalRequired={approvalRequired}
                 events={txFeed.events}
                 members={state.members}
+                envelopeNames={state.envelope_names}
               />
             );
           })}
@@ -413,6 +419,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           error={txFeed.error}
           newestTxHash={newestTxHash}
           members={state.members}
+          envelopeNames={state.envelope_names}
         />
       </div>
 
@@ -442,7 +449,19 @@ function Dashboard({ contractId }: { contractId: string }) {
               contractId={contractId}
               isAdmin={isAdmin}
               pending={state.pending}
+              envelopeNames={state.envelope_names}
               onSuccess={refreshAll}
+            />
+          </div>
+
+          <div className="sobre-admin-section sobre-card-flat">
+            <h3>Envelope names</h3>
+            <EnvelopeNamesForm
+              userAddress={address}
+              contractId={contractId}
+              isAdmin={isAdmin}
+              current={state.envelope_names}
+              onSuccess={refresh}
             />
           </div>
 
@@ -453,6 +472,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               contractId={contractId}
               isAdmin={isAdmin}
               current={state.percents}
+              envelopeNames={state.envelope_names}
               onSuccess={refresh}
             />
           </div>
@@ -464,6 +484,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               contractId={contractId}
               isAdmin={isAdmin}
               current={state.policy}
+              envelopeNames={state.envelope_names}
               onSuccess={refresh}
             />
           </div>
