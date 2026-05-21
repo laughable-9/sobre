@@ -4,6 +4,11 @@ import { useState } from "react";
 
 import { useCreateSobre } from "@/hooks/useCreateSobre";
 import { SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
+import {
+  SplitEditor,
+  isValidSplit,
+  type Split,
+} from "@/components/sobre/SplitEditor";
 import { getProfile } from "@/lib/profile";
 
 export function InitForm({
@@ -22,9 +27,11 @@ export function InitForm({
   const adminEmoji = profile?.emoji ?? SOBRE_EMOJIS[0];
 
   const [walletName, setWalletName] = useState("");
+  const [split, setSplit] = useState<Split>([50, 30, 20]);
   const { createSobre, pending, error } = useCreateSobre(userAddress);
 
-  const valid = walletName.trim().length > 0 && adminName.length > 0;
+  const valid =
+    walletName.trim().length > 0 && adminName.length > 0 && isValidSplit(split);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -34,6 +41,7 @@ export function InitForm({
         walletName: walletName.trim(),
         adminName,
         adminEmoji,
+        percents: split,
       });
       onSuccess(newContractId);
     } catch {
@@ -100,6 +108,17 @@ export function InitForm({
         />
       </div>
 
+      <div className="sobre-input-group">
+        <label>Envelope split</label>
+        <p
+          className="text-[12px] -mt-1 mb-3"
+          style={{ color: "var(--text-3)" }}
+        >
+          How each deposit gets distributed. You can change this later.
+        </p>
+        <SplitEditor value={split} onChange={setSplit} disabled={pending} />
+      </div>
+
       {error ? (
         <p
           className="text-xs break-all"
@@ -120,7 +139,9 @@ export function InitForm({
           cursor: !valid || pending ? "not-allowed" : "pointer",
         }}
       >
-        {pending ? "Opening your Sobre…" : "Open this Sobre (50 / 30 / 20)"}
+        {pending
+          ? "Opening your Sobre…"
+          : `Open this Sobre (${split[0]} / ${split[1]} / ${split[2]})`}
       </button>
     </form>
   );
