@@ -132,23 +132,33 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-              "function_name": "spend",
+              "function_name": "set_policy",
               "args": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                },
-                {
-                  "vec": [
+                  "map": [
                     {
-                      "symbol": "Tuition"
+                      "key": {
+                        "symbol": "daily_limit"
+                      },
+                      "val": "void"
+                    },
+                    {
+                      "key": {
+                        "symbol": "protected_envelopes"
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
+                    {
+                      "key": {
+                        "symbol": "require_all_sigs"
+                      },
+                      "val": {
+                        "bool": true
+                      }
                     }
                   ]
-                },
-                {
-                  "i128": "50000000"
-                },
-                {
-                  "string": "school fee"
                 }
               ]
             }
@@ -177,10 +187,10 @@
                   ]
                 },
                 {
-                  "i128": "20000000"
+                  "i128": "40000000"
                 },
                 {
-                  "string": "savings draw"
+                  "string": "discretionary"
                 }
               ]
             }
@@ -189,6 +199,28 @@
         }
       ]
     ],
+    [],
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "function_name": "deny_request",
+              "args": [
+                {
+                  "u64": "1"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
     []
   ],
   "ledger": {
@@ -269,36 +301,6 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "DailySpent"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
-                  },
-                  {
-                    "u64": "0"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "70000000"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 4095
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -307,6 +309,18 @@
                     "wasm": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
                   },
                   "storage": [
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "ActiveRequestIds"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "vec": []
+                      }
+                    },
                     {
                       "key": {
                         "vec": [
@@ -333,10 +347,10 @@
                             "i128": "500000000"
                           },
                           {
-                            "i128": "250000000"
+                            "i128": "300000000"
                           },
                           {
-                            "i128": "180000000"
+                            "i128": "200000000"
                           }
                         ]
                       }
@@ -355,6 +369,18 @@
                             "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "NextRequestId"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "u64": "2"
                       }
                     },
                     {
@@ -387,6 +413,41 @@
                           },
                           {
                             "u32": 20
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Policy"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "daily_limit"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "protected_envelopes"
+                            },
+                            "val": {
+                              "vec": []
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "require_all_sigs"
+                            },
+                            "val": {
+                              "bool": true
+                            }
                           }
                         ]
                       }
@@ -486,6 +547,26 @@
           "data": {
             "contract_data": {
               "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "8370022561469687789"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
               "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
               "key": {
                 "vec": [
@@ -505,7 +586,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "930000000"
+                      "i128": "1000000000"
                     }
                   },
                   {
@@ -557,7 +638,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "9070000000"
+                      "i128": "9000000000"
                     }
                   },
                   {
