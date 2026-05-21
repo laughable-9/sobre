@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { Check, Copy, Link2 } from "lucide-react";
 
+import { backdropClose } from "@/lib/ui";
+
 export function InviteModal({
   walletName,
   contractId,
@@ -34,7 +36,7 @@ export function InviteModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onClick={onClose}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         <h2>Invite a family member</h2>
         <p className="sub">

@@ -4,6 +4,7 @@ import { useState } from "react";
 
 import { EmojiPicker, SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
 import { setProfile, type UserProfile } from "@/lib/profile";
+import { backdropClose } from "@/lib/ui";
 
 export function ProfileEditModal({
   address,
@@ -30,7 +31,7 @@ export function ProfileEditModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onClick={onClose}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <form
         className="sobre-modal"
         onClick={(e) => e.stopPropagation()}

@@ -7,6 +7,7 @@ import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
+import { backdropClose } from "@/lib/ui";
 
 export function CloseWalletModal({
   adminAddress,
@@ -47,7 +48,7 @@ export function CloseWalletModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onClick={onClose}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-1.5">
           <div
@@ -65,10 +66,7 @@ export function CloseWalletModal({
           <h2 style={{ margin: 0 }}>Close wallet?</h2>
         </div>
         <p className="sub">
-          This sweeps every envelope back to your address and empties the
-          wallet. The wallet stays callable — re-depositing would re-split per
-          the percentages — but for the demo this is the &quot;close out&quot;
-          action.
+          This closes the wallet and returns every peso to you.
         </p>
 
         <div

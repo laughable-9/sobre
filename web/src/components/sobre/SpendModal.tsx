@@ -16,6 +16,7 @@ import {
   STROOPS_PER_XLM,
   type EnvelopeName,
 } from "@/lib/config";
+import { backdropClose } from "@/lib/ui";
 
 const QUICK_PHP = [50, 100, 500, 1000];
 
@@ -93,7 +94,7 @@ export function SpendModal({
   const isSavings = envelope === "Savings";
 
   return (
-    <div className="sobre-modal-bg" onClick={onClose}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center gap-3 mb-1.5">
           <div
@@ -150,7 +151,7 @@ export function SpendModal({
           >
             <AlertTriangle size={16} strokeWidth={2.2} />
             <div>
-              <b>Walang sapat na pera sa envelope.</b> Balance is ₱{" "}
+              <b>Not enough in this envelope.</b> Balance is ₱{" "}
               {balancePhp.toLocaleString("en-PH", {
                 minimumFractionDigits: 2,
               })}
@@ -246,7 +247,7 @@ export function SpendModal({
 
         <div className="sobre-input-group">
           <label htmlFor="spend-memo">
-            Para sa ano?{" "}
+            What&apos;s it for?{" "}
             <span style={{ color: "var(--text-3)", fontWeight: 400 }}>
               (optional)
             </span>
@@ -255,7 +256,7 @@ export function SpendModal({
             id="spend-memo"
             className="sobre-input"
             type="text"
-            placeholder="ulam, gasolina, tuition…"
+            placeholder="groceries, gas, tuition…"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
             disabled={pending}
