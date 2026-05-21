@@ -4,6 +4,15 @@ use soroban_sdk::{
     testutils::Address as _, token, vec, BytesN, Env, String,
 };
 
+fn default_envelope_names(env: &Env) -> Vec<String> {
+    vec![
+        env,
+        String::from_str(env, "Groceries"),
+        String::from_str(env, "Tuition"),
+        String::from_str(env, "Savings"),
+    ]
+}
+
 /// Sobre wasm baked into the test binary at compile time. The workspace
 /// build picks up the right path; ensure `cargo build --target wasm32v1-none
 /// --release -p sobre` has run at least once before running these tests.
@@ -59,6 +68,7 @@ fn create_sobre_deploys_and_inits_a_new_instance() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "Santos Family"),
         &String::from_str(&f.env, "Juan Dela Cruz"),
         &String::from_str(&f.env, "🥭"),
@@ -84,6 +94,7 @@ fn create_sobre_registers_admin_in_directory() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "First"),
         &String::from_str(&f.env, "Juan"),
         &String::from_str(&f.env, "🥭"),
@@ -92,6 +103,7 @@ fn create_sobre_registers_admin_in_directory() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 40u32, 40u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "Second"),
         &String::from_str(&f.env, "Juan"),
         &String::from_str(&f.env, "🥭"),
@@ -112,6 +124,7 @@ fn sobres_of_admin_isolates_users() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "Mine"),
         &String::from_str(&f.env, "Juan"),
         &String::from_str(&f.env, "🥭"),
@@ -120,6 +133,7 @@ fn sobres_of_admin_isolates_users() {
         &other,
         &f.payment_token,
         &vec![&f.env, 60u32, 25u32, 15u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "Theirs"),
         &String::from_str(&f.env, "Maria"),
         &String::from_str(&f.env, "🌺"),
@@ -139,6 +153,7 @@ fn each_create_returns_a_distinct_contract_address() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "A"),
         &String::from_str(&f.env, "J"),
         &String::from_str(&f.env, "🥭"),
@@ -147,6 +162,7 @@ fn each_create_returns_a_distinct_contract_address() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "B"),
         &String::from_str(&f.env, "J"),
         &String::from_str(&f.env, "🥭"),
@@ -161,6 +177,7 @@ fn create_sobres_are_functionally_independent() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 50u32, 30u32, 20u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "A"),
         &String::from_str(&f.env, "Juan"),
         &String::from_str(&f.env, "🥭"),
@@ -169,6 +186,7 @@ fn create_sobres_are_functionally_independent() {
         &f.admin,
         &f.payment_token,
         &vec![&f.env, 60u32, 25u32, 15u32],
+        &default_envelope_names(&f.env),
         &String::from_str(&f.env, "B"),
         &String::from_str(&f.env, "Juan"),
         &String::from_str(&f.env, "🥭"),

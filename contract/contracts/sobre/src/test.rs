@@ -11,6 +11,18 @@ const STROOPS_PER_TOKEN: i128 = 10_000_000;
 const WALLET_NAME: &str = "Pagunsan Family";
 const ADMIN_NAME: &str = "Kuya Jun";
 const ADMIN_EMOJI: &str = "🥭";
+const ENV_GROCERIES: &str = "Groceries";
+const ENV_TUITION: &str = "Tuition";
+const ENV_SAVINGS: &str = "Savings";
+
+fn default_envelope_names(env: &Env) -> Vec<String> {
+    vec![
+        env,
+        String::from_str(env, ENV_GROCERIES),
+        String::from_str(env, ENV_TUITION),
+        String::from_str(env, ENV_SAVINGS),
+    ]
+}
 
 /// All tests start from "initialized wallet with admin + default 50/30/20
 /// split + a real SEP-41 payment token alice can mint and deposit." The
@@ -34,6 +46,7 @@ impl Fixture {
 
         let admin = Address::generate(&env);
         let percents = vec![&env, 50u32, 30u32, 20u32];
+        let envelope_names = default_envelope_names(&env);
         let wallet_name = String::from_str(&env, WALLET_NAME);
         let admin_name = String::from_str(&env, ADMIN_NAME);
         let admin_emoji = String::from_str(&env, ADMIN_EMOJI);
@@ -45,6 +58,7 @@ impl Fixture {
                 admin.clone(),
                 payment_token.clone(),
                 percents,
+                envelope_names,
                 wallet_name,
                 admin_name,
                 admin_emoji,
@@ -112,6 +126,7 @@ fn init_seeds_wallet_name_and_admin_profile() {
     assert_eq!(state.admin, f.admin);
     assert_eq!(state.payment_token, f.payment_token);
     assert_eq!(state.wallet_name, String::from_str(&f.env, WALLET_NAME));
+    assert_eq!(state.envelope_names, default_envelope_names(&f.env));
     assert_eq!(state.percents, vec![&f.env, 50u32, 30u32, 20u32]);
     assert_eq!(state.members.len(), 1);
     let admin_member = state.members.get(0).unwrap();
@@ -119,6 +134,59 @@ fn init_seeds_wallet_name_and_admin_profile() {
     assert_eq!(admin_member.name, String::from_str(&f.env, ADMIN_NAME));
     assert_eq!(admin_member.emoji, String::from_str(&f.env, ADMIN_EMOJI));
     assert_eq!(state.balances.len(), 3);
+}
+
+// ─── set_envelope_names ───────────────────────────────────────────────────
+
+#[test]
+fn set_envelope_names_updates_state() {
+    let f = Fixture::new();
+    let updated = vec![
+        &f.env,
+        String::from_str(&f.env, "Rent"),
+        String::from_str(&f.env, "School"),
+        String::from_str(&f.env, "Vacation"),
+    ];
+
+    f.client().set_envelope_names(&updated);
+
+    assert_eq!(f.client().get_state().envelope_names, updated);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn set_envelope_names_rejects_wrong_count() {
+    let f = Fixture::new();
+    f.client().set_envelope_names(&vec![
+        &f.env,
+        String::from_str(&f.env, "Only"),
+        String::from_str(&f.env, "Two"),
+    ]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn set_envelope_names_rejects_empty_name() {
+    let f = Fixture::new();
+    f.client().set_envelope_names(&vec![
+        &f.env,
+        String::from_str(&f.env, "Rent"),
+        String::from_str(&f.env, ""),
+        String::from_str(&f.env, "Savings"),
+    ]);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #12)")]
+fn set_envelope_names_rejects_too_long() {
+    let f = Fixture::new();
+    // 25 chars — exceeds MAX_ENVELOPE_NAME_LEN (24).
+    f.client().set_envelope_names(&vec![
+        &f.env,
+        String::from_str(&f.env, "A"),
+        String::from_str(&f.env, "B"),
+        String::from_str(&f.env, "ThisLabelIsWayWayTooLongXX"),
+    ]);
 }
 
 // ─── join_wallet ──────────────────────────────────────────────────────────

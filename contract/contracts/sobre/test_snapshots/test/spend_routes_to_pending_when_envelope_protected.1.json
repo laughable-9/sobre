@@ -53,6 +53,19 @@
                   ]
                 },
                 {
+                  "vec": [
+                    {
+                      "string": "Groceries"
+                    },
+                    {
+                      "string": "Tuition"
+                    },
+                    {
+                      "string": "Savings"
+                    }
+                  ]
+                },
+                {
                   "string": "Pagunsan Family"
                 },
                 {
@@ -576,6 +589,28 @@
                           },
                           {
                             "i128": "200000000"
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EnvelopeNames"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "string": "Groceries"
+                          },
+                          {
+                            "string": "Tuition"
+                          },
+                          {
+                            "string": "Savings"
                           }
                         ]
                       }

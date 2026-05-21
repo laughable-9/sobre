@@ -8,6 +8,7 @@ const ENVELOPE_COUNT: u32 = 3;
 const PERCENT_TOTAL: u32 = 100;
 const MAX_MEMBERS: u32 = 2;
 const SECONDS_PER_DAY: u64 = 86_400;
+const MAX_ENVELOPE_NAME_LEN: u32 = 24;
 
 // ─── Domain types ─────────────────────────────────────────────────────────
 
@@ -57,6 +58,7 @@ pub enum DataKey {
     ActiveRequestIds,
     Request(u64),
     WalletName,
+    EnvelopeNames,
     /// (caller, day_epoch) → cumulative spent that day. Day epoch is
     /// `ledger.timestamp() / SECONDS_PER_DAY`, so each new UTC day starts a
     /// fresh counter without explicit reset.
@@ -96,6 +98,7 @@ pub struct WalletState {
     pub admin: Address,
     pub payment_token: Address,
     pub wallet_name: String,
+    pub envelope_names: Vec<String>,
     pub percents: Vec<u32>,
     pub members: Vec<Member>,
     pub balances: Vec<i128>,
@@ -186,6 +189,13 @@ pub struct WalletRenamed {
     pub new_name: String,
 }
 
+/// Emitted when admin renames the envelopes via `set_envelope_names`.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct EnvelopesRenamed {
+    pub names: Vec<String>,
+}
+
 /// Emitted when admin closes the wallet via `close_wallet`. Records the
 /// total stroops swept back to admin so the activity feed can render
 /// "₱X swept to admin · wallet closed" without re-reading balances.
@@ -212,6 +222,7 @@ pub enum Error {
     RequestNotFound = 9,
     MemberNotFound = 10,
     CannotRemoveAdmin = 11,
+    InvalidEnvelopeNames = 12,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -223,6 +234,18 @@ fn validate_percents(env: &Env, percents: &Vec<u32>) {
     let sum: u32 = percents.iter().sum();
     if sum != PERCENT_TOTAL {
         panic_with_error!(env, Error::InvalidPercents);
+    }
+}
+
+fn validate_envelope_names(env: &Env, names: &Vec<String>) {
+    if names.len() != ENVELOPE_COUNT {
+        panic_with_error!(env, Error::InvalidEnvelopeNames);
+    }
+    for n in names.iter() {
+        let len = n.len();
+        if len == 0 || len > MAX_ENVELOPE_NAME_LEN {
+            panic_with_error!(env, Error::InvalidEnvelopeNames);
+        }
     }
 }
 
@@ -446,6 +469,7 @@ impl SobreContract {
         admin: Address,
         payment_token: Address,
         percents: Vec<u32>,
+        envelope_names: Vec<String>,
         wallet_name: String,
         admin_name: String,
         admin_emoji: String,
@@ -455,6 +479,7 @@ impl SobreContract {
             admin,
             payment_token,
             percents,
+            envelope_names,
             wallet_name,
             admin_name,
             admin_emoji,
@@ -464,12 +489,15 @@ impl SobreContract {
     /// One-time setup. The caller becomes the admin AND the first profiled
     /// member of the wallet. `wallet_name` shows in the top bar both members
     /// see; `admin_name` + `admin_emoji` is the admin's row in the members
-    /// list.
+    /// list. `envelope_names` is the display label for each of the three
+    /// envelopes (e.g., ["Rent", "School", "Savings"]). The contract's
+    /// `Envelope` enum still indexes by position [0, 1, 2] under the hood.
     pub fn init(
         env: Env,
         admin: Address,
         payment_token: Address,
         percents: Vec<u32>,
+        envelope_names: Vec<String>,
         wallet_name: String,
         admin_name: String,
         admin_emoji: String,
@@ -479,11 +507,13 @@ impl SobreContract {
         }
         admin.require_auth();
         validate_percents(&env, &percents);
+        validate_envelope_names(&env, &envelope_names);
 
         let inst = env.storage().instance();
         inst.set(&DataKey::Admin, &admin);
         inst.set(&DataKey::PaymentToken, &payment_token);
         inst.set(&DataKey::Percents, &percents);
+        inst.set(&DataKey::EnvelopeNames, &envelope_names);
         inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
         inst.set(&DataKey::WalletName, &wallet_name);
 
@@ -594,6 +624,18 @@ impl SobreContract {
         require_admin_auth(&env);
         validate_percents(&env, &percents);
         env.storage().instance().set(&DataKey::Percents, &percents);
+    }
+
+    /// Admin-only. Rename the three envelopes. Purely cosmetic — the on-chain
+    /// `Envelope::Groceries|Tuition|Savings` enum still indexes balances and
+    /// policies, so existing pending requests + balances stay valid.
+    pub fn set_envelope_names(env: Env, names: Vec<String>) {
+        require_admin_auth(&env);
+        validate_envelope_names(&env, &names);
+        env.storage()
+            .instance()
+            .set(&DataKey::EnvelopeNames, &names);
+        EnvelopesRenamed { names }.publish(&env);
     }
 
     /// Admin-only. Replace the entire spending policy in one call. Any spend
@@ -714,6 +756,7 @@ impl SobreContract {
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
         let wallet_name: String = inst.get(&DataKey::WalletName).unwrap();
+        let envelope_names: Vec<String> = inst.get(&DataKey::EnvelopeNames).unwrap();
         let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
         let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
@@ -724,6 +767,7 @@ impl SobreContract {
             admin,
             payment_token,
             wallet_name,
+            envelope_names,
             percents,
             members,
             balances,
