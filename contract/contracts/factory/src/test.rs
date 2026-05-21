@@ -225,15 +225,13 @@ fn init_twice_rejects() {
 #[test]
 fn set_sobre_wasm_swaps_the_pointer() {
     let f = Fixture::new();
-    // A "v2" wasm hash to swap to. Same bytes for the test, but the hash
-    // would be different in production.
-    let v2_hash: BytesN<32> = f.env.deployer().upload_contract_wasm(SOBRE_WASM);
+    // upload_contract_wasm is deterministic on bytes, so re-uploading the
+    // same bytes yields the same hash. Tests just that set_sobre_wasm
+    // overwrites the stored pointer with the value the admin passes in.
+    let initial = f.client().current_sobre_wasm();
+    let new_hash: BytesN<32> = f.env.deployer().upload_contract_wasm(SOBRE_WASM);
+    assert_eq!(initial, new_hash);
 
-    assert_eq!(
-        f.client().current_sobre_wasm(),
-        f.env.deployer().upload_contract_wasm(SOBRE_WASM),
-    );
-
-    f.client().set_sobre_wasm(&v2_hash);
-    assert_eq!(f.client().current_sobre_wasm(), v2_hash);
+    f.client().set_sobre_wasm(&new_hash);
+    assert_eq!(f.client().current_sobre_wasm(), new_hash);
 }

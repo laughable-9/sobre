@@ -637,9 +637,17 @@ impl SobreContract {
     /// wasm. Same contract address, same storage, new code on the next call.
     /// Reads the target hash from the factory rather than taking it as an
     /// argument so the admin can't fat-finger a wrong or malicious wasm.
+    ///
+    /// Trust assumption: whoever holds the factory's admin key controls what
+    /// wasm this Sobre adopts on `upgrade()`. Move the factory admin to a
+    /// multisig + timelock before mainnet.
     pub fn upgrade(env: Env) {
         require_admin_auth(&env);
-        let factory: Address = env.storage().instance().get(&DataKey::Factory).unwrap();
+        let factory: Address = env
+            .storage()
+            .instance()
+            .get(&DataKey::Factory)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
         let new_wasm: BytesN<32> = env.invoke_contract(
             &factory,
             &soroban_sdk::Symbol::new(&env, "current_sobre_wasm"),
