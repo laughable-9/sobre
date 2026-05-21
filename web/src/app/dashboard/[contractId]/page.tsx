@@ -86,6 +86,26 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [closeOpen, setCloseOpen] = useState(false);
   const [heroPulse, setHeroPulse] = useState(false);
   const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
+  const [tab, setTab] = useState<"envelopes" | "settings">("envelopes");
+  // Hash-sync the tab so refresh + back-button keep the user where they were.
+  // Read once on mount and on subsequent hash changes; write when tab changes.
+  useEffect(() => {
+    const fromHash = () =>
+      window.location.hash === "#settings" ? "settings" : "envelopes";
+    setTab(fromHash());
+    const handler = () => setTab(fromHash());
+    window.addEventListener("hashchange", handler);
+    return () => window.removeEventListener("hashchange", handler);
+  }, []);
+  const switchTab = (next: "envelopes" | "settings") => {
+    if (next === tab) return;
+    setTab(next);
+    history.replaceState(
+      null,
+      "",
+      next === "settings" ? "#settings" : window.location.pathname + window.location.search,
+    );
+  };
   const [celebration, setCelebration] = useState<
     { msg: string; kind: "ok" | "warn" } | null
   >(null);
@@ -371,6 +391,32 @@ function Dashboard({ contractId }: { contractId: string }) {
         </Link>
       </div>
 
+      <nav
+        className="sobre-tabs mx-auto w-full px-7 pt-4"
+        style={{ maxWidth: 1320 }}
+      >
+        <button
+          type="button"
+          className="sobre-tab"
+          data-active={tab === "envelopes" ? "true" : "false"}
+          onClick={() => switchTab("envelopes")}
+        >
+          Envelopes
+        </button>
+        <button
+          type="button"
+          className="sobre-tab"
+          data-active={tab === "settings" ? "true" : "false"}
+          onClick={() => switchTab("settings")}
+        >
+          Settings
+          {state.pending.length > 0 ? (
+            <span className="sobre-tab-badge">{state.pending.length}</span>
+          ) : null}
+        </button>
+      </nav>
+
+      {tab === "envelopes" ? (
       <div className="sobre-dash">
         <SummaryCard
           state={state}
@@ -422,14 +468,13 @@ function Dashboard({ contractId }: { contractId: string }) {
           envelopeNames={state.envelope_names}
         />
       </div>
+      ) : null}
 
+      {tab === "settings" ? (
       <section
-        className="mx-auto w-full px-7 pb-12"
+        className="mx-auto w-full px-7 pb-12 pt-4"
         style={{ maxWidth: 1320 }}
       >
-        <h2 className="font-serif text-[22px] font-semibold mb-4">
-          Wallet controls
-        </h2>
         <div
           className="grid gap-5"
           style={{
@@ -519,6 +564,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           ) : null}
         </div>
       </section>
+      ) : null}
 
       {heroPulse ? <HeroPulse /> : null}
       {celebration ? (
