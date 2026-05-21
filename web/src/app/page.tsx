@@ -228,8 +228,19 @@ function Hero() {
             <ArrowRight size={16} strokeWidth={2.4} />
           </Link>
         </div>
-        {/* Right slot — TBD. Kyle's cooking something to drop in here. */}
-        <div className="sobre-hero-right" aria-hidden />
+        <div className="sobre-hero-right">
+          <video
+            className="sobre-hero-loop"
+            src="/loop-1.mp4"
+            autoPlay
+            muted
+            loop
+            playsInline
+            disablePictureInPicture
+            disableRemotePlayback
+            controlsList="nodownload nofullscreen noremoteplayback"
+          />
+        </div>
       </div>
     </section>
   );
@@ -294,7 +305,8 @@ function HowItWorks() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">How it works</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            How it works
+            Sending home,{" "}
+            <em className="sobre-em">simplified.</em>
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
             Four steps. No banks. No middlemen. Just your family on the same

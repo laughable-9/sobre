@@ -875,10 +875,22 @@
 .sobre-hero-cta:active { transform: translateY(0); }
 .sobre-hero-right {
   min-height: 320px;
+  padding-right: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sobre-hero-loop {
+  width: 100%;
+  height: auto;
+  max-height: 70vh;
+  display: block;
+  border-radius: 16px;
+  object-fit: contain;
 }
 @media (max-width: 960px) {
   .sobre-hero { min-height: auto; padding: 48px 24px 40px; }
-  .sobre-hero-grid { grid-template-columns: 1fr; gap: 24px; }
+  .sobre-hero-grid { grid-template-columns: 1fr; gap: 32px; }
   .sobre-hero-content {
     max-width: 100%;
     align-items: center;
@@ -886,7 +898,20 @@
     margin: 0 auto;
   }
   .sobre-hero-subhead { margin-left: auto; margin-right: auto; }
-  .sobre-hero-right { display: none; }
+  .sobre-hero-right {
+    /* Force an explicit min-height so the slot survives even before video
+       metadata loads; without this the container can collapse to 0 on
+       narrow viewports and the video never paints. */
+    min-height: 240px;
+    padding: 0;
+    width: 100%;
+    max-width: 480px;
+    margin: 0 auto;
+  }
+  .sobre-hero-loop {
+    max-height: 60vh;
+    width: 100%;
+  }
   .sobre-hero-headline { font-size: clamp(32px, 9vw, 52px); }
 }
 
