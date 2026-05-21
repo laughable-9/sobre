@@ -36,7 +36,8 @@ export function PendingRequestsPanel({
   if (pending.length === 0) {
     return (
       <p className="text-xs" style={{ color: "var(--text-3)" }}>
-        Walang pending. Spends below the policy threshold execute immediately.
+        No pending requests. Spends below the policy threshold execute
+        immediately.
       </p>
     );
   }

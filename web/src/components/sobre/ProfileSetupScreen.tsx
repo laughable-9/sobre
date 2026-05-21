@@ -44,10 +44,10 @@ export function ProfileSetupScreen({
             className="font-serif mt-5 mb-3"
             style={{ fontSize: 32, fontWeight: 600 }}
           >
-            Anong tawag sa&apos;yo?
+            What should we call you?
           </h1>
           <p style={{ fontSize: 15, color: "var(--text-2)" }}>
-            Pick a name and emoji once. We&apos;ll use them by default
+            Pick a name and an icon once. We&apos;ll use them by default
             whenever you open or join a Sobre.
           </p>
         </div>

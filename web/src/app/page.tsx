@@ -5,14 +5,10 @@ import Image from "next/image";
 import Link from "next/link";
 import {
   ArrowRight,
-  Check,
   ChevronDown,
   DollarSign,
   Eye,
-  GraduationCap,
   Shield,
-  ShoppingCart,
-  Sprout,
   TrendingUp,
 } from "lucide-react";
 
@@ -59,62 +55,59 @@ const STATS = [
 const STEPS = [
   {
     num: 1,
-    fil: "Buksan ang sobre.",
+    fil: "Open a Sobre.",
     body:
       "Open a shared wallet from your phone in under 60 seconds. Invite your family with a link.",
   },
   {
     num: 2,
-    fil: "Hatiin ang pera.",
+    fil: "Set the split.",
     body:
-      "Decide your envelopes: Groceries, Tuition, Savings. Set the split. ₱10,000 becomes ₱5,000 / ₱3,000 / ₱2,000 automatically.",
+      "Three envelopes: Groceries, Tuition, Savings. Pick the percentages. ₱10,000 becomes ₱5,000 / ₱3,000 / ₱2,000 automatically.",
   },
   {
     num: 3,
-    fil: "Padala. Hatian. Tapos.",
+    fil: "Send. Split. Done.",
     body:
-      "The moment your remittance lands on Stellar, Sobre splits it across your envelopes. Both sides see it instantly.",
+      "The moment a deposit lands on Stellar, Sobre splits it across the envelopes. Both sides see it instantly.",
   },
   {
     num: 4,
-    fil: "Bawat piso, may pinupuntahan.",
+    fil: "Every peso has a place.",
     body:
-      "Each member can only spend from their assigned envelope. Every transaction shows up live. Savings earns interest while it sits.",
+      "Set a daily limit. Lock specific envelopes so big spends need admin approval. Savings earns interest while it sits.",
   },
 ];
 
 const TRUST = [
   {
     icon: <Shield size={18} strokeWidth={2} />,
-    title: "Token-agnostic by design",
-    body:
-      "The contract accepts any SEP-41 token at init. We use XLM today on Stellar; USDC and EURC support is one config change away.",
+    title: "Built on Stellar",
+    body: "Your wallet is a smart contract on Stellar. No bank in the middle.",
   },
   {
     icon: <Eye size={18} strokeWidth={2} />,
     title: "Verifiable on-chain",
-    body:
-      "Every deposit, spend, and approval is a public Stellar transaction. Nothing hidden — the ledger is the source of truth.",
+    body: "Every deposit, spend, and approval is a public transaction.",
   },
   {
     icon: <DollarSign size={18} strokeWidth={2} />,
     title: "Fractions of a cent",
-    body:
-      "Stellar's network charges micro-fees per transaction. Sobre adds zero on top.",
+    body: "Stellar charges micro-fees per transaction. Sobre adds zero.",
   },
 ];
 
-const OFW_POINTS = [
-  "See exactly where every peso goes — in real time.",
+const SENDER_POINTS = [
+  "See where every peso goes, in real time.",
   "No more panic calls asking for extra money.",
-  "Set the split once; let Sobre handle it monthly.",
+  "Set the split once. Sobre handles it forever.",
   "Sleep better knowing nothing falls through the cracks.",
 ];
 
 const FAMILY_POINTS = [
   "No fighting over who spent what.",
-  "Big purchases need a quick approval — prevents impulse buys.",
-  <>Real-time visibility, no more <em>&quot;wala na pong pera&quot;</em>.</>,
+  "Big purchases need admin approval, so there's no impulse spending.",
+  "Real-time visibility into the whole wallet.",
   "Savings grows automatically while you focus on family.",
 ];
 
@@ -124,24 +117,20 @@ const FAQS = [
     a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain, and the contract is token-agnostic — we use XLM today, with USDC support on the roadmap.",
   },
   {
-    q: "Anong kailangan ko para magsimula?",
-    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No KYC barriers, no minimum deposit.",
+    q: "What do I need to start?",
+    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No KYC, no minimum deposit.",
   },
   {
-    q: "Paano ako magpapadala ng pera?",
-    a: "On-ramp partners like Transak (roadmap) will let you send pesos or any currency, auto-converted to Stellar tokens. Today, sending native XLM from your Freighter wallet works end-to-end on testnet.",
+    q: "How do I send money in?",
+    a: "Send native XLM from any Stellar wallet (we use Freighter for the demo). On-ramp partners like Transak that convert pesos to Stellar tokens are on the roadmap.",
   },
   {
-    q: "Pwede ko ba i-cash out sa pesos?",
+    q: "Can I cash out to pesos?",
     a: "Yes — through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
   },
   {
-    q: "Ano ang fee?",
-    a: "Sobre charges 0% on transfers between family members. Network fees on Stellar are fractions of a cent. On-ramp and off-ramp partners may charge their own fees, fully disclosed up front.",
-  },
-  {
-    q: "Ano kung mag-away ang pamilya?",
-    a: "Only the admin (whoever creates the wallet) can change the envelope splits. All transactions are visible. Big spends require approval. Designed to prevent conflict, not create it.",
+    q: "What if the family disagrees?",
+    a: "Only the admin can change the envelope split. All transactions are visible to every member. Big spends require approval. Designed to prevent conflict, not create it.",
   },
 ];
 
@@ -167,6 +156,28 @@ function Nav() {
   const wallet = useFreighter();
   const { status, address, connect } = wallet;
 
+  const connectButton = address ? (
+    <WalletMenu wallet={wallet} />
+  ) : status === "not-installed" ? (
+    <a
+      href="https://www.freighter.app/"
+      target="_blank"
+      rel="noreferrer"
+      className="sobre-btn-nav sobre-btn-nav-soft"
+    >
+      Install Freighter
+    </a>
+  ) : (
+    <button
+      type="button"
+      onClick={() => void connect()}
+      className="sobre-btn-nav sobre-btn-nav-soft"
+      disabled={status === "checking"}
+    >
+      {status === "checking" ? "Checking…" : "Connect"}
+    </button>
+  );
+
   return (
     <header className="sobre-nav">
       <div className="sobre-container sobre-nav-inner">
@@ -181,29 +192,13 @@ function Nav() {
           <span className="sobre-brand-name">Sobre</span>
         </Link>
         <nav className="sobre-nav-links">
-          <a href="#how">How it works</a>
-          <a href="#about">About</a>
-          {address ? (
-            <WalletMenu wallet={wallet} />
-          ) : status === "not-installed" ? (
-            <a
-              href="https://www.freighter.app/"
-              target="_blank"
-              rel="noreferrer"
-              className="sobre-btn-nav sobre-btn-nav-soft"
-            >
-              Install Freighter
-            </a>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void connect()}
-              className="sobre-btn-nav sobre-btn-nav-soft"
-              disabled={status === "checking"}
-            >
-              {status === "checking" ? "Checking…" : "Connect Wallet"}
-            </button>
-          )}
+          <a href="#how" className="sobre-nav-link-text">
+            How it works
+          </a>
+          <a href="#about" className="sobre-nav-link-text">
+            About
+          </a>
+          {connectButton}
           <Link href="/dashboard" className="sobre-btn-nav">
             Open Sobre
           </Link>
@@ -216,165 +211,27 @@ function Nav() {
 function Hero() {
   return (
     <section id="top" className="sobre-hero">
-      <div className="sobre-container sobre-hero-grid">
-        <div>
-          <h1 className="sobre-h1">
-            <em className="sobre-em">Isang sobre.</em>
+      <div className="sobre-hero-grid">
+        <div className="sobre-hero-content">
+          <h1 className="sobre-hero-headline">
+            One Sobre.
             <br />
-            <em className="sobre-em">Isang pamilya.</em>
-            <br />
-            Magkasama{" "}
-            <span style={{ color: "var(--sobre-primary)" }}>kahit malayo</span>.
+            No matter the{" "}
+            <em className="sobre-hero-accent">distance</em>.
           </h1>
-          <p className="sobre-hero-sub">
-            The joint account for OFW families. Your remittance auto-splits
-            into envelopes the moment it arrives.
+          <p className="sobre-hero-subhead">
+            The joint account for Filipino families. Money you send home
+            auto-splits into envelopes the moment it arrives.
           </p>
-          <div className="sobre-hero-cta">
-            <Link
-              href="/dashboard"
-              className="sobre-btn-primary-large"
-            >
-              Open a Shared Sobre
-              <ArrowRight size={16} strokeWidth={2} />
-            </Link>
-            <a href="#how" className="sobre-btn-ghost-large">
-              See how it works
-              <ArrowRight size={14} strokeWidth={2} />
-            </a>
-          </div>
-          <div className="sobre-hero-trust">
-            Built on Stellar &nbsp;·&nbsp; Token-agnostic &nbsp;·&nbsp; No
-            hidden fees
-          </div>
+          <Link href="/dashboard" className="sobre-hero-cta">
+            Open a Sobre
+            <ArrowRight size={16} strokeWidth={2.4} />
+          </Link>
         </div>
-
-        <PhoneMock />
+        {/* Right slot — TBD. Kyle's cooking something to drop in here. */}
+        <div className="sobre-hero-right" aria-hidden />
       </div>
     </section>
-  );
-}
-
-function PhoneMock() {
-  return (
-    <div className="sobre-phone-stage">
-      <div className="sobre-float-tag">
-        <div className="splash">
-          <ArrowRight
-            size={14}
-            strokeWidth={2}
-            style={{ transform: "rotate(90deg)" }}
-          />
-        </div>
-        <div>
-          <b>Remittance landed</b>
-          <span className="sub">+ ₱ 10,000.00 · auto-split</span>
-        </div>
-      </div>
-      <div className="sobre-float-tag bottom">
-        <div
-          className="splash"
-          style={{
-            background: "#fbe7d2",
-            color: "var(--primary-hover)",
-          }}
-        >
-          <ShoppingCart size={14} strokeWidth={2} />
-        </div>
-        <div>
-          <b>Maria spent ₱ 350</b>
-          <span className="sub">Groceries · just now</span>
-        </div>
-      </div>
-
-      <div className="sobre-phone">
-        <div className="sobre-phone-screen">
-          <div className="sobre-phone-top">
-            <div className="wallet-name">Pagunsan Family</div>
-            <div className="avatar">MP</div>
-          </div>
-
-          <div className="sobre-phone-balance">
-            <div className="label">Total balance</div>
-            <div className="amt tabular">
-              ₱ 24,891
-              <span style={{ fontSize: 24, color: "var(--text-2)" }}>.40</span>
-            </div>
-            <div className="usdc tabular">≈ 1,556 XLM</div>
-          </div>
-
-          <div className="sobre-env-stack">
-            <PhoneEnvelope
-              icon={<ShoppingCart size={16} strokeWidth={1.8} />}
-              name="Groceries"
-              amount="₱ 5,234.50"
-              fill={62}
-            />
-            <PhoneEnvelope
-              icon={<GraduationCap size={16} strokeWidth={1.8} />}
-              name="Tuition"
-              amount="₱ 7,800.00"
-              fill={84}
-            />
-            <PhoneEnvelope
-              icon={<Sprout size={16} strokeWidth={1.8} />}
-              name={
-                <span
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: 6,
-                  }}
-                >
-                  Savings{" "}
-                  <span
-                    className="sobre-pill sobre-pill-soft-green"
-                    style={{ padding: "1px 6px", fontSize: 10 }}
-                  >
-                    4.5% APY
-                  </span>
-                </span>
-              }
-              amount="₱ 11,856.90"
-              fill={100}
-              green
-            />
-          </div>
-
-          <div className="sobre-phone-toast">
-            <span className="dot" />
-            Remittance + ₱10,000 auto-split across 3 envelopes
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function PhoneEnvelope({
-  icon,
-  name,
-  amount,
-  fill,
-  green,
-}: {
-  icon: React.ReactNode;
-  name: React.ReactNode;
-  amount: string;
-  fill: number;
-  green?: boolean;
-}) {
-  return (
-    <div className="sobre-env-mini">
-      <div className={`sobre-env-icon${green ? " green" : ""}`}>{icon}</div>
-      <div className="meta">
-        <div className="name">{name}</div>
-        <div className="amt tabular">{amount}</div>
-        <div className={`bar${green ? " green" : ""}`}>
-          <span style={{ width: `${fill}%` }} />
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -388,12 +245,12 @@ function Problem() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">The reality</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Ang totoo:{" "}
-            <em className="sobre-em">ang remittance hindi sapat.</em>
+            Money sent home,{" "}
+            <em className="sobre-em">but it&apos;s never enough.</em>
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
-            Years of work abroad. Billions in money sent home. And yet, most
-            families still come up short.
+            Years of work abroad. Billions sent home. And yet, most families
+            still come up short.
           </p>
         </div>
 
@@ -437,7 +294,7 @@ function HowItWorks() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">How it works</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Paano gumagana
+            How it works
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
             Four steps. No banks. No middlemen. Just your family on the same
@@ -469,15 +326,14 @@ function Product() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">The product</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Hindi lang wallet.{" "}
-            <em className="sobre-em">Plano para sa pamilya.</em>
+            Not just a wallet.{" "}
+            <em className="sobre-em">A plan for the family.</em>
           </h2>
         </div>
 
         <FeatureRow>
           <SplitVisual />
           <FeatureCopy
-            tag="Auto-split on arrival"
             heading={
               <>
                 Decide once.{" "}
@@ -486,9 +342,8 @@ function Product() {
             }
             body={
               <>
-                ₱10,000 in → ₱5,000 Groceries, ₱3,000 Tuition, ₱2,000 Savings.{" "}
-                <em>Walang nakakalimutan.</em> No more dividing the padala by
-                hand after a long shift abroad.
+                ₱10,000 in → ₱5,000 Groceries, ₱3,000 Tuition, ₱2,000 Savings.
+                No more dividing the money by hand after a long shift.
               </>
             }
           />
@@ -497,18 +352,18 @@ function Product() {
         <FeatureRow reverse>
           <MembersVisual />
           <FeatureCopy
-            tag="Role-based envelopes"
             heading={
               <>
-                Everyone only spends from their{" "}
-                <em className="sobre-em">own envelope.</em>
+                Set a daily limit. Lock the{" "}
+                <em className="sobre-em">important envelopes.</em>
               </>
             }
             body={
               <>
-                Your wife handles groceries. Your parents handle utilities.
-                Each family member can only access their assigned envelope —{" "}
-                <em>no more &quot;nasaan na ang pera?&quot;</em>
+                As admin you can cap each member&apos;s daily spend or require
+                approval on specific envelopes like Tuition or Savings.
+                Spends that cross the line wait for your sign-off before the
+                funds move.
               </>
             }
           />
@@ -517,7 +372,6 @@ function Product() {
         <FeatureRow>
           <SavingsVisual />
           <FeatureCopy
-            tag="Savings that grow"
             heading={
               <>
                 Money in Savings <em className="sobre-em">actually earns.</em>
@@ -552,20 +406,14 @@ function FeatureRow({
 }
 
 function FeatureCopy({
-  tag,
   heading,
   body,
 }: {
-  tag: string;
   heading: React.ReactNode;
   body: React.ReactNode;
 }) {
   return (
     <div className="sobre-feat">
-      <div className="sobre-feat-tag">
-        <Check size={14} strokeWidth={2} />
-        {tag}
-      </div>
       <h2>{heading}</h2>
       <p>{body}</p>
     </div>
@@ -720,29 +568,20 @@ function MembersVisual() {
           gap: 14,
         }}
       >
-        <MemberRow
-          initials="MA"
-          bg="#fbe7d2"
-          fg="var(--primary-hover)"
-          name="Maria · wife"
-          access="Access: Groceries"
-          pill="₱ 5,234.50"
+        <PolicyRow
+          icon="⏱"
+          title="Daily limit per member"
+          value="₱ 500"
         />
-        <MemberRow
-          initials="PE"
-          bg="var(--accent-soft)"
-          fg="var(--sobre-accent)"
-          name="Kuya Pedro · brother"
-          access="Access: Utilities"
-          pill="₱ 1,840.00"
+        <PolicyRow
+          icon="🔒"
+          title="Tuition needs approval"
+          value="Locked"
         />
-        <MemberRow
-          initials="LN"
-          bg="var(--surface-alt)"
-          fg="var(--text-1)"
-          name="Lola Norma · mother"
-          access="Access: Tuition · view only"
-          pill="₱ 7,800.00"
+        <PolicyRow
+          icon="🔒"
+          title="Savings needs approval"
+          value="Locked"
         />
         <div
           style={{
@@ -754,43 +593,24 @@ function MembersVisual() {
             borderRadius: 10,
             padding: 14,
             color: "var(--text-3)",
+            fontSize: 13,
           }}
         >
-          <div
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: "50%",
-              border: "1.5px dashed var(--border-strong)",
-              display: "grid",
-              placeItems: "center",
-            }}
-          >
-            +
-          </div>
-          <div style={{ flex: 1, fontSize: 13 }}>
-            Invite another family member
-          </div>
+          Groceries stays open for small day-to-day spends.
         </div>
       </div>
     </div>
   );
 }
 
-function MemberRow({
-  initials,
-  bg,
-  fg,
-  name,
-  access,
-  pill,
+function PolicyRow({
+  icon,
+  title,
+  value,
 }: {
-  initials: string;
-  bg: string;
-  fg: string;
-  name: string;
-  access: string;
-  pill: string;
+  icon: string;
+  title: string;
+  value: string;
 }) {
   return (
     <div
@@ -808,22 +628,29 @@ function MemberRow({
         style={{
           width: 36,
           height: 36,
-          borderRadius: "50%",
-          background: bg,
-          color: fg,
+          borderRadius: 10,
+          background: "var(--surface-alt)",
           display: "grid",
           placeItems: "center",
-          fontWeight: 600,
-          fontSize: 13,
+          fontSize: 18,
         }}
       >
-        {initials}
+        {icon}
       </div>
       <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{name}</div>
-        <div style={{ fontSize: 12, color: "var(--text-2)" }}>{access}</div>
+        <div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div>
       </div>
-      <span className="sobre-pill sobre-pill-cream tabular">{pill}</span>
+      <span
+        className="sobre-pill"
+        style={{
+          background: "#fdf3d8",
+          color: "#b88b1c",
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {value}
+      </span>
     </div>
   );
 }
@@ -951,8 +778,8 @@ function TwoSides() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">Two sides, one wallet</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Para sa OFW. Para sa pamilya.{" "}
-            <em className="sobre-em">Pareho.</em>
+            For the sender. For the family.{" "}
+            <em className="sobre-em">Same wallet.</em>
           </h2>
         </div>
 
@@ -962,11 +789,11 @@ function TwoSides() {
               className="sobre-eyebrow"
               style={{ color: "var(--primary-hover)" }}
             >
-              For the OFW abroad
+              For the sender
             </div>
             <h3 style={{ marginTop: 10 }}>Send home with zero guesswork.</h3>
             <ul>
-              {OFW_POINTS.map((p, i) => (
+              {SENDER_POINTS.map((p, i) => (
                 <li key={i}>{p}</li>
               ))}
             </ul>
@@ -999,7 +826,7 @@ function Faq({
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">FAQ</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Mga tanong na <em className="sobre-em">madalas itanong.</em>
+            Frequently asked questions
           </h2>
         </div>
         <div className="sobre-faq">
@@ -1037,7 +864,7 @@ function FinalCTA() {
     <section className="sobre-final-cta">
       <div className="sobre-container">
         <h2>
-          <em className="sobre-em">Buksan ang sobre.</em> Buksan ang plano.
+          <em className="sobre-em">Open the Sobre.</em> Open the plan.
         </h2>
         <p className="lede sobre-lede">
           Open a wallet in 60 seconds. Invite your family. Send your first
@@ -1057,9 +884,6 @@ function FinalCTA() {
           Start with Sobre, free
           <ArrowRight size={16} strokeWidth={2} />
         </Link>
-        <div className="fine">
-          No credit card. No KYC barriers. Demo available now.
-        </div>
       </div>
     </section>
   );
