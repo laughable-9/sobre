@@ -10,6 +10,7 @@ import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
+import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { DepositModal } from "@/components/sobre/DepositModal";
@@ -555,6 +556,12 @@ function Dashboard({ contractId }: { contractId: string }) {
         className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
         style={{ maxWidth: 1320 }}
       >
+        <UpgradeAvailableCard
+          userAddress={address}
+          contractId={contractId}
+          isAdmin={isAdmin}
+          onSuccess={refreshAll}
+        />
         <div
           className="grid gap-5"
           style={{

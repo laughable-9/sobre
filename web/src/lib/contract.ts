@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Address,
   BASE_FEE,
   Contract,
   TransactionBuilder,
@@ -177,4 +178,39 @@ export function spendPolicyScVal({
       val: xdr.ScVal.scvBool(requireAllSigs),
     }),
   ]);
+}
+
+/**
+ * Fetch the wasm hash a deployed contract is currently executing. We can't
+ * ask the contract for this directly because Soroban exposes no env API for
+ * "what's my own wasm hash"; instead we read the contract's instance ledger
+ * entry, where the executable hash lives.
+ *
+ * Returns the hex-encoded hash (no leading 0x) so callers can compare it
+ * against the hash strings the Stellar CLI prints.
+ */
+export async function fetchRunningWasmHash(
+  contractId: string,
+): Promise<string> {
+  const server = getServer();
+  const key = xdr.LedgerKey.contractData(
+    new xdr.LedgerKeyContractData({
+      contract: Address.fromString(contractId).toScAddress(),
+      key: xdr.ScVal.scvLedgerKeyContractInstance(),
+      durability: xdr.ContractDataDurability.persistent(),
+    }),
+  );
+  const resp = await server.getLedgerEntries(key);
+  if (resp.entries.length === 0) {
+    throw new Error("contract has no instance ledger entry");
+  }
+  const data = resp.entries[0].val.contractData().val();
+  const executable = data.instance().executable();
+  // executable.switch().value is 0 for wasm, 1 for stellarAsset, 2 for token
+  if (executable.switch().name !== "contractExecutableWasm") {
+    throw new Error(
+      `contract is not wasm-backed (executable=${executable.switch().name})`,
+    );
+  }
+  return executable.wasmHash().toString("hex");
 }
