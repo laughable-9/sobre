@@ -6,6 +6,7 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { AlertTriangle, ChevronLeft } from "lucide-react";
 
+import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
@@ -442,6 +443,17 @@ function Dashboard({ contractId }: { contractId: string }) {
               isAdmin={isAdmin}
               pending={state.pending}
               onSuccess={refreshAll}
+            />
+          </div>
+
+          <div className="sobre-admin-section sobre-card-flat">
+            <h3>Envelope split</h3>
+            <EnvelopeSplitForm
+              userAddress={address}
+              contractId={contractId}
+              isAdmin={isAdmin}
+              current={state.percents}
+              onSuccess={refresh}
             />
           </div>
 
