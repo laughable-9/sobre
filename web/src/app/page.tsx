@@ -4,6 +4,8 @@ import { AddMemberForm } from "@/components/AddMemberForm";
 import { BalancePanel } from "@/components/BalancePanel";
 import { ConnectButton } from "@/components/ConnectButton";
 import { DepositForm } from "@/components/DepositForm";
+import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
+import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { SpendForm } from "@/components/SpendForm";
 import { TxFeed } from "@/components/TxFeed";
 import { useFreighter } from "@/hooks/useFreighter";
@@ -14,8 +16,11 @@ export default function Home() {
   // same get_state poller.
   const wallet = useFreighter();
   const { address } = wallet;
-  const state = useWalletState(address);
-  const refresh = () => void state.refresh();
+  const walletState = useWalletState(address);
+  const refresh = () => void walletState.refresh();
+
+  const state = walletState.state;
+  const isAdmin = Boolean(state && address && state.admin === address);
 
   return (
     <div className="min-h-dvh bg-background">
@@ -33,7 +38,7 @@ export default function Home() {
           <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
             Wallet state
           </h2>
-          <BalancePanel address={address} wallet={state} />
+          <BalancePanel address={address} wallet={walletState} />
         </section>
 
         <section>
@@ -49,6 +54,34 @@ export default function Home() {
           </h2>
           <SpendForm userAddress={address} onSuccess={refresh} />
         </section>
+
+        {state ? (
+          <section>
+            <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+              Pending approvals {state.pending.length > 0 ? `(${state.pending.length})` : ""}
+            </h2>
+            <PendingRequestsPanel
+              userAddress={address}
+              isAdmin={isAdmin}
+              pending={state.pending}
+              onSuccess={refresh}
+            />
+          </section>
+        ) : null}
+
+        {state ? (
+          <section>
+            <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+              Spending policy
+            </h2>
+            <PolicySettingsForm
+              userAddress={address}
+              isAdmin={isAdmin}
+              current={state.policy}
+              onSuccess={refresh}
+            />
+          </section>
+        ) : null}
 
         <section>
           <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">

@@ -5,22 +5,48 @@ import { formatXlm, shortenAddress } from "@/lib/format";
 
 function renderEvent(ev: FeedEvent): React.ReactNode {
   const time = new Date(ev.ledgerClosedAt).toLocaleTimeString();
-  if (ev.kind === "Deposit") {
-    return (
-      <>
-        [{time}] <strong>Deposit</strong> by {shortenAddress(ev.from)} —{" "}
-        {formatXlm(ev.amount)} → G:{formatXlm(ev.groceries)} T:
-        {formatXlm(ev.tuition)} S:{formatXlm(ev.savings)}
-      </>
-    );
+  switch (ev.kind) {
+    case "Deposit":
+      return (
+        <>
+          [{time}] <strong>Deposit</strong> by {shortenAddress(ev.from)} —{" "}
+          {formatXlm(ev.amount)} → G:{formatXlm(ev.groceries)} T:
+          {formatXlm(ev.tuition)} S:{formatXlm(ev.savings)}
+        </>
+      );
+    case "Spend":
+      return (
+        <>
+          [{time}] <strong>Spend</strong> by {shortenAddress(ev.caller)} —{" "}
+          {formatXlm(ev.amount)} from {ev.envelope}
+          {ev.memo ? ` — "${ev.memo}"` : ""}
+        </>
+      );
+    case "RequestCreated":
+      return (
+        <>
+          [{time}] <strong>Request #{ev.requestId.toString()}</strong> by{" "}
+          {shortenAddress(ev.caller)} — {formatXlm(ev.amount)} from{" "}
+          {ev.envelope}
+          {ev.memo ? ` — "${ev.memo}"` : ""}
+          {" (awaiting approval)"}
+        </>
+      );
+    case "RequestApproved":
+      return (
+        <>
+          [{time}] <strong>Request #{ev.requestId.toString()}</strong>{" "}
+          approved
+        </>
+      );
+    case "RequestDenied":
+      return (
+        <>
+          [{time}] <strong>Request #{ev.requestId.toString()}</strong>{" "}
+          denied
+        </>
+      );
   }
-  return (
-    <>
-      [{time}] <strong>Spend</strong> by {shortenAddress(ev.caller)} —{" "}
-      {formatXlm(ev.amount)} from {ev.envelope}
-      {ev.memo ? ` — "${ev.memo}"` : ""}
-    </>
-  );
 }
 
 export function TxFeed() {
