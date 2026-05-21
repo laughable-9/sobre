@@ -38,3 +38,12 @@ export function formatXlm(stroops: bigint): string {
 export function formatPhp(stroops: bigint): string {
   return `₱${(stroopsToXlm(stroops) * PHP_PER_XLM).toFixed(2)}`;
 }
+
+/** "₱1,234.56" — same as formatPhp but with Filipino locale grouping. */
+export function formatPhpLocale(stroops: bigint): string {
+  const php = stroopsToXlm(stroops) * PHP_PER_XLM;
+  return `₱${php.toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}

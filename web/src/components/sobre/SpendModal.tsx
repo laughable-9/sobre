@@ -1,0 +1,256 @@
+"use client";
+
+import { useEffect, useRef, useState } from "react";
+import {
+  AlertTriangle,
+  GraduationCap,
+  ShoppingCart,
+  Sprout,
+} from "lucide-react";
+
+import { useSpend } from "@/hooks/useSpend";
+import type { WalletState } from "@/hooks/useWalletState";
+import {
+  ENVELOPE_LABELS,
+  PHP_PER_XLM,
+  STROOPS_PER_XLM,
+  type EnvelopeName,
+} from "@/lib/config";
+
+const QUICK_PHP = [50, 100, 500, 1000];
+
+const ICONS: Record<EnvelopeName, React.ReactNode> = {
+  Groceries: <ShoppingCart size={20} strokeWidth={2} />,
+  Tuition: <GraduationCap size={20} strokeWidth={2} />,
+  Savings: <Sprout size={20} strokeWidth={2} />,
+};
+
+export function SpendModal({
+  userAddress,
+  state,
+  envelope,
+  onClose,
+  onSuccess,
+}: {
+  userAddress: string;
+  state: WalletState;
+  envelope: EnvelopeName;
+  onClose: () => void;
+  /** Called after the tx lands. `willGoPending` is the modal's prediction of
+   *  whether the contract routed the spend to a pending request (vs executed
+   *  immediately) — computed from the same policy_requires_approval rules. */
+  onSuccess: (info: {
+    willGoPending: boolean;
+    amount: bigint;
+    envelope: EnvelopeName;
+  }) => void;
+}) {
+  const idx = ENVELOPE_LABELS.indexOf(envelope);
+  const balanceStroops = state.balances[idx] ?? 0n;
+  const balanceXlm = Number(balanceStroops) / STROOPS_PER_XLM;
+  const balancePhp = balanceXlm * PHP_PER_XLM;
+
+  const [phpStr, setPhpStr] = useState("");
+  const [memo, setMemo] = useState("");
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const { spend, pending, error } = useSpend(userAddress);
+
+  const php = Number(phpStr) || 0;
+  const xlm = php / PHP_PER_XLM;
+  const stroopsRequested = BigInt(Math.round(xlm * STROOPS_PER_XLM));
+  const overspend = stroopsRequested > balanceStroops;
+
+  // Predict whether the contract will route this to a pending request,
+  // matching policy_requires_approval in lib.rs.
+  const requireAllSigs = state.policy.require_all_sigs;
+  const envProtected = state.policy.protected_envelopes.includes(envelope);
+  const dailyLimitStroops = state.policy.daily_limit;
+  const wouldExceedDaily =
+    dailyLimitStroops !== null && stroopsRequested > dailyLimitStroops;
+  const willGoPending =
+    php > 0 && !overspend && (requireAllSigs || envProtected || wouldExceedDaily);
+
+  useEffect(() => {
+    setTimeout(() => inputRef.current?.focus(), 50);
+  }, []);
+
+  const handleSubmit = async () => {
+    if (php <= 0 || overspend) return;
+    try {
+      await spend(envelope, stroopsRequested, memo);
+      onSuccess({
+        willGoPending: Boolean(willGoPending),
+        amount: stroopsRequested,
+        envelope,
+      });
+    } catch {
+      // error already on hook
+    }
+  };
+
+  const isSavings = envelope === "Savings";
+
+  return (
+    <div className="sobre-modal-bg" onClick={onClose}>
+      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-1.5">
+          <div
+            className="grid place-items-center"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: isSavings
+                ? "var(--accent-soft)"
+                : "var(--surface-alt)",
+              color: isSavings ? "var(--sobre-accent)" : "var(--text-1)",
+            }}
+          >
+            {ICONS[envelope]}
+          </div>
+          <h2 style={{ margin: 0 }}>Spend from {envelope}</h2>
+        </div>
+        <p className="sub">
+          Available:{" "}
+          <b className="tabular" style={{ color: "var(--text-1)" }}>
+            ₱{" "}
+            {balancePhp.toLocaleString("en-PH", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+          </b>{" "}
+          · <span className="tabular">{balanceXlm.toFixed(4)} XLM</span>
+        </p>
+
+        {willGoPending ? (
+          <div className="sobre-warning-bar">
+            <AlertTriangle size={16} strokeWidth={2.2} />
+            <div>
+              <b>Lampas sa usual.</b>{" "}
+              {requireAllSigs
+                ? "All spends need admin approval. This will be queued."
+                : envProtected
+                  ? `${envelope} is admin-protected. This will be queued.`
+                  : "Over the daily limit. This will be queued for admin approval."}
+            </div>
+          </div>
+        ) : null}
+
+        {overspend && php > 0 ? (
+          <div
+            className="sobre-warning-bar"
+            style={{
+              background: "#fbe4e0",
+              borderColor: "#e8b9b0",
+              color: "#7a2a1d",
+            }}
+          >
+            <AlertTriangle size={16} strokeWidth={2.2} />
+            <div>
+              <b>Walang sapat na pera sa envelope.</b> Balance is ₱{" "}
+              {balancePhp.toLocaleString("en-PH", {
+                minimumFractionDigits: 2,
+              })}
+              .
+            </div>
+          </div>
+        ) : null}
+
+        <div className="sobre-input-group">
+          <label htmlFor="spend-amount">Amount</label>
+          <div className="sobre-input-wrap">
+            <span className="prefix">₱</span>
+            <input
+              id="spend-amount"
+              ref={inputRef}
+              className="sobre-input has-prefix tabular"
+              type="number"
+              inputMode="decimal"
+              placeholder="0.00"
+              min="0"
+              step="0.01"
+              value={phpStr}
+              onChange={(e) => setPhpStr(e.target.value)}
+              disabled={pending}
+            />
+          </div>
+          <div className="sobre-quick-amts">
+            {QUICK_PHP.map((q) => (
+              <button
+                key={q}
+                type="button"
+                className={phpStr === String(q) ? "active" : ""}
+                onClick={() => setPhpStr(String(q))}
+                disabled={pending}
+              >
+                ₱{q.toLocaleString()}
+              </button>
+            ))}
+          </div>
+          {php > 0 ? (
+            <div
+              className="mt-2 text-[12px]"
+              style={{ color: "var(--text-3)" }}
+            >
+              ≈ {xlm.toFixed(4)} XLM
+            </div>
+          ) : null}
+        </div>
+
+        <div className="sobre-input-group">
+          <label htmlFor="spend-memo">
+            Para sa ano?{" "}
+            <span style={{ color: "var(--text-3)", fontWeight: 400 }}>
+              (optional)
+            </span>
+          </label>
+          <input
+            id="spend-memo"
+            className="sobre-input"
+            type="text"
+            placeholder="ulam, gasolina, tuition…"
+            value={memo}
+            onChange={(e) => setMemo(e.target.value)}
+            disabled={pending}
+            maxLength={120}
+          />
+        </div>
+
+        {error ? (
+          <p
+            className="text-xs break-all mb-3"
+            style={{ color: "var(--sobre-danger)" }}
+          >
+            {error}
+          </p>
+        ) : null}
+
+        <div className="sobre-modal-actions">
+          <button
+            className="sobre-btn sobre-btn-soft"
+            onClick={onClose}
+            disabled={pending}
+          >
+            Cancel
+          </button>
+          <button
+            className="sobre-btn sobre-btn-primary"
+            onClick={() => void handleSubmit()}
+            disabled={!php || overspend || pending}
+            style={
+              !php || overspend || pending
+                ? { opacity: 0.5, cursor: "not-allowed" }
+                : {}
+            }
+          >
+            {pending
+              ? "Submitting…"
+              : willGoPending
+                ? "Request approval"
+                : "Confirm spend"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
