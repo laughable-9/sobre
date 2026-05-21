@@ -7,6 +7,7 @@ use soroban_sdk::{
 const ENVELOPE_COUNT: u32 = 3;
 const PERCENT_TOTAL: u32 = 100;
 const MAX_MEMBERS: u32 = 2;
+const SECONDS_PER_DAY: u64 = 86_400;
 
 // ─── Domain types ─────────────────────────────────────────────────────────
 
@@ -39,11 +40,43 @@ pub enum DataKey {
     Percents,
     Members,
     Balances,
+    Policy,
+    NextRequestId,
+    ActiveRequestIds,
+    Request(u64),
+    /// (caller, day_epoch) → cumulative spent that day. Day epoch is
+    /// `ledger.timestamp() / SECONDS_PER_DAY`, so each new UTC day starts a
+    /// fresh counter without explicit reset.
+    DailySpent(Address, u64),
 }
 
-/// Composite view returned to the frontend in one call. `balances` is ordered
-/// [Groceries, Tuition, Savings] so the dashboard can render alongside
-/// `percents` without extra lookups.
+/// All three checks compose with OR — any one triggering routes the spend
+/// to admin approval. Default (no policy set) leaves all spends open.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct SpendPolicy {
+    /// When true, every spend needs admin approval regardless of amount.
+    pub require_all_sigs: bool,
+    /// Cap on cumulative daily spend per caller (in stroops). None = no cap.
+    pub daily_limit: Option<i128>,
+    /// Envelopes a member can't spend from directly — admin must approve.
+    pub protected_envelopes: Vec<Envelope>,
+}
+
+/// Created by `spend` when policy triggers; resolved by `approve_request`
+/// (executes the transfer) or `deny_request` (drops it).
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct PendingRequest {
+    pub id: u64,
+    pub caller: Address,
+    pub envelope: Envelope,
+    pub amount: i128,
+    pub memo: String,
+    pub requested_at_ledger: u32,
+}
+
+/// Composite view returned to the frontend in one call.
 #[contracttype]
 #[derive(Clone)]
 pub struct WalletState {
@@ -52,6 +85,8 @@ pub struct WalletState {
     pub percents: Vec<u32>,
     pub members: Vec<Address>,
     pub balances: Vec<i128>,
+    pub policy: SpendPolicy,
+    pub pending: Vec<PendingRequest>,
 }
 
 /// Emitted by `deposit`. Topic list: ("Deposit", from). Data map:
@@ -68,9 +103,8 @@ pub struct Deposit {
     pub savings: i128,
 }
 
-/// Emitted by `spend`. Topic list: ("Spend", caller, envelope). Data map:
-/// {amount, memo}. Both caller and envelope are topics so the dashboard can
-/// filter the live feed by member or by envelope via RPC's getEvents.
+/// Emitted by `spend` when the policy doesn't block, AND by `approve_request`
+/// after a blocked spend is approved. The dashboard treats both the same way.
 #[contractevent]
 #[derive(Clone, Debug)]
 pub struct Spend {
@@ -80,6 +114,37 @@ pub struct Spend {
     pub envelope: Envelope,
     pub amount: i128,
     pub memo: String,
+}
+
+/// Emitted when `spend` is policy-blocked and queued for admin approval
+/// instead of executing. Lifecycle: RequestCreated → RequestApproved | RequestDenied.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct RequestCreated {
+    #[topic]
+    pub request_id: u64,
+    #[topic]
+    pub caller: Address,
+    pub envelope: Envelope,
+    pub amount: i128,
+    pub memo: String,
+}
+
+/// Emitted when admin approves a pending request. The transfer that follows
+/// also emits a Spend event, so this is purely a correlation signal.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct RequestApproved {
+    #[topic]
+    pub request_id: u64,
+}
+
+/// Emitted when admin denies a pending request. No transfer happens.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct RequestDenied {
+    #[topic]
+    pub request_id: u64,
 }
 
 /// Explicit discriminants pin the wire format. Frontends match on these
@@ -96,6 +161,7 @@ pub enum Error {
     InvalidAmount = 6,
     NotAMember = 7,
     InsufficientBalance = 8,
+    RequestNotFound = 9,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -121,14 +187,175 @@ fn require_admin_auth(env: &Env) {
     admin.require_auth();
 }
 
-/// Panics `NotAMember` if `addr` isn't in the wallet's member list. The
-/// admin is included as the first member at init, so any participant (admin
-/// or family member) passes this check.
 fn require_member(env: &Env, addr: &Address) {
     let members: Vec<Address> = env.storage().instance().get(&DataKey::Members).unwrap();
     if !members.contains(addr) {
         panic_with_error!(env, Error::NotAMember);
     }
+}
+
+fn empty_policy(env: &Env) -> SpendPolicy {
+    SpendPolicy {
+        require_all_sigs: false,
+        daily_limit: None,
+        protected_envelopes: Vec::new(env),
+    }
+}
+
+fn load_policy(env: &Env) -> SpendPolicy {
+    env.storage()
+        .instance()
+        .get(&DataKey::Policy)
+        .unwrap_or_else(|| empty_policy(env))
+}
+
+fn day_epoch(env: &Env) -> u64 {
+    env.ledger().timestamp() / SECONDS_PER_DAY
+}
+
+fn daily_spent(env: &Env, caller: &Address) -> i128 {
+    env.storage()
+        .persistent()
+        .get(&DataKey::DailySpent(caller.clone(), day_epoch(env)))
+        .unwrap_or(0)
+}
+
+fn add_daily_spent(env: &Env, caller: &Address, amount: i128) {
+    let key = DataKey::DailySpent(caller.clone(), day_epoch(env));
+    let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
+    env.storage().persistent().set(&key, &(current + amount));
+}
+
+/// Returns true if the configured policy requires admin approval for this
+/// specific spend.
+fn policy_requires_approval(
+    env: &Env,
+    policy: &SpendPolicy,
+    caller: &Address,
+    envelope: Envelope,
+    amount: i128,
+) -> bool {
+    if policy.require_all_sigs {
+        return true;
+    }
+    if policy.protected_envelopes.contains(&envelope) {
+        return true;
+    }
+    if let Some(limit) = policy.daily_limit {
+        if daily_spent(env, caller) + amount > limit {
+            return true;
+        }
+    }
+    false
+}
+
+/// Pure execution path — assumes policy + member + amount checks already
+/// passed. Transfers tokens, updates the envelope balance, tracks daily
+/// spend, and emits the Spend event.
+fn execute_spend(
+    env: &Env,
+    caller: &Address,
+    envelope: Envelope,
+    amount: i128,
+    memo: &String,
+) {
+    let inst = env.storage().instance();
+    let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+    let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+
+    let index = envelope.index();
+    let current = balances.get(index).unwrap();
+    if current < amount {
+        panic_with_error!(env, Error::InsufficientBalance);
+    }
+
+    token::Client::new(env, &payment_token).transfer(
+        &env.current_contract_address(),
+        caller,
+        &amount,
+    );
+
+    balances.set(index, current - amount);
+    inst.set(&DataKey::Balances, &balances);
+
+    add_daily_spent(env, caller, amount);
+
+    Spend {
+        caller: caller.clone(),
+        envelope,
+        amount,
+        memo: memo.clone(),
+    }
+    .publish(env);
+}
+
+fn create_pending_request(
+    env: &Env,
+    caller: Address,
+    envelope: Envelope,
+    amount: i128,
+    memo: String,
+) -> u64 {
+    let inst = env.storage().instance();
+    let next_id: u64 = inst.get(&DataKey::NextRequestId).unwrap_or(1);
+    inst.set(&DataKey::NextRequestId, &(next_id + 1));
+
+    let request = PendingRequest {
+        id: next_id,
+        caller: caller.clone(),
+        envelope,
+        amount,
+        memo: memo.clone(),
+        requested_at_ledger: env.ledger().sequence(),
+    };
+    env.storage()
+        .persistent()
+        .set(&DataKey::Request(next_id), &request);
+
+    let mut active: Vec<u64> = inst
+        .get(&DataKey::ActiveRequestIds)
+        .unwrap_or(Vec::new(env));
+    active.push_back(next_id);
+    inst.set(&DataKey::ActiveRequestIds, &active);
+
+    RequestCreated {
+        request_id: next_id,
+        caller,
+        envelope,
+        amount,
+        memo,
+    }
+    .publish(env);
+
+    next_id
+}
+
+fn remove_active_id(env: &Env, request_id: u64) {
+    let inst = env.storage().instance();
+    let mut active: Vec<u64> = inst.get(&DataKey::ActiveRequestIds).unwrap_or(Vec::new(env));
+    if let Some(idx) = active.first_index_of(request_id) {
+        active.remove(idx);
+        inst.set(&DataKey::ActiveRequestIds, &active);
+    }
+}
+
+fn load_active_pending(env: &Env) -> Vec<PendingRequest> {
+    let active: Vec<u64> = env
+        .storage()
+        .instance()
+        .get(&DataKey::ActiveRequestIds)
+        .unwrap_or(Vec::new(env));
+    let mut out = Vec::new(env);
+    for id in active.iter() {
+        if let Some(req) = env
+            .storage()
+            .persistent()
+            .get::<_, PendingRequest>(&DataKey::Request(id))
+        {
+            out.push_back(req);
+        }
+    }
+    out
 }
 
 // ─── Contract ─────────────────────────────────────────────────────────────
@@ -179,10 +406,13 @@ impl SobreContract {
         env.storage().instance().set(&DataKey::Percents, &percents);
     }
 
-    /// Splits the inflow across envelopes by the stored percentages. The
-    /// last envelope absorbs any rounding remainder so `sum(balances) ==
-    /// amount`. Emits a `Deposit` event the dashboard filters on for the
-    /// live transaction feed.
+    /// Admin-only. Replace the entire spending policy in one call. Any spend
+    /// that lands AFTER this updates against the new policy immediately.
+    pub fn set_policy(env: Env, policy: SpendPolicy) {
+        require_admin_auth(&env);
+        env.storage().instance().set(&DataKey::Policy, &policy);
+    }
+
     pub fn deposit(env: Env, from: Address, amount: i128) {
         from.require_auth();
 
@@ -195,16 +425,12 @@ impl SobreContract {
         let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
 
-        // Auth from from.require_auth() above is reused for this nested
-        // transfer — no second Freighter popup for the user.
         token::Client::new(&env, &payment_token).transfer(
             &from,
             &env.current_contract_address(),
             &amount,
         );
 
-        // Integer division floors each split; savings absorbs the remainder
-        // so the deposit is conserved (no dust loss).
         let total = PERCENT_TOTAL as i128;
         let split = |pct: u32| amount * (pct as i128) / total;
         let groceries = split(percents.get(0).unwrap());
@@ -231,9 +457,10 @@ impl SobreContract {
         .publish(&env);
     }
 
-    /// Members-only. Deducts `amount` from `envelope`'s balance and transfers
-    /// the tokens out to `caller`. Emits a `Spend` event with the memo so the
-    /// dashboard can render a tx-feed row ("X spent Y from Z — memo").
+    /// Members-only. Routes through the configured SpendPolicy:
+    /// - if no policy triggers, transfers tokens and emits Spend
+    /// - if any policy condition triggers, creates a PendingRequest and emits
+    ///   RequestCreated (no transfer; admin must approve_request later)
     pub fn spend(env: Env, caller: Address, envelope: Envelope, amount: i128, memo: String) {
         caller.require_auth();
 
@@ -242,36 +469,53 @@ impl SobreContract {
         }
         require_member(&env, &caller);
 
-        let inst = env.storage().instance();
-        let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
-        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
-
-        let index = envelope.index();
-        let current = balances.get(index).unwrap();
-        if current < amount {
-            panic_with_error!(&env, Error::InsufficientBalance);
+        let policy = load_policy(&env);
+        if policy_requires_approval(&env, &policy, &caller, envelope, amount) {
+            create_pending_request(&env, caller, envelope, amount, memo);
+        } else {
+            execute_spend(&env, &caller, envelope, amount, &memo);
         }
-
-        token::Client::new(&env, &payment_token).transfer(
-            &env.current_contract_address(),
-            &caller,
-            &amount,
-        );
-
-        balances.set(index, current - amount);
-        inst.set(&DataKey::Balances, &balances);
-
-        Spend {
-            caller,
-            envelope,
-            amount,
-            memo,
-        }
-        .publish(&env);
     }
 
-    /// Polled by both dashboards every 2-3s. All reads come from instance
-    /// storage (cheapest tier, auto-TTL extended on each contract invocation).
+    /// Admin-only. Execute a previously created pending request. Emits both
+    /// `Spend` (for the transfer) and `RequestApproved` (for correlation).
+    pub fn approve_request(env: Env, request_id: u64) {
+        require_admin_auth(&env);
+
+        let req: PendingRequest = env
+            .storage()
+            .persistent()
+            .get(&DataKey::Request(request_id))
+            .unwrap_or_else(|| panic_with_error!(&env, Error::RequestNotFound));
+
+        env.storage().persistent().remove(&DataKey::Request(request_id));
+        remove_active_id(&env, request_id);
+
+        execute_spend(&env, &req.caller, req.envelope, req.amount, &req.memo);
+
+        RequestApproved { request_id }.publish(&env);
+    }
+
+    /// Admin-only. Drop a pending request without transferring anything.
+    pub fn deny_request(env: Env, request_id: u64) {
+        require_admin_auth(&env);
+
+        if !env
+            .storage()
+            .persistent()
+            .has(&DataKey::Request(request_id))
+        {
+            panic_with_error!(&env, Error::RequestNotFound);
+        }
+        env.storage().persistent().remove(&DataKey::Request(request_id));
+        remove_active_id(&env, request_id);
+
+        RequestDenied { request_id }.publish(&env);
+    }
+
+    /// Polled by both dashboards every 2-3s. Returns admin, payment token,
+    /// envelope split + balances, members, the active SpendPolicy, and the
+    /// list of pending requests — in one call.
     pub fn get_state(env: Env) -> WalletState {
         let inst = env.storage().instance();
         let admin: Address = inst
@@ -281,6 +525,8 @@ impl SobreContract {
         let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
         let members: Vec<Address> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+        let policy = load_policy(&env);
+        let pending = load_active_pending(&env);
 
         WalletState {
             admin,
@@ -288,6 +534,8 @@ impl SobreContract {
             percents,
             members,
             balances,
+            policy,
+            pending,
         }
     }
 }
