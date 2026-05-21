@@ -15,11 +15,28 @@ const fraunces = Fraunces({
   style: ["normal", "italic"],
 });
 
+const SITE = "https://sobre-mocha.vercel.app";
+const TITLE = "Sobre — joint wallets for OFW families";
+const DESC =
+  "Remittances auto-split into named envelopes the moment they land. Both members see the same balances in real time, on Stellar.";
+
 export const metadata: Metadata = {
-  title: "Sobre — family wallet for OFW households",
-  description:
-    "Joint Stellar wallet with auto-splitting remittances. Built for the Rise In × Stellar APAC Hackathon 2026.",
+  metadataBase: new URL(SITE),
+  title: TITLE,
+  description: DESC,
   icons: [{ rel: "icon", url: "/sobre-logo.svg" }],
+  openGraph: {
+    title: TITLE,
+    description: DESC,
+    url: SITE,
+    siteName: "Sobre",
+    type: "website",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: TITLE,
+    description: DESC,
+  },
 };
 
 export default function RootLayout({
