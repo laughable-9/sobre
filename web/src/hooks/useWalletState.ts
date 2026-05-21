@@ -27,11 +27,18 @@ export interface PendingRequest {
   requested_at_ledger: number;
 }
 
+export interface Member {
+  address: string;
+  name: string;
+  emoji: string;
+}
+
 export interface WalletState {
   admin: string;
   payment_token: string;
+  wallet_name: string;
   percents: number[];
-  members: string[];
+  members: Member[];
   balances: bigint[];
   policy: SpendPolicy;
   pending: PendingRequest[];
@@ -66,8 +73,14 @@ export function useWalletState(
     const gen = ++generationRef.current;
     const server = getServer();
 
-    setLoading(true);
-    setError(null);
+    // Only toggle loading on the first fetch — subsequent polls happen in the
+    // background and shouldn't flicker the UI. Same reasoning for `error`:
+    // we only set it on the catch path (which Object.is-skips a re-render when
+    // the message hasn't changed) and clear it strictly after a successful
+    // poll. Otherwise an uninitialized contract would flicker between the
+    // init form and the loading screen every 3s.
+    const isInitialFetch = lastRetvalXdrRef.current === null;
+    if (isInitialFetch) setLoading(true);
     try {
       const source = await server.getAccount(userAddress);
       const contract = new Contract(CONTRACT_ID);
@@ -94,11 +107,12 @@ export function useWalletState(
       lastRetvalXdrRef.current = retvalXdr;
       const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
       setState(normalizeWalletState(raw));
+      setError(null);
     } catch (e) {
       if (gen !== generationRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
-      if (gen === generationRef.current) setLoading(false);
+      if (gen === generationRef.current && isInitialFetch) setLoading(false);
     }
   }, [userAddress]);
 
@@ -138,11 +152,20 @@ function normalizeWalletState(raw: Record<string, unknown>): WalletState {
       }))
     : [];
 
+  const members: Member[] = Array.isArray(raw.members)
+    ? (raw.members as Record<string, unknown>[]).map((m) => ({
+        address: String(m.address),
+        name: String(m.name ?? ""),
+        emoji: String(m.emoji ?? ""),
+      }))
+    : [];
+
   return {
     admin: String(raw.admin),
     payment_token: String(raw.payment_token),
+    wallet_name: String(raw.wallet_name ?? ""),
     percents: (raw.percents as number[]) ?? [],
-    members: (raw.members as string[]) ?? [],
+    members,
     balances: (raw.balances as bigint[]) ?? [],
     policy,
     pending,
