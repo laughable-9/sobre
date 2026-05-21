@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 4,
+    "address": 5,
     "nonce": 0,
     "mux_id": 0
   },
@@ -52,6 +52,15 @@
                       "u32": 20
                     }
                   ]
+                },
+                {
+                  "string": "Pagunsan Family"
+                },
+                {
+                  "string": "Kuya Jun"
+                },
+                {
+                  "string": "\\xf0\\x9f\\xa5\\xad"
                 }
               ]
             }
@@ -127,6 +136,31 @@
     ],
     [
       [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "function_name": "join_wallet",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                },
+                {
+                  "string": "Maria"
+                },
+                {
+                  "string": "\\xf0\\x9f\\x8c\\xba"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
         {
           "function": {
@@ -169,7 +203,7 @@
     ],
     [
       [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
         {
           "function": {
             "contract_fn": {
@@ -177,7 +211,7 @@
               "function_name": "spend",
               "args": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                 },
                 {
                   "vec": [
@@ -305,7 +339,7 @@
                       "symbol": "caller"
                     },
                     "val": {
-                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                      "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                     }
                   },
                   {
@@ -428,7 +462,60 @@
                       "val": {
                         "vec": [
                           {
-                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "address"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "emoji"
+                                },
+                                "val": {
+                                  "string": "\\xf0\\x9f\\xa5\\xad"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "name"
+                                },
+                                "val": {
+                                  "string": "Kuya Jun"
+                                }
+                              }
+                            ]
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "address"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "emoji"
+                                },
+                                "val": {
+                                  "string": "\\xf0\\x9f\\x8c\\xba"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "name"
+                                },
+                                "val": {
+                                  "string": "Maria"
+                                }
+                              }
+                            ]
                           }
                         ]
                       }
@@ -513,6 +600,18 @@
                           }
                         ]
                       }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "WalletName"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "Pagunsan Family"
+                      }
                     }
                   ]
                 }
@@ -522,26 +621,6 @@
           "ext": "v0"
         },
         "live_until": 4095
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "2032731177588607455"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
       },
       {
         "entry": {
@@ -593,6 +672,46 @@
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "5541220902715666415"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "2032731177588607455"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "8370022561469687789"
                 }
               },
               "durability": "temporary",

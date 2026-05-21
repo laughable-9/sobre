@@ -33,6 +33,18 @@ impl Envelope {
     }
 }
 
+/// Profile travels with the address everywhere we render a member — name
+/// shows in summary/activity/feed, emoji is the avatar. The frontend allows
+/// only a curated emoji set (mango, palm, flower, money, star, sun) so this
+/// stays a tiny string per row.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub struct Member {
+    pub address: Address,
+    pub name: String,
+    pub emoji: String,
+}
+
 #[contracttype]
 pub enum DataKey {
     Admin,
@@ -44,6 +56,7 @@ pub enum DataKey {
     NextRequestId,
     ActiveRequestIds,
     Request(u64),
+    WalletName,
     /// (caller, day_epoch) → cumulative spent that day. Day epoch is
     /// `ledger.timestamp() / SECONDS_PER_DAY`, so each new UTC day starts a
     /// fresh counter without explicit reset.
@@ -82,8 +95,9 @@ pub struct PendingRequest {
 pub struct WalletState {
     pub admin: Address,
     pub payment_token: Address,
+    pub wallet_name: String,
     pub percents: Vec<u32>,
-    pub members: Vec<Address>,
+    pub members: Vec<Member>,
     pub balances: Vec<i128>,
     pub policy: SpendPolicy,
     pub pending: Vec<PendingRequest>,
@@ -147,6 +161,40 @@ pub struct RequestDenied {
     pub request_id: u64,
 }
 
+/// Emitted when a non-admin self-joins via the invite-link flow.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct MemberJoined {
+    #[topic]
+    pub member: Address,
+    pub name: String,
+    pub emoji: String,
+}
+
+/// Emitted when admin kicks a member.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct MemberRemoved {
+    #[topic]
+    pub member: Address,
+}
+
+/// Emitted when admin renames the wallet via `set_wallet_name`.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WalletRenamed {
+    pub new_name: String,
+}
+
+/// Emitted when admin closes the wallet via `close_wallet`. Records the
+/// total stroops swept back to admin so the activity feed can render
+/// "₱X swept to admin · wallet closed" without re-reading balances.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WalletClosed {
+    pub total: i128,
+}
+
 /// Explicit discriminants pin the wire format. Frontends match on these
 /// numeric codes — do not renumber or reorder.
 #[contracterror]
@@ -162,6 +210,8 @@ pub enum Error {
     NotAMember = 7,
     InsufficientBalance = 8,
     RequestNotFound = 9,
+    MemberNotFound = 10,
+    CannotRemoveAdmin = 11,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -187,9 +237,23 @@ fn require_admin_auth(env: &Env) {
     admin.require_auth();
 }
 
+fn is_admin(env: &Env, addr: &Address) -> bool {
+    let admin: Address = env.storage().instance().get(&DataKey::Admin).unwrap();
+    &admin == addr
+}
+
+fn find_member_index(members: &Vec<Member>, addr: &Address) -> Option<u32> {
+    for (i, m) in members.iter().enumerate() {
+        if &m.address == addr {
+            return Some(i as u32);
+        }
+    }
+    None
+}
+
 fn require_member(env: &Env, addr: &Address) {
-    let members: Vec<Address> = env.storage().instance().get(&DataKey::Members).unwrap();
-    if !members.contains(addr) {
+    let members: Vec<Member> = env.storage().instance().get(&DataKey::Members).unwrap();
+    if find_member_index(&members, addr).is_none() {
         panic_with_error!(env, Error::NotAMember);
     }
 }
@@ -220,14 +284,20 @@ fn daily_spent(env: &Env, caller: &Address) -> i128 {
         .unwrap_or(0)
 }
 
+/// Admin spends never touch the daily counter — see `policy_requires_approval`
+/// for the matching bypass on the gate-check side.
 fn add_daily_spent(env: &Env, caller: &Address, amount: i128) {
+    if is_admin(env, caller) {
+        return;
+    }
     let key = DataKey::DailySpent(caller.clone(), day_epoch(env));
     let current: i128 = env.storage().persistent().get(&key).unwrap_or(0);
     env.storage().persistent().set(&key, &(current + amount));
 }
 
 /// Returns true if the configured policy requires admin approval for this
-/// specific spend.
+/// specific spend. Admin is always exempt: their spends are the trusted-OFW
+/// transactions the demo's policy is designed to guard against, not block.
 fn policy_requires_approval(
     env: &Env,
     policy: &SpendPolicy,
@@ -235,6 +305,9 @@ fn policy_requires_approval(
     envelope: Envelope,
     amount: i128,
 ) -> bool {
+    if is_admin(env, caller) {
+        return false;
+    }
     if policy.require_all_sigs {
         return true;
     }
@@ -365,7 +438,19 @@ pub struct SobreContract;
 
 #[contractimpl]
 impl SobreContract {
-    pub fn init(env: Env, admin: Address, payment_token: Address, percents: Vec<u32>) {
+    /// One-time setup. The caller becomes the admin AND the first profiled
+    /// member of the wallet. `wallet_name` shows in the top bar both members
+    /// see; `admin_name` + `admin_emoji` is the admin's row in the members
+    /// list.
+    pub fn init(
+        env: Env,
+        admin: Address,
+        payment_token: Address,
+        percents: Vec<u32>,
+        wallet_name: String,
+        admin_name: String,
+        admin_emoji: String,
+    ) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::AlreadyInitialized);
         }
@@ -377,25 +462,107 @@ impl SobreContract {
         inst.set(&DataKey::PaymentToken, &payment_token);
         inst.set(&DataKey::Percents, &percents);
         inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
-        // Members seeded with admin so "is X a member" is a single contains() check.
-        inst.set(&DataKey::Members, &vec![&env, admin]);
+        inst.set(&DataKey::WalletName, &wallet_name);
+
+        let admin_member = Member {
+            address: admin,
+            name: admin_name,
+            emoji: admin_emoji,
+        };
+        inst.set(&DataKey::Members, &vec![&env, admin_member]);
     }
 
-    /// Admin-only. Append a member (typically the family side). Demo caps total
-    /// participants at MAX_MEMBERS (admin counts as one of the two).
-    pub fn add_member(env: Env, member: Address) {
-        require_admin_auth(&env);
+    /// Self-service join used by the invite-link flow. Anyone with the link
+    /// can call this until the 2-member cap is reached — the cap is the
+    /// demo's safety net since the URL itself isn't authenticated.
+    pub fn join_wallet(env: Env, caller: Address, name: String, emoji: String) {
+        caller.require_auth();
+        if !env.storage().instance().has(&DataKey::Admin) {
+            panic_with_error!(&env, Error::NotInitialized);
+        }
 
         let inst = env.storage().instance();
-        let mut members: Vec<Address> = inst.get(&DataKey::Members).unwrap();
-        if members.contains(&member) {
+        let mut members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
+        if find_member_index(&members, &caller).is_some() {
             panic_with_error!(&env, Error::DuplicateMember);
         }
         if members.len() >= MAX_MEMBERS {
             panic_with_error!(&env, Error::MemberLimitReached);
         }
-        members.push_back(member);
+        members.push_back(Member {
+            address: caller.clone(),
+            name: name.clone(),
+            emoji: emoji.clone(),
+        });
         inst.set(&DataKey::Members, &members);
+
+        MemberJoined {
+            member: caller,
+            name,
+            emoji,
+        }
+        .publish(&env);
+    }
+
+    /// Admin-only. Kicks a member out of the wallet. The admin cannot kick
+    /// themselves — `close_wallet` is the right tool for shutting down.
+    pub fn remove_member(env: Env, member: Address) {
+        require_admin_auth(&env);
+
+        let inst = env.storage().instance();
+        let admin: Address = inst.get(&DataKey::Admin).unwrap();
+        if member == admin {
+            panic_with_error!(&env, Error::CannotRemoveAdmin);
+        }
+
+        let mut members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
+        let idx = find_member_index(&members, &member)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::MemberNotFound));
+        members.remove(idx);
+        inst.set(&DataKey::Members, &members);
+
+        MemberRemoved { member }.publish(&env);
+    }
+
+    /// Admin-only. Renames the wallet (the "Pagunsan Family" string at the
+    /// top of both dashboards).
+    pub fn set_wallet_name(env: Env, new_name: String) {
+        require_admin_auth(&env);
+        env.storage().instance().set(&DataKey::WalletName, &new_name);
+        WalletRenamed {
+            new_name: new_name.clone(),
+        }
+        .publish(&env);
+    }
+
+    /// Admin-only. Sweeps every envelope balance back to admin in a single
+    /// SEP-41 transfer and zeroes the envelopes. The wallet remains callable
+    /// — re-depositing would re-split per the current percentages — but for
+    /// the demo this represents "closing the wallet."
+    pub fn close_wallet(env: Env) {
+        require_admin_auth(&env);
+
+        let inst = env.storage().instance();
+        let admin: Address = inst.get(&DataKey::Admin).unwrap();
+        let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+        let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+
+        let mut total: i128 = 0;
+        for b in balances.iter() {
+            total += b;
+        }
+
+        if total > 0 {
+            token::Client::new(&env, &payment_token).transfer(
+                &env.current_contract_address(),
+                &admin,
+                &total,
+            );
+        }
+
+        inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
+
+        WalletClosed { total }.publish(&env);
     }
 
     /// Admin-only. Overwrite the envelope percentage split. Only affects how
@@ -458,7 +625,8 @@ impl SobreContract {
     }
 
     /// Members-only. Routes through the configured SpendPolicy:
-    /// - if no policy triggers, transfers tokens and emits Spend
+    /// - if no policy triggers (or the caller is admin), transfers tokens
+    ///   and emits Spend
     /// - if any policy condition triggers, creates a PendingRequest and emits
     ///   RequestCreated (no transfer; admin must approve_request later)
     pub fn spend(env: Env, caller: Address, envelope: Envelope, amount: i128, memo: String) {
@@ -514,16 +682,17 @@ impl SobreContract {
     }
 
     /// Polled by both dashboards every 2-3s. Returns admin, payment token,
-    /// envelope split + balances, members, the active SpendPolicy, and the
-    /// list of pending requests — in one call.
+    /// wallet name, envelope split + balances, profiled members, the active
+    /// SpendPolicy, and the list of pending requests — in one call.
     pub fn get_state(env: Env) -> WalletState {
         let inst = env.storage().instance();
         let admin: Address = inst
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+        let wallet_name: String = inst.get(&DataKey::WalletName).unwrap();
         let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
-        let members: Vec<Address> = inst.get(&DataKey::Members).unwrap();
+        let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let policy = load_policy(&env);
         let pending = load_active_pending(&env);
@@ -531,6 +700,7 @@ impl SobreContract {
         WalletState {
             admin,
             payment_token,
+            wallet_name,
             percents,
             members,
             balances,

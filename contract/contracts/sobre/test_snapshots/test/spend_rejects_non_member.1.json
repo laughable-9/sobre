@@ -52,6 +52,15 @@
                       "u32": 20
                     }
                   ]
+                },
+                {
+                  "string": "Pagunsan Family"
+                },
+                {
+                  "string": "Kuya Jun"
+                },
+                {
+                  "string": "\\xf0\\x9f\\xa5\\xad"
                 }
               ]
             }
@@ -258,7 +267,32 @@
                       "val": {
                         "vec": [
                           {
-                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "address"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "emoji"
+                                },
+                                "val": {
+                                  "string": "\\xf0\\x9f\\xa5\\xad"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "name"
+                                },
+                                "val": {
+                                  "string": "Kuya Jun"
+                                }
+                              }
+                            ]
                           }
                         ]
                       }
@@ -295,6 +329,18 @@
                             "u32": 20
                           }
                         ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "WalletName"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "string": "Pagunsan Family"
                       }
                     }
                   ]
