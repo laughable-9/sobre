@@ -9,6 +9,7 @@ import { ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
 import { InitForm } from "@/components/sobre/InitForm";
 import { JoinByLinkForm } from "@/components/sobre/JoinByLinkForm";
 import { ProfileSetupScreen } from "@/components/sobre/ProfileSetupScreen";
+import { SobreCardSkeleton } from "@/components/sobre/Skeletons";
 import { TopBar } from "@/components/sobre/TopBar";
 import { Button } from "@/components/ui/button";
 
@@ -136,7 +137,7 @@ export default function MySobresPage() {
               className="mx-auto"
             />
             <h1 className="font-serif text-[36px] font-semibold mt-5 mb-3">
-              Buksan ang sobre
+              Open a new Sobre
             </h1>
             <p className="text-[16px] mb-6" style={{ color: "var(--text-2)" }}>
               Give your new Sobre a name. You become the admin and can
@@ -236,7 +237,18 @@ export default function MySobresPage() {
           </p>
         ) : null}
 
-        {allRows.length === 0 ? (
+        {adminSobres.loading && allRows.length === 0 ? (
+          <div
+            className="grid gap-4"
+            style={{
+              gridTemplateColumns:
+                "repeat(auto-fill, minmax(min(340px, 100%), 1fr))",
+            }}
+          >
+            <SobreCardSkeleton />
+            <SobreCardSkeleton />
+          </div>
+        ) : allRows.length === 0 ? (
           <div
             className="text-center py-16 px-6"
             style={{
@@ -271,7 +283,7 @@ export default function MySobresPage() {
                 margin: "0 auto",
               }}
             >
-              Open your first Sobre to start the auto-split for your family —
+              Open your first Sobre to start the auto-split for your family,
               or paste an invite link if someone in your family already opened
               one.
             </p>

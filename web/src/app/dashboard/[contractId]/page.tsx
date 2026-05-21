@@ -11,6 +11,7 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { DepositModal } from "@/components/sobre/DepositModal";
+import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
 import { JoinForm } from "@/components/sobre/JoinForm";
@@ -266,11 +267,13 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   // ─── Loading branch ───────────────────────────────────────────────────
   if (!state) {
-    return (
-      <div className="sobre-app">
-        <TopBar wallet={wallet} />
-        <main className="flex-1 grid place-items-center px-6">
-          {walletState.error?.includes("Error(Contract, #2)") ? (
+    const isUninitialized =
+      walletState.error?.includes("Error(Contract, #2)") ?? false;
+    if (isUninitialized) {
+      return (
+        <div className="sobre-app">
+          <TopBar wallet={wallet} />
+          <main className="flex-1 grid place-items-center px-6">
             <div className="text-center max-w-md">
               <h1 className="font-serif text-[28px] font-semibold mb-3">
                 This Sobre isn&apos;t open yet
@@ -287,10 +290,14 @@ function Dashboard({ contractId }: { contractId: string }) {
                 Back to My Sobres
               </Link>
             </div>
-          ) : (
-            <p style={{ color: "var(--text-2)" }}>Loading…</p>
-          )}
-        </main>
+          </main>
+        </div>
+      );
+    }
+    return (
+      <div className="sobre-app">
+        <TopBar wallet={wallet} />
+        <DashboardSkeleton />
       </div>
     );
   }
