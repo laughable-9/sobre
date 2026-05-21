@@ -9,7 +9,7 @@
  * only the entry point for opening new ones + listing the user's wallets.
  */
 export const FACTORY_CONTRACT_ID =
-  "CBF3AC45NCERBDEWHDRQBRTQDQC6DZGZ4NTNDXCZTUXL4QJ6Y4OKTIN5";
+  "CDDGY2WGKGTEV7477Y4N4PQF66LMST4LC3V5PONVPRUQOZBOFYL5UEEH";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
  *  Deterministic per network. On testnet it's always this address. */
@@ -32,3 +32,16 @@ export const PHP_PER_XLM = 16;
 
 export const ENVELOPE_LABELS = ["Groceries", "Tuition", "Savings"] as const;
 export type EnvelopeName = (typeof ENVELOPE_LABELS)[number];
+
+/** Map a canonical envelope slot to its current display label.
+ *  `envelopeNames` comes from get_state; falls back to the slot key when the
+ *  state hasn't loaded yet or the array is malformed. */
+export function displayEnvelopeName(
+  canonical: string,
+  envelopeNames: string[] | undefined,
+): string {
+  if (!envelopeNames) return canonical;
+  const i = ENVELOPE_LABELS.indexOf(canonical as EnvelopeName);
+  if (i < 0) return canonical;
+  return envelopeNames[i] ?? canonical;
+}

@@ -29,10 +29,13 @@ export function SplitEditor({
   value,
   onChange,
   disabled,
+  labels,
 }: {
   value: Split;
   onChange: (next: Split) => void;
   disabled?: boolean;
+  /** Row labels — defaults to the contract-side enum names. */
+  labels?: readonly [string, string, string];
 }) {
   const sum = value[0] + value[1] + value[2];
   const ok = sum === 100;
@@ -46,7 +49,16 @@ export function SplitEditor({
 
   return (
     <div className="space-y-2.5">
-      {ENVELOPE_LABELS.map((label, i) => (
+      <div
+        className="flex justify-end tabular text-[12px] font-semibold whitespace-nowrap"
+        style={{
+          color: ok ? "var(--sobre-accent)" : "var(--sobre-danger)",
+        }}
+      >
+        Total {sum}% {ok ? "✓" : "(needs 100%)"}
+      </div>
+
+      {(labels ?? ENVELOPE_LABELS).map((label, i) => (
         <div key={label} className="flex items-center gap-3">
           <div
             className="flex-1 text-[14px] font-medium"
@@ -95,39 +107,30 @@ export function SplitEditor({
         </div>
       ))}
 
-      <div className="flex items-center justify-between pt-1">
-        <div className="flex gap-1.5 flex-wrap">
-          {PRESETS.map((p) => {
-            const active = splitsEqual(p.value, value);
-            return (
-              <button
-                key={p.label}
-                type="button"
-                disabled={disabled}
-                onClick={() => onChange(p.value)}
-                className="text-[11px] font-medium"
-                style={{
-                  padding: "5px 10px",
-                  borderRadius: 999,
-                  border: `1px solid ${active ? "var(--sobre-primary)" : "var(--border)"}`,
-                  color: active ? "var(--sobre-primary)" : "var(--text-2)",
-                  background: active ? "var(--surface-alt)" : "var(--surface)",
-                  cursor: disabled ? "not-allowed" : "pointer",
-                }}
-              >
-                {p.label}
-              </button>
-            );
-          })}
-        </div>
-        <div
-          className="tabular text-[12px] font-semibold"
-          style={{
-            color: ok ? "var(--sobre-accent)" : "var(--sobre-danger)",
-          }}
-        >
-          Total {sum}% {ok ? "✓" : `(needs 100%)`}
-        </div>
+      <div className="flex gap-1.5 pt-1 overflow-x-auto">
+        {PRESETS.map((p) => {
+          const active = splitsEqual(p.value, value);
+          return (
+            <button
+              key={p.label}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(p.value)}
+              className="text-[11px] font-medium whitespace-nowrap"
+              style={{
+                padding: "5px 10px",
+                borderRadius: 999,
+                border: `1px solid ${active ? "var(--sobre-primary)" : "var(--border)"}`,
+                color: active ? "var(--sobre-primary)" : "var(--text-2)",
+                background: active ? "var(--surface-alt)" : "var(--surface)",
+                cursor: disabled ? "not-allowed" : "pointer",
+                flexShrink: 0,
+              }}
+            >
+              {p.label}
+            </button>
+          );
+        })}
       </div>
     </div>
   );

@@ -11,6 +11,7 @@ export interface CreateSobreArgs {
   adminName: string;
   adminEmoji: string;
   percents?: [number, number, number];
+  envelopeNames?: [string, string, string];
 }
 
 export interface UseCreateSobreResult {
@@ -37,6 +38,7 @@ export function useCreateSobre(
       adminName,
       adminEmoji,
       percents = [50, 30, 20],
+      envelopeNames = ["Groceries", "Tuition", "Savings"],
     }: CreateSobreArgs): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       setPending(true);
@@ -46,6 +48,7 @@ export function useCreateSobre(
           Address.fromString(userAddress).toScVal(),
           Address.fromString(XLM_SAC_ID).toScVal(),
           percentsScVal(percents),
+          xdr.ScVal.scvVec(envelopeNames.map((n) => xdr.ScVal.scvString(n))),
           xdr.ScVal.scvString(walletName),
           xdr.ScVal.scvString(adminName),
           xdr.ScVal.scvString(adminEmoji),

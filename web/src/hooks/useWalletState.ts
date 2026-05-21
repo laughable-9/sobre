@@ -37,6 +37,7 @@ export interface WalletState {
   admin: string;
   payment_token: string;
   wallet_name: string;
+  envelope_names: string[];
   percents: number[];
   members: Member[];
   balances: bigint[];
@@ -173,6 +174,9 @@ function normalizeWalletState(raw: Record<string, unknown>): WalletState {
     admin: String(raw.admin),
     payment_token: String(raw.payment_token),
     wallet_name: String(raw.wallet_name ?? ""),
+    envelope_names: Array.isArray(raw.envelope_names)
+      ? (raw.envelope_names as unknown[]).map(String)
+      : [],
     percents: (raw.percents as number[]) ?? [],
     members,
     balances: (raw.balances as bigint[]) ?? [],

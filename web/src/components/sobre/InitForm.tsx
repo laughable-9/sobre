@@ -5,6 +5,12 @@ import { useState } from "react";
 import { useCreateSobre } from "@/hooks/useCreateSobre";
 import { SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
 import {
+  DEFAULT_ENVELOPE_NAMES,
+  EnvelopeNamesEditor,
+  isValidEnvelopeNames,
+  type EnvelopeNames,
+} from "@/components/sobre/EnvelopeNamesEditor";
+import {
   SplitEditor,
   isValidSplit,
   type Split,
@@ -27,21 +33,29 @@ export function InitForm({
   const adminEmoji = profile?.emoji ?? SOBRE_EMOJIS[0];
 
   const [walletName, setWalletName] = useState("");
+  const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
+    DEFAULT_ENVELOPE_NAMES,
+  );
   const [split, setSplit] = useState<Split>([50, 30, 20]);
   const { createSobre, pending, error } = useCreateSobre(userAddress);
 
   const valid =
-    walletName.trim().length > 0 && adminName.length > 0 && isValidSplit(split);
+    walletName.trim().length > 0 &&
+    adminName.length > 0 &&
+    isValidEnvelopeNames(envelopeNames) &&
+    isValidSplit(split);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
     try {
+      const trimmed = envelopeNames.map((n) => n.trim()) as EnvelopeNames;
       const newContractId = await createSobre({
         walletName: walletName.trim(),
         adminName,
         adminEmoji,
         percents: split,
+        envelopeNames: trimmed,
       });
       onSuccess(newContractId);
     } catch {
@@ -109,6 +123,21 @@ export function InitForm({
       </div>
 
       <div className="sobre-input-group">
+        <label>Envelope names</label>
+        <p
+          className="text-[12px] -mt-1 mb-3"
+          style={{ color: "var(--text-3)" }}
+        >
+          What you call each envelope (e.g., Rent, School, Vacation).
+        </p>
+        <EnvelopeNamesEditor
+          value={envelopeNames}
+          onChange={setEnvelopeNames}
+          disabled={pending}
+        />
+      </div>
+
+      <div className="sobre-input-group">
         <label>Envelope split</label>
         <p
           className="text-[12px] -mt-1 mb-3"
@@ -116,7 +145,12 @@ export function InitForm({
         >
           How each deposit gets distributed. You can change this later.
         </p>
-        <SplitEditor value={split} onChange={setSplit} disabled={pending} />
+        <SplitEditor
+          value={split}
+          onChange={setSplit}
+          disabled={pending}
+          labels={envelopeNames}
+        />
       </div>
 
       {error ? (

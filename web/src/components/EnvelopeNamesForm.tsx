@@ -2,81 +2,76 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-import { toEnvelopeNames } from "@/components/sobre/EnvelopeNamesEditor";
 import {
-  SplitEditor,
-  isValidSplit,
-  splitsEqual,
-  toSplit,
-} from "@/components/sobre/SplitEditor";
-import { useSetEnvelopes } from "@/hooks/useSetEnvelopes";
+  EnvelopeNamesEditor,
+  isValidEnvelopeNames,
+  namesEqual,
+  toEnvelopeNames,
+  type EnvelopeNames,
+} from "@/components/sobre/EnvelopeNamesEditor";
+import { useSetEnvelopeNames } from "@/hooks/useSetEnvelopeNames";
 
-function ReadOnly({
-  percents,
-  envelopeNames,
-}: {
-  percents: number[];
-  envelopeNames: string[];
-}) {
-  const names = toEnvelopeNames(envelopeNames);
+function ReadOnly({ names }: { names: EnvelopeNames }) {
   return (
     <div className="text-sm space-y-1.5">
-      {names.map((name, i) => (
+      {names.map((n, i) => (
         <div key={i} className="flex justify-between gap-3">
-          <span style={{ color: "var(--text-2)" }}>{name}</span>
-          <span className="font-medium tabular" style={{ color: "var(--text-1)" }}>
-            {percents[i] ?? 0}%
+          <span style={{ color: "var(--text-2)" }}>#{i + 1}</span>
+          <span className="font-medium" style={{ color: "var(--text-1)" }}>
+            {n}
           </span>
         </div>
       ))}
       <p className="text-xs pt-1" style={{ color: "var(--text-3)" }}>
-        Only the admin can change the split.
+        Only the admin can rename the envelopes.
       </p>
     </div>
   );
 }
 
-export function EnvelopeSplitForm({
+export function EnvelopeNamesForm({
   userAddress,
   contractId,
   isAdmin,
   current,
-  envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
   contractId: string;
   isAdmin: boolean;
-  current: number[];
-  envelopeNames: string[];
+  current: string[];
   onSuccess: () => void;
 }) {
-  const [split, setSplit] = useState(() => toSplit(current));
-  const { setEnvelopes, pending, error } = useSetEnvelopes(
+  const [names, setNames] = useState<EnvelopeNames>(() => toEnvelopeNames(current));
+  const { setEnvelopeNames, pending, error } = useSetEnvelopeNames(
     userAddress,
     contractId,
   );
 
-  // Hash by the underlying values so the upstream poll's identity churn
-  // doesn't clobber an in-progress edit every 3s.
-  const sig = useMemo(() => current.join(","), [current]);
+  // Re-sync from chain state on poll, but only when the underlying names
+  // actually change (so a 3s poll doesn't keep clobbering an in-progress edit).
+  const sig = useMemo(() => current.join("\n"), [current]);
   useEffect(() => {
-    setSplit(toSplit(current));
+    setNames(toEnvelopeNames(current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
 
   if (!userAddress) return null;
-  if (!isAdmin)
-    return <ReadOnly percents={current} envelopeNames={envelopeNames} />;
+  if (!isAdmin) return <ReadOnly names={toEnvelopeNames(current)} />;
 
-  const dirty = !splitsEqual(split, toSplit(current));
-  const valid = isValidSplit(split);
+  const trimmed: EnvelopeNames = [
+    names[0].trim(),
+    names[1].trim(),
+    names[2].trim(),
+  ];
+  const valid = isValidEnvelopeNames(names);
+  const dirty = !namesEqual(trimmed, toEnvelopeNames(current));
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !dirty) return;
     try {
-      await setEnvelopes(split);
+      await setEnvelopeNames(trimmed);
       onSuccess();
     } catch {
       /* surfaced via hook error */
@@ -86,13 +81,13 @@ export function EnvelopeSplitForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
-        Changes apply to future deposits. Existing balances stay put.
+        Display only. Balances + pending requests stay attached to the same
+        envelope slots.
       </p>
-      <SplitEditor
-        value={split}
-        onChange={setSplit}
+      <EnvelopeNamesEditor
+        value={names}
+        onChange={setNames}
         disabled={pending}
-        labels={toEnvelopeNames(envelopeNames)}
       />
       <div className="flex items-center gap-3 pt-1">
         <button
@@ -106,7 +101,7 @@ export function EnvelopeSplitForm({
             cursor: pending || !valid || !dirty ? "not-allowed" : "pointer",
           }}
         >
-          {pending ? "Saving…" : "Save split"}
+          {pending ? "Saving…" : "Save names"}
         </button>
         {error ? (
           <span
