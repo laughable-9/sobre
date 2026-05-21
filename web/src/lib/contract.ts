@@ -4,6 +4,7 @@ import {
   BASE_FEE,
   Contract,
   TransactionBuilder,
+  nativeToScVal,
   rpc,
   xdr,
 } from "@stellar/stellar-sdk";
@@ -82,4 +83,39 @@ export function envelopeScVal(
   variant: "Groceries" | "Tuition" | "Savings",
 ): xdr.ScVal {
   return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(variant)]);
+}
+
+/**
+ * Encode a SpendPolicy struct as an ScVal map. Field order matters — Soroban
+ * sorts struct map entries alphabetically by key:
+ *     daily_limit < protected_envelopes < require_all_sigs
+ */
+export function spendPolicyScVal({
+  requireAllSigs,
+  dailyLimit,
+  protectedEnvelopes,
+}: {
+  requireAllSigs: boolean;
+  dailyLimit: bigint | null;
+  protectedEnvelopes: ("Groceries" | "Tuition" | "Savings")[];
+}): xdr.ScVal {
+  const dailyLimitVal =
+    dailyLimit === null
+      ? xdr.ScVal.scvVoid()
+      : nativeToScVal(dailyLimit, { type: "i128" });
+
+  return xdr.ScVal.scvMap([
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("daily_limit"),
+      val: dailyLimitVal,
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("protected_envelopes"),
+      val: xdr.ScVal.scvVec(protectedEnvelopes.map(envelopeScVal)),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("require_all_sigs"),
+      val: xdr.ScVal.scvBool(requireAllSigs),
+    }),
+  ]);
 }
