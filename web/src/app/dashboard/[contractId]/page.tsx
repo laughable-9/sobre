@@ -34,7 +34,7 @@ import {
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
-import { rememberJoinedSobre } from "@/lib/joinedSobres";
+import { forgetJoinedSobre, rememberJoinedSobre } from "@/lib/joinedSobres";
 
 interface RouteParams {
   contractId: string;
@@ -79,6 +79,16 @@ function Dashboard({ contractId }: { contractId: string }) {
   const isMember = Boolean(
     state && address && state.members.some((m) => m.address === address),
   );
+
+  // Kicked-member cleanup: when state has loaded and confirms this address
+  // isn't a member (and we didn't arrive via an invite link), drop any
+  // localStorage joined-Sobre entry so "My Sobres" stops listing it.
+  useEffect(() => {
+    if (!state || !address) return;
+    if (searchParams.get("join") === contractId) return;
+    if (isMember) return;
+    forgetJoinedSobre(address, contractId);
+  }, [state, address, isMember, contractId, searchParams]);
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);

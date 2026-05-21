@@ -17,7 +17,7 @@ import { useFreighter } from "@/hooks/useFreighter";
 import { useSobreSummary } from "@/hooks/useSobreSummary";
 import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
-import { getJoinedSobres } from "@/lib/joinedSobres";
+import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile } from "@/lib/profile";
 import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
 
@@ -302,6 +302,14 @@ export default function MySobresPage() {
                 contractId={row.id}
                 role={row.role}
                 callerAddress={address}
+                onNotAMember={
+                  row.role === "member"
+                    ? () => {
+                        forgetJoinedSobre(address, row.id);
+                        setJoined((prev) => prev.filter((id) => id !== row.id));
+                      }
+                    : undefined
+                }
               />
             ))}
           </div>
@@ -315,12 +323,28 @@ function SobreCard({
   contractId,
   role,
   callerAddress,
+  onNotAMember,
 }: {
   contractId: string;
   role: "admin" | "member";
   callerAddress: string;
+  /** Called once when the on-chain members list confirms the caller has been
+   *  kicked. Parent uses this to forget the localStorage entry + drop the
+   *  card from the list. Only fired for `role === "member"`. */
+  onNotAMember?: () => void;
 }) {
   const { summary, loading } = useSobreSummary(contractId, callerAddress);
+
+  const stillAMember =
+    summary === null ||
+    summary.members.some((m) => m.address === callerAddress);
+  useEffect(() => {
+    if (summary && !stillAMember && onNotAMember) {
+      onNotAMember();
+    }
+  }, [summary, stillAMember, onNotAMember]);
+
+  if (summary && !stillAMember) return null;
 
   const totalXlm =
     summary !== null ? Number(summary.totalStroops) / STROOPS_PER_XLM : 0;
