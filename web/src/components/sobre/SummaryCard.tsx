@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Plus, Timer, X } from "lucide-react";
+import { Check, Copy, Plus, Timer, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
@@ -19,6 +19,7 @@ export function SummaryCard({
   onDeposit,
   dailySpent,
   onKick,
+  onInvite,
 }: {
   state: WalletState;
   address: string;
@@ -29,8 +30,12 @@ export function SummaryCard({
   /** Admin-only; omit for non-admin viewers. Wired by the dashboard to open
    *  a confirm-then-removeMember flow. */
   onKick?: (memberAddress: string) => void;
+  /** Admin-only; opens the InviteModal. Rendered as a slot in the members
+   *  list when there's still room (members < 2). */
+  onInvite?: () => void;
 }) {
   const isAdmin = address === state.admin;
+  const canInvite = isAdmin && state.members.length < 2;
   const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
   const totalXlm = Number(totalStroops) / STROOPS_PER_XLM;
   const totalPhp = totalXlm * PHP_PER_XLM;
@@ -93,9 +98,22 @@ export function SummaryCard({
         />
 
         <div className="sobre-members">
-          <span className="sobre-label">
-            Members ({state.members.length}/2)
-          </span>
+          <div className="flex items-center justify-between">
+            <span className="sobre-label">
+              Members ({state.members.length}/2)
+            </span>
+            {canInvite && onInvite ? (
+              <button
+                type="button"
+                onClick={onInvite}
+                className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
+                style={{ color: "var(--sobre-primary)" }}
+              >
+                <UserPlus size={11} strokeWidth={2.5} />
+                Invite
+              </button>
+            ) : null}
+          </div>
           <div className="mt-3 space-y-1">
             {state.members.map((m, i) => {
               const palette = MEMBER_PALETTES[i % MEMBER_PALETTES.length];
@@ -127,20 +145,31 @@ export function SummaryCard({
                       ) : null}
                     </div>
                     <div className="role">
-                      {memberIsAdmin ? "Admin · OFW" : "Family member"}
+                      {memberIsAdmin ? "Admin" : "Family member"}
                     </div>
                   </div>
                   <button
                     onClick={() => void copyAddr(m.address)}
                     className="sobre-iconbtn"
-                    style={{ width: 28, height: 28 }}
+                    style={{
+                      width: 28,
+                      height: 28,
+                      color:
+                        copiedAddr === m.address
+                          ? "var(--sobre-accent)"
+                          : undefined,
+                    }}
                     title={
                       copiedAddr === m.address
                         ? "Copied!"
                         : "Copy full address"
                     }
                   >
-                    <Copy size={13} strokeWidth={2} />
+                    {copiedAddr === m.address ? (
+                      <Check size={13} strokeWidth={2.5} />
+                    ) : (
+                      <Copy size={13} strokeWidth={2} />
+                    )}
                   </button>
                   {isAdmin && !memberIsAdmin && onKick ? (
                     <button

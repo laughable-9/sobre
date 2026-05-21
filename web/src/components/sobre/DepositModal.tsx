@@ -15,18 +15,20 @@ const QUICK = [1, 5, 10, 50];
 export function DepositModal({
   userAddress,
   state,
+  contractId,
   onClose,
   onSuccess,
 }: {
   userAddress: string;
   state: WalletState;
+  contractId: string;
   onClose: () => void;
   /** Called after the tx lands on chain with the actual XLM amount sent. */
   onSuccess: (info: { xlm: number; stroops: bigint }) => void;
 }) {
   const [xlmStr, setXlmStr] = useState("10");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { deposit, pending, error } = useDeposit(userAddress);
+  const { deposit, pending, error } = useDeposit(userAddress, contractId);
   const xlm = Number(xlmStr);
   const valid = isFinite(xlm) && xlm > 0;
   const php = (valid ? xlm : 0) * PHP_PER_XLM;

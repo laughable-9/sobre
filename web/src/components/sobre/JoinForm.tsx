@@ -5,21 +5,29 @@ import { useState } from "react";
 import { useJoinWallet } from "@/hooks/useJoinWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { EmojiPicker, SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
+import { getProfile } from "@/lib/profile";
 
 export function JoinForm({
   userAddress,
   state,
+  contractId,
   onSuccess,
   onCancel,
 }: {
   userAddress: string;
   state: WalletState;
+  contractId: string;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[1]);
-  const { joinWallet, pending, error } = useJoinWallet(userAddress);
+  // Pre-fill from the user's saved profile so accepting an invite is a single
+  // click once they've set up their default name + emoji.
+  const savedProfile = getProfile(userAddress);
+  const [name, setName] = useState(savedProfile?.name ?? "");
+  const [emoji, setEmoji] = useState<string>(
+    savedProfile?.emoji ?? SOBRE_EMOJIS[1],
+  );
+  const { joinWallet, pending, error } = useJoinWallet(userAddress, contractId);
 
   const alreadyMember = state.members.some(
     (m) => m.address === userAddress,
@@ -97,7 +105,7 @@ export function JoinForm({
               />
             </div>
             <div className="sobre-input-group">
-              <label>Your emoji</label>
+              <label>Your icon</label>
               <EmojiPicker
                 value={emoji}
                 onChange={setEmoji}

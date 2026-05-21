@@ -6,20 +6,29 @@ import { AlertTriangle } from "lucide-react";
 import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
+import { markSobreClosed } from "@/lib/closedSobres";
 
 export function CloseWalletModal({
   adminAddress,
   state,
+  contractId,
   onClose,
   onSuccess,
 }: {
   adminAddress: string;
   state: WalletState;
+  contractId: string;
   onClose: () => void;
+  /** Fires after the sweep tx lands. The contract still allows reads after
+   *  this, but we mark the Sobre as closed locally so My Sobres hides it and
+   *  the dashboard renders a "closed" screen on subsequent visits. */
   onSuccess: () => void;
 }) {
   const [confirmText, setConfirmText] = useState("");
-  const { closeWallet, pending, error } = useCloseWallet(adminAddress);
+  const { closeWallet, pending, error } = useCloseWallet(
+    adminAddress,
+    contractId,
+  );
   const total = state.balances.reduce((a, b) => a + b, 0n);
   const totalXlm = Number(total) / STROOPS_PER_XLM;
   const totalPhp = totalXlm * PHP_PER_XLM;
@@ -30,6 +39,7 @@ export function CloseWalletModal({
     if (!confirmed) return;
     try {
       await closeWallet();
+      markSobreClosed(contractId);
       onSuccess();
     } catch {
       // error on hook

@@ -45,11 +45,13 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export function PolicySettingsForm({
   userAddress,
+  contractId,
   isAdmin,
   current,
   onSuccess,
 }: {
   userAddress: string | null;
+  contractId: string;
   isAdmin: boolean;
   current: SpendPolicy;
   onSuccess: () => void;
@@ -65,7 +67,7 @@ export function PolicySettingsForm({
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
     () => new Set(current.protected_envelopes),
   );
-  const { setPolicy, pending, error } = useSetPolicy(userAddress);
+  const { setPolicy, pending, error } = useSetPolicy(userAddress, contractId);
 
   // Stable signature so the upstream poll doesn't reset form state when the
   // server data hasn't actually changed.
@@ -146,7 +148,7 @@ export function PolicySettingsForm({
         >
           Daily limit (XLM) per member
         </label>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <input
             id="daily-limit"
             type="number"
@@ -162,11 +164,7 @@ export function PolicySettingsForm({
             <span className="text-xs" style={{ color: "var(--text-3)" }}>
               ≈ ₱ {phpDaily}
             </span>
-          ) : (
-            <span className="text-xs" style={{ color: "var(--text-3)" }}>
-              Leave blank for no limit.
-            </span>
-          )}
+          ) : null}
         </div>
       </div>
 

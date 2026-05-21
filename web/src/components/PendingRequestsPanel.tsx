@@ -9,11 +9,13 @@ import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 export function PendingRequestsPanel({
   userAddress,
+  contractId,
   isAdmin,
   pending,
   onSuccess,
 }: {
   userAddress: string | null;
+  contractId: string;
   isAdmin: boolean;
   pending: PendingRequest[];
   onSuccess: () => void;
@@ -22,12 +24,12 @@ export function PendingRequestsPanel({
     approve,
     pending: approveInFlight,
     error: approveError,
-  } = useApproveRequest(userAddress);
+  } = useApproveRequest(userAddress, contractId);
   const {
     deny,
     pending: denyInFlight,
     error: denyError,
-  } = useDenyRequest(userAddress);
+  } = useDenyRequest(userAddress, contractId);
 
   if (!userAddress) return null;
 

@@ -2,33 +2,40 @@
 
 import { useState } from "react";
 
-import { useInit } from "@/hooks/useInit";
-import { EmojiPicker, SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
+import { useCreateSobre } from "@/hooks/useCreateSobre";
+import { SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
+import { getProfile } from "@/lib/profile";
 
 export function InitForm({
   userAddress,
   onSuccess,
 }: {
   userAddress: string;
-  onSuccess: () => void;
+  /** Called with the freshly-deployed Sobre's contract address. */
+  onSuccess: (contractId: string) => void;
 }) {
-  const [walletName, setWalletName] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[0]);
-  const { init, pending, error } = useInit(userAddress);
+  // The user has already set their name + icon during the first-connect
+  // profile setup; reuse those silently so this form only asks for the one
+  // thing that's per-Sobre — the wallet name.
+  const profile = getProfile(userAddress);
+  const adminName = profile?.name ?? "";
+  const adminEmoji = profile?.emoji ?? SOBRE_EMOJIS[0];
 
-  const valid = walletName.trim().length > 0 && adminName.trim().length > 0;
+  const [walletName, setWalletName] = useState("");
+  const { createSobre, pending, error } = useCreateSobre(userAddress);
+
+  const valid = walletName.trim().length > 0 && adminName.length > 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
     try {
-      await init({
+      const newContractId = await createSobre({
         walletName: walletName.trim(),
-        adminName: adminName.trim(),
-        adminEmoji: emoji,
+        adminName,
+        adminEmoji,
       });
-      onSuccess();
+      onSuccess(newContractId);
     } catch {
       // error on hook
     }
@@ -40,6 +47,44 @@ export function InitForm({
       className="text-left space-y-4 mt-6"
       style={{ maxWidth: 360, margin: "24px auto 0" }}
     >
+      {profile ? (
+        <div
+          className="rounded-[10px] p-3 flex items-center gap-3"
+          style={{
+            background: "var(--surface-alt)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div
+            className="grid place-items-center"
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: 10,
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              fontSize: 20,
+            }}
+          >
+            {adminEmoji}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div
+              className="text-[11px] uppercase tracking-wider"
+              style={{ color: "var(--text-3)", fontWeight: 600 }}
+            >
+              You&apos;ll join as
+            </div>
+            <div
+              className="text-[14px] font-medium truncate"
+              style={{ color: "var(--text-1)" }}
+            >
+              {adminName}
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="sobre-input-group">
         <label htmlFor="wallet-name">Sobre name</label>
         <input
@@ -54,28 +99,16 @@ export function InitForm({
           autoFocus
         />
       </div>
-      <div className="sobre-input-group">
-        <label htmlFor="admin-name">Your name</label>
-        <input
-          id="admin-name"
-          className="sobre-input"
-          type="text"
-          placeholder="Juan Dela Cruz"
-          value={adminName}
-          onChange={(e) => setAdminName(e.target.value)}
-          disabled={pending}
-          maxLength={32}
-        />
-      </div>
-      <div className="sobre-input-group">
-        <label>Your emoji</label>
-        <EmojiPicker value={emoji} onChange={setEmoji} disabled={pending} />
-      </div>
+
       {error ? (
-        <p className="text-xs break-all" style={{ color: "var(--sobre-danger)" }}>
+        <p
+          className="text-xs break-all"
+          style={{ color: "var(--sobre-danger)" }}
+        >
           {error}
         </p>
       ) : null}
+
       <button
         type="submit"
         disabled={!valid || pending}
@@ -87,9 +120,7 @@ export function InitForm({
           cursor: !valid || pending ? "not-allowed" : "pointer",
         }}
       >
-        {pending
-          ? "Initializing…"
-          : "Open the wallet (50 / 30 / 20)"}
+        {pending ? "Opening your Sobre…" : "Open this Sobre (50 / 30 / 20)"}
       </button>
     </form>
   );

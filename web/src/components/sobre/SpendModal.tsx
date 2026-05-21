@@ -28,12 +28,14 @@ const ICONS: Record<EnvelopeName, React.ReactNode> = {
 export function SpendModal({
   userAddress,
   state,
+  contractId,
   envelope,
   onClose,
   onSuccess,
 }: {
   userAddress: string;
   state: WalletState;
+  contractId: string;
   envelope: EnvelopeName;
   onClose: () => void;
   /** Called after the tx lands. `willGoPending` is the modal's prediction of
@@ -53,7 +55,7 @@ export function SpendModal({
   const [phpStr, setPhpStr] = useState("");
   const [memo, setMemo] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { spend, pending, error } = useSpend(userAddress);
+  const { spend, pending, error } = useSpend(userAddress, contractId);
 
   const php = Number(phpStr) || 0;
   const xlm = php / PHP_PER_XLM;
