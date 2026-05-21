@@ -50,6 +50,11 @@ impl Fixture {
         let wallet_name = String::from_str(&env, WALLET_NAME);
         let admin_name = String::from_str(&env, ADMIN_NAME);
         let admin_emoji = String::from_str(&env, ADMIN_EMOJI);
+        // Standalone tests don't go through the factory, so we mint a
+        // throwaway address to satisfy the Factory constructor arg. Tests
+        // that exercise upgrade() install a real factory via the factory
+        // crate's test suite instead.
+        let factory = Address::generate(&env);
         // env.register now invokes __constructor with these args, atomically
         // deploying + initializing the contract in one step.
         let contract_id = env.register(
@@ -62,6 +67,7 @@ impl Fixture {
                 wallet_name,
                 admin_name,
                 admin_emoji,
+                factory,
             ),
         );
         Self {

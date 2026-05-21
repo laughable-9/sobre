@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
-    vec, Address, Env, String, Vec,
+    vec, Address, BytesN, Env, String, Vec,
 };
 
 const ENVELOPE_COUNT: u32 = 3;
@@ -63,6 +63,10 @@ pub enum DataKey {
     /// `ledger.timestamp() / SECONDS_PER_DAY`, so each new UTC day starts a
     /// fresh counter without explicit reset.
     DailySpent(Address, u64),
+    /// Address of the SobreFactory that deployed this instance. Read on
+    /// `upgrade()` so the admin can opt into the factory's current wasm hash
+    /// without having to remember it themselves.
+    Factory,
 }
 
 /// All three checks compose with OR — any one triggering routes the spend
@@ -194,6 +198,14 @@ pub struct WalletRenamed {
 #[derive(Clone, Debug)]
 pub struct EnvelopesRenamed {
     pub names: Vec<String>,
+}
+
+/// Emitted when the admin opts this Sobre into a new wasm via `upgrade`.
+/// The new code takes effect on the next invocation; storage is unchanged.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct WalletUpgraded {
+    pub new_wasm: BytesN<32>,
 }
 
 /// Emitted when admin closes the wallet via `close_wallet`. Records the
@@ -473,6 +485,7 @@ impl SobreContract {
         wallet_name: String,
         admin_name: String,
         admin_emoji: String,
+        factory: Address,
     ) {
         Self::init(
             env,
@@ -483,15 +496,15 @@ impl SobreContract {
             wallet_name,
             admin_name,
             admin_emoji,
+            factory,
         );
     }
 
     /// One-time setup. The caller becomes the admin AND the first profiled
-    /// member of the wallet. `wallet_name` shows in the top bar both members
-    /// see; `admin_name` + `admin_emoji` is the admin's row in the members
-    /// list. `envelope_names` is the display label for each of the three
-    /// envelopes (e.g., ["Rent", "School", "Savings"]). The contract's
-    /// `Envelope` enum still indexes by position [0, 1, 2] under the hood.
+    /// member of the wallet. `factory` is the SobreFactory that deployed this
+    /// instance; `upgrade()` reads its `current_sobre_wasm` view to opt this
+    /// Sobre into the latest contract code without trusting the admin to
+    /// pass the right hash by hand.
     pub fn init(
         env: Env,
         admin: Address,
@@ -501,6 +514,7 @@ impl SobreContract {
         wallet_name: String,
         admin_name: String,
         admin_emoji: String,
+        factory: Address,
     ) {
         if env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::AlreadyInitialized);
@@ -516,6 +530,7 @@ impl SobreContract {
         inst.set(&DataKey::EnvelopeNames, &envelope_names);
         inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
         inst.set(&DataKey::WalletName, &wallet_name);
+        inst.set(&DataKey::Factory, &factory);
 
         let admin_member = Member {
             address: admin,
@@ -616,6 +631,22 @@ impl SobreContract {
         inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
 
         WalletClosed { total }.publish(&env);
+    }
+
+    /// Admin-only. Opt this Sobre into the factory's current SobreContract
+    /// wasm. Same contract address, same storage, new code on the next call.
+    /// Reads the target hash from the factory rather than taking it as an
+    /// argument so the admin can't fat-finger a wrong or malicious wasm.
+    pub fn upgrade(env: Env) {
+        require_admin_auth(&env);
+        let factory: Address = env.storage().instance().get(&DataKey::Factory).unwrap();
+        let new_wasm: BytesN<32> = env.invoke_contract(
+            &factory,
+            &soroban_sdk::Symbol::new(&env, "current_sobre_wasm"),
+            soroban_sdk::Vec::new(&env),
+        );
+        env.deployer().update_current_contract_wasm(new_wasm.clone());
+        WalletUpgraded { new_wasm }.publish(&env);
     }
 
     /// Admin-only. Overwrite the envelope percentage split. Only affects how

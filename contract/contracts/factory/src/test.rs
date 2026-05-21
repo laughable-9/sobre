@@ -41,10 +41,12 @@ impl Fixture {
         let token_contract = env.register_stellar_asset_contract_v2(token_admin);
         let payment_token = token_contract.address();
 
-        // Deploy + init the factory.
+        // Deploy + init the factory with a generated factory-admin separate
+        // from the per-wallet admin used in tests below.
         let factory_id = env.register(SobreFactory, ());
         let client = SobreFactoryClient::new(&env, &factory_id);
-        client.init(&wasm_hash);
+        let factory_admin = Address::generate(&env);
+        client.init(&factory_admin, &wasm_hash);
 
         let admin = Address::generate(&env);
         Self {
@@ -215,6 +217,23 @@ fn init_twice_rejects() {
     let wasm_hash: BytesN<32> = env.deployer().upload_contract_wasm(SOBRE_WASM);
     let factory_id = env.register(SobreFactory, ());
     let client = SobreFactoryClient::new(&env, &factory_id);
-    client.init(&wasm_hash);
-    client.init(&wasm_hash);
+    let factory_admin = Address::generate(&env);
+    client.init(&factory_admin, &wasm_hash);
+    client.init(&factory_admin, &wasm_hash);
+}
+
+#[test]
+fn set_sobre_wasm_swaps_the_pointer() {
+    let f = Fixture::new();
+    // A "v2" wasm hash to swap to. Same bytes for the test, but the hash
+    // would be different in production.
+    let v2_hash: BytesN<32> = f.env.deployer().upload_contract_wasm(SOBRE_WASM);
+
+    assert_eq!(
+        f.client().current_sobre_wasm(),
+        f.env.deployer().upload_contract_wasm(SOBRE_WASM),
+    );
+
+    f.client().set_sobre_wasm(&v2_hash);
+    assert_eq!(f.client().current_sobre_wasm(), v2_hash);
 }
