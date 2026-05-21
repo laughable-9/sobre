@@ -514,19 +514,6 @@
   color: var(--text-1);
   border-bottom-color: var(--sobre-primary);
 }
-.sobre-tab-badge {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 6px;
-  border-radius: 999px;
-  background: #fdf3d8;
-  color: #b88b1c;
-  font-size: 11px;
-  font-weight: 700;
-  font-variant-numeric: tabular-nums;
-}
 
 .sobre-quick-amts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sobre-quick-amts button {

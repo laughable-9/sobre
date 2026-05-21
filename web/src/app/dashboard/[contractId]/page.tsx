@@ -410,9 +410,6 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClick={() => switchTab("settings")}
         >
           Settings
-          {state.pending.length > 0 ? (
-            <span className="sobre-tab-badge">{state.pending.length}</span>
-          ) : null}
         </button>
       </nav>
 
@@ -425,7 +422,21 @@ function Dashboard({ contractId }: { contractId: string }) {
           dailySpent={dailySpent}
           onKick={isAdmin ? handleKick : undefined}
           onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
-        />
+        >
+          {state.pending.length > 0 ? (
+            <div className="sobre-admin-section sobre-card-flat">
+              <h3>Pending approvals ({state.pending.length})</h3>
+              <PendingRequestsPanel
+                userAddress={address}
+                contractId={contractId}
+                isAdmin={isAdmin}
+                pending={state.pending}
+                envelopeNames={state.envelope_names}
+                onSuccess={refreshAll}
+              />
+            </div>
+          ) : null}
+        </SummaryCard>
 
         <div className="sobre-envs">
           <header className="flex items-end justify-between mb-5">
@@ -483,19 +494,14 @@ function Dashboard({ contractId }: { contractId: string }) {
           }}
         >
           <div className="sobre-admin-section sobre-card-flat">
-            <h3>
-              Pending approvals{" "}
-              {state.pending.length > 0
-                ? `(${state.pending.length})`
-                : ""}
-            </h3>
-            <PendingRequestsPanel
+            <h3>Spending policy</h3>
+            <PolicySettingsForm
               userAddress={address}
               contractId={contractId}
               isAdmin={isAdmin}
-              pending={state.pending}
+              current={state.policy}
               envelopeNames={state.envelope_names}
-              onSuccess={refreshAll}
+              onSuccess={refresh}
             />
           </div>
 
@@ -517,18 +523,6 @@ function Dashboard({ contractId }: { contractId: string }) {
               contractId={contractId}
               isAdmin={isAdmin}
               current={state.percents}
-              envelopeNames={state.envelope_names}
-              onSuccess={refresh}
-            />
-          </div>
-
-          <div className="sobre-admin-section sobre-card-flat">
-            <h3>Spending policy</h3>
-            <PolicySettingsForm
-              userAddress={address}
-              contractId={contractId}
-              isAdmin={isAdmin}
-              current={state.policy}
               envelopeNames={state.envelope_names}
               onSuccess={refresh}
             />

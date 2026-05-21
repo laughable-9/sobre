@@ -20,6 +20,7 @@ export function SummaryCard({
   dailySpent,
   onKick,
   onInvite,
+  children,
 }: {
   state: WalletState;
   address: string;
@@ -33,6 +34,9 @@ export function SummaryCard({
   /** Admin-only; opens the InviteModal. Rendered as a slot in the members
    *  list when there's still room (members < 2). */
   onInvite?: () => void;
+  /** Optional extra cards stacked below the total-balance card in the same
+   *  left column — used by the dashboard to surface pending approvals. */
+  children?: React.ReactNode;
 }) {
   const isAdmin = address === state.admin;
   const canInvite = isAdmin && state.members.length < 2;
@@ -191,6 +195,7 @@ export function SummaryCard({
           </div>
         </div>
       </div>
+      {children}
     </aside>
   );
 }
