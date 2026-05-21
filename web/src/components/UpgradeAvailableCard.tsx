@@ -4,6 +4,7 @@ import { ExternalLink, Sparkles } from "lucide-react";
 
 import { useUpgradeSobre } from "@/hooks/useUpgradeSobre";
 import { useUpgradeStatus } from "@/hooks/useUpgradeStatus";
+import { FACTORY_CONTRACT_ID } from "@/lib/config";
 
 function shortHash(hash: string | null): string {
   if (!hash) return "…";
@@ -39,9 +40,10 @@ export function UpgradeAvailableCard({
     }
   };
 
-  const explorerUrl = status.currentHash
-    ? `https://stellar.expert/explorer/testnet/wasm/${status.currentHash}`
-    : null;
+  // stellar.expert doesn't have a standalone wasm-by-hash page, so we link
+  // to the factory contract where the WasmUpdated event was emitted. The
+  // admin can verify which hash got published + when from the events list.
+  const explorerUrl = `https://stellar.expert/explorer/testnet/contract/${FACTORY_CONTRACT_ID}`;
 
   return (
     <div
@@ -88,18 +90,16 @@ export function UpgradeAvailableCard({
               <b style={{ color: "var(--text-2)" }}>Available:</b>{" "}
               {shortHash(status.currentHash)}
             </span>
-            {explorerUrl ? (
-              <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1"
-                style={{ color: "var(--sobre-accent)" }}
-              >
-                View on stellar.expert
-                <ExternalLink size={10} strokeWidth={2.4} />
-              </a>
-            ) : null}
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="inline-flex items-center gap-1"
+              style={{ color: "var(--sobre-accent)" }}
+            >
+              Verify on stellar.expert
+              <ExternalLink size={10} strokeWidth={2.4} />
+            </a>
           </div>
           {isAdmin ? (
             <div className="flex items-center gap-3">
