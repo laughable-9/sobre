@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Clock, Copy, Link2 } from "lucide-react";
+import { Check, Clock, Copy, Link2, RefreshCcw } from "lucide-react";
 
 import { backdropClose } from "@/lib/ui";
 
@@ -83,12 +83,29 @@ export function InviteModal({
         </div>
 
         <div
-          className="flex items-center gap-2 text-[12px] mb-4"
+          className="flex items-center justify-between gap-2 text-[12px] mb-4"
           style={{ color: "var(--text-2)" }}
         >
-          <Clock size={13} strokeWidth={2} />
-          Expires in {INVITE_EXPIRY_MINUTES} minutes
-          {expiresAtClock ? ` (at ${expiresAtClock})` : ""}.
+          <span className="inline-flex items-center gap-1.5">
+            <Clock size={13} strokeWidth={2} />
+            Expires in {INVITE_EXPIRY_MINUTES} minutes
+            {expiresAtClock ? ` (at ${expiresAtClock})` : ""}.
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              setExpiresAt(
+                Math.floor(Date.now() / 1000) + INVITE_EXPIRY_MINUTES * 60,
+              );
+              setCopied(false);
+            }}
+            className="inline-flex items-center gap-1 text-[12px] font-medium"
+            style={{ color: "var(--sobre-accent)" }}
+            title="Invalidate the current link and mint a fresh one"
+          >
+            <RefreshCcw size={12} strokeWidth={2.2} />
+            Generate new link
+          </button>
         </div>
 
         <div className="sobre-modal-actions">

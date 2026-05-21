@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 
 import { useJoinWallet } from "@/hooks/useJoinWallet";
 import type { WalletState } from "@/hooks/useWalletState";
@@ -52,23 +53,44 @@ export function JoinForm({
         </p>
 
         {alreadyMember ? (
-          <div
-            className="sobre-warning-bar"
-            style={{
-              background: "var(--accent-soft)",
-              borderColor: "#cfe0d4",
-              color: "var(--sobre-accent)",
-            }}
-          >
-            <div>You&apos;re already a member of this wallet.</div>
-          </div>
-        ) : isFull ? (
-          <div className="sobre-warning-bar">
-            <div>
-              <b>This wallet is full.</b> Sobre caps each wallet at 2 members.
-              Ask the admin to remove someone first.
+          <>
+            <div
+              className="sobre-warning-bar"
+              style={{
+                background: "var(--accent-soft)",
+                borderColor: "#cfe0d4",
+                color: "var(--sobre-accent)",
+              }}
+            >
+              <div>You&apos;re already a member of this wallet.</div>
             </div>
-          </div>
+            <button
+              type="button"
+              onClick={onCancel}
+              className="sobre-btn sobre-btn-primary w-full justify-center mt-4"
+              style={{ padding: "14px 22px", fontSize: 15 }}
+            >
+              Go to the dashboard
+            </button>
+          </>
+        ) : isFull ? (
+          <>
+            <div className="sobre-warning-bar">
+              <div>
+                <b>This family is already full.</b> Sobre caps each wallet at
+                2 members and{" "}
+                <b>{state.wallet_name}</b> already has two. Ask the admin to
+                remove someone before you try again.
+              </div>
+            </div>
+            <Link
+              href="/dashboard"
+              className="sobre-btn sobre-btn-soft w-full justify-center mt-4"
+              style={{ padding: "14px 22px", fontSize: 15 }}
+            >
+              Back to My Sobres
+            </Link>
+          </>
         ) : savedProfile ? (
           <ConfirmJoin
             name={savedProfile.name}

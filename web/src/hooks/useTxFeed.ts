@@ -43,6 +43,16 @@ export type FeedEvent =
   | (FeedEventBase & {
       kind: "RequestDenied";
       requestId: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "MemberJoined";
+      member: string;
+      name: string;
+      emoji: string;
+    })
+  | (FeedEventBase & {
+      kind: "MemberRemoved";
+      member: string;
     });
 
 export interface UseTxFeedResult {
@@ -135,6 +145,20 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
             ...base,
             kind: "RequestDenied",
             requestId: topics[1] as bigint,
+          });
+        } else if (kind === "member_joined") {
+          parsed.push({
+            ...base,
+            kind: "MemberJoined",
+            member: String(topics[1]),
+            name: String(data.name ?? ""),
+            emoji: String(data.emoji ?? ""),
+          });
+        } else if (kind === "member_removed") {
+          parsed.push({
+            ...base,
+            kind: "MemberRemoved",
+            member: String(topics[1]),
           });
         }
       }

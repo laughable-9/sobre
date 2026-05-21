@@ -18,9 +18,11 @@ import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
 import { JoinForm } from "@/components/sobre/JoinForm";
 import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
+import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
 import { SpendModal } from "@/components/sobre/SpendModal";
 import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
+import type { Member } from "@/hooks/useWalletState";
 
 import { useFreighter } from "@/hooks/useFreighter";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
@@ -103,6 +105,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
   const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
   const [tab, setTab] = useState<"envelopes" | "settings">("envelopes");
@@ -214,13 +217,18 @@ function Dashboard({ contractId }: { contractId: string }) {
     refreshAll();
   };
 
-  const handleKick = async (memberAddress: string) => {
+  const handleKick = (memberAddress: string) => {
     const member = state?.members.find((m) => m.address === memberAddress);
-    const label = member?.name || memberAddress;
-    if (kickPending) return;
-    if (!window.confirm(`Remove ${label} from this wallet?`)) return;
+    if (!member || kickPending) return;
+    setRemoveTarget(member);
+  };
+
+  const confirmRemove = async () => {
+    if (!removeTarget) return;
+    const label = removeTarget.name || removeTarget.address;
     try {
-      await removeMember(memberAddress);
+      await removeMember(removeTarget.address);
+      setRemoveTarget(null);
       flash(`${label} removed`, "warn");
       refreshAll();
     } catch {
@@ -280,7 +288,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               Connect your wallet
             </h1>
             <p className="text-[15px]" style={{ color: "var(--text-2)" }}>
-              You need to connect Freighter to open this Sobre.
+              You need to connect your wallet to open this Sobre.
             </p>
           </div>
         </main>
@@ -316,8 +324,8 @@ function Dashboard({ contractId }: { contractId: string }) {
               style={{ color: "var(--text-2)" }}
             >
               Invite links to <em>{state.wallet_name}</em> expire 30 minutes
-              after they&apos;re generated and can only be used once. Ask the
-              admin to send a fresh link.
+              after they&apos;re generated, and each link can only be used
+              once. Ask the admin to send a fresh link.
             </p>
             <Link
               href="/dashboard"
@@ -611,7 +619,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 type="button"
                 onClick={() => setCloseOpen(true)}
                 className="sobre-btn sobre-btn-danger"
-                style={{ padding: "10px 16px", fontSize: 13 }}
+                style={{ padding: "12px 18px", fontSize: 14 }}
               >
                 Close wallet
               </button>
@@ -644,6 +652,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           contractId={contractId}
           envelope={spendOpen}
+          dailySpent={dailySpent}
           onClose={() => setSpendOpen(null)}
           onSuccess={handleSpendSuccess}
         />
@@ -654,6 +663,16 @@ function Dashboard({ contractId }: { contractId: string }) {
           walletName={state.wallet_name}
           contractId={contractId}
           onClose={() => setInviteOpen(false)}
+        />
+      ) : null}
+
+      {removeTarget ? (
+        <RemoveMemberModal
+          member={removeTarget}
+          walletName={state.wallet_name}
+          pending={kickPending}
+          onClose={() => setRemoveTarget(null)}
+          onConfirm={() => void confirmRemove()}
         />
       ) : null}
 

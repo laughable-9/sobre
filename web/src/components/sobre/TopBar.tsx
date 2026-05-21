@@ -62,7 +62,7 @@ export function TopBar({
               className="rounded-full px-3 py-1 text-xs font-medium"
               style={{ background: "#fbe4e0", color: "#7a2a1d" }}
             >
-              Switch Freighter to {NETWORK.name}
+              Switch your wallet to {NETWORK.name}
             </span>
           ) : null}
 

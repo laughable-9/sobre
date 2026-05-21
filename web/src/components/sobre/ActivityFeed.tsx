@@ -1,7 +1,15 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowDownToLine, ShoppingBag, Hourglass, CheckCheck, X as XIcon } from "lucide-react";
+import {
+  ArrowDownToLine,
+  CheckCheck,
+  Hourglass,
+  ShoppingBag,
+  UserMinus,
+  UserPlus,
+  X as XIcon,
+} from "lucide-react";
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
@@ -234,6 +242,37 @@ function ActivityRow({
           <div className="body">
             <div className="who">
               Request #{ev.requestId.toString()} denied
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "MemberJoined":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <UserPlus size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              {ev.emoji ? `${ev.emoji} ` : ""}
+              <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "MemberRemoved":
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <UserMinus size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              <b>{labelFor(ev.member)}</b> was removed from the wallet
             </div>
             <div className="meta">{time} · view tx ↗</div>
           </div>

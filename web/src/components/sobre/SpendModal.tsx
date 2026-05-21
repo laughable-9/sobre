@@ -32,6 +32,7 @@ export function SpendModal({
   state,
   contractId,
   envelope,
+  dailySpent,
   onClose,
   onSuccess,
 }: {
@@ -39,6 +40,9 @@ export function SpendModal({
   state: WalletState;
   contractId: string;
   envelope: EnvelopeName;
+  /** Stroops the caller has already spent today. Used to predict daily-limit
+   *  routing the same way the contract does (daily_spent + amount > limit). */
+  dailySpent: bigint;
   onClose: () => void;
   /** Called after the tx lands. `willGoPending` is the modal's prediction of
    *  whether the contract routed the spend to a pending request (vs executed
@@ -66,14 +70,29 @@ export function SpendModal({
   const overspend = stroopsRequested > balanceStroops;
 
   // Predict whether the contract will route this to a pending request,
-  // matching policy_requires_approval in lib.rs.
+  // matching policy_requires_approval in lib.rs. Admin always bypasses, so
+  // their spends execute immediately regardless of policy.
+  const isAdmin = userAddress === state.admin;
   const requireAllSigs = state.policy.require_all_sigs;
   const envProtected = state.policy.protected_envelopes.includes(envelope);
   const dailyLimitStroops = state.policy.daily_limit;
   const wouldExceedDaily =
-    dailyLimitStroops !== null && stroopsRequested > dailyLimitStroops;
+    dailyLimitStroops !== null &&
+    dailySpent + stroopsRequested > dailyLimitStroops;
   const willGoPending =
-    php > 0 && !overspend && (requireAllSigs || envProtected || wouldExceedDaily);
+    !isAdmin &&
+    php > 0 &&
+    !overspend &&
+    (requireAllSigs || envProtected || wouldExceedDaily);
+
+  const dailyLimitPhp =
+    dailyLimitStroops !== null
+      ? (Number(dailyLimitStroops) / STROOPS_PER_XLM) * PHP_PER_XLM
+      : 0;
+  const dailySpentPhp =
+    (Number(dailySpent) / STROOPS_PER_XLM) * PHP_PER_XLM;
+  const fmtPhpAmt = (n: number) =>
+    `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -136,7 +155,7 @@ export function SpendModal({
                 ? "All non-admin spends need admin approval right now."
                 : envProtected
                   ? `${displayName} is admin-protected.`
-                  : "This amount is over the daily limit."}{" "}
+                  : `Spending ${fmtPhpAmt(php)} would put you over today's ${fmtPhpAmt(dailyLimitPhp)} limit (already spent ${fmtPhpAmt(dailySpentPhp)} today), so this spend needs admin approval.`}{" "}
               Admin reviews the request before the funds move.
             </div>
           </div>

@@ -577,9 +577,14 @@
   box-shadow: var(--shadow-md);
   border-color: var(--border-strong);
 }
+.sobre-admin-section { display: flex; flex-direction: column; }
 .sobre-admin-section h3 {
   font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 0 0 12px;
 }
+/* Push the submit row to the bottom so every card's primary action lines up
+   along the same baseline regardless of how tall the body content is. */
+.sobre-admin-section > form { display: flex; flex-direction: column; flex: 1; }
+.sobre-admin-section > form > :last-child { margin-top: auto; }
 
 
 /* ─── Landing page (ported from the design's landing.css) ─────────────── */

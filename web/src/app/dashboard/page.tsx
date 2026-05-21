@@ -81,8 +81,7 @@ export default function MySobresPage() {
               className="text-[16px] mb-6"
               style={{ color: "var(--text-2)" }}
             >
-              Connect your Freighter wallet to see your Sobres or open a new
-              one.
+              Connect your wallet to see your Sobres or open a new one.
             </p>
             {wallet.status === "not-installed" ? (
               <a
