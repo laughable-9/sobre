@@ -438,6 +438,29 @@ pub struct SobreContract;
 
 #[contractimpl]
 impl SobreContract {
+    /// Auto-invoked on deploy_v2 with the constructor args, so the
+    /// SobreFactory can deploy + init atomically (no front-run window).
+    /// Manual deploys can still call `init` directly with the same args.
+    pub fn __constructor(
+        env: Env,
+        admin: Address,
+        payment_token: Address,
+        percents: Vec<u32>,
+        wallet_name: String,
+        admin_name: String,
+        admin_emoji: String,
+    ) {
+        Self::init(
+            env,
+            admin,
+            payment_token,
+            percents,
+            wallet_name,
+            admin_name,
+            admin_emoji,
+        );
+    }
+
     /// One-time setup. The caller becomes the admin AND the first profiled
     /// member of the wallet. `wallet_name` shows in the top bar both members
     /// see; `admin_name` + `admin_emoji` is the admin's row in the members

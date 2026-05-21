@@ -32,16 +32,23 @@ impl Fixture {
         let token_contract = env.register_stellar_asset_contract_v2(token_admin);
         let payment_token = token_contract.address();
 
-        let contract_id = env.register(SobreContract, ());
         let admin = Address::generate(&env);
-        let client = SobreContractClient::new(&env, &contract_id);
-        client.init(
-            &admin,
-            &payment_token,
-            &vec![&env, 50u32, 30u32, 20u32],
-            &String::from_str(&env, WALLET_NAME),
-            &String::from_str(&env, ADMIN_NAME),
-            &String::from_str(&env, ADMIN_EMOJI),
+        let percents = vec![&env, 50u32, 30u32, 20u32];
+        let wallet_name = String::from_str(&env, WALLET_NAME);
+        let admin_name = String::from_str(&env, ADMIN_NAME);
+        let admin_emoji = String::from_str(&env, ADMIN_EMOJI);
+        // env.register now invokes __constructor with these args, atomically
+        // deploying + initializing the contract in one step.
+        let contract_id = env.register(
+            SobreContract,
+            (
+                admin.clone(),
+                payment_token.clone(),
+                percents,
+                wallet_name,
+                admin_name,
+                admin_emoji,
+            ),
         );
         Self {
             env,
