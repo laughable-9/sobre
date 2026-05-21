@@ -131,6 +131,13 @@ export function envelopeScVal(
   return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(variant)]);
 }
 
+/** Encode the envelope split as `Vec<u32>` for create_sobre + set_envelopes. */
+export function percentsScVal(
+  percents: [number, number, number],
+): xdr.ScVal {
+  return xdr.ScVal.scvVec(percents.map((p) => xdr.ScVal.scvU32(p)));
+}
+
 /**
  * Encode a SpendPolicy struct as an ScVal map. Field order matters — Soroban
  * sorts struct map entries alphabetically by key:
