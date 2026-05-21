@@ -1,19 +1,62 @@
 import { ImageResponse } from "next/og";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 
-export const runtime = "edge";
-export const alt = "Sobre — joint wallets for OFW families";
+export const alt = "Sobre — one Sobre, no matter the distance.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
 const CREAM = "#FDFAF3";
 const MANGO = "#E8923C";
-const PALM = "#2E6B4C";
 const INK = "#1F1B16";
-const INK_2 = "#5B544A";
 
-/** Renders the share-preview card at request time. Same brand tokens as the
- *  landing page so the OG card and the live site feel like the same product. */
-export default function OpengraphImage() {
+async function googleFonts(cssUrl: string): Promise<ArrayBuffer[]> {
+  const css = await fetch(cssUrl, {
+    headers: { "User-Agent": "Mozilla/5.0 Sobre/og" },
+  }).then((r) => r.text());
+  const urls = [...css.matchAll(/url\((https:\/\/[^)]+)\) format/g)].map(
+    (m) => m[1],
+  );
+  return Promise.all(
+    urls.map((u) => fetch(u).then((r) => r.arrayBuffer())),
+  );
+}
+
+/** Landing-hero headline + Sobre logo as a 1200x630 share preview. Same
+ *  cream / mango palette as the live site. */
+export default async function OpengraphImage() {
+  // Defensive: the logo + Google Fonts fetches both have failure modes that
+  // would otherwise 500 the whole route (and on dev that surfaces as the
+  // landing page erroring out too). Fall back to a logo-less + system-font
+  // render if either source is unavailable.
+  let logoSrc: string | null = null;
+  try {
+    const logo = readFileSync(
+      join(process.cwd(), "public", "sobre-logo.svg"),
+    ).toString("base64");
+    logoSrc = `data:image/svg+xml;base64,${logo}`;
+  } catch {
+    logoSrc = null;
+  }
+
+  let fonts: { name: string; data: ArrayBuffer; style: "normal" | "italic"; weight: 600 }[] = [];
+  try {
+    const [[serifBold], [serifItalic]] = await Promise.all([
+      googleFonts(
+        "https://fonts.googleapis.com/css2?family=Fraunces:wght@600&display=swap",
+      ),
+      googleFonts(
+        "https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@1,600&display=swap",
+      ),
+    ]);
+    fonts = [
+      { name: "Fraunces", data: serifBold, style: "normal", weight: 600 },
+      { name: "FrauncesItalic", data: serifItalic, style: "italic", weight: 600 },
+    ];
+  } catch {
+    fonts = [];
+  }
+
   return new ImageResponse(
     (
       <div
@@ -21,145 +64,79 @@ export default function OpengraphImage() {
           width: "100%",
           height: "100%",
           display: "flex",
-          flexDirection: "column",
-          justifyContent: "space-between",
-          padding: "72px 88px",
           background: CREAM,
-          fontFamily: "Inter, sans-serif",
+          padding: "70px 80px",
+          alignItems: "center",
         }}
       >
-        {/* Top row: logo + wordmark */}
-        <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            paddingRight: 24,
+          }}
+        >
           <div
             style={{
-              width: 72,
-              height: 72,
-              borderRadius: 18,
-              background: "#fff",
-              border: "2px solid #efe7d4",
+              fontFamily: "Fraunces",
+              fontSize: 78,
+              fontWeight: 600,
+              color: INK,
+              lineHeight: 1.04,
+              letterSpacing: "-0.025em",
+            }}
+          >
+            One Sobre.
+          </div>
+          <div
+            style={{
+              fontFamily: "Fraunces",
+              fontSize: 78,
+              fontWeight: 600,
+              color: INK,
+              lineHeight: 1.04,
+              letterSpacing: "-0.025em",
+              display: "flex",
+              flexWrap: "wrap",
+            }}
+          >
+            <span>No matter the&nbsp;</span>
+            <span
+              style={{
+                fontFamily: "FrauncesItalic",
+                fontStyle: "italic",
+                color: MANGO,
+              }}
+            >
+              distance
+            </span>
+            <span>.</span>
+          </div>
+        </div>
+
+        {logoSrc ? (
+          <div
+            style={{
+              width: 380,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              fontSize: 42,
+              flexShrink: 0,
             }}
           >
-            ✉️
-          </div>
-          <div
-            style={{
-              fontFamily: "serif",
-              fontSize: 56,
-              fontWeight: 700,
-              color: INK,
-              letterSpacing: "-0.02em",
-            }}
-          >
-            Sobre
-          </div>
-        </div>
-
-        {/* Headline + tagline */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-          <div
-            style={{
-              fontFamily: "serif",
-              fontSize: 76,
-              fontWeight: 600,
-              color: INK,
-              lineHeight: 1.05,
-              letterSpacing: "-0.025em",
-              maxWidth: 1024,
-            }}
-          >
-            A joint account for families living worlds apart.
-          </div>
-          <div
-            style={{
-              fontSize: 28,
-              color: INK_2,
-              lineHeight: 1.35,
-              maxWidth: 980,
-            }}
-          >
-            Remittances auto-split into named envelopes the moment they
-            land. Both members see the same balances in real time, on Stellar.
-          </div>
-        </div>
-
-        {/* Bottom row: envelope chips + Stellar tag */}
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            gap: 16,
-          }}
-        >
-          <div style={{ display: "flex", gap: 14 }}>
-            <Chip label="Groceries" pct="50%" color={MANGO} />
-            <Chip label="Tuition" pct="30%" color={INK} />
-            <Chip label="Savings" pct="20%" color={PALM} />
-          </div>
-          <div
-            style={{
-              display: "flex",
-              alignItems: "center",
-              gap: 10,
-              fontSize: 22,
-              fontWeight: 600,
-              color: INK_2,
-            }}
-          >
-            <div
-              style={{
-                width: 10,
-                height: 10,
-                borderRadius: 999,
-                background: MANGO,
-              }}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={logoSrc}
+              alt=""
+              width={360}
+              height={360}
+              style={{ objectFit: "contain" }}
             />
-            Built on Stellar
           </div>
-        </div>
+        ) : null}
       </div>
     ),
-    { ...size },
-  );
-}
-
-function Chip({
-  label,
-  pct,
-  color,
-}: {
-  label: string;
-  pct: string;
-  color: string;
-}) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 4,
-        padding: "16px 22px",
-        background: "#fff",
-        border: "2px solid #efe7d4",
-        borderRadius: 16,
-      }}
-    >
-      <div style={{ fontSize: 16, color: INK_2, fontWeight: 500 }}>{label}</div>
-      <div
-        style={{
-          fontFamily: "serif",
-          fontSize: 32,
-          fontWeight: 700,
-          color,
-          letterSpacing: "-0.02em",
-        }}
-      >
-        {pct}
-      </div>
-    </div>
+    { ...size, fonts: fonts.length > 0 ? fonts : undefined },
   );
 }
