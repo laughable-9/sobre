@@ -68,6 +68,15 @@ function Dashboard({ contractId }: { contractId: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const joinParam = searchParams.get("join");
+  const expiresParam = searchParams.get("expires");
+  const inviteExpiresAt = expiresParam ? Number(expiresParam) : null;
+  // No expiry param → treat as expired so legacy / hand-edited links can't
+  // sneak past. Past expiry → also expired. Only a future-dated, numeric
+  // expires=… is considered live.
+  const inviteExpired =
+    !inviteExpiresAt ||
+    !Number.isFinite(inviteExpiresAt) ||
+    inviteExpiresAt * 1000 < Date.now();
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -281,6 +290,48 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   // ─── Phase 2: invite-link landed here ─────────────────────────────────
   const invitedHere = joinParam === contractId;
+  if (invitedHere && inviteExpired && state && !isMember) {
+    return (
+      <div className="sobre-app">
+        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
+        <main className="flex-1 grid place-items-center px-6">
+          <div className="text-center max-w-md">
+            <div
+              className="grid place-items-center mx-auto text-[36px]"
+              style={{
+                width: 64,
+                height: 64,
+                borderRadius: "50%",
+                background: "var(--surface-alt)",
+                border: "1.5px solid var(--border)",
+              }}
+            >
+              ⌛
+            </div>
+            <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
+              This invite link has expired
+            </h1>
+            <p
+              className="text-[14px] mb-5"
+              style={{ color: "var(--text-2)" }}
+            >
+              Invite links to <em>{state.wallet_name}</em> expire 30 minutes
+              after they&apos;re generated and can only be used once. Ask the
+              admin to send a fresh link.
+            </p>
+            <Link
+              href="/dashboard"
+              className="sobre-btn sobre-btn-soft"
+              style={{ padding: "10px 16px", fontSize: 13 }}
+            >
+              <ChevronLeft size={14} />
+              My Sobres
+            </Link>
+          </div>
+        </main>
+      </div>
+    );
+  }
   if (invitedHere && state && !isMember) {
     return (
       <div className="sobre-app">

@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Check, Copy, Link2 } from "lucide-react";
+import { Check, Clock, Copy, Link2 } from "lucide-react";
 
 import { backdropClose } from "@/lib/ui";
+
+export const INVITE_EXPIRY_MINUTES = 30;
+
+function buildInviteUrl(origin: string, contractId: string, expiresAt: number) {
+  const base = origin || "";
+  return `${base}/dashboard/${contractId}?join=${contractId}&expires=${expiresAt}`;
+}
 
 export function InviteModal({
   walletName,
@@ -16,16 +23,27 @@ export function InviteModal({
 }) {
   const [copied, setCopied] = useState(false);
   const [origin, setOrigin] = useState("");
+  // Lock the expires-at at modal mount so the URL the user copies is the same
+  // one shown on screen. Reopen the modal to regenerate.
+  const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
   useEffect(() => {
     setOrigin(window.location.origin);
+    setExpiresAt(
+      Math.floor(Date.now() / 1000) + INVITE_EXPIRY_MINUTES * 60,
+    );
   }, []);
 
-  const url = origin
-    ? `${origin}/dashboard/${contractId}?join=${contractId}`
-    : `/dashboard/${contractId}?join=${contractId}`;
+  const url = expiresAt ? buildInviteUrl(origin, contractId, expiresAt) : "";
+  const expiresAtClock = expiresAt
+    ? new Date(expiresAt * 1000).toLocaleTimeString(undefined, {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    : "";
 
   const copy = async () => {
+    if (!url) return;
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -40,13 +58,12 @@ export function InviteModal({
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         <h2>Invite a family member</h2>
         <p className="sub">
-          Share this link with the person you want to add to {walletName}. They
-          open it, connect their Freighter, pick a name + emoji, and they&apos;re
-          in. The wallet caps at 2 members.
+          Share this link with the person you want to add to {walletName}.
+          One-time use — once they join, the link stops working for anyone else.
         </p>
 
         <div
-          className="rounded-[10px] p-3 flex items-center gap-3 mb-4"
+          className="rounded-[10px] p-3 flex items-center gap-3 mb-3"
           style={{
             background: "var(--surface-alt)",
             border: "1.5px dashed var(--border-strong)",
@@ -61,8 +78,17 @@ export function InviteModal({
             className="text-[12px] break-all flex-1"
             style={{ color: "var(--text-1)" }}
           >
-            {url}
+            {url || "Generating…"}
           </code>
+        </div>
+
+        <div
+          className="flex items-center gap-2 text-[12px] mb-4"
+          style={{ color: "var(--text-2)" }}
+        >
+          <Clock size={13} strokeWidth={2} />
+          Expires in {INVITE_EXPIRY_MINUTES} minutes
+          {expiresAtClock ? ` (at ${expiresAtClock})` : ""}.
         </div>
 
         <div className="sobre-modal-actions">
@@ -75,6 +101,7 @@ export function InviteModal({
           <button
             className="sobre-btn sobre-btn-primary"
             onClick={() => void copy()}
+            disabled={!url}
           >
             {copied ? (
               <>
