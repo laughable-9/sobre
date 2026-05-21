@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { ArrowDownToLine, ShoppingBag, Hourglass, CheckCheck, X as XIcon } from "lucide-react";
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
+import type { Member } from "@/hooks/useWalletState";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
@@ -32,6 +33,8 @@ interface ActivityFeedProps {
   loading: boolean;
   error: string | null;
   newestTxHash: string | null;
+  /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
+  members: Member[];
 }
 
 export function ActivityFeed({
@@ -39,7 +42,23 @@ export function ActivityFeed({
   loading,
   error,
   newestTxHash,
+  members,
 }: ActivityFeedProps) {
+  const nameByAddress = useMemo(() => {
+    const out = new Map<string, { name: string; emoji: string }>();
+    for (const m of members) {
+      out.set(m.address, { name: m.name, emoji: m.emoji });
+    }
+    return out;
+  }, [members]);
+
+  const labelFor = (addr: string): string => {
+    const profile = nameByAddress.get(addr);
+    if (!profile) return shortenAddress(addr);
+    return profile.emoji
+      ? `${profile.emoji} ${profile.name}`
+      : profile.name;
+  };
   const groups = useMemo(() => {
     const out: Record<"TODAY" | "YESTERDAY" | "EARLIER", FeedEvent[]> = {
       TODAY: [],
@@ -85,6 +104,7 @@ export function ActivityFeed({
                 key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
                 ev={ev}
                 isNew={ev.txHash === newestTxHash}
+                labelFor={labelFor}
               />
             ))}
           </div>
@@ -94,7 +114,15 @@ export function ActivityFeed({
   );
 }
 
-function ActivityRow({ ev, isNew }: { ev: FeedEvent; isNew: boolean }) {
+function ActivityRow({
+  ev,
+  isNew,
+  labelFor,
+}: {
+  ev: FeedEvent;
+  isNew: boolean;
+  labelFor: (addr: string) => string;
+}) {
   const time = fmtTime(ev.ledgerClosedAt);
   const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
 
@@ -146,7 +174,7 @@ function ActivityRow({ ev, isNew }: { ev: FeedEvent; isNew: boolean }) {
           </div>
           <div className="body">
             <div className="who">
-              {shortenAddress(ev.caller)} spent{" "}
+              {labelFor(ev.caller)} spent{" "}
               <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
               from {ev.envelope}
             </div>
@@ -164,7 +192,7 @@ function ActivityRow({ ev, isNew }: { ev: FeedEvent; isNew: boolean }) {
           </div>
           <div className="body">
             <div className="who">
-              {shortenAddress(ev.caller)} requested{" "}
+              {labelFor(ev.caller)} requested{" "}
               <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
               from {ev.envelope}
             </div>

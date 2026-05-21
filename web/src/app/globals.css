@@ -316,6 +316,16 @@
 .sobre-env-foot .spent b { color: var(--text-1); font-weight: 600; }
 .sobre-env-foot .actions { display: flex; gap: 8px; }
 
+.sobre-env-meta {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px dashed var(--border-strong);
+  display: flex; flex-direction: column; gap: 4px;
+  font-size: 13px;
+}
+.sobre-env-row { display: flex; justify-content: space-between; align-items: baseline; }
+.sobre-env-row.last { font-size: 12px; }
+
 .sobre-pill {
   display: inline-flex; align-items: center; gap: 6px;
   padding: 4px 10px; border-radius: 999px;
@@ -420,6 +430,36 @@
 .sobre-input.has-prefix { padding-left: 32px; }
 .sobre-input:focus { outline: none; border-color: var(--sobre-primary); }
 .sobre-input::placeholder { color: var(--text-3); }
+
+.sobre-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 6px;
+  background: var(--surface-alt);
+  border-radius: 999px;
+  outline: none;
+  cursor: pointer;
+}
+.sobre-slider:disabled { opacity: 0.4; cursor: not-allowed; }
+.sobre-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 20px; height: 20px;
+  background: var(--sobre-primary);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(31, 27, 22, 0.2);
+}
+.sobre-slider::-moz-range-thumb {
+  width: 20px; height: 20px;
+  background: var(--sobre-primary);
+  border: 2px solid var(--surface);
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(31, 27, 22, 0.2);
+}
 
 .sobre-quick-amts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sobre-quick-amts button {

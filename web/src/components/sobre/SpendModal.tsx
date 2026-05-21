@@ -126,12 +126,13 @@ export function SpendModal({
           <div className="sobre-warning-bar">
             <AlertTriangle size={16} strokeWidth={2.2} />
             <div>
-              <b>Lampas sa usual.</b>{" "}
+              <b>This will create a withdrawal request, not a direct spend.</b>{" "}
               {requireAllSigs
-                ? "All spends need admin approval. This will be queued."
+                ? "All non-admin spends need admin approval right now."
                 : envProtected
-                  ? `${envelope} is admin-protected. This will be queued.`
-                  : "Over the daily limit. This will be queued for admin approval."}
+                  ? `${envelope} is admin-protected.`
+                  : "This amount is over the daily limit."}{" "}
+              Admin reviews the request before the funds move.
             </div>
           </div>
         ) : null}
@@ -174,18 +175,62 @@ export function SpendModal({
               disabled={pending}
             />
           </div>
+
+          <input
+            type="range"
+            min={0}
+            max={Math.max(1, Math.round(balancePhp))}
+            step={Math.max(1, Math.round(balancePhp / 100))}
+            value={Math.min(php, balancePhp)}
+            onChange={(e) => setPhpStr(e.target.value)}
+            disabled={pending || balancePhp === 0}
+            className="sobre-slider mt-3"
+            aria-label="Amount slider"
+          />
+          <div
+            className="flex justify-between text-[11px] mt-1 tabular"
+            style={{ color: "var(--text-3)" }}
+          >
+            <span>₱0</span>
+            <span>
+              ₱
+              {balancePhp.toLocaleString("en-PH", {
+                minimumFractionDigits: 0,
+                maximumFractionDigits: 0,
+              })}
+            </span>
+          </div>
+
           <div className="sobre-quick-amts">
-            {QUICK_PHP.map((q) => (
-              <button
-                key={q}
-                type="button"
-                className={phpStr === String(q) ? "active" : ""}
-                onClick={() => setPhpStr(String(q))}
-                disabled={pending}
-              >
-                ₱{q.toLocaleString()}
-              </button>
-            ))}
+            {QUICK_PHP.map((q) => {
+              const disabled = pending || q > balancePhp;
+              return (
+                <button
+                  key={q}
+                  type="button"
+                  className={phpStr === String(q) ? "active" : ""}
+                  onClick={() => setPhpStr(String(q))}
+                  disabled={disabled}
+                  style={
+                    disabled
+                      ? {
+                          opacity: 0.4,
+                          cursor: "not-allowed",
+                          textDecoration:
+                            q > balancePhp ? "line-through" : undefined,
+                        }
+                      : undefined
+                  }
+                  title={
+                    q > balancePhp
+                      ? `Not enough — ₱${balancePhp.toFixed(0)} available`
+                      : undefined
+                  }
+                >
+                  ₱{q.toLocaleString()}
+                </button>
+              );
+            })}
           </div>
           {php > 0 ? (
             <div
@@ -246,7 +291,7 @@ export function SpendModal({
             {pending
               ? "Submitting…"
               : willGoPending
-                ? "Request approval"
+                ? "Request withdrawal"
                 : "Confirm spend"}
           </button>
         </div>

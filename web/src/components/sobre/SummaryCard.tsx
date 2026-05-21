@@ -1,6 +1,6 @@
 "use client";
 
-import { Copy, Plus, Timer } from "lucide-react";
+import { Copy, Plus, Timer, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
@@ -8,9 +8,9 @@ import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
-const MEMBER_COLORS = [
-  { bg: "#fbe7d2", fg: "#D67E28" }, // mango — first member (admin)
-  { bg: "#E8F0EA", fg: "#2E6B4C" }, // green — second member
+const MEMBER_PALETTES = [
+  { bg: "#fbe7d2", fg: "#D67E28" }, // mango — first slot (admin)
+  { bg: "#E8F0EA", fg: "#2E6B4C" }, // green — second slot
 ] as const;
 
 export function SummaryCard({
@@ -18,6 +18,7 @@ export function SummaryCard({
   address,
   onDeposit,
   dailySpent,
+  onKick,
 }: {
   state: WalletState;
   address: string;
@@ -25,7 +26,11 @@ export function SummaryCard({
   /** Sum of stroops the connected user has spent today (UTC). Computed from
    *  the activity feed by the dashboard. Used to render "remaining today". */
   dailySpent: bigint;
+  /** Admin-only; omit for non-admin viewers. Wired by the dashboard to open
+   *  a confirm-then-removeMember flow. */
+  onKick?: (memberAddress: string) => void;
 }) {
+  const isAdmin = address === state.admin;
   const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
   const totalXlm = Number(totalStroops) / STROOPS_PER_XLM;
   const totalPhp = totalXlm * PHP_PER_XLM;
@@ -93,21 +98,25 @@ export function SummaryCard({
           </span>
           <div className="mt-3 space-y-1">
             {state.members.map((m, i) => {
-              const palette = MEMBER_COLORS[i % MEMBER_COLORS.length];
-              const isAdmin = m === state.admin;
-              const isYou = m === address;
-              const initials = m.slice(1, 3).toUpperCase();
+              const palette = MEMBER_PALETTES[i % MEMBER_PALETTES.length];
+              const memberIsAdmin = m.address === state.admin;
+              const isYou = m.address === address;
               return (
-                <div key={m} className="sobre-member">
+                <div key={m.address} className="sobre-member">
                   <div
                     className="av"
-                    style={{ background: palette.bg, color: palette.fg }}
+                    style={{
+                      background: palette.bg,
+                      color: palette.fg,
+                      fontSize: m.emoji ? 18 : 12,
+                    }}
+                    title={m.address}
                   >
-                    {initials}
+                    {m.emoji || m.address.slice(1, 3).toUpperCase()}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="name">
-                      {shortenAddress(m)}
+                      {m.name || shortenAddress(m.address)}
                       {isYou ? (
                         <span
                           className="ml-2 text-[11px]"
@@ -118,19 +127,35 @@ export function SummaryCard({
                       ) : null}
                     </div>
                     <div className="role">
-                      {isAdmin ? "Admin · OFW" : "Family member"}
+                      {memberIsAdmin ? "Admin · OFW" : "Family member"}
                     </div>
                   </div>
                   <button
-                    onClick={() => void copyAddr(m)}
+                    onClick={() => void copyAddr(m.address)}
                     className="sobre-iconbtn"
                     style={{ width: 28, height: 28 }}
                     title={
-                      copiedAddr === m ? "Copied!" : "Copy full address"
+                      copiedAddr === m.address
+                        ? "Copied!"
+                        : "Copy full address"
                     }
                   >
                     <Copy size={13} strokeWidth={2} />
                   </button>
+                  {isAdmin && !memberIsAdmin && onKick ? (
+                    <button
+                      onClick={() => onKick(m.address)}
+                      className="sobre-iconbtn"
+                      style={{
+                        width: 28,
+                        height: 28,
+                        color: "var(--sobre-danger)",
+                      }}
+                      title="Remove member"
+                    >
+                      <X size={14} strokeWidth={2.5} />
+                    </button>
+                  ) : null}
                 </div>
               );
             })}
@@ -176,7 +201,6 @@ function DailyLimitCard({
 
   const limitXlm = Number(dailyLimit) / STROOPS_PER_XLM;
   const limitPhp = limitXlm * PHP_PER_XLM;
-  const spentXlm = Number(dailySpent) / STROOPS_PER_XLM;
   const remainingStroops =
     dailySpent >= dailyLimit ? 0n : dailyLimit - dailySpent;
   const remainingXlm = Number(remainingStroops) / STROOPS_PER_XLM;
@@ -201,35 +225,48 @@ function DailyLimitCard({
   const hours = Math.floor(diffMs / 3_600_000);
   const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
 
+  const limitLabel = limitPhp.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  const remainingLabel = remainingPhp.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+
   return (
     <div
       className="mt-5 pt-4 border-t"
       style={{ borderColor: "var(--border)" }}
     >
-      <span className="sobre-label">Daily limit</span>
-      <div className="mt-2 flex items-baseline justify-between">
-        <div
-          className="tabular"
+      <div className="flex items-baseline justify-between">
+        <span className="sobre-label">Daily limit</span>
+        <span
+          className="text-[11px] tabular inline-flex items-center gap-1 whitespace-nowrap"
+          style={{ color: "var(--text-3)" }}
+        >
+          <Timer size={11} strokeWidth={2} />
+          Resets in {hours}h {minutes}m
+        </span>
+      </div>
+      <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        <span
+          className="tabular whitespace-nowrap"
           style={{
             fontFamily: "var(--serif)",
-            fontSize: 22,
+            fontSize: 20,
             fontWeight: 600,
             color: "var(--text-1)",
           }}
         >
-          ₱{" "}
-          {remainingPhp.toLocaleString("en-PH", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })}
-        </div>
-        <div className="text-[11px]" style={{ color: "var(--text-3)" }}>
-          left of ₱{" "}
-          {limitPhp.toLocaleString("en-PH", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })}
-        </div>
+          ₱{remainingLabel}
+        </span>
+        <span
+          className="text-[11px] tabular whitespace-nowrap"
+          style={{ color: "var(--text-3)" }}
+        >
+          left of ₱{limitLabel}
+        </span>
       </div>
       <div
         className="mt-2 h-[6px] rounded-full overflow-hidden"
@@ -248,22 +285,6 @@ function DailyLimitCard({
             transition: "width .6s ease",
           }}
         />
-      </div>
-      <div
-        className="mt-2 flex items-center justify-between text-[11px]"
-        style={{ color: "var(--text-2)" }}
-      >
-        <span className="tabular">
-          Spent today: ₱{" "}
-          {(spentXlm * PHP_PER_XLM).toLocaleString("en-PH", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })}
-        </span>
-        <span className="inline-flex items-center gap-1">
-          <Timer size={11} strokeWidth={2} />
-          Refreshes in {hours}h {minutes}m
-        </span>
       </div>
     </div>
   );
