@@ -5,10 +5,13 @@ import { BalancePanel } from "@/components/BalancePanel";
 import { ConnectButton } from "@/components/ConnectButton";
 import { DepositForm } from "@/components/DepositForm";
 import { SpendForm } from "@/components/SpendForm";
+import { TxFeed } from "@/components/TxFeed";
 import { useFreighter } from "@/hooks/useFreighter";
 import { useWalletState } from "@/hooks/useWalletState";
 
 export default function Home() {
+  // Lifted once so every consumer shares the same Freighter watcher and the
+  // same get_state poller.
   const wallet = useFreighter();
   const { address } = wallet;
   const state = useWalletState(address);
@@ -52,6 +55,13 @@ export default function Home() {
             Add member (admin only)
           </h2>
           <AddMemberForm userAddress={address} onSuccess={refresh} />
+        </section>
+
+        <section>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+            Transaction feed
+          </h2>
+          <TxFeed />
         </section>
       </main>
     </div>
