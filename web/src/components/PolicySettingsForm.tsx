@@ -1,42 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import { useSetPolicy } from "@/hooks/useSetPolicy";
 import type { SpendPolicy } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
+  PHP_PER_XLM,
   STROOPS_PER_XLM,
   type EnvelopeName,
 } from "@/lib/config";
-import { formatXlm } from "@/lib/format";
 
-/** Read-only view of the policy that members see when they aren't admin. */
 function PolicyReadOnly({ current }: { current: SpendPolicy }) {
-  const dailyLimitLabel =
-    current.daily_limit === null ? "no limit" : formatXlm(current.daily_limit);
+  const dailyLabel =
+    current.daily_limit === null
+      ? "no limit"
+      : `${(Number(current.daily_limit) / STROOPS_PER_XLM).toFixed(4)} XLM`;
   const protectedLabel =
     current.protected_envelopes.length === 0
       ? "none"
       : current.protected_envelopes.join(", ");
-
   return (
-    <div className="space-y-1 text-sm">
-      <ul className="ml-4 list-disc space-y-1">
-        <li>
-          Admin approval required for every spend:{" "}
-          <strong>{current.require_all_sigs ? "yes" : "no"}</strong>
-        </li>
-        <li>
-          Daily limit: <strong>{dailyLimitLabel}</strong>
-        </li>
-        <li>
-          Envelopes requiring approval: <strong>{protectedLabel}</strong>
-        </li>
-      </ul>
-      <p className="text-xs text-muted-foreground">
+    <div className="text-sm space-y-1.5">
+      <Row label="Admin approval for every spend" value={current.require_all_sigs ? "Yes" : "No"} />
+      <Row label="Daily limit per member" value={dailyLabel} />
+      <Row label="Envelopes requiring approval" value={protectedLabel} />
+      <p className="text-xs pt-1" style={{ color: "var(--text-3)" }}>
         Only the admin can change these.
       </p>
+    </div>
+  );
+}
+
+function Row({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-3">
+      <span style={{ color: "var(--text-2)" }}>{label}</span>
+      <span className="font-medium" style={{ color: "var(--text-1)" }}>
+        {value}
+      </span>
     </div>
   );
 }
@@ -63,9 +65,20 @@ export function PolicySettingsForm({
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
     () => new Set(current.protected_envelopes),
   );
-  const { setPolicy, pending, error, lastHash } = useSetPolicy(userAddress);
+  const { setPolicy, pending, error } = useSetPolicy(userAddress);
 
-  // Re-sync local form when the wallet state's policy changes externally.
+  // Stable signature so the upstream poll doesn't reset form state when the
+  // server data hasn't actually changed.
+  const policySig = useMemo(
+    () =>
+      `${current.require_all_sigs}|${current.daily_limit ?? "x"}|${[
+        ...current.protected_envelopes,
+      ]
+        .sort()
+        .join(",")}`,
+    [current],
+  );
+
   useEffect(() => {
     setRequireAllSigs(current.require_all_sigs);
     setDailyLimitXlm(
@@ -74,20 +87,27 @@ export function PolicySettingsForm({
         : (Number(current.daily_limit) / STROOPS_PER_XLM).toString(),
     );
     setProtectedSet(new Set(current.protected_envelopes));
-  }, [current.require_all_sigs, current.daily_limit, current.protected_envelopes]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [policySig]);
 
   if (!userAddress) return null;
+  if (!isAdmin) return <PolicyReadOnly current={current} />;
 
-  if (!isAdmin) {
-    return <PolicyReadOnly current={current} />;
-  }
-
-  const toggleEnvelope = (envelope: EnvelopeName) => {
+  const toggle = (e: EnvelopeName) => {
+    if (requireAllSigs) return;
     const next = new Set(protectedSet);
-    if (next.has(envelope)) next.delete(envelope);
-    else next.add(envelope);
+    if (next.has(e)) next.delete(e);
+    else next.add(e);
     setProtectedSet(next);
   };
+
+  // When require_all_sigs is on, every envelope is effectively protected.
+  // Show that visually + send it that way to the contract too, even though
+  // the contract treats require_all_sigs as the master switch and would
+  // route those spends to pending regardless of protected_envelopes.
+  const effectiveProtected = requireAllSigs
+    ? new Set<EnvelopeName>(ENVELOPE_LABELS)
+    : protectedSet;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -100,77 +120,119 @@ export function PolicySettingsForm({
       await setPolicy({
         requireAllSigs,
         dailyLimit,
-        protectedEnvelopes: Array.from(protectedSet),
+        protectedEnvelopes: Array.from(effectiveProtected),
       });
       onSuccess();
     } catch {
-      // error already on hook
+      // error on hook
     }
   };
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-3 text-sm">
-      <label className="flex items-center gap-2">
-        <input
-          type="checkbox"
-          checked={requireAllSigs}
-          onChange={(e) => setRequireAllSigs(e.target.checked)}
-          disabled={pending}
-        />
-        <span>Require admin approval for every spend</span>
-      </label>
+  const phpDaily =
+    Number(dailyLimitXlm) > 0
+      ? (Number(dailyLimitXlm) * PHP_PER_XLM).toLocaleString("en-PH", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        })
+      : null;
 
-      <div className="flex flex-wrap items-center gap-2">
-        <label className="flex items-center gap-2">
-          <span>Daily limit (XLM):</span>
+  return (
+    <form onSubmit={handleSubmit} className="space-y-4 text-sm">
+      <div className="space-y-1.5">
+        <label
+          htmlFor="daily-limit"
+          className="block font-medium"
+          style={{ color: "var(--text-1)" }}
+        >
+          Daily limit (XLM) per member
+        </label>
+        <div className="flex items-center gap-3">
           <input
+            id="daily-limit"
             type="number"
             step="0.0001"
             min="0"
             value={dailyLimitXlm}
             onChange={(e) => setDailyLimitXlm(e.target.value)}
-            className="w-24 rounded border px-2 py-1 text-sm"
-            placeholder="none"
+            className="sobre-input w-40"
+            placeholder="no limit"
             disabled={pending}
           />
-        </label>
-        <span className="text-xs text-muted-foreground">
-          Spends above the daily cumulative total need admin approval. Leave
-          blank for no limit.
-        </span>
+          {phpDaily ? (
+            <span className="text-xs" style={{ color: "var(--text-3)" }}>
+              ≈ ₱ {phpDaily}
+            </span>
+          ) : (
+            <span className="text-xs" style={{ color: "var(--text-3)" }}>
+              Leave blank for no limit.
+            </span>
+          )}
+        </div>
       </div>
 
-      <fieldset className="space-y-1">
-        <legend className="text-xs text-muted-foreground">
-          Envelopes that require admin approval
+      <label className="flex items-center gap-2.5 cursor-pointer">
+        <input
+          type="checkbox"
+          checked={requireAllSigs}
+          onChange={(e) => setRequireAllSigs(e.target.checked)}
+          disabled={pending}
+          className="w-4 h-4 accent-[var(--sobre-primary)]"
+        />
+        <span style={{ color: "var(--text-1)" }}>
+          Require admin approval for every spend
+        </span>
+      </label>
+
+      <fieldset
+        className="space-y-1.5"
+        style={requireAllSigs ? { opacity: 0.65 } : {}}
+      >
+        <legend className="font-medium" style={{ color: "var(--text-1)" }}>
+          Envelopes requiring approval
         </legend>
+        {requireAllSigs ? (
+          <p className="text-xs ml-1" style={{ color: "var(--text-3)" }}>
+            All envelopes are protected because{" "}
+            <em>require admin approval</em> is on.
+          </p>
+        ) : null}
         {ENVELOPE_LABELS.map((envelope) => (
-          <label key={envelope} className="ml-2 flex items-center gap-2">
+          <label
+            key={envelope}
+            className={`ml-1 flex items-center gap-2.5 ${
+              requireAllSigs ? "cursor-not-allowed" : "cursor-pointer"
+            }`}
+          >
             <input
               type="checkbox"
-              checked={protectedSet.has(envelope)}
-              onChange={() => toggleEnvelope(envelope)}
-              disabled={pending}
+              checked={effectiveProtected.has(envelope)}
+              onChange={() => toggle(envelope)}
+              disabled={pending || requireAllSigs}
+              className="w-4 h-4 accent-[var(--sobre-primary)]"
             />
             <span>{envelope}</span>
           </label>
         ))}
       </fieldset>
 
-      <button
-        type="submit"
-        disabled={pending}
-        className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
-      >
-        {pending ? "Saving…" : "Save policy"}
-      </button>
-
-      {error ? (
-        <p className="text-xs text-destructive break-all">{error}</p>
-      ) : null}
-      {lastHash ? (
-        <p className="text-xs text-emerald-600">tx: {lastHash.slice(0, 16)}…</p>
-      ) : null}
+      <div className="flex items-center gap-3 pt-1">
+        <button
+          type="submit"
+          disabled={pending}
+          className="sobre-btn sobre-btn-primary"
+          style={{ padding: "12px 18px", fontSize: 14 }}
+        >
+          {pending ? "Saving…" : "Save policy"}
+        </button>
+        {error ? (
+          <span
+            className="text-xs break-all"
+            style={{ color: "var(--sobre-danger)" }}
+          >
+            {error}
+          </span>
+        ) : null}
+      </div>
     </form>
   );
 }

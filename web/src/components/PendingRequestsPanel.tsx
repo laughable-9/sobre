@@ -1,9 +1,11 @@
 "use client";
 
+import { Check, Hourglass, X } from "lucide-react";
+
 import { useApproveRequest } from "@/hooks/useApproveRequest";
 import { useDenyRequest } from "@/hooks/useDenyRequest";
 import type { PendingRequest } from "@/hooks/useWalletState";
-import { formatXlm, shortenAddress } from "@/lib/format";
+import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 export function PendingRequestsPanel({
   userAddress,
@@ -31,7 +33,9 @@ export function PendingRequestsPanel({
 
   if (pending.length === 0) {
     return (
-      <p className="text-xs text-muted-foreground">No pending requests.</p>
+      <p className="text-xs" style={{ color: "var(--text-3)" }}>
+        Walang pending. Spends below the policy threshold execute immediately.
+      </p>
     );
   }
 
@@ -43,7 +47,7 @@ export function PendingRequestsPanel({
       await approve(id);
       onSuccess();
     } catch {
-      // error already on hook
+      // surfaces below
     }
   };
   const handleDeny = async (id: bigint) => {
@@ -51,53 +55,100 @@ export function PendingRequestsPanel({
       await deny(id);
       onSuccess();
     } catch {
-      // error already on hook
+      // surfaces below
     }
   };
 
   return (
     <div className="space-y-3 text-sm">
-      <ul className="space-y-2">
+      <ul className="space-y-3">
         {pending.map((req) => (
           <li
             key={req.id.toString()}
-            className="rounded border p-2 space-y-1"
+            className="rounded-[10px] border p-3.5 flex items-start gap-3"
+            style={{
+              background: "var(--surface-alt)",
+              borderColor: "var(--border)",
+            }}
           >
-            <div>
-              <span className="font-mono text-xs text-muted-foreground">
-                #{req.id.toString()}
-              </span>{" "}
-              {shortenAddress(req.caller)} wants {formatXlm(req.amount)} from{" "}
-              <strong>{req.envelope}</strong>
-              {req.memo ? ` — "${req.memo}"` : ""}
+            <div
+              className="grid place-items-center shrink-0"
+              style={{
+                width: 32,
+                height: 32,
+                borderRadius: 999,
+                background: "#fdf3d8",
+                color: "#b88b1c",
+              }}
+            >
+              <Hourglass size={14} strokeWidth={2} />
             </div>
-            {isAdmin ? (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => void handleApprove(req.id)}
-                  disabled={inFlight}
-                  className="rounded bg-emerald-600 px-2 py-0.5 text-xs text-white disabled:opacity-50"
+            <div className="flex-1 min-w-0">
+              <div className="text-[14px]">
+                <span
+                  className="font-mono text-[12px]"
+                  style={{ color: "var(--text-3)" }}
                 >
-                  {approveInFlight ? "Approving…" : "Approve"}
-                </button>
-                <button
-                  onClick={() => void handleDeny(req.id)}
-                  disabled={inFlight}
-                  className="rounded bg-destructive/80 px-2 py-0.5 text-xs text-destructive-foreground disabled:opacity-50"
+                  #{req.id.toString()}
+                </span>{" "}
+                <span style={{ color: "var(--text-1)" }}>
+                  {shortenAddress(req.caller)} wants{" "}
+                  <b className="tabular">{formatPhpLocale(req.amount)}</b>{" "}
+                  from <b>{req.envelope}</b>
+                </span>
+              </div>
+              {req.memo ? (
+                <div
+                  className="text-[12px] mt-1"
+                  style={{ color: "var(--text-2)" }}
                 >
-                  {denyInFlight ? "Denying…" : "Deny"}
-                </button>
-              </div>
-            ) : (
-              <div className="text-xs text-muted-foreground">
-                Waiting for admin approval.
-              </div>
-            )}
+                  &quot;{req.memo}&quot;
+                </div>
+              ) : null}
+              {isAdmin ? (
+                <div className="mt-2 flex gap-2">
+                  <button
+                    onClick={() => void handleApprove(req.id)}
+                    disabled={inFlight}
+                    className="sobre-btn"
+                    style={{
+                      background: "var(--sobre-accent)",
+                      color: "#fff",
+                      opacity: inFlight ? 0.5 : 1,
+                    }}
+                  >
+                    <Check size={13} strokeWidth={2.5} />
+                    {approveInFlight ? "Approving…" : "Approve"}
+                  </button>
+                  <button
+                    onClick={() => void handleDeny(req.id)}
+                    disabled={inFlight}
+                    className="sobre-btn sobre-btn-soft"
+                    style={{ opacity: inFlight ? 0.5 : 1 }}
+                  >
+                    <X size={13} strokeWidth={2.5} />
+                    {denyInFlight ? "Denying…" : "Deny"}
+                  </button>
+                </div>
+              ) : (
+                <div
+                  className="text-[11px] mt-2"
+                  style={{ color: "var(--text-3)" }}
+                >
+                  Waiting for admin to decide.
+                </div>
+              )}
+            </div>
           </li>
         ))}
       </ul>
       {showError ? (
-        <p className="text-xs text-destructive break-all">{showError}</p>
+        <p
+          className="text-xs break-all"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {showError}
+        </p>
       ) : null}
     </div>
   );

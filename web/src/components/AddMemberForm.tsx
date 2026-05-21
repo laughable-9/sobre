@@ -25,37 +25,46 @@ export function AddMemberForm({
       onSuccess();
       setMemberAddress("");
     } catch {
-      // error already on hook
+      // error on hook
     }
   };
 
   return (
-    <form onSubmit={handleSubmit} className="space-y-2">
+    <form onSubmit={handleSubmit} className="space-y-2.5">
+      <p className="text-xs" style={{ color: "var(--text-2)" }}>
+        Paste the family member&apos;s Stellar address (G…). The contract caps
+        the wallet at 2 members; the admin counts as one.
+      </p>
       <div className="flex flex-wrap items-center gap-2">
         <input
           type="text"
           value={memberAddress}
           onChange={(e) => setMemberAddress(e.target.value)}
-          className="flex-1 min-w-[24rem] rounded border px-2 py-1 text-sm font-mono"
-          placeholder="G... (Stellar address)"
+          className="sobre-input flex-1 min-w-[24rem]"
+          placeholder="G…"
           disabled={pending}
         />
         <button
           type="submit"
           disabled={pending}
-          className="rounded bg-primary px-3 py-1 text-sm text-primary-foreground disabled:opacity-50"
+          className="sobre-btn sobre-btn-primary"
+          style={{ padding: "12px 18px", fontSize: 14 }}
         >
           {pending ? "Adding…" : "Add member"}
         </button>
       </div>
-      <p className="text-xs text-muted-foreground">
-        Only the admin can add members. Max 2 members total (admin counts as one).
-      </p>
       {error ? (
-        <p className="text-xs text-destructive break-all">{error}</p>
+        <p
+          className="text-xs break-all"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {error}
+        </p>
       ) : null}
       {lastHash ? (
-        <p className="text-xs text-emerald-600">tx: {lastHash.slice(0, 16)}…</p>
+        <p className="text-xs" style={{ color: "var(--sobre-accent)" }}>
+          tx: {lastHash.slice(0, 16)}…
+        </p>
       ) : null}
     </form>
   );
