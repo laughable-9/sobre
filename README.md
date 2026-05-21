@@ -51,16 +51,16 @@ One transaction, one signature, one atomic state change visible to everyone in t
 | Phase 2: admin mutators (`add_member`, `set_envelopes`) | ✅ on testnet |
 | Phase 3: `deposit` with atomic envelope split and event emission | ✅ on testnet |
 | Phase 4: `spend` with member-gating, balance check, and Spend event | ✅ on testnet |
-| Phase 5: Next.js dashboard with Freighter wallet integration | not started |
+| Phase 5: Next.js dashboard with Freighter wallet integration | ✅ local (Vercel deploy after design polish) |
 | Mainnet deployment | not started |
 
 ## Live on Stellar testnet
 
 | | |
 |---|---|
-| Contract ID | `CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR` |
+| Contract ID | `CA2VIMSA75A6BTLE2G4Y5DRFDBSXOXZCUFQR32VB5WGOTGSVFYV4FSQY` |
 | Network | Test SDF Network ; September 2015 (testnet) |
-| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR) |
+| Explorer | [stellar.expert](https://stellar.expert/explorer/testnet/contract/CA2VIMSA75A6BTLE2G4Y5DRFDBSXOXZCUFQR32VB5WGOTGSVFYV4FSQY) |
 | Payment token | XLM native (Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`) |
 | Exports | `init`, `add_member`, `set_envelopes`, `deposit`, `spend`, `get_state` |
 | Wasm size | 11,358 bytes |
@@ -77,7 +77,7 @@ stellar contract invoke \
 # Deposit 10 XLM (the hero feature). Splits per the configured percentages
 # and emits a Deposit event the dashboard listens to.
 stellar contract invoke \
-  --id CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR \
+  --id CA2VIMSA75A6BTLE2G4Y5DRFDBSXOXZCUFQR32VB5WGOTGSVFYV4FSQY \
   --network testnet --source YOUR_IDENTITY \
   -- deposit --from YOUR_IDENTITY --amount 100000000
 
@@ -85,7 +85,7 @@ stellar contract invoke \
 # Emits a Spend event with topics (Spend, caller, envelope) for the
 # dashboard's transaction feed.
 stellar contract invoke \
-  --id CC32A6OHCP57RPFSDBWP7NDRGRYCPSAV664VZEWEW5QH364ELEZ4IVJR \
+  --id CA2VIMSA75A6BTLE2G4Y5DRFDBSXOXZCUFQR32VB5WGOTGSVFYV4FSQY \
   --network testnet --source YOUR_IDENTITY \
   -- spend --caller YOUR_IDENTITY --envelope Groceries \
      --amount 20000000 --memo '"groceries at SM"'
@@ -135,12 +135,35 @@ contract/
     src/lib.rs                     Contract code: data model, init, mutators, get_state
     src/test.rs                    Unit tests (cargo test, in-memory host)
     test_snapshots/                Soroban testutils state snapshots
+web/                               Next.js 16 dashboard
+  src/app/                         Routes (single page, App Router, "use client")
+  src/components/                  ConnectButton, BalancePanel, forms, TxFeed
+  src/hooks/                       useFreighter, useWalletState, useInit,
+                                   useDeposit, useSpend, useAddMember, useTxFeed
+  src/lib/                         config (contract ID, RPC), contract helpers,
+                                   formatters
 sobre_productspec.pdf              Original product spec
 ```
 
-(A `web/` directory will be added in Phase 5 for the Next.js frontend.)
+The dashboard polls the contract every 3 seconds via Soroban's
+`simulateTransaction` (read-only, no fees) and submits writes via
+Freighter-signed transactions. Live transaction feed comes from
+`server.getEvents()` polling.
 
-## Running locally
+## Running the web app
+
+```bash
+cd web
+npm install        # first time only
+npm run dev        # http://localhost:3000
+```
+
+Open the URL in a browser with [Freighter](https://www.freighter.app/)
+installed and switched to **Testnet**. Click Connect Wallet, then
+either initialize a new wallet (if the contract instance is fresh) or
+deposit/spend if it's already set up.
+
+## Running the contract
 
 Requires:
 - [Rust 1.95+](https://rustup.rs) with the `wasm32v1-none` target (`rustup target add wasm32v1-none`)
