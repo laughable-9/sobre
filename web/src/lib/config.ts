@@ -1,9 +1,15 @@
 /**
- * Hardcoded constants for the demo. Phase 5 doesn't bother with env vars —
- * the contract ID is public and the testnet network passphrase is fixed.
+ * Hardcoded constants for the demo. Contract IDs are public; the testnet
+ * network passphrase is fixed.
  */
 
-export const CONTRACT_ID = "CAQ4CUGKAQL67CV5OUXUUGCCZDMFZSRWZOCOIXOF7LK666W7A6YF3CUD";
+/**
+ * SobreFactory contract — the singleton that deploys per-family SobreContract
+ * instances. Each family gets their own contract address; this address is
+ * only the entry point for opening new ones + listing the user's wallets.
+ */
+export const FACTORY_CONTRACT_ID =
+  "CBF3AC45NCERBDEWHDRQBRTQDQC6DZGZ4NTNDXCZTUXL4QJ6Y4OKTIN5";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
  *  Deterministic per network. On testnet it's always this address. */
