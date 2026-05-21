@@ -942,17 +942,6 @@ function Footer() {
               </li>
             </ul>
           </div>
-          <div className="sobre-footer-col">
-            <h4>Legal</h4>
-            <ul>
-              <li>
-                <a href="#">Privacy</a>
-              </li>
-              <li>
-                <a href="#">Terms</a>
-              </li>
-            </ul>
-          </div>
         </div>
         <div className="sobre-footer-bottom">
           <div>© 2026 Sobre. Built for Stellar Philippines Hackathon.</div>
