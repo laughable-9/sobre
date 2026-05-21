@@ -3,7 +3,7 @@
  * the contract ID is public and the testnet network passphrase is fixed.
  */
 
-export const CONTRACT_ID = "CA2VIMSA75A6BTLE2G4Y5DRFDBSXOXZCUFQR32VB5WGOTGSVFYV4FSQY";
+export const CONTRACT_ID = "CCRSYLZG6KAAICETCVSJT3H76FA6FKTFXGLDPFZIQWNKILM4OMPR2GJQ";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
  *  Deterministic per network. On testnet it's always this address. */

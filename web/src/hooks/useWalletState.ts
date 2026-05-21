@@ -8,8 +8,24 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-import { CONTRACT_ID, NETWORK } from "@/lib/config";
+import { CONTRACT_ID, NETWORK, type EnvelopeName } from "@/lib/config";
 import { getServer } from "@/lib/contract";
+import { envelopeNameFromScNative } from "@/lib/format";
+
+export interface SpendPolicy {
+  require_all_sigs: boolean;
+  daily_limit: bigint | null;
+  protected_envelopes: EnvelopeName[];
+}
+
+export interface PendingRequest {
+  id: bigint;
+  caller: string;
+  envelope: EnvelopeName;
+  amount: bigint;
+  memo: string;
+  requested_at_ledger: number;
+}
 
 export interface WalletState {
   admin: string;
@@ -17,6 +33,8 @@ export interface WalletState {
   percents: number[];
   members: string[];
   balances: bigint[];
+  policy: SpendPolicy;
+  pending: PendingRequest[];
 }
 
 export interface UseWalletStateResult {
@@ -27,10 +45,10 @@ export interface UseWalletStateResult {
 }
 
 /**
- * Poll `get_state` on the deployed contract every 3 seconds using
- * simulateTransaction (no fees, no tx submission). Uses the connected user's
- * address as the simulation source. Lift this hook to the root component so
- * the page polls once, not once per consumer.
+ * Lifts the polling lifecycle to a single caller so the page opens one watch.
+ * Short-circuits setState when the retval XDR is byte-identical to the last
+ * one — keeps object references stable across no-op polls so downstream
+ * useEffects (e.g. form re-sync in PolicySettingsForm) don't re-fire every 3s.
  */
 export function useWalletState(
   userAddress: string | null,
@@ -38,9 +56,10 @@ export function useWalletState(
   const [state, setState] = useState<WalletState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Each call to fetchState bumps this; only the latest call is allowed to
-  // setState. Protects against userAddress flipping mid-fetch.
+  // Bump on every fetch; only the latest call may setState. Guards against
+  // address flipping mid-fetch.
   const generationRef = useRef(0);
+  const lastRetvalXdrRef = useRef<string | null>(null);
 
   const fetchState = useCallback(async () => {
     if (!userAddress) return;
@@ -68,8 +87,13 @@ export function useWalletState(
       if (!sim.result?.retval) {
         throw new Error("simulation returned no value");
       }
-      const native = scValToNative(sim.result.retval) as WalletState;
-      setState(native);
+      const retvalXdr = sim.result.retval.toXDR("base64");
+      if (retvalXdr === lastRetvalXdrRef.current) {
+        return; // no-op poll; keep references stable
+      }
+      lastRetvalXdrRef.current = retvalXdr;
+      const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
+      setState(normalizeWalletState(raw));
     } catch (e) {
       if (gen !== generationRef.current) return;
       setError(e instanceof Error ? e.message : String(e));
@@ -86,4 +110,41 @@ export function useWalletState(
   }, [userAddress, fetchState]);
 
   return { state, loading, error, refresh: fetchState };
+}
+
+function normalizeWalletState(raw: Record<string, unknown>): WalletState {
+  const rawPolicy = (raw.policy ?? {}) as Record<string, unknown>;
+  const policy: SpendPolicy = {
+    require_all_sigs: Boolean(rawPolicy.require_all_sigs),
+    daily_limit:
+      rawPolicy.daily_limit === undefined || rawPolicy.daily_limit === null
+        ? null
+        : (rawPolicy.daily_limit as bigint),
+    protected_envelopes: Array.isArray(rawPolicy.protected_envelopes)
+      ? (rawPolicy.protected_envelopes as unknown[]).map((e) =>
+          envelopeNameFromScNative(e),
+        )
+      : [],
+  };
+
+  const pending: PendingRequest[] = Array.isArray(raw.pending)
+    ? (raw.pending as Record<string, unknown>[]).map((r) => ({
+        id: r.id as bigint,
+        caller: String(r.caller),
+        envelope: envelopeNameFromScNative(r.envelope),
+        amount: r.amount as bigint,
+        memo: String(r.memo ?? ""),
+        requested_at_ledger: Number(r.requested_at_ledger ?? 0),
+      }))
+    : [];
+
+  return {
+    admin: String(raw.admin),
+    payment_token: String(raw.payment_token),
+    percents: (raw.percents as number[]) ?? [],
+    members: (raw.members as string[]) ?? [],
+    balances: (raw.balances as bigint[]) ?? [],
+    policy,
+    pending,
+  };
 }

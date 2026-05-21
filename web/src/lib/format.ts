@@ -2,7 +2,22 @@
  * Display formatters shared across components. Pure functions, no React.
  */
 
-import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
+import { PHP_PER_XLM, STROOPS_PER_XLM, type EnvelopeName } from "@/lib/config";
+
+/**
+ * `Envelope::Groceries` and friends are encoded by Soroban as either a
+ * `Vec<Symbol>` (the literal `#[contracttype] enum X` representation, where
+ * scValToNative gives `["Groceries"]`) or a bare `Symbol` (when emitted as an
+ * event topic, gives `"Groceries"`). Normalize either shape.
+ */
+export function envelopeNameFromScNative(
+  raw: unknown,
+  fallback: EnvelopeName = "Groceries",
+): EnvelopeName {
+  if (typeof raw === "string") return raw as EnvelopeName;
+  if (Array.isArray(raw) && raw.length > 0) return String(raw[0]) as EnvelopeName;
+  return fallback;
+}
 
 /** "GAVM…WWA2" from a full Stellar G-address. */
 export function shortenAddress(address: string): string {
