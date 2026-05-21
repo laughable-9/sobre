@@ -110,9 +110,9 @@ To deploy your own copy of the contracts, see the commands at the bottom of this
 
 | Name | Role | GitHub |
 |---|---|---|
-| Clarence Kyle Pagunsan | Lead developer (contract + frontend) | [@laughable-9](https://github.com/laughable-9) |
-| Elfritz Angelo Peralta | Contributor | _tbd_ |
-| Lance Gabriel Sacdalan | Contributor | _tbd_ |
+| Clarence Kyle Pagunsan | Co-founder · Lead developer (contract + frontend) | [@laughable-9](https://github.com/laughable-9) |
+| Elfritz Angelo Peralta | Co-founder · Project manager | [@elfrtz](https://github.com/elfrtz) |
+| Lance Gabriel Sacdalan | Co-founder · QA | [@sacdalance](https://github.com/sacdalance) |
 
 ## 📜 License
 
