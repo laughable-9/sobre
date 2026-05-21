@@ -23,6 +23,38 @@ export interface FreighterState {
   network: string | null;
   error: string | null;
   connect: () => Promise<void>;
+  disconnect: () => void;
+  /** Re-query Freighter for the live address + network. WatchWalletChanges
+   *  already polls every 2s in the background; this is for "force a refresh
+   *  now" UX (e.g., after the user switches accounts inside Freighter). */
+  refresh: () => Promise<void>;
+}
+
+/**
+ * Freighter's API has no programmatic disconnect — the extension stays
+ * authorized to the site until the user revokes via Freighter UI. We fake a
+ * disconnect by setting a localStorage flag that the mount-time auto-detect
+ * respects; `connect()` clears the flag.
+ */
+const DISCONNECT_FLAG_KEY = "sobre.wallet.disconnected";
+
+function readDisconnectFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(DISCONNECT_FLAG_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function writeDisconnectFlag(value: boolean): void {
+  if (typeof window === "undefined") return;
+  try {
+    if (value) window.localStorage.setItem(DISCONNECT_FLAG_KEY, "1");
+    else window.localStorage.removeItem(DISCONNECT_FLAG_KEY);
+  } catch {
+    // ignore quota issues
+  }
 }
 
 /**
@@ -46,6 +78,14 @@ export function useFreighter(): FreighterState {
         if (cancelled) return;
         if (!installed) {
           setStatus("not-installed");
+          return;
+        }
+
+        // Respect a user-initiated disconnect: even though Freighter still
+        // remembers us, we present as logged out until the user clicks
+        // Connect again.
+        if (readDisconnectFlag()) {
+          setStatus("disconnected");
           return;
         }
 
@@ -88,6 +128,7 @@ export function useFreighter(): FreighterState {
 
   const connect = useCallback(async () => {
     setError(null);
+    writeDisconnectFlag(false);
     try {
       const { address: addr, error: requestErr } = await requestAccess();
       if (requestErr) {
@@ -104,5 +145,28 @@ export function useFreighter(): FreighterState {
     }
   }, []);
 
-  return { status, address, network, error, connect };
+  const disconnect = useCallback(() => {
+    writeDisconnectFlag(true);
+    setAddress(null);
+    setNetwork(null);
+    setError(null);
+    setStatus("disconnected");
+  }, []);
+
+  const refresh = useCallback(async () => {
+    setError(null);
+    try {
+      const [{ address: addr }, { network: net }] = await Promise.all([
+        getAddress(),
+        getNetwork(),
+      ]);
+      setAddress(addr);
+      setNetwork(net);
+      setStatus("connected");
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    }
+  }, []);
+
+  return { status, address, network, error, connect, disconnect, refresh };
 }

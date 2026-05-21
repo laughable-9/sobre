@@ -3,7 +3,8 @@
 import { useState } from "react";
 import { AlertTriangle, ArrowLeft, Check } from "lucide-react";
 
-import { CONTRACT_ID } from "@/lib/config";
+/** Stellar contract addresses are 56 chars, base32, starting with C. */
+const CONTRACT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
 
 export function JoinByLinkForm({
   onValid,
@@ -36,23 +37,29 @@ export function JoinByLinkForm({
       });
       return;
     }
-    const joinParam = parsed.searchParams.get("join");
-    if (!joinParam) {
-      setStatus({
-        kind: "invalid",
-        reason: "Invite link is missing the ?join= part.",
-      });
-      return;
-    }
-    if (joinParam !== CONTRACT_ID) {
+    // Accept either /dashboard/<contractId> in the path or ?join=<contractId>
+    // in the query — both shapes are valid invite links. Path wins when both
+    // exist (it's the canonical Sobre URL).
+    const pathMatch = parsed.pathname.match(/\/dashboard\/(C[A-Z2-7]{55})/);
+    const fromPath = pathMatch?.[1];
+    const fromQuery = parsed.searchParams.get("join");
+    const candidate = fromPath || fromQuery;
+    if (!candidate) {
       setStatus({
         kind: "invalid",
         reason:
-          "This invite is for a different Sobre. Ask the sender to resend the latest link.",
+          "This URL doesn't look like a Sobre invite. It should include the contract address.",
       });
       return;
     }
-    setStatus({ kind: "valid", contractId: joinParam });
+    if (!CONTRACT_ADDRESS_RE.test(candidate)) {
+      setStatus({
+        kind: "invalid",
+        reason: "The contract address in that link doesn't look right.",
+      });
+      return;
+    }
+    setStatus({ kind: "valid", contractId: candidate });
   };
 
   const handleSubmit = (e: React.FormEvent) => {

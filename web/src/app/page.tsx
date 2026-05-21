@@ -16,6 +16,9 @@ import {
   TrendingUp,
 } from "lucide-react";
 
+import { useFreighter } from "@/hooks/useFreighter";
+import { WalletMenu } from "@/components/sobre/WalletMenu";
+
 function GithubMark({ size = 18 }: { size?: number }) {
   return (
     <svg
@@ -161,6 +164,9 @@ export default function Landing() {
 }
 
 function Nav() {
+  const wallet = useFreighter();
+  const { status, address, connect } = wallet;
+
   return (
     <header className="sobre-nav">
       <div className="sobre-container sobre-nav-inner">
@@ -177,8 +183,29 @@ function Nav() {
         <nav className="sobre-nav-links">
           <a href="#how">How it works</a>
           <a href="#about">About</a>
+          {address ? (
+            <WalletMenu wallet={wallet} />
+          ) : status === "not-installed" ? (
+            <a
+              href="https://www.freighter.app/"
+              target="_blank"
+              rel="noreferrer"
+              className="sobre-btn-nav sobre-btn-nav-soft"
+            >
+              Install Freighter
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={() => void connect()}
+              className="sobre-btn-nav sobre-btn-nav-soft"
+              disabled={status === "checking"}
+            >
+              {status === "checking" ? "Checking…" : "Connect Wallet"}
+            </button>
+          )}
           <Link href="/dashboard" className="sobre-btn-nav">
-            Open Wallet
+            Open Sobre
           </Link>
         </nav>
       </div>
@@ -208,7 +235,7 @@ function Hero() {
               href="/dashboard"
               className="sobre-btn-primary-large"
             >
-              Open a Shared Wallet
+              Open a Shared Sobre
               <ArrowRight size={16} strokeWidth={2} />
             </Link>
             <a href="#how" className="sobre-btn-ghost-large">

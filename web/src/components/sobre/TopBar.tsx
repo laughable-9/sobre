@@ -2,29 +2,30 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Bell, Check, Pencil, X } from "lucide-react";
+import { Check, Pencil, X } from "lucide-react";
 
 import type { FreighterState } from "@/hooks/useFreighter";
 import { useRenameWallet } from "@/hooks/useRenameWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { NETWORK } from "@/lib/config";
-import { shortenAddress } from "@/lib/format";
-import { Button, buttonVariants } from "@/components/ui/button";
+import { WalletMenu } from "@/components/sobre/WalletMenu";
 
 export function TopBar({
   wallet,
   walletState,
+  contractId,
   isAdmin,
   onRenamed,
 }: {
   wallet: FreighterState;
   /** When present, render the wallet name pill + admin rename affordance. */
   walletState?: WalletState | null;
+  /** Required alongside walletState for the admin rename action. */
+  contractId?: string;
   isAdmin?: boolean;
   onRenamed?: () => void;
 }) {
   const { status, address, network, error, connect } = wallet;
-  const initials = address ? address.slice(1, 3).toUpperCase() : "··";
   const wrongNetwork = network !== null && network !== NETWORK.name;
 
   return (
@@ -43,10 +44,11 @@ export function TopBar({
           </a>
         </div>
 
-        {walletState ? (
+        {walletState && contractId ? (
           <WalletNamePill
             walletName={walletState.wallet_name}
             adminAddress={address}
+            contractId={contractId}
             canRename={Boolean(isAdmin)}
             onRenamed={onRenamed}
           />
@@ -64,42 +66,26 @@ export function TopBar({
             </span>
           ) : null}
 
-          {status === "checking" ? (
-            <Button variant="outline" disabled size="sm">
-              Checking…
-            </Button>
+          {address ? (
+            <WalletMenu wallet={wallet} />
           ) : status === "not-installed" ? (
             <a
               href="https://www.freighter.app/"
               target="_blank"
               rel="noreferrer"
-              className={buttonVariants({ size: "sm" })}
+              className="sobre-btn-nav sobre-btn-nav-soft"
             >
               Install Freighter
             </a>
-          ) : !address ? (
-            <Button size="sm" onClick={connect}>
-              Connect Wallet
-            </Button>
           ) : (
-            <>
-              <button
-                type="button"
-                className="sobre-iconbtn"
-                aria-label="Notifications"
-              >
-                <Bell size={18} strokeWidth={2} />
-              </button>
-              <div
-                className="sobre-avatar-lg"
-                title={`${address} (${network})`}
-              >
-                {initials}
-              </div>
-              <span className="hidden md:inline text-xs text-[color:var(--text-2)] font-mono">
-                {shortenAddress(address)}
-              </span>
-            </>
+            <button
+              type="button"
+              onClick={() => void connect()}
+              className="sobre-btn-nav sobre-btn-nav-soft"
+              disabled={status === "checking"}
+            >
+              {status === "checking" ? "Checking…" : "Connect Wallet"}
+            </button>
           )}
         </div>
       </div>
@@ -114,17 +100,19 @@ export function TopBar({
 function WalletNamePill({
   walletName,
   adminAddress,
+  contractId,
   canRename,
   onRenamed,
 }: {
   walletName: string;
   adminAddress: string | null;
+  contractId: string;
   canRename: boolean;
   onRenamed?: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(walletName);
-  const { renameWallet, pending } = useRenameWallet(adminAddress);
+  const { renameWallet, pending } = useRenameWallet(adminAddress, contractId);
 
   const save = async () => {
     const next = draft.trim();

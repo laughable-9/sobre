@@ -20,8 +20,8 @@ export function InviteModal({
   }, []);
 
   const url = origin
-    ? `${origin}/dashboard?join=${contractId}`
-    : `/dashboard?join=${contractId}`;
+    ? `${origin}/dashboard/${contractId}?join=${contractId}`
+    : `/dashboard/${contractId}?join=${contractId}`;
 
   const copy = async () => {
     try {

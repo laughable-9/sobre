@@ -254,7 +254,7 @@
   line-height: 1; letter-spacing: -0.02em;
   margin-top: 10px;
 }
-.sobre-total .cents { font-size: 22px; color: var(--text-2); }
+.sobre-total .cents { font-size: 22px; }
 
 .sobre-members { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 18px; }
 .sobre-member { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
@@ -506,9 +506,27 @@
   padding: 22px 24px;
   box-shadow: var(--shadow-sm);
 }
+
+/* Used on the "My Sobres" cards — same surface as sobre-card-flat but with
+   hover lift since these are navigable. */
+.sobre-card-link {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+  display: block;
+  transition: transform .15s ease, box-shadow .15s ease, border-color .15s ease;
+}
+.sobre-card-link:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-md);
+  border-color: var(--border-strong);
+}
 .sobre-admin-section h3 {
   font-family: var(--serif); font-size: 18px; font-weight: 500; margin: 0 0 12px;
 }
+
 
 /* ─── Landing page (ported from the design's landing.css) ─────────────── */
 .sobre-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
@@ -584,6 +602,126 @@
 }
 .sobre-nav-links a.sobre-btn-nav:hover,
 .sobre-btn-nav:hover { background: var(--primary-hover); color: #fff; }
+
+/* Cream/soft variant for "Connect Wallet" — secondary affordance next to
+   the primary mango "Open Sobre" CTA in the landing nav. */
+.sobre-nav-links a.sobre-btn-nav-soft,
+.sobre-btn-nav-soft {
+  background: var(--surface);
+  color: var(--text-1);
+  border: 1px solid var(--border);
+}
+.sobre-nav-links a.sobre-btn-nav-soft:hover,
+.sobre-btn-nav-soft:hover { background: var(--surface-alt); color: var(--text-1); }
+.sobre-btn-nav-soft:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* Connected-wallet pill + dropdown menu. Used in the landing nav and any
+   surface that wants a compact wallet affordance with copy/refresh/sign-out.
+   Anchored to its trigger via the wrapping .sobre-wallet-menu div. */
+.sobre-wallet-menu { position: relative; display: inline-block; }
+.sobre-wallet-menu-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-1);
+  cursor: pointer;
+  transition: background .15s ease, border-color .15s ease;
+}
+.sobre-wallet-menu-pill:hover {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.sobre-wallet-menu-pill .emoji {
+  font-size: 16px;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+}
+.sobre-wallet-menu-pill .addr {
+  font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
+  font-weight: 600;
+}
+.sobre-wallet-menu-pill .chev { color: var(--text-3); }
+
+.sobre-wallet-menu-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 8px;
+  box-shadow: 0 16px 36px rgba(31, 27, 22, 0.14), 0 4px 10px rgba(31, 27, 22, 0.06);
+  z-index: 60;
+  animation: sobre-menu-in .15s ease-out;
+}
+@keyframes sobre-menu-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.sobre-wallet-menu-head {
+  padding: 12px 12px 14px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 6px;
+}
+.sobre-wallet-menu-head .label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-3);
+  margin-bottom: 6px;
+}
+.sobre-wallet-menu-head .addr-full {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 11px;
+  color: var(--text-1);
+  word-break: break-all;
+  line-height: 1.4;
+}
+
+.sobre-wallet-menu-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 14px;
+  color: var(--text-1);
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s ease, color .12s ease;
+}
+.sobre-wallet-menu-item:hover:not(:disabled) {
+  background: var(--surface-alt);
+}
+.sobre-wallet-menu-item:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+.sobre-wallet-menu-item.danger { color: var(--sobre-danger); }
+.sobre-wallet-menu-item.danger:hover { background: #fbe4e0; }
+
+.sobre-wallet-menu-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 6px 4px;
+}
+
+@keyframes sobre-spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
 
 .sobre-hero { padding: 56px 0 80px; }
 .sobre-hero-grid {
