@@ -616,7 +616,11 @@
 }
 .sobre-nav-inner {
   display: flex; align-items: center; justify-content: space-between;
-  padding: 18px 0;
+  /* Vertical-only — horizontal padding comes from .sobre-container on the
+     same element. The shorthand `padding: 18px 0` would zero out the
+     container's left/right padding and clip nav contents to the edge. */
+  padding-top: 18px;
+  padding-bottom: 18px;
 }
 .sobre-brand { display: flex; align-items: center; gap: 10px; }
 .sobre-brand-name {
@@ -639,7 +643,7 @@
   .sobre-container { padding: 0 20px; }
   .sobre-nav-link-text { display: none; }
   .sobre-nav-links { gap: 10px; }
-  .sobre-nav-inner { padding: 14px 0; }
+  .sobre-nav-inner { padding-top: 14px; padding-bottom: 14px; }
   .sobre-brand-name { font-size: 18px; }
   .sobre-nav-links a.sobre-btn-nav,
   .sobre-btn-nav,
