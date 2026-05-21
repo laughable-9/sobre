@@ -15,6 +15,7 @@ export interface UseDenyRequestResult {
 /** Drops the queued spend; no tokens move. */
 export function useDenyRequest(
   adminAddress: string | null,
+  contractId: string | null,
 ): UseDenyRequestResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -23,11 +24,17 @@ export function useDenyRequest(
   const deny = useCallback(
     async (requestId: bigint): Promise<string> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
         const args = [nativeToScVal(requestId, { type: "u64" })];
-        const hash = await invokeWrite("deny_request", args, adminAddress);
+        const { hash } = await invokeWrite(
+          contractId,
+          "deny_request",
+          args,
+          adminAddress,
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
@@ -37,7 +44,7 @@ export function useDenyRequest(
         setPending(false);
       }
     },
-    [adminAddress],
+    [adminAddress, contractId],
   );
 
   return { deny, pending, error, lastHash };

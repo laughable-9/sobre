@@ -17,7 +17,10 @@ export interface UseDepositResult {
  * address as the `from` argument; their Freighter signature authorizes both
  * the outer Sobre call and the inner XLM SAC `transfer` sub-call.
  */
-export function useDeposit(userAddress: string | null): UseDepositResult {
+export function useDeposit(
+  userAddress: string | null,
+  contractId: string | null,
+): UseDepositResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastHash, setLastHash] = useState<string | null>(null);
@@ -25,6 +28,7 @@ export function useDeposit(userAddress: string | null): UseDepositResult {
   const deposit = useCallback(
     async (amountStroops: bigint): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
@@ -32,7 +36,12 @@ export function useDeposit(userAddress: string | null): UseDepositResult {
           Address.fromString(userAddress).toScVal(),
           nativeToScVal(amountStroops, { type: "i128" }),
         ];
-        const hash = await invokeWrite("deposit", args, userAddress);
+        const { hash } = await invokeWrite(
+          contractId,
+          "deposit",
+          args,
+          userAddress,
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
@@ -43,7 +52,7 @@ export function useDeposit(userAddress: string | null): UseDepositResult {
         setPending(false);
       }
     },
-    [userAddress],
+    [userAddress, contractId],
   );
 
   return { deposit, pending, error, lastHash };

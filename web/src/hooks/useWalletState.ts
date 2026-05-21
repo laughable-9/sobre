@@ -8,7 +8,7 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-import { CONTRACT_ID, NETWORK, type EnvelopeName } from "@/lib/config";
+import { NETWORK, type EnvelopeName } from "@/lib/config";
 import { getServer } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
 
@@ -59,6 +59,7 @@ export interface UseWalletStateResult {
  */
 export function useWalletState(
   userAddress: string | null,
+  contractId: string | null,
 ): UseWalletStateResult {
   const [state, setState] = useState<WalletState | null>(null);
   const [loading, setLoading] = useState(false);
@@ -69,7 +70,7 @@ export function useWalletState(
   const lastRetvalXdrRef = useRef<string | null>(null);
 
   const fetchState = useCallback(async () => {
-    if (!userAddress) return;
+    if (!userAddress || !contractId) return;
     const gen = ++generationRef.current;
     const server = getServer();
 
@@ -83,7 +84,7 @@ export function useWalletState(
     if (isInitialFetch) setLoading(true);
     try {
       const source = await server.getAccount(userAddress);
-      const contract = new Contract(CONTRACT_ID);
+      const contract = new Contract(contractId);
       const tx = new TransactionBuilder(source, {
         fee: BASE_FEE,
         networkPassphrase: NETWORK.passphrase,
@@ -114,14 +115,22 @@ export function useWalletState(
     } finally {
       if (gen === generationRef.current && isInitialFetch) setLoading(false);
     }
-  }, [userAddress]);
+  }, [userAddress, contractId]);
+
+  // Reset the dedupe cache when the contractId changes so navigating between
+  // Sobres always re-issues a fresh fetch.
+  useEffect(() => {
+    lastRetvalXdrRef.current = null;
+    setState(null);
+    setError(null);
+  }, [contractId]);
 
   useEffect(() => {
-    if (!userAddress) return;
+    if (!userAddress || !contractId) return;
     fetchState();
     const interval = setInterval(fetchState, 3000);
     return () => clearInterval(interval);
-  }, [userAddress, fetchState]);
+  }, [userAddress, contractId, fetchState]);
 
   return { state, loading, error, refresh: fetchState };
 }

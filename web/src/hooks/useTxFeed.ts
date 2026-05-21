@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { scValToNative } from "@stellar/stellar-sdk";
 
-import { CONTRACT_ID } from "@/lib/config";
 import { getServer } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
 
@@ -58,7 +57,7 @@ export interface UseTxFeedResult {
  * Skips setState when the latest event list is identical (avoids forcing a
  * full re-render every 3s). Returns newest first.
  */
-export function useTxFeed(): UseTxFeedResult {
+export function useTxFeed(contractId: string | null): UseTxFeedResult {
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -67,6 +66,7 @@ export function useTxFeed(): UseTxFeedResult {
   const generationRef = useRef(0);
 
   const fetchEvents = useCallback(async () => {
+    if (!contractId) return;
     const gen = ++generationRef.current;
     setError(null);
     try {
@@ -79,7 +79,7 @@ export function useTxFeed(): UseTxFeedResult {
       // Soroban RPC silently treats as "return zero events." Hard-won bug.
       const raw = await server.getEvents({
         startLedger: startLedgerRef.current,
-        filters: [{ type: "contract", contractIds: [CONTRACT_ID] }],
+        filters: [{ type: "contract", contractIds: [contractId] }],
       });
       if (gen !== generationRef.current) return;
 
@@ -152,13 +152,22 @@ export function useTxFeed(): UseTxFeedResult {
     } finally {
       if (gen === generationRef.current) setLoading(false);
     }
-  }, []);
+  }, [contractId]);
+
+  // Reset paging state when switching Sobres so we re-window from the
+  // current ledger for the new contract.
+  useEffect(() => {
+    startLedgerRef.current = null;
+    lastSignatureRef.current = "";
+    setEvents([]);
+  }, [contractId]);
 
   useEffect(() => {
+    if (!contractId) return;
     fetchEvents();
     const interval = setInterval(fetchEvents, 3000);
     return () => clearInterval(interval);
-  }, [fetchEvents]);
+  }, [contractId, fetchEvents]);
 
   return { events, loading, error, refresh: fetchEvents };
 }

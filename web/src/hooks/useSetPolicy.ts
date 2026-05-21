@@ -19,7 +19,10 @@ export interface UseSetPolicyResult {
 }
 
 /** Any spend that lands after this call evaluates against the new policy. */
-export function useSetPolicy(adminAddress: string | null): UseSetPolicyResult {
+export function useSetPolicy(
+  adminAddress: string | null,
+  contractId: string | null,
+): UseSetPolicyResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [lastHash, setLastHash] = useState<string | null>(null);
@@ -27,11 +30,17 @@ export function useSetPolicy(adminAddress: string | null): UseSetPolicyResult {
   const setPolicy = useCallback(
     async (input: PolicyInput): Promise<string> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
         const args = [spendPolicyScVal(input)];
-        const hash = await invokeWrite("set_policy", args, adminAddress);
+        const { hash } = await invokeWrite(
+          contractId,
+          "set_policy",
+          args,
+          adminAddress,
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
@@ -41,7 +50,7 @@ export function useSetPolicy(adminAddress: string | null): UseSetPolicyResult {
         setPending(false);
       }
     },
-    [adminAddress],
+    [adminAddress, contractId],
   );
 
   return { setPolicy, pending, error, lastHash };

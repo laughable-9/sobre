@@ -18,23 +18,31 @@ export interface UseCloseWalletResult {
  */
 export function useCloseWallet(
   adminAddress: string | null,
+  contractId: string | null,
 ): UseCloseWalletResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const closeWallet = useCallback(async (): Promise<string> => {
     if (!adminAddress) throw new Error("Wallet not connected.");
+    if (!contractId) throw new Error("No wallet selected.");
     setPending(true);
     setError(null);
     try {
-      return await invokeWrite("close_wallet", [], adminAddress);
+      const { hash } = await invokeWrite(
+        contractId,
+        "close_wallet",
+        [],
+        adminAddress,
+      );
+      return hash;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
     } finally {
       setPending(false);
     }
-  }, [adminAddress]);
+  }, [adminAddress, contractId]);
 
   return { closeWallet, pending, error };
 }

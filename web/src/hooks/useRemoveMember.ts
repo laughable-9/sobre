@@ -14,6 +14,7 @@ export interface UseRemoveMemberResult {
 /** Admin-only kick. Caller must be the admin's wallet. */
 export function useRemoveMember(
   adminAddress: string | null,
+  contractId: string | null,
 ): UseRemoveMemberResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -21,11 +22,18 @@ export function useRemoveMember(
   const removeMember = useCallback(
     async (memberAddress: string): Promise<string> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
         const args = [Address.fromString(memberAddress).toScVal()];
-        return await invokeWrite("remove_member", args, adminAddress);
+        const { hash } = await invokeWrite(
+          contractId,
+          "remove_member",
+          args,
+          adminAddress,
+        );
+        return hash;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;
@@ -33,7 +41,7 @@ export function useRemoveMember(
         setPending(false);
       }
     },
-    [adminAddress],
+    [adminAddress, contractId],
   );
 
   return { removeMember, pending, error };

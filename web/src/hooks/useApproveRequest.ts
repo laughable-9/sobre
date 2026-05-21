@@ -14,6 +14,7 @@ export interface UseApproveRequestResult {
 
 export function useApproveRequest(
   adminAddress: string | null,
+  contractId: string | null,
 ): UseApproveRequestResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -22,11 +23,17 @@ export function useApproveRequest(
   const approve = useCallback(
     async (requestId: bigint): Promise<string> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
         const args = [nativeToScVal(requestId, { type: "u64" })];
-        const hash = await invokeWrite("approve_request", args, adminAddress);
+        const { hash } = await invokeWrite(
+          contractId,
+          "approve_request",
+          args,
+          adminAddress,
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
@@ -36,7 +43,7 @@ export function useApproveRequest(
         setPending(false);
       }
     },
-    [adminAddress],
+    [adminAddress, contractId],
   );
 
   return { approve, pending, error, lastHash };
