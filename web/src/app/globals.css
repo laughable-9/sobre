@@ -196,7 +196,11 @@
   align-items: center; gap: 24px;
 }
 @media (max-width: 760px) {
-  .sobre-topbar-inner { grid-template-columns: auto 1fr; }
+  .sobre-topbar-inner {
+    grid-template-columns: auto 1fr;
+    padding: 0 16px;
+    gap: 12px;
+  }
   .sobre-topbar-inner > .sobre-wallet-pill { display: none; }
 }
 .sobre-wallet-pill {
@@ -232,6 +236,9 @@
   gap: 24px;
 }
 @media (max-width: 1100px) { .sobre-dash { grid-template-columns: 1fr; } }
+@media (max-width: 768px) {
+  .sobre-dash { padding: 16px; gap: 16px; }
+}
 
 .sobre-summary { display: flex; flex-direction: column; gap: 18px; }
 .sobre-summary-card {
@@ -241,6 +248,11 @@
   padding: 26px;
   box-shadow: var(--shadow-sm);
   position: relative; overflow: hidden;
+}
+@media (max-width: 768px) {
+  .sobre-summary-card { padding: 20px; }
+  .sobre-total { font-size: 36px; }
+  .sobre-total .cents { font-size: 18px; }
 }
 .sobre-label {
   font-size: 11px; font-weight: 600;
@@ -283,6 +295,10 @@
   margin-bottom: 16px;
   position: relative;
   transition: box-shadow .25s ease, transform .25s ease;
+}
+@media (max-width: 768px) {
+  .sobre-envelope { padding: 18px 16px; margin-bottom: 12px; }
+  .sobre-env-amount { font-size: 32px; }
 }
 .sobre-envelope:hover { box-shadow: var(--shadow-md); }
 .sobre-envelope.pulse { animation: sobre-env-pulse 1.2s ease; }
@@ -357,6 +373,14 @@
   position: sticky; top: 100px;
   max-height: calc(100vh - 120px);
   display: flex; flex-direction: column;
+}
+/* Single-column layout drops the sticky pin + height cap so the feed grows
+   naturally below the envelopes instead of fighting for viewport room. */
+@media (max-width: 1100px) {
+  .sobre-activity { position: static; max-height: none; }
+}
+@media (max-width: 768px) {
+  .sobre-activity { padding: 18px 16px; }
 }
 .sobre-activity .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .sobre-activity h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; }
@@ -585,6 +609,16 @@
    along the same baseline regardless of how tall the body content is. */
 .sobre-admin-section > form { display: flex; flex-direction: column; flex: 1; }
 .sobre-admin-section > form > :last-child { margin-top: auto; }
+/* On mobile the grid collapses to a single column — equal-height alignment
+   becomes wasted whitespace below short forms, so let the button sit
+   directly under its content instead. */
+@media (max-width: 900px) {
+  .sobre-admin-section > form { flex: none; }
+  .sobre-admin-section > form > :last-child { margin-top: 0; }
+}
+@media (max-width: 768px) {
+  .sobre-card-flat { padding: 18px 16px; }
+}
 
 
 /* ─── Landing page (ported from the design's landing.css) ─────────────── */

@@ -447,7 +447,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       />
 
       <div
-        className="mx-auto w-full px-7 pt-5"
+        className="mx-auto w-full px-4 sm:px-7 pt-5"
         style={{ maxWidth: 1320 }}
       >
         <Link
@@ -461,7 +461,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       </div>
 
       <nav
-        className="sobre-tabs mx-auto w-full px-7 pt-4"
+        className="sobre-tabs mx-auto w-full px-4 sm:px-7 pt-4"
         style={{ maxWidth: 1320 }}
       >
         <button
@@ -552,7 +552,7 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {tab === "settings" ? (
       <section
-        className="mx-auto w-full px-7 pb-12 pt-4"
+        className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
         style={{ maxWidth: 1320 }}
       >
         <div
