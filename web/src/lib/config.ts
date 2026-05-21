@@ -16,6 +16,11 @@ export const FACTORY_CONTRACT_ID =
 export const XLM_SAC_ID =
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
+/** Origin used in invite URLs the admin shares. Hardcoded to the deployed
+ *  domain so a link generated from `localhost:3000` during local dev still
+ *  resolves to the production app when the recipient opens it. */
+export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
+
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
   name: "TESTNET",

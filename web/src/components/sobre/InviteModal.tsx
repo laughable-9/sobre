@@ -3,13 +3,13 @@
 import { useEffect, useState } from "react";
 import { Check, Clock, Copy, Link2, RefreshCcw } from "lucide-react";
 
+import { APP_ORIGIN } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
 
 export const INVITE_EXPIRY_MINUTES = 30;
 
-function buildInviteUrl(origin: string, contractId: string, expiresAt: number) {
-  const base = origin || "";
-  return `${base}/dashboard/${contractId}?join=${contractId}&expires=${expiresAt}`;
+function buildInviteUrl(contractId: string, expiresAt: number) {
+  return `${APP_ORIGIN}/dashboard/${contractId}?join=${contractId}&expires=${expiresAt}`;
 }
 
 export function InviteModal({
@@ -22,19 +22,17 @@ export function InviteModal({
   onClose: () => void;
 }) {
   const [copied, setCopied] = useState(false);
-  const [origin, setOrigin] = useState("");
   // Lock the expires-at at modal mount so the URL the user copies is the same
   // one shown on screen. Reopen the modal to regenerate.
   const [expiresAt, setExpiresAt] = useState<number | null>(null);
 
   useEffect(() => {
-    setOrigin(window.location.origin);
     setExpiresAt(
       Math.floor(Date.now() / 1000) + INVITE_EXPIRY_MINUTES * 60,
     );
   }, []);
 
-  const url = expiresAt ? buildInviteUrl(origin, contractId, expiresAt) : "";
+  const url = expiresAt ? buildInviteUrl(contractId, expiresAt) : "";
   const expiresAtClock = expiresAt
     ? new Date(expiresAt * 1000).toLocaleTimeString(undefined, {
         hour: "numeric",
