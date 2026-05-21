@@ -32,7 +32,7 @@ export default async function OpengraphImage() {
   let logoSrc: string | null = null;
   try {
     const logo = readFileSync(
-      join(process.cwd(), "public", "sobre-logo.svg"),
+      join(process.cwd(), "public", "sobre-logo2.svg"),
     ).toString("base64");
     logoSrc = `data:image/svg+xml;base64,${logo}`;
   } catch {

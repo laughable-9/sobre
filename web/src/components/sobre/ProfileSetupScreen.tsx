@@ -33,7 +33,7 @@ export function ProfileSetupScreen({
       >
         <div className="text-center mb-7">
           <Image
-            src="/sobre-logo.svg"
+            src="/sobre-logo2.svg"
             alt=""
             width={56}
             height={56}

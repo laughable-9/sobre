@@ -248,7 +248,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo.svg"
+              src="/sobre-logo2.svg"
               alt=""
               width={56}
               height={56}
@@ -406,7 +406,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo.svg"
+              src="/sobre-logo2.svg"
               alt=""
               width={56}
               height={56}

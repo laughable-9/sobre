@@ -183,7 +183,7 @@ function Nav() {
       <div className="sobre-container sobre-nav-inner">
         <Link href="#top" className="sobre-brand">
           <Image
-            src="/sobre-logo.svg"
+            src="/sobre-logo2.svg"
             alt=""
             width={32}
             height={32}
@@ -909,7 +909,7 @@ function Footer() {
           <div>
             <div className="sobre-brand">
               <Image
-                src="/sobre-logo.svg"
+                src="/sobre-logo2.svg"
                 alt=""
                 width={32}
                 height={32}

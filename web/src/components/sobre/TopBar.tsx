@@ -34,7 +34,7 @@ export function TopBar({
         <div className="flex items-center gap-3">
           <a href="/" className="flex items-center gap-2.5">
             <Image
-              src="/sobre-logo.svg"
+              src="/sobre-logo2.svg"
               alt="Sobre"
               width={28}
               height={28}

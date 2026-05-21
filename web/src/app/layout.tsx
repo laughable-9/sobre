@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: TITLE,
   description: DESC,
-  icons: [{ rel: "icon", url: "/sobre-logo.svg" }],
+  icons: [{ rel: "icon", url: "/sobre-logo2.svg" }],
   openGraph: {
     title: TITLE,
     description: DESC,
