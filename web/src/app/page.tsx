@@ -1,16 +1,18 @@
 "use client";
 
+import { AddMemberForm } from "@/components/AddMemberForm";
 import { BalancePanel } from "@/components/BalancePanel";
 import { ConnectButton } from "@/components/ConnectButton";
+import { DepositForm } from "@/components/DepositForm";
+import { SpendForm } from "@/components/SpendForm";
 import { useFreighter } from "@/hooks/useFreighter";
 import { useWalletState } from "@/hooks/useWalletState";
 
 export default function Home() {
-  // Lifted once so every consumer shares the same Freighter watcher and the
-  // same get_state poller.
   const wallet = useFreighter();
   const { address } = wallet;
   const state = useWalletState(address);
+  const refresh = () => void state.refresh();
 
   return (
     <div className="min-h-dvh bg-background">
@@ -29,6 +31,27 @@ export default function Home() {
             Wallet state
           </h2>
           <BalancePanel address={address} wallet={state} />
+        </section>
+
+        <section>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+            Deposit
+          </h2>
+          <DepositForm userAddress={address} onSuccess={refresh} />
+        </section>
+
+        <section>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+            Spend
+          </h2>
+          <SpendForm userAddress={address} onSuccess={refresh} />
+        </section>
+
+        <section>
+          <h2 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3">
+            Add member (admin only)
+          </h2>
+          <AddMemberForm userAddress={address} onSuccess={refresh} />
         </section>
       </main>
     </div>
