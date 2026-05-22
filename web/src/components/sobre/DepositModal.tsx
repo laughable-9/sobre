@@ -6,11 +6,11 @@ import { useDeposit } from "@/hooks/useDeposit";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  PHP_PER_XLM,
   STROOPS_PER_XLM,
   displayEnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 const QUICK_PHP = [100, 500, 1000, 5000];
 const QUICK_XLM = [1, 5, 10, 50];
@@ -31,6 +31,7 @@ export function DepositModal({
   /** Called after the tx lands on chain with the actual XLM amount sent. */
   onSuccess: (info: { xlm: number; stroops: bigint }) => void;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const [unit, setUnit] = useState<Unit>("PHP");
   const [amountStr, setAmountStr] = useState("500");
   const inputRef = useRef<HTMLInputElement | null>(null);

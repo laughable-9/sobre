@@ -32,7 +32,8 @@ export const NETWORK = {
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */
 export const STROOPS_PER_XLM = 10_000_000;
 
-/** Fixed XLM → PHP rate for the demo. Real impl would poll CoinGecko. */
+/** Fallback XLM → PHP rate. Used until CoinGecko comes back (or if it
+ *  fails). Live rate is fetched + cached by lib/usePhpPerXlm. */
 export const PHP_PER_XLM = 16;
 
 export const ENVELOPE_LABELS = ["Groceries", "Tuition", "Savings"] as const;

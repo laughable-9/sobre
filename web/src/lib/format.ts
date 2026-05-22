@@ -2,7 +2,8 @@
  * Display formatters shared across components. Pure functions, no React.
  */
 
-import { PHP_PER_XLM, STROOPS_PER_XLM, type EnvelopeName } from "@/lib/config";
+import { STROOPS_PER_XLM, type EnvelopeName } from "@/lib/config";
+import { getPhpPerXlm } from "@/lib/usePhpPerXlm";
 
 /**
  * `Envelope::Groceries` and friends are encoded by Soroban as either a
@@ -34,14 +35,15 @@ export function formatXlm(stroops: bigint): string {
   return `${stroopsToXlm(stroops).toFixed(4)} XLM`;
 }
 
-/** "₱48.00" — fiat conversion using the demo's hardcoded XLM→PHP rate. */
+/** "₱48.00" — fiat conversion using the live CoinGecko rate (fallback in
+ *  config.ts on cold boot / network failure). */
 export function formatPhp(stroops: bigint): string {
-  return `₱${(stroopsToXlm(stroops) * PHP_PER_XLM).toFixed(2)}`;
+  return `₱${(stroopsToXlm(stroops) * getPhpPerXlm()).toFixed(2)}`;
 }
 
 /** "₱1,234.56" — same as formatPhp but with Filipino locale grouping. */
 export function formatPhpLocale(stroops: bigint): string {
-  const php = stroopsToXlm(stroops) * PHP_PER_XLM;
+  const php = stroopsToXlm(stroops) * getPhpPerXlm();
   return `₱${php.toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

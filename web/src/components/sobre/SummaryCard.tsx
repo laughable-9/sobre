@@ -4,8 +4,9 @@ import { Check, Copy, Plus, Timer, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
+import { STROOPS_PER_XLM } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const MEMBER_PALETTES = [
@@ -38,6 +39,7 @@ export function SummaryCard({
    *  left column — used by the dashboard to surface pending approvals. */
   children?: React.ReactNode;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const isAdmin = address === state.admin;
   const canInvite = isAdmin && state.members.length < 2;
   const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
@@ -213,6 +215,7 @@ function DailyLimitCard({
   dailyLimit: bigint | null;
   dailySpent: bigint;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const [, force] = useState(0);
   useEffect(() => {
     const id = setInterval(() => force((x) => x + 1), 60_000);

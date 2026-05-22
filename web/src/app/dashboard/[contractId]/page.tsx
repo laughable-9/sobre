@@ -31,13 +31,13 @@ import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  PHP_PER_XLM,
   STROOPS_PER_XLM,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, rememberJoinedSobre } from "@/lib/joinedSobres";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 type Tab = "envelopes" | "settings";
 const SETTINGS_HASH = "#settings";
@@ -66,6 +66,7 @@ function DashboardLoading() {
 }
 
 function Dashboard({ contractId }: { contractId: string }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const wallet = useFreighter();
   const { address } = wallet;
   const walletState = useWalletState(address, contractId);

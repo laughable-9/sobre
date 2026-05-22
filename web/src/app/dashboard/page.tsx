@@ -19,7 +19,8 @@ import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile } from "@/lib/profile";
-import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
+import { STROOPS_PER_XLM } from "@/lib/config";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 type Mode = "list" | "new" | "join";
 
@@ -332,6 +333,7 @@ function SobreCard({
    *  card from the list. Only fired for `role === "member"`. */
   onNotAMember?: () => void;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const { summary, loading } = useSobreSummary(contractId, callerAddress);
 
   const stillAMember =

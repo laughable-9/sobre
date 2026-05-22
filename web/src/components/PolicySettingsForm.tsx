@@ -8,11 +8,11 @@ import { useSetPolicy } from "@/hooks/useSetPolicy";
 import type { SpendPolicy } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  PHP_PER_XLM,
   STROOPS_PER_XLM,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { getPhpPerXlm, usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 type Unit = "PHP" | "XLM";
 
@@ -24,7 +24,7 @@ function formatLimitLabel(stroops: bigint | null, unit: Unit): string {
   if (stroops === null) return "no limit";
   const xlm = Number(stroops) / STROOPS_PER_XLM;
   if (unit === "PHP") {
-    return `₱${(xlm * PHP_PER_XLM).toLocaleString("en-PH", {
+    return `₱${(xlm * getPhpPerXlm()).toLocaleString("en-PH", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     })}`;
@@ -89,6 +89,7 @@ export function PolicySettingsForm({
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const [unit, setUnit] = useState<Unit>("PHP");
   // The amount input is kept in the currently selected unit so the value the
   // user typed survives toggling between PHP and XLM (we convert under the

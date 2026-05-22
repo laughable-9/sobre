@@ -12,12 +12,12 @@ import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  PHP_PER_XLM,
   STROOPS_PER_XLM,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
@@ -50,6 +50,7 @@ export function EnvelopeCard({
   members: Member[];
   envelopeNames: string[];
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
   const xlm = Number(balanceStroops) / STROOPS_PER_XLM;

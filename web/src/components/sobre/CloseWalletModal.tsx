@@ -5,9 +5,10 @@ import { AlertTriangle } from "lucide-react";
 
 import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { PHP_PER_XLM, STROOPS_PER_XLM } from "@/lib/config";
+import { STROOPS_PER_XLM } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
 import { backdropClose } from "@/lib/ui";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 export function CloseWalletModal({
   adminAddress,
@@ -25,6 +26,7 @@ export function CloseWalletModal({
    *  the dashboard renders a "closed" screen on subsequent visits. */
   onSuccess: () => void;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const [confirmText, setConfirmText] = useState("");
   const { closeWallet, pending, error } = useCloseWallet(
     adminAddress,

@@ -12,12 +12,12 @@ import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  PHP_PER_XLM,
   STROOPS_PER_XLM,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
+import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 const QUICK_PHP = [50, 100, 500, 1000];
 
@@ -53,6 +53,7 @@ export function SpendModal({
     envelope: EnvelopeName;
   }) => void;
 }) {
+  const PHP_PER_XLM = usePhpPerXlm();
   const idx = ENVELOPE_LABELS.indexOf(envelope);
   const displayName = displayEnvelopeName(envelope, state.envelope_names);
   const balanceStroops = state.balances[idx] ?? 0n;
