@@ -9,7 +9,7 @@ import {
 } from "@stellar/stellar-sdk";
 
 import { NETWORK, type EnvelopeName } from "@/lib/config";
-import { getServer } from "@/lib/contract";
+import { getOrFundAccount, getServer } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
 
 export interface SpendPolicy {
@@ -84,7 +84,7 @@ export function useWalletState(
     const isInitialFetch = lastRetvalXdrRef.current === null;
     if (isInitialFetch) setLoading(true);
     try {
-      const source = await server.getAccount(userAddress);
+      const source = await getOrFundAccount(userAddress);
       const contract = new Contract(contractId);
       const tx = new TransactionBuilder(source, {
         fee: BASE_FEE,
