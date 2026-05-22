@@ -101,7 +101,7 @@ The wasm built with `stellar contract build --optimize` is deployed on both netw
 |---|---|
 | **SobreFactory** | `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` |
 | **SobreContract wasm hash** | `545f5b8ad2c0c7c7e378d75b7d2d4060c3250259cb02700d53c4fe084d3b3da0` |
-| **Payment token** | XLM native Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| **Payment token** | XLM native Stellar Asset Contract `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
 | **Network passphrase** | `Public Global Stellar Network ; September 2015` |
 | **RPC** | `https://mainnet.sorobanrpc.com` |
 | **Factory explorer** | [stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) |

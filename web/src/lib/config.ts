@@ -17,10 +17,11 @@ export const FACTORY_CONTRACT_ID =
   "CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
- *  Deterministic per network — same C-address on testnet + mainnet because
- *  the native-asset SAC derivation is by symbol "native". */
+ *  Deterministic per network — different address per network because the SAC
+ *  derivation hashes the network passphrase.
+ *  Mainnet: CAS3J7GY... | Testnet: CDLZFC3S... (kept here for reference) */
 export const XLM_SAC_ID =
-  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+  "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
 
 /** Origin used in invite URLs the admin shares. Hardcoded to the deployed
  *  domain so a link generated from `localhost:3000` during local dev still
