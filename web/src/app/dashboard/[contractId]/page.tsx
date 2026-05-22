@@ -502,6 +502,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 contractId={contractId}
                 isAdmin={isAdmin}
                 pending={state.pending}
+                members={state.members}
                 envelopeNames={state.envelope_names}
                 onSuccess={refreshAll}
               />

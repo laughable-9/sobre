@@ -620,6 +620,21 @@
   .sobre-card-flat { padding: 18px 16px; }
 }
 
+/* Pending-approvals action row. Each button grows to fill the row when
+   there's space for two side by side, wraps onto its own line on a narrow
+   parent (e.g., the SummaryCard's left column at <320px). Min width keeps
+   the icon + label from cramping. */
+.sobre-pending-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.sobre-pending-actions > button {
+  flex: 1 1 110px;
+  min-width: 0;
+}
+
 
 /* ─── Landing page (ported from the design's landing.css) ─────────────── */
 .sobre-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }
