@@ -1,5 +1,5 @@
 /**
- * Hardcoded constants for the demo. Contract IDs are public; the testnet
+ * Hardcoded constants for the demo. Contract IDs are public; the mainnet
  * network passphrase is fixed.
  */
 

@@ -73,7 +73,7 @@ export async function invokeWrite(
     throw new Error(`send failed: ${xdrStr ?? "unknown"}`);
   }
 
-  // Poll for inclusion (testnet usually settles in ~5s).
+  // Poll for inclusion (Stellar settles in ~5-6s on both testnet and mainnet).
   for (let i = 0; i < 30; i++) {
     const result = await server.getTransaction(sent.hash);
     if (result.status === "SUCCESS") {
