@@ -41,8 +41,9 @@ export function usePhpPerXlm(): number {
 
 const CACHE_KEY = "sobre.phpPerXlm";
 const CACHE_TTL_MS = 10 * 60 * 1000;
-const COINGECKO_URL =
-  "https://api.coingecko.com/api/v3/simple/price?ids=stellar&vs_currencies=php";
+/** Our own server route, which fronts CoinGecko with a 10-minute Vercel edge
+ *  cache so the upstream sees one origin instead of N user-agents. */
+const RATE_URL = "/api/php-rate";
 
 interface CachedRate {
   rate: number;
@@ -77,10 +78,10 @@ function writeCache(rate: number) {
 
 async function fetchLiveRate(): Promise<number | null> {
   try {
-    const res = await fetch(COINGECKO_URL);
+    const res = await fetch(RATE_URL);
     if (!res.ok) return null;
-    const data = (await res.json()) as { stellar?: { php?: number } };
-    const live = data?.stellar?.php;
+    const data = (await res.json()) as { rate?: number };
+    const live = data?.rate;
     if (typeof live !== "number" || !Number.isFinite(live) || live <= 0) {
       return null;
     }
