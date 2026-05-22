@@ -93,7 +93,23 @@ The web app talks to the live testnet factory by default, so once `npm run dev` 
 
 ## 🌐 Deployment
 
-### Testnet
+The wasm built with `stellar contract build --optimize` is deployed on both networks. Mainnet is the production deploy the web app talks to. Testnet stays live as a sandbox.
+
+### Mainnet (production)
+
+| | |
+|---|---|
+| **SobreFactory** | `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` |
+| **SobreContract wasm hash** | `545f5b8ad2c0c7c7e378d75b7d2d4060c3250259cb02700d53c4fe084d3b3da0` |
+| **Payment token** | XLM native Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
+| **Network passphrase** | `Public Global Stellar Network ; September 2015` |
+| **RPC** | `https://mainnet.sorobanrpc.com` |
+| **Factory explorer** | [stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) |
+
+📸 Screenshot, Stellar Expert (Mainnet)
+![Mainnet Screenshot](./screenshots/mainnet.png)
+
+### Testnet (sandbox)
 
 | | |
 |---|---|
@@ -101,24 +117,21 @@ The web app talks to the live testnet factory by default, so once `npm run dev` 
 | **SobreContract wasm hash** | `7e10bb8904ff29d51ee40a60fca74758bd444825fb427086a83bd281b5a453ec` |
 | **Payment token** | XLM native Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
 | **Network passphrase** | `Test SDF Network ; September 2015` |
+| **RPC** | `https://soroban-testnet.stellar.org` |
 | **Factory explorer** | [stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X](https://stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X) |
-
-**SobreContract exports:** `init`, `join_wallet`, `remove_member`, `set_wallet_name`, `close_wallet`, `upgrade`, `set_envelopes`, `set_envelope_names`, `set_policy`, `deposit`, `spend`, `approve_request`, `deny_request`, `get_state`. Wasm size 27,639 bytes.
-
-**SobreFactory exports:** `init`, `set_sobre_wasm`, `current_sobre_wasm`, `create_sobre`, `sobres_of_admin`. Wasm size 5,559 bytes.
-
-**Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code. See [the upgrade rationale in the README appendix](#appendix-deploying-your-own-factory) for the industry pattern this implements.
 
 📸 Screenshot, Stellar Expert (Testnet)
 ![Testnet Screenshot](./screenshots/testnet.png)
 
-### Mainnet
+**SobreContract exports:** `init`, `join_wallet`, `remove_member`, `set_wallet_name`, `close_wallet`, `upgrade`, `set_envelopes`, `set_envelope_names`, `set_policy`, `deposit`, `spend`, `approve_request`, `deny_request`, `get_state`. Wasm size 22,836 bytes (after `--optimize`).
 
-Not deployed yet. Will be added before demo day.
+**SobreFactory exports:** `init`, `set_sobre_wasm`, `current_sobre_wasm`, `create_sobre`, `sobres_of_admin`. Wasm size 4,975 bytes.
+
+**Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code. See [the upgrade rationale in the README appendix](#appendix-deploying-your-own-factory) for the industry pattern this implements.
 
 ### Live web app
 
-Not deployed yet. Runs locally via `npm run dev` against the live testnet factory above.
+`https://sobre-mocha.vercel.app` runs against the mainnet factory above. Real XLM, real wallets.
 
 ## 🎥 Demo
 

@@ -7,12 +7,18 @@
  * SobreFactory contract — the singleton that deploys per-family SobreContract
  * instances. Each family gets their own contract address; this address is
  * only the entry point for opening new ones + listing the user's wallets.
+ *
+ * Mainnet is the live production deployment the web app talks to. Testnet
+ * factory `CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X` is kept
+ * around as a sandbox; flip FACTORY_CONTRACT_ID + NETWORK together to
+ * switch environments.
  */
 export const FACTORY_CONTRACT_ID =
-  "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
+  "CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
- *  Deterministic per network. On testnet it's always this address. */
+ *  Deterministic per network — same C-address on testnet + mainnet because
+ *  the native-asset SAC derivation is by symbol "native". */
 export const XLM_SAC_ID =
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
@@ -23,10 +29,10 @@ export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
 
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
-  name: "TESTNET",
-  passphrase: "Test SDF Network ; September 2015",
-  rpcUrl: "https://soroban-testnet.stellar.org",
-  horizonUrl: "https://horizon-testnet.stellar.org",
+  name: "PUBLIC",
+  passphrase: "Public Global Stellar Network ; September 2015",
+  rpcUrl: "https://mainnet.sorobanrpc.com",
+  horizonUrl: "https://horizon.stellar.org",
 } as const;
 
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */

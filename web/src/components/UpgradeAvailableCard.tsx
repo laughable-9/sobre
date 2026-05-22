@@ -43,7 +43,7 @@ export function UpgradeAvailableCard({
   // stellar.expert doesn't have a standalone wasm-by-hash page, so we link
   // to the factory contract where the WasmUpdated event was emitted. The
   // admin can verify which hash got published + when from the events list.
-  const explorerUrl = `https://stellar.expert/explorer/testnet/contract/${FACTORY_CONTRACT_ID}`;
+  const explorerUrl = `https://stellar.expert/explorer/public/contract/${FACTORY_CONTRACT_ID}`;
 
   return (
     <div

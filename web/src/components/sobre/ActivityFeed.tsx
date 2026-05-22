@@ -138,7 +138,7 @@ function ActivityRow({
   envelopeNames: string[];
 }) {
   const time = fmtTime(ev.ledgerClosedAt);
-  const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
+  const explorerUrl = `https://stellar.expert/explorer/public/tx/${ev.txHash}`;
 
   // Each row wraps its content in an anchor so clicking opens the underlying
   // Stellar transaction on stellar.expert in a new tab. The trailing arrow is
