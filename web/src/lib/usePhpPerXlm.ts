@@ -91,22 +91,21 @@ async function fetchLiveRate(): Promise<number | null> {
   }
 }
 
-/** Mount once in app/layout.tsx. Reads cached rate from localStorage on
- *  first paint, then refreshes from CoinGecko in the background. */
+/** Mount once in app/layout.tsx. Reads cached rate from localStorage for
+ *  the first paint, then always revalidates against /api/php-rate in the
+ *  background. The server route is edge-cached for 10 minutes so the
+ *  background call is cheap either way; meanwhile the user never sees a
+ *  stale rate older than one page load. */
 export function PhpRateBoot(): null {
   useEffect(() => {
     const cached = readCache();
     if (cached) setRate(cached.rate);
-    // Always re-fetch on mount when the cache is stale or absent. Cap to
-    // one network call per page load; CoinGecko's free tier rate-limits.
-    if (!cached) {
-      void fetchLiveRate().then((live) => {
-        if (live !== null) {
-          setRate(live);
-          writeCache(live);
-        }
-      });
-    }
+    void fetchLiveRate().then((live) => {
+      if (live !== null) {
+        setRate(live);
+        writeCache(live);
+      }
+    });
   }, []);
   return null;
 }
