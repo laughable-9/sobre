@@ -20,53 +20,6 @@ export function getServer(): rpc.Server {
   return cachedServer;
 }
 
-/** Stellar testnet error string when a G-address has never been seen by the
- *  network. Brand-new wallets on testnet need to be funded by Friendbot once
- *  before they can sign anything; this string is what the RPC throws back
- *  through the SDK when that hasn't happened yet. */
-const ACCOUNT_NOT_FOUND_RE = /Account not found/i;
-
-const FRIENDBOT_URL = "https://friendbot.stellar.org";
-
-/** Tracks in-flight Friendbot calls per address so concurrent contract calls
- *  during onboarding (e.g., useWalletState + an invokeWrite firing at the
- *  same time) share one funding round-trip instead of spamming the faucet. */
-const fundingInflight = new Map<string, Promise<void>>();
-
-async function fundViaFriendbot(address: string): Promise<void> {
-  const res = await fetch(`${FRIENDBOT_URL}?addr=${address}`);
-  if (!res.ok) {
-    const body = await res.text().catch(() => "");
-    throw new Error(
-      `Friendbot funding failed (${res.status}): ${body.slice(0, 200)}`,
-    );
-  }
-}
-
-/** Fetch the account, and if testnet says "Account not found" then hit
- *  Friendbot once + retry. Mainnet has no Friendbot — the error there is a
- *  real "this wallet has no XLM" condition and gets surfaced as-is. */
-export async function getOrFundAccount(address: string) {
-  const server = getServer();
-  try {
-    return await server.getAccount(address);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    if (!ACCOUNT_NOT_FOUND_RE.test(msg)) throw e;
-    if (NETWORK.name !== "TESTNET") throw e;
-
-    let funding = fundingInflight.get(address);
-    if (!funding) {
-      funding = fundViaFriendbot(address).finally(() => {
-        fundingInflight.delete(address);
-      });
-      fundingInflight.set(address, funding);
-    }
-    await funding;
-    return server.getAccount(address);
-  }
-}
-
 export interface WriteResult {
   hash: string;
   /** Contract return value parsed via scValToNative — null when the contract
@@ -88,7 +41,7 @@ export async function invokeWrite(
   const server = getServer();
   const contract = new Contract(contractId);
 
-  const source = await getOrFundAccount(userAddress);
+  const source = await server.getAccount(userAddress);
   const built = new TransactionBuilder(source, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK.passphrase,
@@ -153,7 +106,7 @@ export async function simulateRead<T = unknown>(
 ): Promise<T> {
   const server = getServer();
   const contract = new Contract(contractId);
-  const source = await getOrFundAccount(callerAddress);
+  const source = await server.getAccount(callerAddress);
   const tx = new TransactionBuilder(source, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK.passphrase,
