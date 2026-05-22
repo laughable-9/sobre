@@ -101,7 +101,7 @@ export function PendingRequestsPanel({
             >
               <Hourglass size={14} strokeWidth={2} />
             </div>
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 sobre-pending-request">
               <div className="text-[14px]">
                 <span
                   className="font-mono text-[12px]"

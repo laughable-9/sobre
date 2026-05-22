@@ -635,6 +635,16 @@
   min-width: 0;
 }
 
+/* The pending-request line contains long tokens (₱500,000.00, memos that
+   might be URLs, long member names). overflow-wrap: anywhere lets the
+   browser break mid-token rather than overflowing horizontally. Applied
+   to the row container so request id, amount, envelope name, and memo
+   all reflow cleanly inside narrow parent cards. */
+.sobre-pending-request {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
 
 /* ─── Landing page (ported from the design's landing.css) ─────────────── */
 .sobre-container { max-width: 1200px; margin: 0 auto; padding: 0 24px; }

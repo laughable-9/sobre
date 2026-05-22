@@ -43,3 +43,4 @@ pnpm-debug.log*
 # --- Claude Code project notes (kept local, not pushed to public repo) ---
 CLAUDE.md
 notes/
+web/public/reference.*
