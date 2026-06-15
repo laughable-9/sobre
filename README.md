@@ -1,6 +1,8 @@
 > ## 🏆 Winner — Best Use of Stellar
 > **Build the Future of Finance Hackathon PH (2026)** · [Read the recap on BitDigest →](https://www.bitdigest.io/posts/filipino-builders-are-ready-the-build-the-future-of-finance-hackathon-proved-it)
 
+![Team Legends — Best Use of Stellar, Build the Future of Finance Hackathon PH](https://pbs.twimg.com/media/HJeKmATa4AA6UWc?format=jpg&name=large)
+
 ---
 
 # Sobre
