@@ -69,6 +69,37 @@ component (use client)
 - Modals live in `web/src/components/sobre/` (`DepositModal`, `SpendModal`,
   `InviteModal`, …). Follow their structure for new flows.
 
+## Responsive: mobile, tablet, and desktop (always check all three)
+
+Every screen must hold up from a phone (~375px) through tablet (~768–1024px)
+to desktop. The layout system is split across two places — match whichever the
+surrounding markup already uses:
+
+- **Page/section layout lives in `globals.css`** as `.sobre-*` classes with
+  `@media (max-width: …)` queries. The established breakpoints are
+  **1320px / 1200px** (max container widths via `.sobre-topbar-inner`,
+  `.sobre-dash`, `.sobre-container`), then **1100px**, **900px**, **768px**,
+  **720px**. When you add a multi-column section (a grid like `.sobre-dash`,
+  `.sobre-stat-grid`, `.sobre-trust-grid`), add the matching `@media` rule that
+  collapses it to one column — usually at 1100px (tablet) and/or 768px
+  (mobile). Don't invent new breakpoints; reuse these so collapse points line
+  up across the page.
+- **Component/modal layout uses Tailwind utilities**, mobile-first: base styles
+  target phones, then `sm:` / `md:` / `lg:` widen. Centered content columns use
+  `max-w-md mx-auto` (or `max-w-sm`) so they don't stretch full-width on
+  desktop. Reuse those rather than picking new max-widths.
+- **Inline `style={{ gridTemplateColumns: "1fr 1fr 1fr" }}`** on a section
+  (a few exist in `page.tsx`) does NOT collapse on small screens — if you add
+  one, give it a CSS class with a media query instead, or it overflows on
+  mobile.
+- The topbar drops the wallet pill under 760px (`.sobre-topbar-inner >
+  .sobre-wallet-pill { display: none }`) — follow that pattern for hiding
+  secondary chrome on narrow screens rather than letting it wrap.
+- **Verify all three widths**, not just your window. Resize the browser (or use
+  devtools device toolbar) to a phone, a tablet, and a wide desktop before
+  claiming a layout change done — `npm run build` won't catch a layout that
+  overflows or fails to collapse.
+
 ## Quality gate (run before claiming done)
 
 ```bash
