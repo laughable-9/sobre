@@ -1,3 +1,8 @@
+> ## 🏆 Winner — Best Use of Stellar
+> **Build the Future of Finance Hackathon PH (2026)** · [Read the recap on BitDigest →](https://www.bitdigest.io/posts/filipino-builders-are-ready-the-build-the-future-of-finance-hackathon-proved-it)
+
+---
+
 # Sobre
 
 > A joint account for families living worlds apart.
