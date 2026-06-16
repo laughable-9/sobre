@@ -479,14 +479,7 @@ function SplitVisual() {
         </div>
         <ArrowRight size={36} strokeWidth={1.5} color="#A89888" />
       </div>
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "1fr 1fr 1fr",
-          gap: 10,
-          marginTop: 18,
-        }}
-      >
+      <div className="sobre-split-tiles">
         <SplitTile label="Groceries · 50%" amount="₱ 5,000" fill={50} />
         <SplitTile label="Tuition · 30%" amount="₱ 3,000" fill={30} />
         <SplitTile label="Savings · 20%" amount="₱ 2,000" fill={20} green />

@@ -1325,6 +1325,14 @@
   box-shadow: var(--shadow-md);
   min-height: 320px;
 }
+/* The ₱10k → three-envelope split tiles. Three across on desktop/tablet;
+   stack to one column on a narrow phone so the amounts don't get cramped
+   (the visual goes full-width below 900px via .sobre-feat-row). */
+.sobre-split-tiles {
+  display: grid; grid-template-columns: 1fr 1fr 1fr;
+  gap: 10px; margin-top: 18px;
+}
+@media (max-width: 600px) { .sobre-split-tiles { grid-template-columns: 1fr; } }
 .sobre-feat h2 { font-family: var(--serif); font-size: 34px; line-height: 1.15; font-weight: 600; color: var(--text-1); letter-spacing: -0.01em; margin: 0; }
 .sobre-feat h2 em { font-style: italic; }
 .sobre-feat p { margin-top: 16px; font-size: 17px; line-height: 1.55; color: var(--text-2); }
