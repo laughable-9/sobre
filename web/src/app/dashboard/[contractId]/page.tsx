@@ -4,7 +4,7 @@ import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ChevronLeft } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Clock, Plus, UserPlus } from "lucide-react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -307,8 +307,9 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <div
-              className="grid place-items-center mx-auto text-[36px]"
+              className="grid place-items-center mx-auto"
               style={{
+                color: "var(--text-3)",
                 width: 64,
                 height: 64,
                 borderRadius: "50%",
@@ -316,7 +317,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 border: "1.5px solid var(--border)",
               }}
             >
-              ⌛
+              <Clock size={28} strokeWidth={1.8} />
             </div>
             <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
               This invite link has expired
@@ -485,7 +486,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       </nav>
 
       {tab === "envelopes" ? (
-      <div className="sobre-dash">
+      <div className="sobre-dash has-bottom-bar">
         <SummaryCard
           state={state}
           address={address}
@@ -636,6 +637,35 @@ function Dashboard({ contractId }: { contractId: string }) {
           ) : null}
         </div>
       </section>
+      ) : null}
+
+      {/* App-first thumb-zone action bar (phones/tablets only). Mirrors the
+          primary actions that otherwise live in the SummaryCard, kept one
+          tap away while the dashboard scrolls. Hidden on desktop via CSS. */}
+      {tab === "envelopes" ? (
+        <div className="sobre-bottom-bar">
+          <div className="sobre-bottom-actions">
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => setInviteOpen(true)}
+                className="sobre-btn sobre-btn-soft"
+                style={{ justifyContent: "center", minHeight: 48 }}
+              >
+                <UserPlus size={18} strokeWidth={2} />
+                Invite
+              </button>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => setDepositOpen(true)}
+              className="sobre-bottom-cta"
+            >
+              <Plus size={18} strokeWidth={2.4} />
+              Add money
+            </button>
+          </div>
+        </div>
       ) : null}
 
       {heroPulse ? <HeroPulse /> : null}
