@@ -6,14 +6,18 @@ import Link from "next/link";
 import {
   ArrowRight,
   ChevronDown,
+  Clock,
   DollarSign,
   Eye,
+  Lock,
   Shield,
   TrendingUp,
 } from "lucide-react";
 
 import { useFreighter } from "@/hooks/useFreighter";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
+import { Reveal } from "@/components/sobre/Reveal";
+import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
 
 function GithubMark({ size = 18 }: { size?: number }) {
   return (
@@ -148,7 +152,54 @@ export default function Landing() {
       <Faq openFaq={openFaq} setOpenFaq={setOpenFaq} />
       <FinalCTA />
       <Footer />
+      <MobileCTABar />
     </>
+  );
+}
+
+/**
+ * "Open a Sobre" CTA that plays the envelope fly-out transition before
+ * navigating to the dashboard. Renders as a real anchor (so it's still a
+ * proper link / right-click-openable / keyboard-activatable) but intercepts
+ * the plain click to run the animation first. Modifier-clicks and the reduced-
+ * motion path fall through to normal navigation.
+ */
+function OpenSobreButton({
+  className,
+  children,
+}: {
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const { playFlyout } = useEnvelopeTransition();
+  return (
+    <Link
+      href="/dashboard"
+      className={className}
+      onClick={(e) => {
+        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+        e.preventDefault();
+        playFlyout("/dashboard");
+      }}
+    >
+      {children}
+    </Link>
+  );
+}
+
+/**
+ * Thumb-zone CTA pinned to the bottom of the viewport on phones/tablets so
+ * "Open a Sobre" is always one tap away while the long marketing page scrolls.
+ * Hidden on desktop (CSS), where the top-nav CTA does the job.
+ */
+function MobileCTABar() {
+  return (
+    <div className="sobre-bottom-bar">
+      <OpenSobreButton className="sobre-bottom-cta">
+        Open a Sobre
+        <ArrowRight size={18} strokeWidth={2.4} />
+      </OpenSobreButton>
+    </div>
   );
 }
 
@@ -223,10 +274,10 @@ function Hero() {
             The joint account for Filipino families. Money you send home
             auto-splits into envelopes the moment it arrives.
           </p>
-          <Link href="/dashboard" className="sobre-hero-cta">
+          <OpenSobreButton className="sobre-hero-cta">
             Open a Sobre
             <ArrowRight size={16} strokeWidth={2.4} />
-          </Link>
+          </OpenSobreButton>
         </div>
         <div className="sobre-hero-right">
           <video
@@ -265,7 +316,7 @@ function Problem() {
           </p>
         </div>
 
-        <div className="sobre-stat-grid">
+        <Reveal className="sobre-stat-grid" data-stagger="">
           {STATS.map((s, i) => (
             <div key={i} className="sobre-stat-card">
               <div className="sobre-stat-num">
@@ -289,7 +340,7 @@ function Problem() {
               <div className="sobre-stat-desc">{s.desc}</div>
             </div>
           ))}
-        </div>
+        </Reveal>
         <div className="sobre-sources">
           Sources: BSP, GMA News, Rappler, Ateneo Policy Brief 2020
         </div>
@@ -314,7 +365,7 @@ function HowItWorks() {
           </p>
         </div>
 
-        <div className="sobre-steps">
+        <Reveal className="sobre-steps" data-stagger="">
           {STEPS.map((s) => (
             <div key={s.num} className="sobre-step">
               <div className="sobre-step-num">{s.num}</div>
@@ -322,7 +373,7 @@ function HowItWorks() {
               <p>{s.body}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -411,9 +462,9 @@ function FeatureRow({
   reverse?: boolean;
 }) {
   return (
-    <div className={`sobre-feat-row${reverse ? " reverse" : ""}`}>
+    <Reveal className={`sobre-feat-row${reverse ? " reverse" : ""}`}>
       {children}
-    </div>
+    </Reveal>
   );
 }
 
@@ -435,10 +486,10 @@ function FeatureCopy({
 function SplitVisual() {
   return (
     <div className="sobre-feat-visual">
-      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+      <div className="sobre-incoming-row">
         <div
+          className="sobre-incoming-card"
           style={{
-            flex: 1,
             background: "#fbe7d2",
             borderRadius: 10,
             padding: "14px 16px",
@@ -477,7 +528,12 @@ function SplitVisual() {
             625 XLM · from Riyadh
           </div>
         </div>
-        <ArrowRight size={36} strokeWidth={1.5} color="#A89888" />
+        <ArrowRight
+          className="sobre-incoming-arrow"
+          size={36}
+          strokeWidth={1.5}
+          color="#A89888"
+        />
       </div>
       <div className="sobre-split-tiles">
         <SplitTile label="Groceries · 50%" amount="₱ 5,000" fill={50} />
@@ -566,25 +622,19 @@ function SplitTile({
 function MembersVisual() {
   return (
     <div className="sobre-feat-visual">
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          gap: 14,
-        }}
-      >
+      <div className="sobre-policy-stack">
         <PolicyRow
-          icon="⏱"
+          icon={<Clock size={18} strokeWidth={2} />}
           title="Daily limit per member"
           value="₱ 500"
         />
         <PolicyRow
-          icon="🔒"
+          icon={<Lock size={18} strokeWidth={2} />}
           title="Tuition needs approval"
           value="Locked"
         />
         <PolicyRow
-          icon="🔒"
+          icon={<Lock size={18} strokeWidth={2} />}
           title="Savings needs approval"
           value="Locked"
         />
@@ -613,7 +663,7 @@ function PolicyRow({
   title,
   value,
 }: {
-  icon: string;
+  icon: React.ReactNode;
   title: string;
   value: string;
 }) {
@@ -637,7 +687,7 @@ function PolicyRow({
           background: "var(--surface-alt)",
           display: "grid",
           placeItems: "center",
-          fontSize: 18,
+          color: "var(--text-2)",
         }}
       >
         {icon}
@@ -759,7 +809,7 @@ function Trust() {
           </p>
         </div>
 
-        <div className="sobre-trust-grid">
+        <Reveal className="sobre-trust-grid" data-stagger="">
           {TRUST.map((t) => (
             <div key={t.title} className="sobre-trust-card">
               <div className="icon">{t.icon}</div>
@@ -767,7 +817,7 @@ function Trust() {
               <p>{t.body}</p>
             </div>
           ))}
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -788,7 +838,7 @@ function TwoSides() {
           </h2>
         </div>
 
-        <div className="sobre-duo">
+        <Reveal className="sobre-duo">
           <div className="sobre-duo-col mango">
             <div
               className="sobre-eyebrow"
@@ -812,7 +862,7 @@ function TwoSides() {
               ))}
             </ul>
           </div>
-        </div>
+        </Reveal>
       </div>
     </section>
   );
@@ -875,20 +925,10 @@ function FinalCTA() {
           Open a wallet in 60 seconds. Invite your family. Send your first
           remittance.
         </p>
-        <Link
-          href="/dashboard"
-          className="sobre-btn-cream"
-          style={{
-            fontSize: 16,
-            padding: "16px 28px",
-            display: "inline-flex",
-            alignItems: "center",
-            gap: 8,
-          }}
-        >
+        <OpenSobreButton className="sobre-btn-cream sobre-final-cta-btn">
           Start with Sobre, free
           <ArrowRight size={16} strokeWidth={2} />
-        </Link>
+        </OpenSobreButton>
       </div>
     </section>
   );

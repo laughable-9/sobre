@@ -116,6 +116,10 @@
   html {
     font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
     scroll-behavior: smooth;
+    /* Paint the warm cream on <html> too so the whole canvas stays cream even
+       where <body> doesn't cover it (overscroll bounce, frosted bars over the
+       top edge). Without this the browser's default grey shows through. */
+    background: var(--sobre-bg);
   }
   body {
     background: var(--sobre-bg);
@@ -1343,4 +1347,395 @@
   text-transform: uppercase;
   color: var(--sobre-accent);
   margin-bottom: 14px;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   APP-FIRST SHELL
+   Phone + tablet read like a native app: frosted sticky top bar, a sticky
+   bottom action bar in the thumb zone, single-column flow, momentum-feeling
+   section reveals, and safe-area insets so content clears the notch / home
+   indicator. All of this is gated to ≤900px so the desktop layouts above are
+   untouched. Colors stay on the design tokens; nothing hardcoded.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Safe-area + no-horizontal-scroll guards. The bottom variable feeds the
+   sticky CTA bar's padding so it sits above the iOS home indicator. */
+:root {
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --sobre-bottom-bar-h: 0px; /* set to a real height when a bottom bar mounts */
+}
+/* Clip horizontal overflow without turning <html>/<body> into a scroll
+   container. `overflow-x: hidden` on these elements can wedge vertical
+   scrolling (it promotes the element to a scroll container, which collides
+   with the 100vh hero + sticky bars); `overflow-x: clip` prevents the
+   sideways scrollbar while leaving the normal page scroll intact. */
+body { overflow-x: clip; }
+
+/* Generous tap targets on touch screens — Apple/Google both call ~44px the
+   minimum. Applies only where a coarse pointer is the primary input so the
+   desktop mouse UI keeps its tighter spacing. */
+@media (pointer: coarse) {
+  .sobre-btn,
+  .sobre-btn-nav,
+  .sobre-iconbtn,
+  .sobre-faq-q,
+  .sobre-tab,
+  .sobre-quick-amts button { min-height: 44px; }
+}
+
+/* ─── Frosted sticky bars ───────────────────────────────────────────────
+   A subtle blur + translucent cream so content scrolling under the bar
+   stays legible, the way a native nav bar behaves. Falls back to the solid
+   cream where backdrop-filter is unsupported. */
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  .sobre-nav,
+  .sobre-topbar {
+    background: color-mix(in srgb, var(--sobre-bg) 82%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+}
+/* Clear the notch on phones so the bar isn't tucked under the status bar. */
+@media (max-width: 900px) {
+  .sobre-nav { padding-top: var(--safe-top); }
+  .sobre-topbar { padding-top: calc(14px + var(--safe-top)); }
+}
+
+/* ─── Sticky bottom action bar (thumb zone) ─────────────────────────────
+   The signature app-first affordance: the primary CTA stays pinned to the
+   bottom of the viewport, one thumb-tap away, while the page scrolls. Mirrors
+   the Expo app's ctaBar. Hidden on desktop where a top-nav CTA is the norm. */
+.sobre-bottom-bar {
+  position: sticky;
+  bottom: 0;
+  z-index: 45;
+  display: none;
+  padding: 12px 18px calc(14px + var(--safe-bottom));
+  background: color-mix(in srgb, var(--sobre-bg) 90%, transparent);
+  border-top: 1px solid var(--border);
+}
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  .sobre-bottom-bar {
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+  }
+}
+.sobre-bottom-bar .sobre-bottom-cta {
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%;
+  padding: 15px 20px;
+  border-radius: var(--r-btn);
+  background: var(--sobre-primary);
+  color: #fff;
+  font-size: 16px; font-weight: 600;
+  box-shadow: 0 8px 20px rgba(232, 146, 60, 0.32);
+  border: 0; cursor: pointer;
+  transition: background .15s ease, transform .1s ease;
+}
+.sobre-bottom-bar .sobre-bottom-cta:active { transform: scale(0.985); }
+.sobre-bottom-bar .sobre-bottom-cta:hover { background: var(--primary-hover); }
+@media (max-width: 900px) {
+  .sobre-bottom-bar { display: block; }
+}
+
+/* ─── On-scroll section reveals ─────────────────────────────────────────
+   Sections start slightly down + faded and animate in once observed (the
+   page toggles `is-visible`). Gives the scroll a gentle, native momentum.
+   Honors reduced-motion by showing everything immediately. */
+.sobre-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .6s cubic-bezier(.2,.7,.2,1), transform .6s cubic-bezier(.2,.7,.2,1);
+  will-change: opacity, transform;
+}
+.sobre-reveal.is-visible {
+  opacity: 1;
+  transform: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-reveal { opacity: 1; transform: none; transition: none; }
+  html { scroll-behavior: auto; }
+}
+
+/* ─── App-first hero (phone/tablet) ─────────────────────────────────────
+   Lead with the product, not a wall of copy: the split card moves up under a
+   tighter headline, the inline CTA is dropped (the sticky bottom bar carries
+   it), and everything centers in a single column. Desktop hero is unchanged. */
+@media (max-width: 900px) {
+  .sobre-hero { min-height: auto; padding: 24px 20px 28px; }
+  .sobre-hero-grid { display: flex; flex-direction: column; gap: 22px; }
+  .sobre-hero-content { gap: 12px; }
+  .sobre-hero-cta { display: none; } /* sticky bottom bar carries the CTA */
+  /* Product art leads on small screens. */
+  .sobre-hero-right { order: -1; min-height: 0; }
+}
+
+/* ─── Bottom tab/action bar variant used inside the dashboard shell ─────
+   Same chrome as the marketing bottom bar but lays out a row of equal
+   actions (e.g. Add money / Invite) instead of one CTA. */
+.sobre-bottom-bar .sobre-bottom-actions {
+  display: flex; gap: 10px;
+}
+.sobre-bottom-bar .sobre-bottom-actions > * { flex: 1; }
+
+/* Reserve space so the last content isn't hidden behind the sticky bar.
+   Pages that render a bottom bar add `.has-bottom-bar` to their scroll root. */
+@media (max-width: 900px) {
+  .has-bottom-bar { padding-bottom: 88px; }
+}
+
+/* ─── Landing feature-visual rows that must collapse on phones ───────────
+   These replace inline `style={{ display:flex }}` / grid in page.tsx so they
+   actually reflow on narrow screens instead of overflowing (per the sobre-web
+   skill gotcha about non-collapsing inline grids). */
+.sobre-incoming-row {
+  display: flex; align-items: center; gap: 14px;
+}
+.sobre-incoming-row .sobre-incoming-card { flex: 1; }
+.sobre-incoming-row .sobre-incoming-arrow { flex-shrink: 0; }
+@media (max-width: 480px) {
+  /* Point the flow downward on the narrowest screens so the ₱ amount and the
+     envelope tiles below it read as a single top-to-bottom split. */
+  .sobre-incoming-row { flex-direction: column; align-items: stretch; }
+  .sobre-incoming-row .sobre-incoming-arrow { transform: rotate(90deg); align-self: center; }
+}
+
+.sobre-policy-stack { display: flex; flex-direction: column; gap: 14px; }
+
+/* ─── Modals → bottom sheets on phones ──────────────────────────────────
+   Every Sobre modal shares .sobre-modal-bg + .sobre-modal, so converting
+   them to a thumb-friendly bottom sheet is a pure CSS override here — no
+   per-modal component changes. The sheet slides up from the bottom edge,
+   spans the full width, rounds only its top corners, and respects the home
+   indicator via the safe-area inset. Desktop keeps the centered dialog. */
+@keyframes sobre-sheet-up {
+  from { transform: translateY(100%); }
+  to   { transform: translateY(0); }
+}
+@media (max-width: 640px) {
+  .sobre-modal-bg {
+    place-items: end stretch;
+    padding: 0;
+  }
+  .sobre-modal {
+    max-width: none;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    padding: 24px 20px calc(24px + var(--safe-bottom));
+    max-height: 92vh;
+    animation: sobre-sheet-up .28s cubic-bezier(.2, .8, .25, 1);
+  }
+  .sobre-modal::before {
+    content: "";
+    display: block;
+    width: 40px; height: 4px;
+    border-radius: 999px;
+    background: var(--border-strong);
+    margin: -6px auto 14px;
+  }
+  .sobre-modal-actions {
+    flex-direction: column-reverse;
+    gap: 10px;
+  }
+  .sobre-modal-actions .sobre-btn {
+    width: 100%; justify-content: center; min-height: 48px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-modal { animation: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   INTERACTIVE DESIGN — app-grade micro-interactions
+   Tactile press, hover lift, staggered reveals, count-up numbers. All
+   token-based and fully disabled under prefers-reduced-motion.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Tactile press: any tappable element dips slightly when pressed, the way a
+   native control acknowledges a touch. Scoped to known interactive classes so
+   we don't accidentally shrink layout containers. */
+.sobre-btn,
+.sobre-btn-nav,
+.sobre-hero-cta,
+.sobre-bottom-cta,
+.sobre-step-num,
+.sobre-quick-amts button,
+.sobre-card-link {
+  transition: transform .12s cubic-bezier(.2,.8,.3,1),
+              box-shadow .18s ease, background .15s ease;
+}
+.sobre-btn:active,
+.sobre-btn-nav:active,
+.sobre-hero-cta:active,
+.sobre-bottom-cta:active,
+.sobre-quick-amts button:active {
+  transform: scale(0.96);
+}
+
+/* Hover lift on the marketing cards — they rise toward the cursor on desktop.
+   Suppressed on touch (no hover) so phones don't get a stuck lifted state. */
+@media (hover: hover) {
+  .sobre-stat-card,
+  .sobre-step,
+  .sobre-trust-card {
+    transition: transform .25s cubic-bezier(.2,.8,.3,1), box-shadow .25s ease;
+  }
+  .sobre-stat-card:hover,
+  .sobre-step:hover,
+  .sobre-trust-card:hover {
+    transform: translateY(-4px);
+    box-shadow: var(--shadow-md);
+  }
+  /* The trust icon tile gives a small playful pop on card hover. */
+  .sobre-trust-card:hover .icon { transform: scale(1.08) rotate(-3deg); }
+  .sobre-trust-card .icon { transition: transform .25s cubic-bezier(.2,.8,.3,1.4); }
+}
+
+/* Staggered reveal: when a grid wrapped in .sobre-reveal becomes visible, its
+   direct children cascade in one after another for a lively, app-like entrance.
+   Children opt in via the data-stagger attribute on the wrapper. */
+.sobre-reveal[data-stagger] > * {
+  opacity: 0;
+  transform: translateY(14px);
+  transition: opacity .5s ease, transform .5s cubic-bezier(.2,.7,.2,1);
+}
+.sobre-reveal[data-stagger].is-visible > * {
+  opacity: 1;
+  transform: none;
+}
+.sobre-reveal[data-stagger].is-visible > *:nth-child(1) { transition-delay: .04s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(2) { transition-delay: .12s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(3) { transition-delay: .20s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(4) { transition-delay: .28s; }
+
+/* Brand mark gives a tiny wave on hover — adds warmth without being loud. */
+@media (hover: hover) {
+  .sobre-brand img { transition: transform .3s cubic-bezier(.2,.8,.3,1.6); }
+  .sobre-brand:hover img { transform: translateY(-3px) rotate(-6deg) scale(1.05); }
+}
+
+/* FAQ rows nudge on hover to invite the tap. */
+@media (hover: hover) {
+  .sobre-faq-q { transition: padding-left .2s ease, color .15s ease; }
+  .sobre-faq-q:hover { padding-left: 10px; color: var(--sobre-primary); }
+}
+
+/* Honor reduced-motion: strip every transform/transition added above. */
+@media (prefers-reduced-motion: reduce) {
+  .sobre-btn, .sobre-btn-nav, .sobre-hero-cta, .sobre-bottom-cta,
+  .sobre-quick-amts button, .sobre-card-link,
+  .sobre-stat-card, .sobre-step, .sobre-trust-card,
+  .sobre-trust-card .icon, .sobre-brand img,
+  .sobre-reveal[data-stagger] > * {
+    transition: none !important;
+    transform: none !important;
+  }
+}
+
+/* Stat numbers give a brief scale-pop as their card cascades in — draws the
+   eye to the headline figures without needing a fragile count-up that would
+   choke on the mixed formats ($35.6B, 96%, "8 in 10"). */
+.sobre-reveal[data-stagger].is-visible .sobre-stat-num {
+  animation: sobre-stat-pop .6s cubic-bezier(.2,.8,.3,1.3) both;
+}
+@keyframes sobre-stat-pop {
+  0%   { transform: scale(.82); opacity: 0; }
+  60%  { transform: scale(1.04); opacity: 1; }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-reveal[data-stagger].is-visible .sobre-stat-num { animation: none; }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PAGE TRANSITION — plain orange cover with the brand line
+   A full-screen mango panel sweeps in to COVER the page, carrying the line
+   "Isang sobre. Isang pamilya." styled + positioned to MATCH the dashboard's
+   connect screen heading, so when the cover lifts the text reads as morphing
+   into place. Holds while the destination route mounts (slow connection never
+   flashes blank), then sweeps away to REVEAL. Skipped under reduced-motion.
+   ════════════════════════════════════════════════════════════════════════ */
+/* The overlay itself NEVER moves — it just holds the centered text in place.
+   The sliding orange panel is the ::before behind the text, so the text stays
+   put while the orange sweeps in/out around it. */
+.sobre-env-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  display: grid; place-items: center;
+  background: transparent;
+  pointer-events: none;
+}
+/* Sliding orange panel (behind the text). */
+.sobre-env-overlay::before {
+  content: "";
+  position: fixed;
+  top: -2px; left: -2px; right: -2px; bottom: -2px;
+  width: calc(100vw + 4px);
+  height: calc(100dvh + 4px);
+  background: var(--sobre-primary);
+  z-index: -1;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+/* Match the dashboard <h1> exactly (font-serif, 40px, 600, tracking-tight,
+   leading 1.05, centered) but white — sits where the destination heading will
+   be and STAYS in place (only fades) through the reveal. */
+.sobre-cover-text {
+  font-family: var(--serif);
+  font-weight: 600;
+  color: #fff;
+  text-align: center;
+  margin: 0;
+  font-size: clamp(32px, 6vw, 40px);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  padding: 0 24px;
+}
+
+/* COVER: orange panel slides in from the left to fully cover, then HOLDS. The
+   text fades in and stays centered. */
+.sobre-env-overlay.cover::before {
+  transform: translateX(-101%);
+  animation: sobre-cover-in .55s cubic-bezier(.22,1,.36,1) forwards;
+}
+.sobre-env-overlay.cover .sobre-cover-text {
+  opacity: 0;
+  animation: sobre-cover-text-in .4s ease .2s forwards;
+}
+/* REVEAL: orange panel glides off to the right. A long, gentle ease-out
+   (ease-out-expo-ish) so it decelerates smoothly with no snap at the end. */
+.sobre-env-overlay.reveal::before {
+  transform: translateX(0);
+  animation: sobre-cover-out 1.1s cubic-bezier(.16,1,.3,1) forwards;
+}
+.sobre-env-overlay.reveal .sobre-cover-text {
+  opacity: 1;
+  animation: sobre-cover-text-out .45s ease forwards;
+}
+
+@keyframes sobre-cover-in {
+  0%   { transform: translateX(-101%); }
+  100% { transform: translateX(0); }
+}
+@keyframes sobre-cover-out {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(101%); }
+}
+@keyframes sobre-cover-text-in {
+  0%   { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes sobre-cover-text-out {
+  0%   { opacity: 1; }
+  100% { opacity: 0; }
+}
+
+/* Final-CTA button sizing (was inline on the old <Link>; moved to a class so
+   the new OpenSobreButton anchor keeps the same look). */
+.sobre-final-cta-btn {
+  font-size: 16px;
+  padding: 16px 28px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }

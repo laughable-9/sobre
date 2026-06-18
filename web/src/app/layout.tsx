@@ -3,6 +3,7 @@ import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 
 import { PhpRateBoot } from "@/lib/usePhpPerXlm";
+import { EnvelopeTransition } from "@/components/sobre/EnvelopeTransition";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -54,6 +55,7 @@ export default function RootLayout({
       <body className="min-h-full flex flex-col">
         <PhpRateBoot />
         {children}
+        <EnvelopeTransition />
       </body>
     </html>
   );
