@@ -220,8 +220,9 @@ function Hero() {
             <em className="sobre-hero-accent">distance</em>.
           </h1>
           <p className="sobre-hero-subhead">
-            The joint account for Filipino families. Money you send home
-            auto-splits into envelopes the moment it arrives.
+            The shared family wallet for overseas workers. Every deposit
+            splits into envelopes the household agreed on, the moment it
+            arrives.
           </p>
           <Link href="/dashboard" className="sobre-hero-cta">
             Open a Sobre
