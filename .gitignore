@@ -44,3 +44,8 @@ pnpm-debug.log*
 CLAUDE.md
 notes/
 web/public/reference.*
+
+# --- Local reference docs (specs, partner API references, playbooks) ---
+# The 3 existing tracked files in docs/ stay tracked (gitignore is not
+# retroactive). Any NEW file dropped under docs/ is local-only.
+docs/
