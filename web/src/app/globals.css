@@ -760,8 +760,20 @@
   }
   .sobre-wallet-menu-pill { padding: 7px 12px; font-size: 12.5px; }
 }
+/* Very narrow phones: tighten the nav further but keep the wordmark — hiding
+   it left the row looking lopsided. The brand anchor never shrinks; the nav
+   links can shrink and the gap tightens so the two CTAs still fit on one row. */
 @media (max-width: 380px) {
-  .sobre-brand-name { display: none; }
+  .sobre-nav-inner { gap: 8px; }
+  .sobre-brand { flex: 0 0 auto; }
+  .sobre-nav-links { gap: 8px; min-width: 0; }
+  .sobre-nav-links a.sobre-btn-nav,
+  .sobre-btn-nav,
+  .sobre-nav-links a.sobre-btn-nav-soft,
+  .sobre-btn-nav-soft {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
 }
 /* `.sobre-nav-links a` is more specific than a bare `.sobre-btn-nav`, so we
    match the same depth here to keep the button text white. */
@@ -771,6 +783,9 @@
   padding: 8px 14px; border-radius: var(--r-btn);
   font-size: 13px; font-weight: 500;
   display: inline-flex; align-items: center; gap: 6px;
+  /* Keep "Open Sobre" / "Connect Wallet" on one line — without this the
+     label wraps to two rows once the nav row gets tight on narrow phones. */
+  white-space: nowrap;
 }
 .sobre-nav-links a.sobre-btn-nav:hover,
 .sobre-btn-nav:hover { background: var(--primary-hover); color: #fff; }
@@ -1370,7 +1385,11 @@
    scrolling (it promotes the element to a scroll container, which collides
    with the 100vh hero + sticky bars); `overflow-x: clip` prevents the
    sideways scrollbar while leaving the normal page scroll intact. */
-body { overflow-x: clip; }
+/* `min-width` sets a usable floor: below ~320px the nav CTAs + wordmark can't
+   coexist on one row no matter how tight the gaps, so we stop shrinking and let
+   the (rare) sub-320 viewport scroll horizontally rather than collapse the
+   layout. 320px is the narrowest mainstream phone (iPhone SE 1st-gen). */
+body { overflow-x: clip; min-width: 320px; }
 
 /* Generous tap targets on touch screens — Apple/Google both call ~44px the
    minimum. Applies only where a coarse pointer is the primary input so the
@@ -1467,8 +1486,10 @@ body { overflow-x: clip; }
   .sobre-hero-grid { display: flex; flex-direction: column; gap: 22px; }
   .sobre-hero-content { gap: 12px; }
   .sobre-hero-cta { display: none; } /* sticky bottom bar carries the CTA */
-  /* Product art leads on small screens. */
-  .sobre-hero-right { order: -1; min-height: 0; }
+  /* Product art follows the headline on small screens so the value
+     proposition is visible without scrolling. */
+  .sobre-hero-right { min-height: 0; max-height: 280px; overflow: hidden; }
+  .sobre-hero-loop { max-height: 260px; }
 }
 
 /* ─── Bottom tab/action bar variant used inside the dashboard shell ─────
