@@ -261,6 +261,45 @@ fn validate_envelope_names(env: &Env, names: &Vec<String>) {
     }
 }
 
+/// Shared body for `init` and `__constructor`. Skips the `admin.require_auth()`
+/// check because both public callers (the auth-required `init` and the
+/// factory's `__constructor` whose admin auth is already verified upstream)
+/// arrive here with the same args and the same intent — set this contract
+/// up once and never again.
+fn init_inner(
+    env: Env,
+    admin: Address,
+    payment_token: Address,
+    percents: Vec<u32>,
+    envelope_names: Vec<String>,
+    wallet_name: String,
+    admin_name: String,
+    admin_emoji: String,
+    factory: Address,
+) {
+    if env.storage().instance().has(&DataKey::Admin) {
+        panic_with_error!(&env, Error::AlreadyInitialized);
+    }
+    validate_percents(&env, &percents);
+    validate_envelope_names(&env, &envelope_names);
+
+    let inst = env.storage().instance();
+    inst.set(&DataKey::Admin, &admin);
+    inst.set(&DataKey::PaymentToken, &payment_token);
+    inst.set(&DataKey::Percents, &percents);
+    inst.set(&DataKey::EnvelopeNames, &envelope_names);
+    inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
+    inst.set(&DataKey::WalletName, &wallet_name);
+    inst.set(&DataKey::Factory, &factory);
+
+    let admin_member = Member {
+        address: admin,
+        name: admin_name,
+        emoji: admin_emoji,
+    };
+    inst.set(&DataKey::Members, &vec![&env, admin_member]);
+}
+
 /// Panics `NotInitialized` if init hasn't run — caller might otherwise expect
 /// the generic `require_auth` failure instead.
 fn require_admin_auth(env: &Env) {
@@ -476,6 +515,12 @@ impl SobreContract {
     /// Auto-invoked on deploy_v2 with the constructor args, so the
     /// SobreFactory can deploy + init atomically (no front-run window).
     /// Manual deploys can still call `init` directly with the same args.
+    ///
+    /// The constructor calls `init_inner` (no auth check) instead of the
+    /// public `init`. Admin's intent is already verified at the factory
+    /// layer by `create_sobre`'s `admin.require_auth()`; requiring it again
+    /// here would produce a nested two-context auth tree that's awkward
+    /// for passkey-signed wallets to authorize in a single signature.
     pub fn __constructor(
         env: Env,
         admin: Address,
@@ -487,7 +532,7 @@ impl SobreContract {
         admin_emoji: String,
         factory: Address,
     ) {
-        Self::init(
+        init_inner(
             env,
             admin,
             payment_token,
@@ -500,11 +545,16 @@ impl SobreContract {
         );
     }
 
-    /// One-time setup. The caller becomes the admin AND the first profiled
-    /// member of the wallet. `factory` is the SobreFactory that deployed this
-    /// instance; `upgrade()` reads its `current_sobre_wasm` view to opt this
-    /// Sobre into the latest contract code without trusting the admin to
-    /// pass the right hash by hand.
+    /// One-time setup for manual (non-factory) deploys. Requires admin
+    /// authorization explicitly because there's no factory upstream to
+    /// have done it. Factory-deployed instances skip this path via
+    /// `__constructor` → `init_inner`.
+    ///
+    /// `factory` is the SobreFactory that deployed this instance (or zero
+    /// address for manual deploys); `upgrade()` reads its
+    /// `current_sobre_wasm` view to opt this Sobre into the latest
+    /// contract code without trusting the admin to pass the right hash
+    /// by hand.
     pub fn init(
         env: Env,
         admin: Address,
@@ -516,28 +566,18 @@ impl SobreContract {
         admin_emoji: String,
         factory: Address,
     ) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic_with_error!(&env, Error::AlreadyInitialized);
-        }
         admin.require_auth();
-        validate_percents(&env, &percents);
-        validate_envelope_names(&env, &envelope_names);
-
-        let inst = env.storage().instance();
-        inst.set(&DataKey::Admin, &admin);
-        inst.set(&DataKey::PaymentToken, &payment_token);
-        inst.set(&DataKey::Percents, &percents);
-        inst.set(&DataKey::EnvelopeNames, &envelope_names);
-        inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
-        inst.set(&DataKey::WalletName, &wallet_name);
-        inst.set(&DataKey::Factory, &factory);
-
-        let admin_member = Member {
-            address: admin,
-            name: admin_name,
-            emoji: admin_emoji,
-        };
-        inst.set(&DataKey::Members, &vec![&env, admin_member]);
+        init_inner(
+            env,
+            admin,
+            payment_token,
+            percents,
+            envelope_names,
+            wallet_name,
+            admin_name,
+            admin_emoji,
+            factory,
+        );
     }
 
     /// Self-service join used by the invite-link flow. Anyone with the link
