@@ -1,5 +1,5 @@
 /**
- * Hardcoded constants for the demo. Contract IDs are public; the mainnet
+ * Hardcoded constants for the demo. Contract IDs are public; the testnet
  * network passphrase is fixed.
  */
 
@@ -8,20 +8,20 @@
  * instances. Each family gets their own contract address; this address is
  * only the entry point for opening new ones + listing the user's wallets.
  *
- * Mainnet is the live production deployment the web app talks to. Testnet
- * factory `CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X` is kept
- * around as a sandbox; flip FACTORY_CONTRACT_ID + NETWORK together to
- * switch environments.
+ * Testnet is the live deployment the web app talks to. Mainnet factory
+ * `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` is also
+ * deployed as proof-of-production; flip FACTORY_CONTRACT_ID + NETWORK
+ * together to switch environments.
  */
 export const FACTORY_CONTRACT_ID =
-  "CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO";
+  "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
 
 /** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
  *  Deterministic per network — different address per network because the SAC
  *  derivation hashes the network passphrase.
- *  Mainnet: CAS3J7GY... | Testnet: CDLZFC3S... (kept here for reference) */
+ *  Testnet: CDLZFC3S... | Mainnet: CAS3J7GY... (kept here for reference) */
 export const XLM_SAC_ID =
-  "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 /** Origin used in invite URLs the admin shares. Hardcoded to the deployed
  *  domain so a link generated from `localhost:3000` during local dev still
@@ -30,10 +30,10 @@ export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
 
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
-  name: "PUBLIC",
-  passphrase: "Public Global Stellar Network ; September 2015",
-  rpcUrl: "https://mainnet.sorobanrpc.com",
-  horizonUrl: "https://horizon.stellar.org",
+  name: "TESTNET",
+  passphrase: "Test SDF Network ; September 2015",
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  horizonUrl: "https://horizon-testnet.stellar.org",
 } as const;
 
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */

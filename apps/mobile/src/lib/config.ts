@@ -1,19 +1,19 @@
 /**
  * Mirrors web/src/lib/config.ts. Keep these values in sync — both clients
- * point at the same deployed mainnet contracts.
+ * point at the same deployed testnet contracts.
  */
 
 export const FACTORY_CONTRACT_ID =
-  "CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO";
+  "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
 
 export const XLM_SAC_ID =
-  "CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA";
+  "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
 export const NETWORK = {
-  name: "PUBLIC",
-  passphrase: "Public Global Stellar Network ; September 2015",
-  rpcUrl: "https://mainnet.sorobanrpc.com",
-  horizonUrl: "https://horizon.stellar.org",
+  name: "TESTNET",
+  passphrase: "Test SDF Network ; September 2015",
+  rpcUrl: "https://soroban-testnet.stellar.org",
+  horizonUrl: "https://horizon-testnet.stellar.org",
 } as const;
 
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */
