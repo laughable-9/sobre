@@ -39,6 +39,9 @@ pnpm-debug.log*
 
 # --- Claude Code personal settings (shared settings.json is fine to commit) ---
 .claude/settings.local.json
+# .mcp.json holds the Supabase PAT — local-only until we switch to env-var
+# substitution (`${SUPABASE_ACCESS_TOKEN}`) for team-shareable configs.
+.mcp.json
 
 # --- Claude Code project notes (kept local, not pushed to public repo) ---
 CLAUDE.md
