@@ -66,34 +66,62 @@ export async function createFamilyWallet(
   // simulation, then kit.signAndSubmit swaps in its own deployer keypair for
   // the actual submit. Passing the smart wallet C-address here would fail
   // address validation (C-addresses fail the strkey ed25519 version check).
-  const factoryClient = await contract.Client.from({
-    contractId: FACTORY_CONTRACT_ID,
-    networkPassphrase: NETWORK.passphrase,
-    rpcUrl: NETWORK.rpcUrl,
-  });
-
-  const invocable = factoryClient as unknown as CreateSobreInvocable;
-  const assembledTx = await invocable.create_sobre({
-    admin: args.myWalletContractId,
-    payment_token: XLM_SAC_ID,
-    percents: [...args.percents],
-    envelope_names: [...args.envelopeNames],
-    wallet_name: args.walletName,
-    admin_name: args.adminName,
-    admin_emoji: args.adminEmoji,
-  });
-
-  const submitResult = await kit.signAndSubmit(assembledTx);
-  if (!submitResult.success) {
+  let factoryClient;
+  try {
+    factoryClient = await contract.Client.from({
+      contractId: FACTORY_CONTRACT_ID,
+      networkPassphrase: NETWORK.passphrase,
+      rpcUrl: NETWORK.rpcUrl,
+    });
+  } catch (err) {
     throw new Error(
-      `create_sobre submission failed: ${submitResult.error ?? "unknown"}`,
+      `[create_sobre step 1] Client.from failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
-  const familyContractId = assembledTx.result;
+  const invocable = factoryClient as unknown as CreateSobreInvocable;
+  let assembledTx: contract.AssembledTransaction<string>;
+  try {
+    assembledTx = await invocable.create_sobre({
+      admin: args.myWalletContractId,
+      payment_token: XLM_SAC_ID,
+      percents: [...args.percents],
+      envelope_names: [...args.envelopeNames],
+      wallet_name: args.walletName,
+      admin_name: args.adminName,
+      admin_emoji: args.adminEmoji,
+    });
+  } catch (err) {
+    throw new Error(
+      `[create_sobre step 2] build+simulate failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  let submitResult;
+  try {
+    submitResult = await kit.signAndSubmit(assembledTx);
+  } catch (err) {
+    throw new Error(
+      `[create_sobre step 3] signAndSubmit threw: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+  if (!submitResult.success) {
+    throw new Error(
+      `[create_sobre step 3] signAndSubmit returned error: ${submitResult.error ?? "unknown"}`,
+    );
+  }
+
+  let familyContractId: unknown;
+  try {
+    familyContractId = assembledTx.result;
+  } catch (err) {
+    throw new Error(
+      `[create_sobre step 4] parsing result failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
   if (typeof familyContractId !== "string" || !familyContractId.startsWith("C")) {
     throw new Error(
-      `create_sobre returned an unexpected result: ${JSON.stringify(familyContractId)}`,
+      `[create_sobre step 4] unexpected result shape: ${JSON.stringify(familyContractId)}`,
     );
   }
 
