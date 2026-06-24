@@ -37,18 +37,20 @@ export const NETWORK = {
 } as const;
 
 /**
- * Smart-account-kit pre-uploaded testnet artifacts. Shared across every
- * smart-account-kit user on testnet — Sobre does not deploy these. The
- * mainnet equivalents differ; flip alongside FACTORY_CONTRACT_ID + NETWORK
- * when promoting to mainnet.
+ * passkey-kit pre-uploaded testnet artifact. The smart-wallet contract
+ * WASM is shared across every passkey-kit user on testnet — Sobre does
+ * not deploy this WASM, just instantiates new contracts per user with
+ * the user's passkey as the secp256r1 signer.
+ *
+ * Verification is inline in the wallet contract (no separate WebAuthn
+ * verifier contract like OZ smart-account-kit needs).
+ *
+ * Mainnet uses a different hash; flip alongside FACTORY_CONTRACT_ID +
+ * NETWORK when promoting to mainnet.
  */
-export const SMART_ACCOUNT_KIT = {
-  accountWasmHash:
-    "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611",
-  webauthnVerifierAddress:
-    "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU",
-  ed25519VerifierAddress:
-    "CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA",
+export const PASSKEY_KIT = {
+  walletWasmHash:
+    "ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90",
 } as const;
 
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */

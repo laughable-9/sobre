@@ -48,28 +48,28 @@ export async function findOrCreateWallet(
   }
 
   if (existing) {
-    // Returning user — silent reconnect via the credential cached in IndexedDB.
-    // No passkey prompt because we're not signing anything yet, just confirming
-    // which wallet the SDK has paired locally.
-    await connect();
-    return { wallet: existing as WalletRow, wasCreated: false };
+    const row = existing as WalletRow;
+    // Returning user — re-attach to the existing wallet so subsequent signs
+    // route to the right contract. Pass the stored credential_id +
+    // contract_id to skip the WebAuthn selection prompt.
+    await connect({
+      keyIdBase64: row.credential_id,
+      contractId: row.contract_id,
+    });
+    return { wallet: row, wasCreated: false };
   }
 
   // First visit — fire WebAuthn registration and deploy the smart wallet.
-  const signupResult = await signup(displayName);
-
-  if (!signupResult.submitResult?.success) {
-    throw new Error(
-      `smart wallet deploy failed: ${signupResult.submitResult?.error ?? "unknown error"}`,
-    );
-  }
+  // signup() throws on submission failure, so reaching the next line means
+  // the deploy is confirmed on chain.
+  const signupResult = await signup(email || displayName);
 
   const { data: inserted, error: insertErr } = await supabase
     .from("wallets")
     .insert({
       auth_id: authUserId,
       contract_id: signupResult.contractId,
-      credential_id: signupResult.credentialId,
+      credential_id: signupResult.keyIdBase64,
       display_name: displayName,
       email,
     })

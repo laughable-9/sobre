@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 
-import { connect, signup } from "@/lib/passkey";
+import { signup } from "@/lib/passkey";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { findOrCreateWallet } from "@/lib/wallets";
 
@@ -73,7 +73,6 @@ export default function SignupSmokeTestPage() {
   }
 
   const handleSignup = () => run(() => signup(name));
-  const handleReconnect = () => run(connect);
 
   const handleFindOrCreate = () => {
     if (!session) return;
@@ -182,13 +181,6 @@ export default function SignupSmokeTestPage() {
             }}
           >
             {status === "working" ? "Working…" : "Sign up with passkey"}
-          </button>
-          <button
-            onClick={handleReconnect}
-            disabled={status === "working"}
-            style={GHOST_BUTTON}
-          >
-            Reconnect
           </button>
         </div>
       </section>
