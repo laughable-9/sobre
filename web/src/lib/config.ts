@@ -36,6 +36,21 @@ export const NETWORK = {
   horizonUrl: "https://horizon-testnet.stellar.org",
 } as const;
 
+/**
+ * Smart-account-kit pre-uploaded testnet artifacts. Shared across every
+ * smart-account-kit user on testnet — Sobre does not deploy these. The
+ * mainnet equivalents differ; flip alongside FACTORY_CONTRACT_ID + NETWORK
+ * when promoting to mainnet.
+ */
+export const SMART_ACCOUNT_KIT = {
+  accountWasmHash:
+    "8537b8166c0078440a5324c12f6db48d6340d157c306a54c5ea81405abcc2611",
+  webauthnVerifierAddress:
+    "CCMR63YE5T7MPWREF3PC5XNTTGXFSB4GYUGUIT5POHP2UGCS65TBIUUU",
+  ed25519VerifierAddress:
+    "CCJOUKLCZVCXS4VIBBEA7S3SPWZQS5DPE5A4YG67RA3Z7E3SJZAUJFQA",
+} as const;
+
 /** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */
 export const STROOPS_PER_XLM = 10_000_000;
 

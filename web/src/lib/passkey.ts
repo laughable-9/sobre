@@ -6,6 +6,8 @@ import {
   StellarWalletsKitAdapter,
 } from "smart-account-kit";
 
+import { NETWORK, SMART_ACCOUNT_KIT } from "@/lib/config";
+
 /**
  * Sobre's passkey-backed smart wallet kit.
  *
@@ -20,16 +22,6 @@ import {
  * with FEE_MISMATCH; Dfns or a patched SDK fee policy is the week-2 path).
  */
 
-function required(key: string): string {
-  const value = process.env[key];
-  if (!value) {
-    throw new Error(
-      `[passkey] missing ${key} — copy web/.env.example to web/.env.local`,
-    );
-  }
-  return value;
-}
-
 // Promise singleton. The wallet adapter's init() is async, so we cache the
 // resolved kit instead of constructing it synchronously.
 let kitPromise: Promise<SmartAccountKit> | null = null;
@@ -37,29 +29,22 @@ let kitPromise: Promise<SmartAccountKit> | null = null;
 function getKit(): Promise<SmartAccountKit> {
   if (!kitPromise) {
     kitPromise = (async () => {
-      const rpcUrl = required("NEXT_PUBLIC_RPC_URL");
-      const networkPassphrase = required("NEXT_PUBLIC_NETWORK_PASSPHRASE");
-      const accountWasmHash = required("NEXT_PUBLIC_ACCOUNT_WASM_HASH");
-      const webauthnVerifierAddress = required(
-        "NEXT_PUBLIC_WEBAUTHN_VERIFIER_ADDRESS",
-      );
-
       // Namespacing storage by wasm-hash prefix lets us bump the smart-wallet
       // contract version later without colliding with old credentials.
       const storage = new IndexedDBStorage(
-        `sobre:testnet:${accountWasmHash.slice(0, 16)}`,
+        `sobre:testnet:${SMART_ACCOUNT_KIT.accountWasmHash.slice(0, 16)}`,
       );
 
       const walletAdapter = new StellarWalletsKitAdapter({
-        network: networkPassphrase,
+        network: NETWORK.passphrase,
       });
       await walletAdapter.init();
 
       return new SmartAccountKit({
-        rpcUrl,
-        networkPassphrase,
-        accountWasmHash,
-        webauthnVerifierAddress,
+        rpcUrl: NETWORK.rpcUrl,
+        networkPassphrase: NETWORK.passphrase,
+        accountWasmHash: SMART_ACCOUNT_KIT.accountWasmHash,
+        webauthnVerifierAddress: SMART_ACCOUNT_KIT.webauthnVerifierAddress,
         storage,
         rpName: "Sobre", // shown to the user in the FaceID / fingerprint prompt
         externalWallet: walletAdapter,
