@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
-    vec, Address, BytesN, Env, String, Vec,
+    vec, Address, Bytes, BytesN, Env, String, Vec,
 };
 
 const ENVELOPE_COUNT: u32 = 3;
@@ -67,6 +67,11 @@ pub enum DataKey {
     /// `upgrade()` so the admin can opt into the factory's current wasm hash
     /// without having to remember it themselves.
     Factory,
+    /// Invite token hash → expires_at_ledger. Key is `sha256(plaintext_token)`
+    /// (not the plaintext itself) so a passive Soroban indexer can't read the
+    /// storage entry and redeem the invite before the legitimate recipient.
+    /// Deleted by `join_wallet` on redemption — single-use by construction.
+    Invite(BytesN<32>),
 }
 
 /// All three checks compose with OR — any one triggering routes the spend
@@ -168,6 +173,29 @@ pub struct RequestDenied {
     pub request_id: u64,
 }
 
+/// Emitted when admin creates a single-use invite token. The hash topic lets
+/// the admin's dashboard correlate the create_invite tx with the eventual
+/// InviteRedeemed event without needing to store the plaintext server-side.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct InviteCreated {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+    pub expires_at_ledger: u32,
+}
+
+/// Emitted when a non-admin redeems an invite token to join. Pairs with
+/// InviteCreated by the matching invite_hash topic. The joiner's profile +
+/// address are also captured by the MemberJoined event that fires alongside.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct InviteRedeemed {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+    #[topic]
+    pub member: Address,
+}
+
 /// Emitted when a non-admin self-joins via the invite-link flow.
 #[contractevent]
 #[derive(Clone, Debug)]
@@ -235,6 +263,8 @@ pub enum Error {
     MemberNotFound = 10,
     CannotRemoveAdmin = 11,
     InvalidEnvelopeNames = 12,
+    InviteNotFound = 13,
+    InviteExpired = 14,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -580,13 +610,62 @@ impl SobreContract {
         );
     }
 
-    /// Self-service join used by the invite-link flow. Anyone with the link
-    /// can call this until the 2-member cap is reached — the cap is the
-    /// demo's safety net since the URL itself isn't authenticated.
-    pub fn join_wallet(env: Env, caller: Address, name: String, emoji: String) {
+    /// Admin-only. Persists a single-use invite token that the admin's client
+    /// generated off-chain. The contract stores `sha256(plaintext)` rather
+    /// than the plaintext so a Soroban indexer reading the storage entry
+    /// can't redeem the invite; only the URL recipient (who holds the
+    /// plaintext) can. The persistent entry's TTL is extended to cover the
+    /// expiry window so it's still readable at redemption time.
+    pub fn create_invite(env: Env, token_hash: BytesN<32>, expires_at_ledger: u32) {
+        require_admin_auth(&env);
+
+        let now = env.ledger().sequence();
+        if expires_at_ledger <= now {
+            panic_with_error!(&env, Error::InviteExpired);
+        }
+        let ttl = expires_at_ledger - now;
+
+        let key = DataKey::Invite(token_hash.clone());
+        env.storage().persistent().set(&key, &expires_at_ledger);
+        env.storage().persistent().extend_ttl(&key, ttl, ttl);
+
+        InviteCreated {
+            invite_hash: token_hash,
+            expires_at_ledger,
+        }
+        .publish(&env);
+    }
+
+    /// Self-service join used by the invite-link flow. Caller must present
+    /// the plaintext invite token whose `sha256` was previously stored by
+    /// `create_invite`. The entry is deleted on redemption so each token is
+    /// single-use; the 2-member cap is the demo's safety net even though
+    /// the invite gate already enforces it.
+    pub fn join_wallet(
+        env: Env,
+        caller: Address,
+        name: String,
+        emoji: String,
+        invite_token: BytesN<32>,
+    ) {
         caller.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::NotInitialized);
+        }
+
+        let token_hash: BytesN<32> = env
+            .crypto()
+            .sha256(&Bytes::from(invite_token))
+            .into();
+        let invite_key = DataKey::Invite(token_hash.clone());
+        let expires_at_ledger: u32 = env
+            .storage()
+            .persistent()
+            .get(&invite_key)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::InviteNotFound));
+        if env.ledger().sequence() > expires_at_ledger {
+            env.storage().persistent().remove(&invite_key);
+            panic_with_error!(&env, Error::InviteExpired);
         }
 
         let inst = env.storage().instance();
@@ -604,10 +683,17 @@ impl SobreContract {
         });
         inst.set(&DataKey::Members, &members);
 
+        env.storage().persistent().remove(&invite_key);
+
         MemberJoined {
-            member: caller,
+            member: caller.clone(),
             name,
             emoji,
+        }
+        .publish(&env);
+        InviteRedeemed {
+            invite_hash: token_hash,
+            member: caller,
         }
         .publish(&env);
     }
