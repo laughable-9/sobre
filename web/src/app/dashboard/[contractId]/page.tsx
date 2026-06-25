@@ -3,8 +3,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ChevronLeft, Clock, Plus, UserPlus } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Plus, UserPlus } from "lucide-react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -17,9 +16,9 @@ import { DepositModal } from "@/components/sobre/DepositModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
-import { JoinForm } from "@/components/sobre/JoinForm";
 import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
 import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
+import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SpendModal } from "@/components/sobre/SpendModal";
 import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
@@ -36,7 +35,7 @@ import {
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
-import { forgetJoinedSobre, rememberJoinedSobre } from "@/lib/joinedSobres";
+import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
 
 type Tab = "envelopes" | "settings";
@@ -72,14 +71,6 @@ function Dashboard({ contractId }: { contractId: string }) {
   const walletState = useWalletState(address, contractId);
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const joinParam = searchParams.get("join");
-  // Missing, non-numeric, or past-dated expiry is treated as expired so old
-  // links and hand-edited URLs can't bypass the 30-min window.
-  const inviteExpiresAt = Number(searchParams.get("expires"));
-  const inviteExpired =
-    !Number.isFinite(inviteExpiresAt) || inviteExpiresAt * 1000 < Date.now();
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -93,14 +84,13 @@ function Dashboard({ contractId }: { contractId: string }) {
   );
 
   // Kicked-member cleanup: when state has loaded and confirms this address
-  // isn't a member (and we didn't arrive via an invite link), drop any
-  // localStorage joined-Sobre entry so "My Sobres" stops listing it.
+  // isn't a member, drop any localStorage joined-Sobre entry so "My Sobres"
+  // stops listing it.
   useEffect(() => {
     if (!state || !address) return;
-    if (joinParam === contractId) return;
     if (isMember) return;
     forgetJoinedSobre(address, contractId);
-  }, [state, address, isMember, contractId, joinParam]);
+  }, [state, address, isMember, contractId]);
 
   const [depositOpen, setDepositOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
@@ -285,101 +275,8 @@ function Dashboard({ contractId }: { contractId: string }) {
       <div className="sobre-app">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
-          {wallet.status === "signed-out" ? (
-            <div className="text-center max-w-md">
-              <h1 className="font-serif text-[32px] font-semibold mb-3">
-                Sign in to open this Sobre
-              </h1>
-              <button
-                type="button"
-                onClick={() => void wallet.connect()}
-                className="sobre-btn sobre-btn-primary mt-2"
-                style={{ padding: "12px 20px", fontSize: 14 }}
-              >
-                Continue with Google
-              </button>
-              {wallet.error ? (
-                <p
-                  className="text-xs mt-3"
-                  style={{ color: "var(--sobre-danger)" }}
-                >
-                  {wallet.error}
-                </p>
-              ) : null}
-            </div>
-          ) : (
-            <p style={{ color: "var(--text-2)" }}>
-              {wallet.status === "creating"
-                ? "Setting up your wallet…"
-                : "Loading…"}
-            </p>
-          )}
+          <SignInPanel wallet={wallet} title="Sign in to open this Sobre" />
         </main>
-      </div>
-    );
-  }
-
-  // ─── Phase 2: invite-link landed here ─────────────────────────────────
-  const invitedHere = joinParam === contractId;
-  if (invitedHere && inviteExpired && state && !isMember) {
-    return (
-      <div className="sobre-app">
-        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
-        <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <div
-              className="grid place-items-center mx-auto"
-              style={{
-                color: "var(--text-3)",
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "var(--surface-alt)",
-                border: "1.5px solid var(--border)",
-              }}
-            >
-              <Clock size={28} strokeWidth={1.8} />
-            </div>
-            <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
-              This invite link has expired
-            </h1>
-            <p
-              className="text-[14px] mb-5"
-              style={{ color: "var(--text-2)" }}
-            >
-              Invite links to <em>{state.wallet_name}</em> expire 30 minutes
-              after they&apos;re generated, and each link can only be used
-              once. Ask the admin to send a fresh link.
-            </p>
-            <Link
-              href="/dashboard"
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "10px 16px", fontSize: 13 }}
-            >
-              <ChevronLeft size={14} />
-              My Sobres
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
-  }
-  if (invitedHere && state && !isMember) {
-    return (
-      <div className="sobre-app">
-        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
-        <JoinForm
-          userAddress={address}
-          state={state}
-          contractId={contractId}
-          onSuccess={() => {
-            rememberJoinedSobre(address, contractId);
-            refreshAll();
-            flash("You're in. Welcome!", "ok");
-            router.replace(`/dashboard/${contractId}`);
-          }}
-          onCancel={() => router.replace(`/dashboard/${contractId}`)}
-        />
       </div>
     );
   }

@@ -1,0 +1,55 @@
+/**
+ * Browser-side codec + URL helpers shared by the invite-link flow
+ * (producer in `useCreateInvite`, consumer in `/invite/[token]`). Lives in
+ * `lib/` rather than next to either consumer so URL-shape or codec changes
+ * touch one file.
+ */
+
+import { APP_ORIGIN } from "@/lib/config";
+
+export function base64UrlEncode(bytes: Uint8Array): string {
+  let bin = "";
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+
+export function base64UrlDecode(input: string): Uint8Array {
+  const padded =
+    input.replace(/-/g, "+").replace(/_/g, "/") +
+    "===".slice(0, (4 - (input.length % 4)) % 4);
+  const bin = atob(padded);
+  const out = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+  return out;
+}
+
+export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
+  // Cast: lib.dom's BufferSource excludes Uint8Array<ArrayBufferLike> under
+  // strict TS — runtime is fine since `new Uint8Array(n).buffer` is always
+  // ArrayBuffer here (no SharedArrayBuffer construction path).
+  const digest = await crypto.subtle.digest("SHA-256", bytes as BufferSource);
+  return new Uint8Array(digest);
+}
+
+/** Build the invite URL the admin shares. Hardcoded to `APP_ORIGIN` so a
+ *  link minted from `localhost:3000` during local dev still resolves to the
+ *  deployed app when the recipient opens it. */
+export function buildInviteUrl(
+  contractId: string,
+  tokenBase64Url: string,
+): string {
+  return `${APP_ORIGIN}/invite/${tokenBase64Url}?wallet=${contractId}`;
+}
+
+/** base64url → 32-byte plaintext invite token, or null on malformed input.
+ *  The contract's `join_wallet` rejects with `InviteNotFound` if the wrong
+ *  length lands on chain, but failing client-side first surfaces a clear
+ *  "this link is broken" UX without burning a tx. */
+export function decodeInviteToken(tokenBase64Url: string): Uint8Array | null {
+  try {
+    const bytes = base64UrlDecode(tokenBase64Url);
+    return bytes.length === 32 ? bytes : null;
+  } catch {
+    return null;
+  }
+}
