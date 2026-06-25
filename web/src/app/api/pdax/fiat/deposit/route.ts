@@ -21,7 +21,7 @@ import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
 import { pdaxEnv } from "@/lib/env";
-import { pdaxFetch, PdaxError } from "@/lib/pdax/client";
+import { pdaxErrorToResponse, pdaxFetch, PdaxError } from "@/lib/pdax/client";
 import {
   buildFiatDepositBody,
   type PdaxFiatDepositResponse,
@@ -32,7 +32,10 @@ export const runtime = "nodejs";
 
 interface RequestBody {
   amount_php: number;
-  family_wallet_id: string;
+  /** Family Sobre contract C-address. The route resolves the matching
+   *  `family_wallets.id` internally so the frontend doesn't have to track
+   *  the Supabase row id. */
+  contract_id: string;
 }
 
 function splitName(full: string): { first: string; last: string } {
@@ -48,23 +51,36 @@ export async function POST(req: Request) {
     !body ||
     typeof body.amount_php !== "number" ||
     body.amount_php <= 0 ||
-    typeof body.family_wallet_id !== "string"
+    typeof body.contract_id !== "string"
   ) {
     return NextResponse.json(
-      { error: "Invalid body: expect { amount_php > 0, family_wallet_id }" },
+      { error: "Invalid body: expect { amount_php > 0, contract_id }" },
       { status: 400 },
     );
   }
 
-  const ctx = await requireFamilyMember(body.family_wallet_id);
+  const admin = getSupabaseAdmin();
+  const { data: familyRow } = await admin
+    .from("family_wallets")
+    .select("id")
+    .eq("contract_id", body.contract_id)
+    .single();
+  if (!familyRow) {
+    return NextResponse.json(
+      { error: "Family wallet not found for this contract" },
+      { status: 404 },
+    );
+  }
+  const familyWalletId = (familyRow as { id: string }).id;
+
+  const ctx = await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId, fullName } = ctx;
 
-  const admin = getSupabaseAdmin();
   const identifier = crypto.randomUUID();
   const { error: insertErr } = await admin.from("pdax_deposits").insert({
     identifier,
-    family_wallet_id: body.family_wallet_id,
+    family_wallet_id: familyWalletId,
     member_id: memberId,
     amount_php: body.amount_php,
     status: "pending",
@@ -124,14 +140,8 @@ export async function POST(req: Request) {
       })
       .eq("identifier", identifier);
     if (e instanceof PdaxError) {
-      return NextResponse.json(
-        { error: `PDAX rejected the deposit request`, pdax: e.body },
-        { status: 502 },
-      );
+      console.error("[pdax fiat/deposit]", e.status, JSON.stringify(e.body));
     }
-    return NextResponse.json(
-      { error: e instanceof Error ? e.message : String(e) },
-      { status: 500 },
-    );
+    return pdaxErrorToResponse(e, "PDAX rejected the deposit request");
   }
 }

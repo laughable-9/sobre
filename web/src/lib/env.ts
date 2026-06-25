@@ -69,3 +69,19 @@ export function pdaxEnv() {
     webhookSecret: process.env.PDAX_WEBHOOK_SECRET,
   };
 }
+
+/**
+ * Relay G-address secret. PDAX's /crypto/withdraw can't deliver to a Soroban
+ * contract address (their chain leg uses classic Stellar payment ops), so
+ * the deposit pipeline withdraws to this G-address and then the server signs
+ * a SAC transfer from here to the user's smart wallet. Server-only secret.
+ *
+ * Public address derives from the secret at runtime via `Keypair.fromSecret`.
+ * Deferred validation via getter so the rest of the app boots without it —
+ * only PDAX deposit routes will throw if it's missing.
+ */
+export function relayEnv() {
+  return {
+    secret: required(process.env.RELAY_G_SECRET, "RELAY_G_SECRET"),
+  };
+}

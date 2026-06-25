@@ -19,16 +19,17 @@
 
 import { NextResponse } from "next/server";
 
+import { PAYMENT_TOKEN } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxFetch } from "@/lib/pdax/client";
 import {
   isCryptoWebhook,
   isFiatWebhook,
+  kickOffPdaxWithdraw,
   type PdaxCryptoWebhook,
   type PdaxFiatWebhook,
   type PdaxQuoteResponse,
   type PdaxTradeResponse,
-  type PdaxCryptoWithdrawResponse,
   type PdaxWebhookPayload,
 } from "@/lib/pdax/deposits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -75,32 +76,35 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
       return;
     }
 
-    // Fiat received → trigger the PHP→USDC conversion + crypto withdraw.
+    // Fiat received → kick off the PHP→token trade + crypto withdraw to
+    // the relay. Mark `funded` so the next poll-status call (whether from
+    // the modal or a background sweep) drives the funded→credited
+    // transition via the SAC transfer.
+    //
+    // NOTE: webhooks aren't registered in dev (no public URL). The primary
+    // path for the hackathon demo is the polling route. This is here so
+    // when we DO register the webhook, the architecture stays consistent.
     const { data: row } = await admin
       .from("pdax_deposits")
-      .select("family_wallet_id, member_id, amount_php")
+      .select("amount_php")
       .eq("identifier", p.identifier)
       .single();
     if (!row) return;
 
-    await admin
-      .from("pdax_deposits")
-      .update({ status: "funded" })
-      .eq("identifier", p.identifier);
-
-    // The member's smart wallet C-address is the destination for the USDC.
-    const { data: wallet } = await admin
-      .from("wallets")
-      .select("contract_id")
-      .eq("id", (row as { member_id: string }).member_id)
-      .single();
-    if (!wallet) return;
-
-    await convertAndWithdrawUsdc({
+    const { netAmount } = await kickOffPdaxWithdraw({
       identifier: p.identifier,
       amountPhp: (row as { amount_php: number }).amount_php,
-      destinationCAddress: (wallet as { contract_id: string }).contract_id,
     });
+
+    await admin
+      .from("pdax_deposits")
+      .update({
+        status: "funded",
+        amount_usdc: netAmount,
+        token_currency: PAYMENT_TOKEN,
+      })
+      .eq("identifier", p.identifier)
+      .eq("status", "pending");
     return;
   }
 
@@ -118,8 +122,13 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
   const admin = getSupabaseAdmin();
 
   if (p.transaction_type === "WITHDRAWAL") {
-    // Sobre→user: PDAX sent USDC out to the user's smart wallet. Update the
-    // deposit row so the dashboard can prompt the user to confirm split.
+    // Sobre→relay: PDAX sent the payment token to the relay G-address. The
+    // crypto webhook isn't registered in dev (no public URL), so the
+    // polling path handles this transition today. When this fires for
+    // real, mark the row credited — the SAC forward already ran via the
+    // polling path that detected the same payment first. `amount_usdc` is
+    // a legacy column name; it holds whatever token the family wallet
+    // uses, and `token_currency` records which.
     const status = p.status === "completed" ? "credited" : p.status === "failed" ? "failed" : "funded";
     await admin
       .from("pdax_deposits")
@@ -127,6 +136,7 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
         status,
         withdraw_tx_hash: p.transaction_hash,
         amount_usdc: p.amount,
+        token_currency: PAYMENT_TOKEN,
       })
       .eq("identifier", p.identifier);
     return;
@@ -161,60 +171,6 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
   }
 }
 
-async function convertAndWithdrawUsdc(args: {
-  identifier: string;
-  amountPhp: number;
-  destinationCAddress: string;
-}): Promise<void> {
-  // PDAX quote: sell PHP for USDCXLM.
-  const quote = await pdaxFetch<PdaxQuoteResponse>(
-    "/pdax-institution/v1/trade/quote",
-    {
-      method: "POST",
-      body: {
-        side: "buy",
-        quote_currency: "USDCXLM",
-        base_currency: "PHP",
-        base_quantity: String(args.amountPhp),
-      },
-    },
-  );
-
-  const trade = await pdaxFetch<PdaxTradeResponse>(
-    "/pdax-institution/v1/trade",
-    {
-      method: "POST",
-      body: {
-        quote_id: quote.data.quote_id,
-        side: "buy",
-        idempotency_id: args.identifier,
-      },
-    },
-  );
-
-  // The actual USDC amount we got from the trade. PDAX returns this on the
-  // trade response — we use it for the crypto withdrawal so the user receives
-  // exactly what their PHP bought, minus the trade fee.
-  const usdcAmount = trade.data.base_quantity;
-
-  await pdaxFetch<PdaxCryptoWithdrawResponse>(
-    "/pdax-institution/v1/crypto/withdraw",
-    {
-      method: "POST",
-      body: {
-        identifier: args.identifier,
-        currency: "USDCXLM",
-        amount: String(usdcAmount),
-        address: args.destinationCAddress,
-        // Self-custody C-address — Travel Rule flags don't apply at this
-        // size, but for consistency we tag the wallet as non-custodial.
-        beneficiary_wallet: "true",
-        send_to_self: "true",
-      },
-    },
-  );
-}
-
 async function convertAndPayoutPhp(args: {
   identifier: string;
   amountUsdc: number;
@@ -227,8 +183,10 @@ async function convertAndPayoutPhp(args: {
     {
       method: "POST",
       body: {
+        // Mirror of the buy side — sell the active payment token back to PHP.
+        // Same asset switch (PAYMENT_TOKEN) as the deposit pipeline.
         side: "sell",
-        quote_currency: "USDCXLM",
+        quote_currency: PAYMENT_TOKEN,
         base_currency: "PHP",
         base_quantity: String(args.amountUsdc),
       },

@@ -14,6 +14,8 @@
 
 import "server-only";
 
+import { NextResponse } from "next/server";
+
 import { pdaxEnv } from "@/lib/env";
 
 interface TokenSet {
@@ -162,6 +164,34 @@ export class PdaxError extends Error {
     super(message);
     this.name = "PdaxError";
   }
+}
+
+/**
+ * Standard "PDAX rejected, surface it to the client" shape. Returns
+ * `{ error: "PDAX: <message>", pdax: <raw body> }` with status 502 when
+ * the error is a PdaxError, or 500 for anything else. Use this from any
+ * route that calls `pdaxFetch` so error rendering stays consistent.
+ */
+export function pdaxErrorToResponse(
+  e: unknown,
+  fallback: string,
+): NextResponse {
+  if (e instanceof PdaxError) {
+    return NextResponse.json(
+      {
+        error:
+          typeof e.body === "object" && e.body !== null && "message" in e.body
+            ? `PDAX: ${(e.body as { message: string }).message}`
+            : fallback,
+        pdax: e.body,
+      },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json(
+    { error: e instanceof Error ? e.message : String(e) },
+    { status: 500 },
+  );
 }
 
 export type PdaxMethod = "GET" | "POST" | "PUT" | "DELETE";

@@ -12,7 +12,7 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
-import { DepositModal } from "@/components/sobre/DepositModal";
+import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
@@ -591,7 +591,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       ) : null}
 
       {depositOpen ? (
-        <DepositModal
+        <PdaxDepositModal
           userAddress={address}
           state={state}
           contractId={contractId}
