@@ -48,13 +48,25 @@ const DEPLOYER_KEYPAIR = Keypair.fromRawEd25519Seed(
   hash(Buffer.from("kalepail")),
 );
 
-let kit: PasskeyKit | null = null;
+/**
+ * HMR-tolerant singleton. `let kit` would null out on Next.js Fast Refresh
+ * every time we save a file — the React hook state still claims connected
+ * but the underlying kit forgets `kit.wallet`, so the next `signTransaction`
+ * panics. Caching the kit on `globalThis` survives module re-evaluation;
+ * production is unaffected because the module evaluates once there.
+ */
+const KIT_GLOBAL_KEY = "__sobrePasskeyKit";
+type KitGlobal = typeof globalThis & {
+  [KIT_GLOBAL_KEY]?: PasskeyKit;
+};
+
 let relayer: PasskeyServer | null = null;
 let cachedServer: rpc.Server | null = null;
 
 function getKit(): PasskeyKit {
-  if (!kit) {
-    kit = new PasskeyKit({
+  const g = globalThis as KitGlobal;
+  if (!g[KIT_GLOBAL_KEY]) {
+    g[KIT_GLOBAL_KEY] = new PasskeyKit({
       rpcUrl: NETWORK.rpcUrl,
       networkPassphrase: NETWORK.passphrase,
       walletWasmHash: PASSKEY_KIT.walletWasmHash,
@@ -64,7 +76,7 @@ function getKit(): PasskeyKit {
       timeoutInSeconds: 30,
     });
   }
-  return kit;
+  return g[KIT_GLOBAL_KEY]!;
 }
 
 function getServer(): rpc.Server {
@@ -237,7 +249,7 @@ export async function submit(
 /** Disconnect — passkey-kit doesn't keep server state, just clear the
  *  instance so the next call starts fresh. */
 export function disconnect() {
-  kit = null;
+  delete (globalThis as KitGlobal)[KIT_GLOBAL_KEY];
 }
 
 /** Escape hatch for callers that need the raw kit (e.g. for adding signers
