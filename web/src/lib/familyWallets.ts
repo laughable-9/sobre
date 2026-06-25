@@ -134,12 +134,23 @@ export async function createFamilyWallet(
   // Re-simulate with the signed entries so the footprint covers the
   // wallet's signer-storage reads — the initial sim ran without
   // signatures so it never executed __check_auth.
+  //
+  // The simulate RPC's response carries auth entries too, and the SDK
+  // applies them back to `.built.operations[0].auth` — wiping our signed
+  // signatures with recording-mode empty ones. Capture and restore them
+  // around the call so submit sees the actual passkey signature.
+  const signedAuth = (
+    assembledTx.built?.operations[0] as { auth?: unknown[] } | undefined
+  )?.auth;
   try {
-    await assembledTx.simulate({ restore: false });
+    await assembledTx.simulate({ restore: true });
   } catch (err) {
     throw new Error(
       `[create_sobre step 3b] re-simulate after sign failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+  if (signedAuth && assembledTx.built) {
+    (assembledTx.built.operations[0] as { auth?: unknown }).auth = signedAuth;
   }
 
   // Rebuild + submit. The shared `submitPasskeySigned` in passkey.ts handles

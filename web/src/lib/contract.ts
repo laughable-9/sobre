@@ -82,12 +82,36 @@ export async function invokeWrite(
     .setTimeout(30)
     .build();
 
+  // Pre-simulate to populate the auth entry with recording-mode credentials.
+  // Without this, passkey-kit's sign() takes a fromXDR fast path that doesn't
+  // simulate internally, leaves the AT with zero auth entries, and
+  // signAuthEntries no-ops — no FaceID prompt, submit fails at require_auth.
+  const prepared = await server.prepareTransaction(built);
+
   // FaceID prompt fires inside signTransaction. See the gotcha note in
   // passkey.ts:signTransaction — we MUST use the return value.
-  const signedAT = (await signTransaction<unknown>(built)) as ATWithSim;
+  const signedAT = (await signTransaction<unknown>(prepared)) as ATWithSim;
+
+  // Capture the signed auth entries — the re-simulate below applies the
+  // RPC's auth response back to .built.operations[0].auth and would wipe
+  // the signatures otherwise. Submit-time __check_auth then traps with
+  // UnreachableCodeReached because the signer lookup runs without a
+  // signature to match.
+  const signedAuth = (
+    signedAT.built?.operations[0] as
+      | { auth?: unknown[] }
+      | undefined
+  )?.auth;
 
   // Widen the footprint to cover signer-storage reads __check_auth performs.
-  await signedAT.simulate({ restore: false });
+  // The initial sim passkey-kit ran was unsigned, so it never executed
+  // __check_auth — the footprint missed the smart wallet's signer reads.
+  await signedAT.simulate({ restore: true });
+
+  // Restore the captured signatures over whatever the re-simulate wrote.
+  if (signedAuth && signedAT.built) {
+    (signedAT.built.operations[0] as { auth?: unknown }).auth = signedAuth;
+  }
 
   const sent = await submitPasskeySigned(signedAT);
 
