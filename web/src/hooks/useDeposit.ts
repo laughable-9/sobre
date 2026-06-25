@@ -40,7 +40,6 @@ export function useDeposit(
           contractId,
           "deposit",
           args,
-          userAddress,
         );
         setLastHash(hash);
         return hash;

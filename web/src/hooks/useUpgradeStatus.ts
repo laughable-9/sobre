@@ -18,11 +18,9 @@ export interface UpgradeStatus {
 }
 
 /** Compares this Sobre's executing wasm hash to the factory's canonical
- *  pointer. The factory hash needs an authenticated source for the simulate
- *  call (anyone connected works), so pass any connected address. */
+ *  pointer. */
 export function useUpgradeStatus(
   contractId: string | null,
-  callerAddress: string | null,
 ): UpgradeStatus {
   const [runningHash, setRunningHash] = useState<string | null>(null);
   const [currentHash, setCurrentHash] = useState<string | null>(null);
@@ -30,7 +28,7 @@ export function useUpgradeStatus(
   const [error, setError] = useState<string | null>(null);
 
   const fetchOnce = useCallback(async () => {
-    if (!contractId || !callerAddress) return;
+    if (!contractId) return;
     setError(null);
     try {
       const [running, currentBytes] = await Promise.all([
@@ -39,7 +37,6 @@ export function useUpgradeStatus(
           FACTORY_CONTRACT_ID,
           "current_sobre_wasm",
           [],
-          callerAddress,
         ),
       ]);
       setRunningHash(running);
@@ -58,7 +55,7 @@ export function useUpgradeStatus(
     } finally {
       setLoading(false);
     }
-  }, [contractId, callerAddress]);
+  }, [contractId]);
 
   useEffect(() => {
     setLoading(true);

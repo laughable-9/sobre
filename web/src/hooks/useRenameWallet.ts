@@ -31,7 +31,6 @@ export function useRenameWallet(
           contractId,
           "set_wallet_name",
           args,
-          adminAddress,
         );
         return hash;
       } catch (e) {

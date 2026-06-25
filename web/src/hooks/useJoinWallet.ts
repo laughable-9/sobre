@@ -39,7 +39,6 @@ export function useJoinWallet(
           contractId,
           "join_wallet",
           args,
-          userAddress,
         );
         return hash;
       } catch (e) {

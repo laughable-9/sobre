@@ -28,7 +28,6 @@ export function useSetEnvelopeNames(
           contractId,
           "set_envelope_names",
           [stringVecScVal(names)],
-          adminAddress,
         );
         return hash;
       } catch (e) {

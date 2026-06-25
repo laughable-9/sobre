@@ -14,7 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { useFreighter } from "@/hooks/useFreighter";
+import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Reveal } from "@/components/sobre/Reveal";
 import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
@@ -204,28 +204,24 @@ function MobileCTABar() {
 }
 
 function Nav() {
-  const wallet = useFreighter();
+  const wallet = usePasskeyWallet();
   const { status, address, connect } = wallet;
+  const busy = status === "checking" || status === "creating";
 
   const connectButton = address ? (
     <WalletMenu wallet={wallet} />
-  ) : status === "not-installed" ? (
-    <a
-      href="https://www.freighter.app/"
-      target="_blank"
-      rel="noreferrer"
-      className="sobre-btn-nav sobre-btn-nav-soft"
-    >
-      Install Freighter
-    </a>
   ) : (
     <button
       type="button"
       onClick={() => void connect()}
       className="sobre-btn-nav sobre-btn-nav-soft"
-      disabled={status === "checking"}
+      disabled={busy}
     >
-      {status === "checking" ? "Checking…" : "Connect"}
+      {status === "checking"
+        ? "Checking…"
+        : status === "creating"
+          ? "Setting up…"
+          : "Continue with Google"}
     </button>
   );
 

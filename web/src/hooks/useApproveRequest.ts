@@ -32,7 +32,6 @@ export function useApproveRequest(
           contractId,
           "approve_request",
           args,
-          adminAddress,
         );
         setLastHash(hash);
         return hash;

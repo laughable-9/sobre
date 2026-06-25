@@ -48,7 +48,6 @@ export function useSobreSummary(
           contractId,
           "get_state",
           [],
-          callerAddress,
         );
         if (cancelled) return;
         const members: Member[] = Array.isArray(raw.members)

@@ -4,10 +4,9 @@ import { useState } from "react";
 import Image from "next/image";
 import { Check, Pencil, X } from "lucide-react";
 
-import type { FreighterState } from "@/hooks/useFreighter";
+import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { useRenameWallet } from "@/hooks/useRenameWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { NETWORK } from "@/lib/config";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 
 export function TopBar({
@@ -17,7 +16,7 @@ export function TopBar({
   isAdmin,
   onRenamed,
 }: {
-  wallet: FreighterState;
+  wallet: WalletConnectionState;
   /** When present, render the wallet name pill + admin rename affordance. */
   walletState?: WalletState | null;
   /** Required alongside walletState for the admin rename action. */
@@ -25,8 +24,8 @@ export function TopBar({
   isAdmin?: boolean;
   onRenamed?: () => void;
 }) {
-  const { status, address, network, error, connect } = wallet;
-  const wrongNetwork = network !== null && network !== NETWORK.name;
+  const { status, address, error, connect } = wallet;
+  const busy = status === "checking" || status === "creating";
 
   return (
     <header className="sobre-topbar">
@@ -57,34 +56,20 @@ export function TopBar({
         )}
 
         <div className="flex items-center gap-3 justify-end">
-          {wrongNetwork && address ? (
-            <span
-              className="rounded-full px-3 py-1 text-xs font-medium"
-              style={{ background: "#fbe4e0", color: "#7a2a1d" }}
-            >
-              Switch your wallet to {NETWORK.name}
-            </span>
-          ) : null}
-
           {address ? (
             <WalletMenu wallet={wallet} />
-          ) : status === "not-installed" ? (
-            <a
-              href="https://www.freighter.app/"
-              target="_blank"
-              rel="noreferrer"
-              className="sobre-btn-nav sobre-btn-nav-soft"
-            >
-              Install Freighter
-            </a>
           ) : (
             <button
               type="button"
               onClick={() => void connect()}
               className="sobre-btn-nav sobre-btn-nav-soft"
-              disabled={status === "checking"}
+              disabled={busy}
             >
-              {status === "checking" ? "Checking…" : "Connect Wallet"}
+              {status === "checking"
+                ? "Checking…"
+                : status === "creating"
+                  ? "Setting up…"
+                  : "Continue with Google"}
             </button>
           )}
         </div>

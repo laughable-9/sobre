@@ -8,12 +8,15 @@ import { setProfile } from "@/lib/profile";
 
 export function ProfileSetupScreen({
   address,
+  defaultName,
   onDone,
 }: {
   address: string;
+  /** Optional pre-fill (e.g. the user's Google display name). */
+  defaultName?: string;
   onDone: () => void;
 }) {
-  const [name, setName] = useState("");
+  const [name, setName] = useState(defaultName ?? "");
   const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[0]);
   const valid = name.trim().length > 0;
 

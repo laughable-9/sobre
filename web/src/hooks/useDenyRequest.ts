@@ -33,7 +33,6 @@ export function useDenyRequest(
           contractId,
           "deny_request",
           args,
-          adminAddress,
         );
         setLastHash(hash);
         return hash;

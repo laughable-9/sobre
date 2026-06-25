@@ -1,20 +1,12 @@
 "use client";
 
-import {
-  Address,
-  Operation,
-  TransactionBuilder,
-  contract,
-  rpc,
-  type Transaction,
-} from "@stellar/stellar-sdk";
+import { Address, contract } from "@stellar/stellar-sdk";
 
 import { FACTORY_CONTRACT_ID, NETWORK, XLM_SAC_ID } from "@/lib/config";
 import {
   getDeployerAddress,
-  signEnvelopeWithDeployer,
   signTransaction,
-  submit,
+  submitPasskeySigned,
 } from "@/lib/passkey";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -146,47 +138,10 @@ export async function createFamilyWallet(
     );
   }
 
-  // Rebuild + submit. passkey-kit signed the auth entries on the JS-side
-  // `op.auth` array, but those mutations don't round-trip through
-  // `Transaction.toXDR()` (stellar-base serialises from the underlying
-  // `_tx` XDR which doesn't see them). We extract the signed entries and
-  // bake them into a fresh InvokeHostFunction op, carry the simulated
-  // Soroban resource data forward, sign the envelope, submit.
-  let signedTx: Transaction;
+  // Rebuild + submit. The shared `submitPasskeySigned` in passkey.ts handles
+  // the JS-side `op.auth` → fresh-op + setSorobanData + envelope-sign dance.
   try {
-    if (!assembledTx.built) {
-      throw new Error("AssembledTransaction.built is not set");
-    }
-    const originalOp = assembledTx.built.operations[0] as
-      | Operation.InvokeHostFunction
-      | undefined;
-    if (!originalOp || originalOp.type !== "invokeHostFunction") {
-      throw new Error("expected invokeHostFunction operation");
-    }
-    const server = new rpc.Server(NETWORK.rpcUrl);
-    const sourceAccount = await server.getAccount(deployerAddress);
-
-    const builder = new TransactionBuilder(sourceAccount, {
-      fee: assembledTx.built.fee,
-      networkPassphrase: NETWORK.passphrase,
-    }).addOperation(
-      Operation.invokeHostFunction({
-        func: originalOp.func,
-        auth: originalOp.auth ?? [],
-      }),
-    );
-
-    if (assembledTx.simulationData?.transactionData) {
-      builder.setSorobanData(
-        assembledTx.simulationData.transactionData as Parameters<
-          typeof builder.setSorobanData
-        >[0],
-      );
-    }
-
-    signedTx = builder.setTimeout(30).build();
-    signEnvelopeWithDeployer(signedTx);
-    await submit(signedTx.toXDR());
+    await submitPasskeySigned(assembledTx);
   } catch (err) {
     throw new Error(
       `[create_sobre step 4] rebuild+submit failed: ${err instanceof Error ? err.message : String(err)}`,

@@ -29,7 +29,6 @@ export function useUpgradeSobre(
         contractId,
         "upgrade",
         [],
-        adminAddress,
       );
       return hash;
     } catch (e) {

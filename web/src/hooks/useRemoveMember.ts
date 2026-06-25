@@ -31,7 +31,6 @@ export function useRemoveMember(
           contractId,
           "remove_member",
           args,
-          adminAddress,
         );
         return hash;
       } catch (e) {

@@ -25,7 +25,7 @@ import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
 import type { Member } from "@/hooks/useWalletState";
 
-import { useFreighter } from "@/hooks/useFreighter";
+import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
@@ -67,7 +67,7 @@ function DashboardLoading() {
 
 function Dashboard({ contractId }: { contractId: string }) {
   const PHP_PER_XLM = usePhpPerXlm();
-  const wallet = useFreighter();
+  const wallet = usePasskeyWallet();
   const { address } = wallet;
   const walletState = useWalletState(address, contractId);
   const txFeed = useTxFeed(contractId);
@@ -279,20 +279,41 @@ function Dashboard({ contractId }: { contractId: string }) {
     );
   }
 
-  // ─── Phase 1: not connected ───────────────────────────────────────────
+  // ─── Phase 1: not signed in / wallet bootstrapping ────────────────────
   if (!address) {
     return (
       <div className="sobre-app">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <h1 className="font-serif text-[32px] font-semibold mb-3">
-              Connect your wallet
-            </h1>
-            <p className="text-[15px]" style={{ color: "var(--text-2)" }}>
-              You need to connect your wallet to open this Sobre.
+          {wallet.status === "signed-out" ? (
+            <div className="text-center max-w-md">
+              <h1 className="font-serif text-[32px] font-semibold mb-3">
+                Sign in to open this Sobre
+              </h1>
+              <button
+                type="button"
+                onClick={() => void wallet.connect()}
+                className="sobre-btn sobre-btn-primary mt-2"
+                style={{ padding: "12px 20px", fontSize: 14 }}
+              >
+                Continue with Google
+              </button>
+              {wallet.error ? (
+                <p
+                  className="text-xs mt-3"
+                  style={{ color: "var(--sobre-danger)" }}
+                >
+                  {wallet.error}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p style={{ color: "var(--text-2)" }}>
+              {wallet.status === "creating"
+                ? "Setting up your wallet…"
+                : "Loading…"}
             </p>
-          </div>
+          )}
         </main>
       </div>
     );

@@ -57,7 +57,6 @@ export function useCreateSobre(
           FACTORY_CONTRACT_ID,
           "create_sobre",
           args,
-          userAddress,
         );
         if (typeof returnValue !== "string") {
           throw new Error("create_sobre returned no contract address");

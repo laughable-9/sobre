@@ -41,7 +41,6 @@ export function useSobresOfAdmin(
         FACTORY_CONTRACT_ID,
         "sobres_of_admin",
         args,
-        adminAddress,
       );
       setSobres(Array.isArray(raw) ? raw.map((a) => String(a)) : []);
       setError(null);

@@ -22,7 +22,7 @@ export function UpgradeAvailableCard({
   isAdmin: boolean;
   onSuccess: () => void;
 }) {
-  const status = useUpgradeStatus(contractId, userAddress);
+  const status = useUpgradeStatus(contractId);
   const { upgrade, pending, error } = useUpgradeSobre(userAddress, contractId);
 
   // Hide when there's nothing to surface: still loading, no diff, or the

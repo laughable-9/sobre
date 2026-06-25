@@ -51,7 +51,6 @@ export function useSpend(
           contractId,
           "spend",
           args,
-          userAddress,
         );
         setLastHash(hash);
         return hash;

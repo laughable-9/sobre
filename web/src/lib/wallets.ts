@@ -1,7 +1,17 @@
 "use client";
 
+import type { Session } from "@supabase/supabase-js";
+
 import { connect, signup } from "@/lib/passkey";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+/** Google display name → email → "Sobre" fallback chain. Used both in the
+ *  passkey prompt (the name the user sees there) and in dashboard UI. */
+export function displayNameFromSession(session: Session): string {
+  return (
+    session.user.user_metadata?.full_name ?? session.user.email ?? "Sobre"
+  );
+}
 
 /**
  * Bridge between Google identity (Supabase auth.users) and the passkey-backed

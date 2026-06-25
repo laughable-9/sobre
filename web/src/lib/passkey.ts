@@ -1,6 +1,13 @@
 "use client";
 
-import { hash, Keypair, rpc, TransactionBuilder } from "@stellar/stellar-sdk";
+import {
+  hash,
+  Keypair,
+  Operation,
+  rpc,
+  TransactionBuilder,
+  type Transaction,
+} from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
 import { PasskeyClient, PasskeyKit, PasskeyServer } from "passkey-kit";
 
@@ -139,26 +146,33 @@ export function connect(opts: {
 }
 
 /**
- * Sign an AssembledTransaction's auth entries with the user's passkey.
- * For arbitrary contract calls (e.g. SobreFactory.create_sobre), build the
- * AssembledTransaction first, pass it here, then submit() the result.
+ * Sign a tx's auth entries with the user's passkey. Accepts any of:
+ *   - an AssembledTransaction (from createFamilyWallet's Client.from path)
+ *   - a raw Transaction (from invokeWrite's Contract.call path)
+ *   - a base64 XDR string
  *
  * The passkey prompt fires inside this call.
  *
  * IMPORTANT: passkey-kit imports `AssembledTransaction` from
  * `@stellar/stellar-sdk/minimal/contract` while our consumer imports from
  * `@stellar/stellar-sdk`. The classes are different, so passkey-kit's
- * `instanceof` check fails and it silently rebuilds a fresh AT from the
- * tx XDR. The signed entries end up on the returned AT — the caller MUST
- * use the return value, not assume `txn` was mutated in place.
+ * `instanceof` check fails. It falls through to a fromXDR rebuild (using
+ * the wallet's spec) and, if that throws because the method isn't a wallet
+ * method, to `AssembledTransaction.buildWithOp` — which re-simulates and
+ * populates auth entries internally. Either way the returned AT carries the
+ * signed entries; the caller MUST use the return value rather than assume
+ * the input was mutated.
  */
 export async function signTransaction<T>(
-  txn: import("@stellar/stellar-sdk/contract").AssembledTransaction<T>,
+  txn:
+    | import("@stellar/stellar-sdk/contract").AssembledTransaction<T>
+    | Transaction
+    | string,
 ): Promise<import("@stellar/stellar-sdk/contract").AssembledTransaction<T>> {
   const kit = getKit();
   return (await kit.sign(
     txn as unknown as Parameters<typeof kit.sign>[0],
-  )) as unknown as typeof txn;
+  )) as unknown as import("@stellar/stellar-sdk/contract").AssembledTransaction<T>;
 }
 
 /**
@@ -246,13 +260,72 @@ export function getDeployerAddress(): string {
  * AssembledTransaction.sign()) because passkey-kit's signAuthEntries
  * mutates the JS-side `op.auth` array but stellar-base's
  * `Transaction.toXDR()` serialises from the underlying `_tx` XDR, which
- * doesn't see those JS mutations. Our consumer rebuilds the tx with the
- * signed entries baked into a fresh InvokeHostFunction op (see
- * `familyWallets.createFamilyWallet`); we then sign that envelope here.
+ * doesn't see those JS mutations. `submitPasskeySigned` below rebuilds the
+ * tx with the signed entries baked into a fresh InvokeHostFunction op; this
+ * helper then envelope-signs it.
  */
 export function signEnvelopeWithDeployer<T extends { sign(kp: Keypair): void }>(
   tx: T,
 ): T {
   tx.sign(DEPLOYER_KEYPAIR);
   return tx;
+}
+
+/** Carries the bits both passkey-signed code paths need off an AT after
+ *  `signTransaction()`. The runtime AT exposes these but they're not on the
+ *  public type, so we re-declare. */
+export interface PasskeySignedTx {
+  built?: Transaction;
+  simulationData?: {
+    transactionData?: unknown;
+  };
+}
+
+/**
+ * Rebuild a passkey-signed AT and submit it. This is the dance shared by
+ * `invokeWrite` (one-off contract calls) and `createFamilyWallet` (factory
+ * deploy). passkey-kit's `signAuthEntries` mutates `op.auth` on the JS side,
+ * but `Transaction.toXDR()` serialises from the underlying `_tx` XDR which
+ * doesn't see those mutations — so we extract the signed entries, bake them
+ * into a fresh InvokeHostFunction op, carry the simulated Soroban resource
+ * data forward, sign the envelope with the deployer, and submit.
+ *
+ * Caller is responsible for calling `signTransaction(...)` first AND for any
+ * post-sign re-simulate (e.g. footprint widening for `__check_auth` reads).
+ */
+export async function submitPasskeySigned(
+  signedAT: PasskeySignedTx,
+): Promise<{ hash: string; ledger?: number }> {
+  if (!signedAT.built) throw new Error("AT.built is not set");
+  const originalOp = signedAT.built.operations[0] as
+    | import("@stellar/stellar-sdk").Operation.InvokeHostFunction
+    | undefined;
+  if (!originalOp || originalOp.type !== "invokeHostFunction") {
+    throw new Error("expected invokeHostFunction operation");
+  }
+
+  const server = getServer();
+  const source = await server.getAccount(DEPLOYER_KEYPAIR.publicKey());
+
+  const builder = new TransactionBuilder(source, {
+    fee: signedAT.built.fee,
+    networkPassphrase: NETWORK.passphrase,
+  }).addOperation(
+    Operation.invokeHostFunction({
+      func: originalOp.func,
+      auth: originalOp.auth ?? [],
+    }),
+  );
+
+  if (signedAT.simulationData?.transactionData) {
+    builder.setSorobanData(
+      signedAT.simulationData.transactionData as Parameters<
+        typeof builder.setSorobanData
+      >[0],
+    );
+  }
+
+  const rebuilt = builder.setTimeout(30).build();
+  rebuilt.sign(DEPLOYER_KEYPAIR);
+  return submit(rebuilt.toXDR());
 }
