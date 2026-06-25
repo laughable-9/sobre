@@ -2,7 +2,11 @@
 
 import { Address, contract } from "@stellar/stellar-sdk";
 
-import { FACTORY_CONTRACT_ID, NETWORK, XLM_SAC_ID } from "@/lib/config";
+import {
+  FACTORY_CONTRACT_ID,
+  NETWORK,
+  PAYMENT_TOKEN_SAC_ID,
+} from "@/lib/config";
 import {
   getDeployerAddress,
   signTransaction,
@@ -103,7 +107,7 @@ export async function createFamilyWallet(
   try {
     assembledTx = (await invocable.create_sobre({
       admin: args.myWalletContractId,
-      payment_token: XLM_SAC_ID,
+      payment_token: PAYMENT_TOKEN_SAC_ID,
       percents: [...args.percents],
       envelope_names: [...args.envelopeNames],
       wallet_name: args.walletName,

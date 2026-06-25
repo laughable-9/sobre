@@ -4,9 +4,9 @@ import { Check, Copy, Plus, Timer, UserPlus, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { STROOPS_PER_XLM } from "@/lib/config";
+import { STROOPS_PER_USDC } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const MEMBER_PALETTES = [
@@ -39,12 +39,11 @@ export function SummaryCard({
    *  left column — used by the dashboard to surface pending approvals. */
   children?: React.ReactNode;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const isAdmin = address === state.admin;
   const canInvite = isAdmin && state.members.length < 2;
   const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
-  const totalXlm = Number(totalStroops) / STROOPS_PER_XLM;
-  const totalPhp = totalXlm * PHP_PER_XLM;
+  const totalUsdc = Number(totalStroops) / STROOPS_PER_USDC;
+  const totalPhp = totalUsdc * PHP_PER_USDC;
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
 
   const copyAddr = async (addr: string) => {
@@ -80,7 +79,7 @@ export function SummaryCard({
           className="flex items-center gap-2 mt-3 text-[13px]"
           style={{ color: "var(--text-2)" }}
         >
-          <span className="tabular">{totalXlm.toFixed(4)} XLM</span>
+          <span className="tabular">{totalUsdc.toFixed(4)} USDC</span>
           <span
             className="w-[3px] h-[3px] rounded-full"
             style={{ background: "var(--text-3)" }}
@@ -215,7 +214,6 @@ function DailyLimitCard({
   dailyLimit: bigint | null;
   dailySpent: bigint;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const [, force] = useState(0);
   useEffect(() => {
     const id = setInterval(() => force((x) => x + 1), 60_000);
@@ -236,12 +234,12 @@ function DailyLimitCard({
     );
   }
 
-  const limitXlm = Number(dailyLimit) / STROOPS_PER_XLM;
-  const limitPhp = limitXlm * PHP_PER_XLM;
+  const limitXlm = Number(dailyLimit) / STROOPS_PER_USDC;
+  const limitPhp = limitXlm * PHP_PER_USDC;
   const remainingStroops =
     dailySpent >= dailyLimit ? 0n : dailyLimit - dailySpent;
-  const remainingXlm = Number(remainingStroops) / STROOPS_PER_XLM;
-  const remainingPhp = remainingXlm * PHP_PER_XLM;
+  const remainingXlm = Number(remainingStroops) / STROOPS_PER_USDC;
+  const remainingPhp = remainingXlm * PHP_PER_USDC;
 
   // % of limit used today, for the progress fill.
   const usedFrac =

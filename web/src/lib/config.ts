@@ -16,10 +16,29 @@
 export const FACTORY_CONTRACT_ID =
   "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
 
-/** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
- *  Deterministic per network — different address per network because the SAC
- *  derivation hashes the network passphrase.
- *  Testnet: CDLZFC3S... | Mainnet: CAS3J7GY... (kept here for reference) */
+/**
+ * USDC on Stellar — the SEP-41 SAC for Circle's testnet USDC. Sobre's
+ * payment token: every new family-wallet `init` passes this as the
+ * `payment_token` arg. `deposit` / `spend` / SAC `transfer` all operate
+ * against this contract.
+ *
+ * Testnet issuer (Circle): `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`.
+ * Mainnet USDC SAC needs to be re-resolved against Circle's mainnet issuer
+ * `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` when promoting.
+ */
+export const USDC_SAC_ID =
+  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
+/** Alias used by `createFamilyWallet`. Names the role rather than the
+ *  asset so a future swap is one-line at the config layer. */
+export const PAYMENT_TOKEN_SAC_ID = USDC_SAC_ID;
+
+/**
+ * XLM native SAC — kept for the 3 pre-USDC family wallets Kyle deployed
+ * during Phase 5/6 dev (CDWN4CWY…, CACIPCTW…, CD7IGLTX…). New family
+ * wallets use USDC; these legacy XLM ones still load but display the
+ * wrong currency label after the swap. Treat as test detritus.
+ */
 export const XLM_SAC_ID =
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
 
@@ -53,12 +72,16 @@ export const PASSKEY_KIT = {
     "ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90",
 } as const;
 
-/** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */
-export const STROOPS_PER_XLM = 10_000_000;
+/** Stellar's on-chain unit for SEP-41 tokens is 10^7 sub-units per token.
+ *  USDC on Stellar uses 7 decimals just like XLM, so 1 USDC = 10,000,000
+ *  stroops. The `stroops` term comes from XLM but applies to any SAC token
+ *  using the standard 7-decimal precision. */
+export const STROOPS_PER_USDC = 10_000_000;
 
-/** Fallback XLM → PHP rate. Used until CoinGecko comes back (or if it
- *  fails). Live rate is fetched + cached by lib/usePhpPerXlm. */
-export const PHP_PER_XLM = 16;
+/** Fallback / demo rate. USDC is stable at $1 so PHP-per-USDC tracks the
+ *  USD-PHP rate (mid-2026 spot ~₱58). Hardcoded for the demo; if a live
+ *  rate is ever needed, hit PDAX's `/v1/trade/price` instead of CoinGecko. */
+export const PHP_PER_USDC = 58;
 
 export const ENVELOPE_LABELS = ["Groceries", "Tuition", "Savings"] as const;
 export type EnvelopeName = (typeof ENVELOPE_LABELS)[number];

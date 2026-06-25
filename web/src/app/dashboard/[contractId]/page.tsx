@@ -30,13 +30,13 @@ import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 
 type Tab = "envelopes" | "settings";
 const SETTINGS_HASH = "#settings";
@@ -65,7 +65,6 @@ function DashboardLoading() {
 }
 
 function Dashboard({ contractId }: { contractId: string }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const wallet = usePasskeyWallet();
   const { address } = wallet;
   const walletState = useWalletState(address, contractId);
@@ -180,10 +179,10 @@ function Dashboard({ contractId }: { contractId: string }) {
     return sum;
   }, [txFeed.events, address]);
 
-  const handleDepositSuccess = (xlmDeposited: number) => {
+  const handleDepositSuccess = (usdcDeposited: number) => {
     setDepositOpen(false);
     triggerHeroAnimation();
-    flash(`+ ${xlmDeposited.toFixed(2)} XLM auto-split across envelopes`, "ok");
+    flash(`+ ${usdcDeposited.toFixed(2)} USDC auto-split across envelopes`, "ok");
     refreshAll();
   };
 
@@ -193,7 +192,7 @@ function Dashboard({ contractId }: { contractId: string }) {
     envelope: EnvelopeName;
   }) => {
     setSpendOpen(null);
-    const php = (Number(info.amount) / STROOPS_PER_XLM) * PHP_PER_XLM;
+    const php = (Number(info.amount) / STROOPS_PER_USDC) * PHP_PER_USDC;
     const fmtPhp = `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const envLabel = state
       ? displayEnvelopeName(info.envelope, state.envelope_names)
@@ -597,8 +596,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           contractId={contractId}
           onClose={() => setDepositOpen(false)}
-          onSuccess={({ xlm }) => {
-            handleDepositSuccess(xlm);
+          onSuccess={({ usdc }) => {
+            handleDepositSuccess(usdc);
           }}
         />
       ) : null}

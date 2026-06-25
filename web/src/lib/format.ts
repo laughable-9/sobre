@@ -2,8 +2,11 @@
  * Display formatters shared across components. Pure functions, no React.
  */
 
-import { STROOPS_PER_XLM, type EnvelopeName } from "@/lib/config";
-import { getPhpPerXlm } from "@/lib/usePhpPerXlm";
+import {
+  PHP_PER_USDC,
+  STROOPS_PER_USDC,
+  type EnvelopeName,
+} from "@/lib/config";
 
 /**
  * `Envelope::Groceries` and friends are encoded by Soroban as either a
@@ -25,25 +28,25 @@ export function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
-/** Stroops (the on-chain native unit) → XLM. */
-export function stroopsToXlm(stroops: bigint): number {
-  return Number(stroops) / STROOPS_PER_XLM;
+/** Stroops (the on-chain sub-unit) → USDC. SAC tokens on Stellar use 7
+ *  decimals (10^7 stroops per token). */
+export function stroopsToUsdc(stroops: bigint): number {
+  return Number(stroops) / STROOPS_PER_USDC;
 }
 
-/** "3.0000 XLM" — for inline use inside larger sentences. */
-export function formatXlm(stroops: bigint): string {
-  return `${stroopsToXlm(stroops).toFixed(4)} XLM`;
+/** "3.0000 USDC" — for inline use inside larger sentences. */
+export function formatUsdc(stroops: bigint): string {
+  return `${stroopsToUsdc(stroops).toFixed(4)} USDC`;
 }
 
-/** "₱48.00" — fiat conversion using the live CoinGecko rate (fallback in
- *  config.ts on cold boot / network failure). */
+/** "₱48.00" — fiat conversion using the demo USDC→PHP rate. */
 export function formatPhp(stroops: bigint): string {
-  return `₱${(stroopsToXlm(stroops) * getPhpPerXlm()).toFixed(2)}`;
+  return `₱${(stroopsToUsdc(stroops) * PHP_PER_USDC).toFixed(2)}`;
 }
 
 /** "₱1,234.56" — same as formatPhp but with Filipino locale grouping. */
 export function formatPhpLocale(stroops: bigint): string {
-  const php = stroopsToXlm(stroops) * getPhpPerXlm();
+  const php = stroopsToUsdc(stroops) * PHP_PER_USDC;
   return `₱${php.toLocaleString("en-PH", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,

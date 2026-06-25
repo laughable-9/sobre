@@ -12,12 +12,12 @@ import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
@@ -50,11 +50,10 @@ export function EnvelopeCard({
   members: Member[];
   envelopeNames: string[];
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
-  const xlm = Number(balanceStroops) / STROOPS_PER_XLM;
-  const php = xlm * PHP_PER_XLM;
+  const usdc = Number(balanceStroops) / STROOPS_PER_USDC;
+  const php = usdc * PHP_PER_USDC;
   const isSavings = slot === "Savings";
   const isEmpty = balanceStroops === 0n;
 
@@ -120,7 +119,7 @@ export function EnvelopeCard({
         />
       </div>
 
-      <div className="sobre-env-usdc tabular">{xlm.toFixed(4)} XLM</div>
+      <div className="sobre-env-usdc tabular">{usdc.toFixed(4)} USDC</div>
 
       <div className="sobre-env-meta">
         <div className="sobre-env-row">

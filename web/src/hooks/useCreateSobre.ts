@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address, xdr } from "@stellar/stellar-sdk";
 
-import { FACTORY_CONTRACT_ID, XLM_SAC_ID } from "@/lib/config";
+import { FACTORY_CONTRACT_ID, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
 import { invokeWrite, percentsScVal, stringVecScVal } from "@/lib/contract";
 
 export interface CreateSobreArgs {
@@ -46,7 +46,7 @@ export function useCreateSobre(
       try {
         const args = [
           Address.fromString(userAddress).toScVal(),
-          Address.fromString(XLM_SAC_ID).toScVal(),
+          Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
           percentsScVal(percents),
           stringVecScVal(envelopeNames),
           xdr.ScVal.scvString(walletName),

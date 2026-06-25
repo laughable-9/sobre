@@ -8,13 +8,13 @@ import { useSetPolicy } from "@/hooks/useSetPolicy";
 import type { SpendPolicy } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
-import { getPhpPerXlm, usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 
-type Unit = "PHP" | "XLM";
+type Unit = "PHP" | "USDC";
 
 /** Savings is permanently admin-protected — its APY-bearing balance always
  *  needs admin approval to spend. */
@@ -22,14 +22,14 @@ const ALWAYS_PROTECTED: readonly EnvelopeName[] = [SAVINGS_NAME];
 
 function formatLimitLabel(stroops: bigint | null, unit: Unit): string {
   if (stroops === null) return "no limit";
-  const xlm = Number(stroops) / STROOPS_PER_XLM;
+  const usdc = Number(stroops) / STROOPS_PER_USDC;
   if (unit === "PHP") {
-    return `₱${(xlm * getPhpPerXlm()).toLocaleString("en-PH", {
+    return `₱${(usdc * PHP_PER_USDC).toLocaleString("en-PH", {
       minimumFractionDigits: 0,
       maximumFractionDigits: 0,
     })}`;
   }
-  return `${xlm.toFixed(4)} XLM`;
+  return `${usdc.toFixed(4)} USDC`;
 }
 
 function PolicyReadOnly({
@@ -89,15 +89,14 @@ export function PolicySettingsForm({
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const [unit, setUnit] = useState<Unit>("PHP");
   // The amount input is kept in the currently selected unit so the value the
-  // user typed survives toggling between PHP and XLM (we convert under the
+  // user typed survives toggling between PHP and USDC (we convert under the
   // hood when they flip the toggle).
   const [limitInput, setLimitInput] = useState<string>(() =>
     current.daily_limit === null
       ? ""
-      : ((Number(current.daily_limit) / STROOPS_PER_XLM) * PHP_PER_XLM).toFixed(
+      : ((Number(current.daily_limit) / STROOPS_PER_USDC) * PHP_PER_USDC).toFixed(
           0,
         ),
   );
@@ -124,8 +123,8 @@ export function PolicySettingsForm({
     if (current.daily_limit === null) {
       setLimitInput("");
     } else {
-      const xlm = Number(current.daily_limit) / STROOPS_PER_XLM;
-      setLimitInput(unit === "PHP" ? (xlm * PHP_PER_XLM).toFixed(0) : xlm.toString());
+      const usdc = Number(current.daily_limit) / STROOPS_PER_USDC;
+      setLimitInput(unit === "PHP" ? (usdc * PHP_PER_USDC).toFixed(0) : usdc.toString());
     }
     setProtectedSet(new Set(current.protected_envelopes));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -135,8 +134,8 @@ export function PolicySettingsForm({
     if (next === unit) return;
     const n = Number(limitInput);
     if (Number.isFinite(n) && n > 0) {
-      if (next === "XLM") setLimitInput((n / PHP_PER_XLM).toFixed(4));
-      else setLimitInput((n * PHP_PER_XLM).toFixed(0));
+      if (next === "USDC") setLimitInput((n / PHP_PER_USDC).toFixed(4));
+      else setLimitInput((n * PHP_PER_USDC).toFixed(0));
     }
     setUnit(next);
   };
@@ -163,11 +162,11 @@ export function PolicySettingsForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const n = Number(limitInput);
-    const xlm = unit === "XLM" ? n : n / PHP_PER_XLM;
+    const usdc = unit === "USDC" ? n : n / PHP_PER_USDC;
     const dailyLimit =
       limitInput.trim() === "" || !isFinite(n) || n <= 0
         ? null
-        : BigInt(Math.round(xlm * STROOPS_PER_XLM));
+        : BigInt(Math.round(usdc * STROOPS_PER_USDC));
     try {
       await setPolicy({
         requireAllSigs,
@@ -181,12 +180,12 @@ export function PolicySettingsForm({
   };
 
   const n = Number(limitInput);
-  const xlmEquiv = unit === "XLM" ? n : n / PHP_PER_XLM;
-  const phpEquiv = unit === "PHP" ? n : n * PHP_PER_XLM;
+  const usdcEquiv = unit === "USDC" ? n : n / PHP_PER_USDC;
+  const phpEquiv = unit === "PHP" ? n : n * PHP_PER_USDC;
   const equivLabel =
     n > 0
       ? unit === "PHP"
-        ? `≈ ${xlmEquiv.toFixed(4)} XLM`
+        ? `≈ ${usdcEquiv.toFixed(4)} USDC`
         : `≈ ₱${phpEquiv.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
       : null;
 
@@ -209,7 +208,7 @@ export function PolicySettingsForm({
             <input
               id="daily-limit"
               type="number"
-              step={unit === "XLM" ? "0.0001" : "1"}
+              step={unit === "USDC" ? "0.0001" : "1"}
               min="0"
               value={limitInput}
               onChange={(e) => setLimitInput(e.target.value)}
@@ -329,7 +328,7 @@ function UnitToggle({
 }) {
   return (
     <div className="sobre-unit-toggle" aria-label="Limit unit">
-      {(["PHP", "XLM"] as const).map((u) => (
+      {(["PHP", "USDC"] as const).map((u) => (
         <button
           key={u}
           type="button"
@@ -337,7 +336,7 @@ function UnitToggle({
           disabled={disabled}
           data-active={u === unit ? "true" : "false"}
         >
-          {u === "PHP" ? "₱ PHP" : "XLM"}
+          {u === "PHP" ? "₱ PHP" : "USDC"}
         </button>
       ))}
     </div>

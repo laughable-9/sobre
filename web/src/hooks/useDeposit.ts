@@ -15,7 +15,7 @@ export interface UseDepositResult {
 /**
  * Wraps the deposit(from, amount) contract call. Uses the connected user's
  * address as the `from` argument; their Freighter signature authorizes both
- * the outer Sobre call and the inner XLM SAC `transfer` sub-call.
+ * the outer Sobre call and the inner USDC SAC `transfer` sub-call.
  */
 export function useDeposit(
   userAddress: string | null,

@@ -19,8 +19,8 @@ import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile } from "@/lib/profile";
-import { STROOPS_PER_XLM } from "@/lib/config";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { STROOPS_PER_USDC } from "@/lib/config";
+import { PHP_PER_USDC } from "@/lib/config";
 
 type Mode = "list" | "new" | "join";
 
@@ -331,7 +331,6 @@ function SobreCard({
    *  card from the list. Only fired for `role === "member"`. */
   onNotAMember?: () => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const { summary, loading } = useSobreSummary(contractId, callerAddress);
 
   const stillAMember =
@@ -345,9 +344,9 @@ function SobreCard({
 
   if (summary && !stillAMember) return null;
 
-  const totalXlm =
-    summary !== null ? Number(summary.totalStroops) / STROOPS_PER_XLM : 0;
-  const totalPhp = totalXlm * PHP_PER_XLM;
+  const totalUsdc =
+    summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;
+  const totalPhp = totalUsdc * PHP_PER_USDC;
 
   return (
     <Link
@@ -438,7 +437,7 @@ function SobreCard({
           className="text-[11px] tabular mt-0.5"
           style={{ color: "var(--text-3)" }}
         >
-          {totalXlm.toFixed(4)} XLM
+          {totalUsdc.toFixed(4)} USDC
         </div>
       </div>
 

@@ -6,16 +6,16 @@ import { useDeposit } from "@/hooks/useDeposit";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 
 const QUICK_PHP = [100, 500, 1000, 5000];
-const QUICK_XLM = [1, 5, 10, 50];
+const QUICK_USDC = [1, 5, 10, 50];
 
-type Unit = "PHP" | "XLM";
+type Unit = "PHP" | "USDC";
 
 export function DepositModal({
   userAddress,
@@ -28,10 +28,9 @@ export function DepositModal({
   state: WalletState;
   contractId: string;
   onClose: () => void;
-  /** Called after the tx lands on chain with the actual XLM amount sent. */
-  onSuccess: (info: { xlm: number; stroops: bigint }) => void;
+  /** Called after the tx lands on chain with the actual USDC amount sent. */
+  onSuccess: (info: { usdc: number; stroops: bigint }) => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const [unit, setUnit] = useState<Unit>("PHP");
   const [amountStr, setAmountStr] = useState("500");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -39,43 +38,43 @@ export function DepositModal({
 
   const amount = Number(amountStr);
   const valid = isFinite(amount) && amount > 0;
-  const xlm = unit === "XLM" ? amount : amount / PHP_PER_XLM;
-  const php = unit === "PHP" ? amount : amount * PHP_PER_XLM;
+  const usdc = unit === "USDC" ? amount : amount / PHP_PER_USDC;
+  const php = unit === "PHP" ? amount : amount * PHP_PER_USDC;
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
-  // Convert the typed amount when toggling units so the underlying XLM
-  // value stays the same; e.g. ₱500 toggled to XLM becomes 31.25. PHP keeps
-  // 2 decimals so sub-peso XLM amounts survive a PHP → XLM → PHP round-trip
+  // Convert the typed amount when toggling units so the underlying USDC
+  // value stays the same; e.g. ₱500 toggled to USDC becomes 31.25. PHP keeps
+  // 2 decimals so sub-peso USDC amounts survive a PHP → USDC → PHP round-trip
   // instead of getting quantised to whole pesos.
   const switchUnit = (next: Unit) => {
     if (next === unit) return;
     const converted =
-      next === "XLM"
-        ? amount / PHP_PER_XLM
-        : amount * PHP_PER_XLM;
+      next === "USDC"
+        ? amount / PHP_PER_USDC
+        : amount * PHP_PER_USDC;
     setAmountStr(
-      Number.isFinite(converted) ? converted.toFixed(next === "XLM" ? 4 : 2) : "",
+      Number.isFinite(converted) ? converted.toFixed(next === "USDC" ? 4 : 2) : "",
     );
     setUnit(next);
   };
 
   const handleSubmit = async () => {
     if (!valid) return;
-    const stroops = BigInt(Math.round(xlm * STROOPS_PER_XLM));
+    const stroops = BigInt(Math.round(usdc * STROOPS_PER_USDC));
     try {
       await deposit(stroops);
-      onSuccess({ xlm, stroops });
+      onSuccess({ usdc, stroops });
     } catch {
       // surfaces via the hook's error state
     }
   };
 
-  const quick = unit === "PHP" ? QUICK_PHP : QUICK_XLM;
+  const quick = unit === "PHP" ? QUICK_PHP : QUICK_USDC;
   const fmtQuick = (q: number) =>
-    unit === "PHP" ? `₱${q.toLocaleString()}` : `${q} XLM`;
+    unit === "PHP" ? `₱${q.toLocaleString()}` : `${q} USDC`;
 
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
@@ -113,8 +112,8 @@ export function DepositModal({
             style={{ color: "var(--text-3)" }}
           >
             {unit === "PHP"
-              ? `≈ ${xlm.toFixed(4)} XLM at ₱${PHP_PER_XLM}/XLM`
-              : `≈ ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at ₱${PHP_PER_XLM}/XLM`}
+              ? `≈ ${usdc.toFixed(4)} USDC at ₱${PHP_PER_USDC}/USDC`
+              : `≈ ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at ₱${PHP_PER_USDC}/USDC`}
           </div>
           <div className="sobre-quick-amts">
             {quick.map((q) => (
@@ -138,8 +137,8 @@ export function DepositModal({
           >
             <div className="sobre-label mb-2.5">Auto-split preview</div>
             {ENVELOPE_LABELS.map((env, i) => {
-              const portion = (xlm * state.percents[i]) / 100;
-              const portionPhp = portion * PHP_PER_XLM;
+              const portion = (usdc * state.percents[i]) / 100;
+              const portionPhp = portion * PHP_PER_USDC;
               const label = displayEnvelopeName(env, state.envelope_names);
               return (
                 <div
@@ -164,7 +163,7 @@ export function DepositModal({
                     +{" "}
                     {unit === "PHP"
                       ? `₱${portionPhp.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : `${portion.toFixed(4)} XLM`}
+                      : `${portion.toFixed(4)} USDC`}
                   </span>
                 </div>
               );
@@ -205,7 +204,7 @@ export function DepositModal({
   );
 }
 
-/** Small two-segment toggle for switching the amount input between PHP and XLM. */
+/** Small two-segment toggle for switching the amount input between PHP and USDC. */
 function UnitToggle({
   unit,
   onChange,
@@ -217,7 +216,7 @@ function UnitToggle({
 }) {
   return (
     <div className="sobre-unit-toggle" aria-label="Amount unit">
-      {(["PHP", "XLM"] as const).map((u) => (
+      {(["PHP", "USDC"] as const).map((u) => (
         <button
           key={u}
           type="button"
@@ -225,7 +224,7 @@ function UnitToggle({
           disabled={disabled}
           data-active={u === unit ? "true" : "false"}
         >
-          {u === "PHP" ? "₱ PHP" : "XLM"}
+          {u === "PHP" ? "₱ PHP" : "USDC"}
         </button>
       ))}
     </div>

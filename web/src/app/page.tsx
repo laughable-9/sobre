@@ -118,7 +118,7 @@ const FAMILY_POINTS = [
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain, and the contract is token-agnostic — we use XLM today, with USDC support on the roadmap.",
+    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in USDC, a stablecoin pegged 1:1 to the US dollar. The contract is token-agnostic so other assets can plug in without redeploying.",
   },
   {
     q: "What do I need to start?",
@@ -126,7 +126,7 @@ const FAQS = [
   },
   {
     q: "How do I send money in?",
-    a: "Send native XLM from any Stellar wallet (we use Freighter for the demo). On-ramp partners like Transak that convert pesos to Stellar tokens are on the roadmap.",
+    a: "Pay in pesos via PDAX — InstaPay QR from your bank or e-wallet. PDAX converts to USDC and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
@@ -522,7 +522,7 @@ function SplitVisual() {
               marginTop: 2,
             }}
           >
-            625 XLM · from Riyadh
+            625 USDC · from Riyadh
           </div>
         </div>
         <ArrowRight
@@ -734,7 +734,7 @@ function SavingsVisual() {
             ₱ 11,856.90
           </div>
           <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-741 XLM
+204.43 USDC
           </div>
         </div>
         <span
@@ -800,9 +800,9 @@ function Trust() {
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
             Sobre is built on Stellar — the same chain used by MoneyGram for
-            cross-border payouts. The contract is token-agnostic, so the same
-            wallet works for XLM today and stablecoins on the roadmap. Every
-            transaction is public and verifiable.
+            cross-border payouts. Your balance lives in USDC, a stablecoin
+            pegged 1:1 to the US dollar, so amounts don&apos;t move with
+            crypto volatility. Every transaction is public and verifiable.
           </p>
         </div>
 
