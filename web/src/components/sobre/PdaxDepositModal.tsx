@@ -533,14 +533,23 @@ function AwaitingStep({
   // time-based fallback in the poll-status route is still 90s the user
   // has to wait. Tapping this hits /cancel immediately, flips the row
   // to failed, and the modal transitions out via Realtime.
+  //
+  // Safety: the cancel route refuses (409 already_paid) when PDAX has
+  // already received the PHP. We catch that and show a friendly inline
+  // notice instead of pretending the cancel went through.
   const [cancelling, setCancelling] = useState(false);
+  const [alreadyPaidNotice, setAlreadyPaidNotice] = useState(false);
   const cancel = async () => {
     if (cancelling) return;
     setCancelling(true);
+    setAlreadyPaidNotice(false);
     try {
-      await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
+      const res = await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
         method: "POST",
       });
+      if (res.status === 409) {
+        setAlreadyPaidNotice(true);
+      }
     } finally {
       setCancelling(false);
     }
@@ -587,18 +596,34 @@ function AwaitingStep({
             <button
               type="button"
               onClick={() => void cancel()}
-              disabled={cancelling}
+              disabled={cancelling || alreadyPaidNotice}
               style={{
                 background: "transparent",
                 border: "none",
                 color: "var(--text-3)",
                 fontSize: 12,
-                cursor: cancelling ? "not-allowed" : "pointer",
-                textDecoration: "underline",
+                cursor:
+                  cancelling || alreadyPaidNotice ? "not-allowed" : "pointer",
+                textDecoration: alreadyPaidNotice ? "none" : "underline",
               }}
             >
               {cancelling ? "Cancelling…" : "Cancel this checkout"}
             </button>
+            {alreadyPaidNotice ? (
+              <p
+                style={{
+                  fontSize: 11,
+                  color: "var(--sobre-accent)",
+                  textAlign: "center",
+                  margin: 0,
+                  maxWidth: 260,
+                  lineHeight: 1.4,
+                }}
+              >
+                PDAX already has your payment. Finishing your deposit
+                automatically.
+              </p>
+            ) : null}
           </div>
         ) : undefined
       }

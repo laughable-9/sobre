@@ -504,13 +504,24 @@ function Dashboard({ contractId }: { contractId: string }) {
           }}
           onCancelDeposit={async (identifier) => {
             try {
-              await fetch(
+              const res = await fetch(
                 `/api/pdax/deposits/${identifier}/cancel`,
                 { method: "POST" },
               );
+              if (res.status === 409) {
+                flash(
+                  "PDAX already received your payment. Finishing your deposit.",
+                  "ok",
+                );
+                await activeDeposits.refresh();
+                return { ok: false, alreadyPaid: true };
+              }
               flash("Deposit cancelled.", "warn");
-            } finally {
               await activeDeposits.refresh();
+              return { ok: true };
+            } catch {
+              await activeDeposits.refresh();
+              return { ok: false };
             }
           }}
         />
@@ -651,20 +662,31 @@ function Dashboard({ contractId }: { contractId: string }) {
           onCancelMidFlight={(identifier) => {
             setDepositOpen(false);
             setResumeDepositId(null);
-            flash("Deposit cancelled.", "warn");
             // Cancel-then-refresh in sequence so the row is `failed`
-            // server-side by the time the active list re-reads. Doing
-            // them in parallel left a stale `pending` row in PENDING.
+            // server-side by the time the active list re-reads. The
+            // cancel endpoint refuses (409 already_paid) when PDAX
+            // already has the PHP; in that case we swap the toast for
+            // the reassuring "Finishing your deposit" message and let
+            // the auto-driver finish the pipeline.
             void (async () => {
+              let alreadyPaid = false;
               if (identifier) {
                 try {
-                  await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
-                    method: "POST",
-                  });
+                  const res = await fetch(
+                    `/api/pdax/deposits/${identifier}/cancel`,
+                    { method: "POST" },
+                  );
+                  if (res.status === 409) alreadyPaid = true;
                 } catch {
                   // best effort; the TTL sweep will catch it eventually
                 }
               }
+              flash(
+                alreadyPaid
+                  ? "PDAX already received your payment. Finishing your deposit."
+                  : "Deposit cancelled.",
+                alreadyPaid ? "ok" : "warn",
+              );
               await activeDeposits.refresh();
             })();
           }}

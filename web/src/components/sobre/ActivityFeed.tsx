@@ -61,8 +61,12 @@ interface ActivityFeedProps {
   onResumeDeposit?: (identifier: string) => void;
   /** Called when the user taps the cancel icon on a pending deposit. The
    *  dashboard hits /api/pdax/deposits/[id]/cancel and refreshes the
-   *  active list. */
-  onCancelDeposit?: (identifier: string) => void | Promise<void>;
+   *  active list. Returns `{ ok: boolean, alreadyPaid?: true }` so the
+   *  row knows whether to play its exit animation or stay put with a
+   *  notice. */
+  onCancelDeposit?: (
+    identifier: string,
+  ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
   /** In-flight cashouts surfaced alongside pending deposits. Money has
    *  already moved by the time these appear; the row exists so the user
    *  knows where it is. Tap re-opens the modal at the awaiting view. */
@@ -198,7 +202,9 @@ function PendingDepositRow({
 }: {
   deposit: ActiveDepositRow;
   onResume?: (identifier: string) => void;
-  onCancel?: (identifier: string) => void | Promise<void>;
+  onCancel?: (
+    identifier: string,
+  ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
 }) {
   const [cancelling, setCancelling] = useState(false);
   // Two-step exit so the row stays gone even between "animation done" and
@@ -223,11 +229,19 @@ function PendingDepositRow({
     if (!onCancel || cancelling) return;
     setCancelling(true);
     setExiting(true);
-    setTimeout(() => setHidden(true), ROW_EXIT_MS);
+    const hideTimer = setTimeout(() => setHidden(true), ROW_EXIT_MS);
     try {
-      await onCancel(deposit.identifier);
+      const result = await onCancel(deposit.identifier);
+      if (!result.ok && result.alreadyPaid) {
+        // PDAX already received the payment. Don't hide the row —
+        // poll-status will drive it through funded → credited and
+        // PendingCashout/Deposit will transition normally.
+        clearTimeout(hideTimer);
+        setHidden(false);
+        setExiting(false);
+      }
     } catch {
-      // Restore if the API call failed so the user can retry.
+      clearTimeout(hideTimer);
       setHidden(false);
       setExiting(false);
     } finally {
