@@ -37,11 +37,35 @@ type Phase = "input" | "awaiting" | "confirm" | "splitting" | "done" | "failed";
 /** Status-line copy for the AwaitingStep spinner. Hoisted so the record
  *  literal isn't allocated per-render. */
 const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
-  pending: "Waiting for your payment",
-  funded: "Payment received — crediting your wallet",
-  credited: "Funds landed",
+  pending: "Waiting for your GrabPay payment…",
+  funded: "Payment received — buying XLM through PDAX…",
+  credited: "Funds landed in your wallet",
   split: "Done",
   failed: "Failed",
+};
+
+/** Copy shown during the on-chain split step. Two sub-phases:
+ *  - checking_balance: the SAC transfer just landed at the smart wallet but
+ *    the next read can lag for a few seconds on under-replicated nodes; we
+ *    poll the SAC `balance()` until it's caught up before triggering
+ *    deposit(). Tells the user we're waiting on the chain, not stuck.
+ *  - depositing: the passkey prompt is up and we're submitting deposit(). */
+const SPLIT_STEP_COPY: Record<
+  "idle" | "checking_balance" | "depositing",
+  { title: string; body: string }
+> = {
+  idle: {
+    title: "Splitting across envelopes…",
+    body: "Confirm with your passkey when prompted.",
+  },
+  checking_balance: {
+    title: "Waiting for funds to settle…",
+    body: "Your wallet is receiving the XLM. This usually takes a few seconds.",
+  },
+  depositing: {
+    title: "Splitting across envelopes…",
+    body: "Confirm with your passkey when prompted.",
+  },
 };
 
 function phaseFromStatus(status: DepositStatus | undefined): Phase {
@@ -87,6 +111,7 @@ export function PdaxDepositModal({
   const {
     deposit,
     pending: depositPending,
+    step: depositStep,
     error: depositError,
   } = useDeposit(userAddress, contractId);
 
@@ -179,8 +204,8 @@ export function PdaxDepositModal({
         {phase === "splitting" ? (
           <CenteredCopy
             icon={<Loader2 size={28} className="sobre-spin" />}
-            title="Splitting across envelopes…"
-            body="Confirm with your passkey when prompted."
+            title={SPLIT_STEP_COPY[depositStep].title}
+            body={SPLIT_STEP_COPY[depositStep].body}
           />
         ) : null}
 

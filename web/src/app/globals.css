@@ -910,6 +910,14 @@
   to   { transform: rotate(360deg); }
 }
 
+/* Without this class the keyframes above sit unused — every Loader2 in
+ * the PDAX modals + signing screens carries `className="sobre-spin"` but
+ * the rule was missing, so the icons rendered statically. */
+.sobre-spin {
+  animation: sobre-spin 0.9s linear infinite;
+  transform-origin: center;
+}
+
 /* ─── Skeleton loader (shimmer) ───────────────────────────────────────── */
 .sobre-skeleton {
   background: linear-gradient(

@@ -79,12 +79,13 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
 }
 
 /** Status-line copy for the AwaitingStep spinner. Hoisted so the record
- *  literal isn't allocated per-render. */
+ *  literal isn't allocated per-render. Worded as activities the user can
+ *  feel are happening, not static state names. */
 const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
-  spent: "Sending to PDAX…",
-  transferred: "PDAX received the funds — converting to pesos",
-  converted: "Sending to your bank via InstaPay",
+  spent: "Forwarding your XLM to PDAX…",
+  transferred: "PDAX received it — converting to pesos…",
+  converted: "Sending pesos to your bank via InstaPay…",
   paid: "Done",
   failed: "Failed",
 };
@@ -570,14 +571,14 @@ function SigningStep({
 }) {
   const title =
     step === "forwarding"
-      ? "Forwarding to PDAX"
-      : "Withdrawing from envelope";
+      ? "Forwarding to PDAX…"
+      : "Withdrawing from envelope…";
   const body =
     step === "forwarding"
-      ? `Step 2 of 2 — confirm with your passkey to send the XLM to PDAX.`
+      ? "Step 2 of 2 — confirm with your passkey to send the XLM onward to PDAX."
       : `Step 1 of 2 — confirm with your passkey to release ₱${amountPhp.toLocaleString(
           "en-PH",
-        )}.`;
+        )} from your envelope.`;
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="sobre-spin" />}
