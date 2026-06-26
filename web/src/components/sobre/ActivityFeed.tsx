@@ -516,6 +516,12 @@ function PendingCashoutRow({
     paid: "Done",
     failed: "Failed",
   };
+  // Recoverable rows are pending in the DB but the spend tx already
+  // landed on chain — they're waiting for the user to finish, not for
+  // the server to advance. "Preparing" would be misleading.
+  const label = cashout.recoverable
+    ? "Needs your confirmation · tap to resume"
+    : `${statusLabel[cashout.status]} · tap to view`;
   return (
     <div
       role="button"
@@ -543,7 +549,7 @@ function PendingCashoutRow({
             ₱{Number(cashout.amount_php ?? 0).toLocaleString("en-PH")}
           </span>
         </div>
-        <div className="where">{statusLabel[cashout.status]} · tap to view</div>
+        <div className="where">{label}</div>
         <div className="meta">{time}</div>
       </div>
     </div>

@@ -174,22 +174,32 @@ export function PdaxWithdrawModal({
     accountNumber: string;
   } | null>(null);
 
-  // Load the member's default bank on mount, AND check for a recoverable
-  // half-completed cashout before settling on the input step.
+  // Decide the initial local phase: recovery_prompt vs input/register_bank.
+  // Re-runs when resumeIdentifier changes so the activity-feed "tap to
+  // resume" affordance targets the right row.
   useEffect(() => {
     let cancelled = false;
     void (async () => {
-      // Localstorage is the fast path — written by useCashoutSignatures
-      // right after the spend tx returns SUCCESS.
+      // Localstorage / in-memory snapshot. When resumeIdentifier is set
+      // we accept the snapshot only if it matches — otherwise the user
+      // tapped a specific PENDING row and the snapshot might belong to
+      // a different (older) orphan we don't want to redirect them to.
       const snap = readCashoutRecovery();
-      if (snap && snap.contractId === contractId && !cancelled) {
+      if (
+        snap &&
+        snap.contractId === contractId &&
+        (!resumeIdentifier || snap.identifier === resumeIdentifier) &&
+        !cancelled
+      ) {
         setRecoverySnapshot(snap);
         setLocalPhase("recovery_prompt");
         return;
       }
-      // Server fallback for users without a snapshot (Kyle's case): scan
+      // Server fallback for users without a snapshot: scan
       // pdax_withdrawals + on-chain Spend events to find pending rows
-      // whose spend already landed.
+      // whose spend already landed. Match by resumeIdentifier when set
+      // so we don't surface a different orphan than the one the user
+      // just tapped.
       try {
         const res = await fetch(
           `/api/pdax/withdrawals/recoverable?contract_id=${encodeURIComponent(contractId)}`,
@@ -208,8 +218,13 @@ export function PdaxWithdrawModal({
               spendTxHash: string;
             }>;
           };
-          if (json.recoverable.length > 0 && !cancelled) {
-            const r = json.recoverable[0];
+          const items = json.recoverable ?? [];
+          const r = resumeIdentifier
+            ? items.find((x) => x.identifier === resumeIdentifier)
+            : items[0];
+          // The state-setting branch below carries the load-bearing
+          // !cancelled check; redundant pair above is gone.
+          if (r && !cancelled) {
             setRecoveryFromServer({
               identifier: r.identifier,
               spendTxHash: r.spendTxHash,
@@ -226,9 +241,15 @@ export function PdaxWithdrawModal({
           }
         }
       } catch {
-        // server-side scan failed; fall through to fresh cashout flow
+        // server-side scan failed; fall through.
       }
-      // No recovery — load the member's default bank and go to input.
+      // No recovery match. When the user came in via "tap to resume" we
+      // do NOT load the bank and drop them at InputStep — they didn't
+      // ask to start a fresh cashout. Stay at the loading spinner so
+      // the next heartbeat / retry can still surface the prompt. For a
+      // fresh "Cash out" open (no resumeIdentifier), proceed to bank
+      // load → input.
+      if (resumeIdentifier) return;
       try {
         const r = await fetch("/api/member/bank");
         const j = (await r.json()) as { bank: BankRecord | null };
@@ -246,7 +267,7 @@ export function PdaxWithdrawModal({
     return () => {
       cancelled = true;
     };
-  }, [contractId]);
+  }, [contractId, resumeIdentifier]);
 
   // Derived phase: server-driven status wins for spent/.../paid/failed,
   // local state owns the pre-signing UI. Computing this inline avoids an

@@ -40,6 +40,13 @@ export interface ActiveCashoutRow {
   beneficiary_account_name: string;
   beneficiary_account_number: string;
   created_at: string;
+  /** Set when the row is past the /active stale TTL but a matching
+   *  on-chain Spend event exists — i.e. the spend leg landed but the
+   *  SAC forward didn't, leaving an orphan that needs the user to
+   *  finish via the recovery prompt. Activity feed uses this to swap
+   *  the PendingCashoutRow copy from "Preparing" (misleading) to
+   *  "Needs your confirmation". */
+  recoverable?: boolean;
 }
 
 export interface UseActiveCashoutsResult {
@@ -56,6 +63,12 @@ export interface UseActiveCashoutsResult {
 }
 
 const HEARTBEAT_MS = 8000;
+/** /recoverable is a Soroban event scan (~1-2s). We only need it for
+ *  orphan-detection — an already-discovered orphan keeps showing via
+ *  the cache below. Every 4th tick (~32s) is more than fresh enough
+ *  for "user finished cashout, modal failed, now they want to find
+ *  it" — and cuts the wasted RPC traffic 4× on idle dashboards. */
+const RECOVERABLE_EVERY_N_TICKS = 4;
 
 /** Fires for cashouts that just settled (paid) or failed. The dashboard
  *  uses it to flash "₱X landed in your bank" when a cashout the user
@@ -80,6 +93,13 @@ export function useActiveCashouts(
   // there means "transitioned to terminal" — we look up which terminal
   // state via /row to fire the right callback.
   const lastActiveRef = useRef<Map<string, ActiveCashoutRow>>(new Map());
+  // Cached last-known recoverable rows. /recoverable is throttled to
+  // run every Nth tick (see RECOVERABLE_EVERY_N_TICKS) because a full
+  // Soroban event scan costs ~1-2s — too expensive to hammer at 8s
+  // cadence on idle dashboards. The cache lets us keep surfacing
+  // already-discovered orphans in PENDING between scans.
+  const lastRecoverableRef = useRef<ActiveCashoutRow[]>([]);
+  const recoverableTickRef = useRef(0);
   const callbacksRef = useRef(callbacks);
   callbacksRef.current = callbacks;
 
@@ -89,21 +109,75 @@ export function useActiveCashouts(
       setRecentlyFailed([]);
       setRecentlyCompleted([]);
       lastActiveRef.current = new Map();
+      lastRecoverableRef.current = [];
       return;
     }
     try {
-      const res = await fetch(
-        `/api/pdax/withdrawals/active?contract_id=${encodeURIComponent(contractId)}`,
-      );
-      if (!res.ok) return;
-      const json = (await res.json()) as {
+      // /active runs every tick. /recoverable scans on-chain Spend
+      // events (expensive) — throttle to every Nth tick and cache the
+      // result so orphans stay visible in PENDING between scans.
+      const fetchRecoverable = recoverableTickRef.current === 0;
+      recoverableTickRef.current =
+        (recoverableTickRef.current + 1) % RECOVERABLE_EVERY_N_TICKS;
+      const [activeRes, recoverableRes] = await Promise.all([
+        fetch(
+          `/api/pdax/withdrawals/active?contract_id=${encodeURIComponent(contractId)}`,
+        ),
+        fetchRecoverable
+          ? fetch(
+              `/api/pdax/withdrawals/recoverable?contract_id=${encodeURIComponent(contractId)}`,
+            ).catch(() => null)
+          : Promise.resolve(null),
+      ]);
+      if (!activeRes.ok) return;
+      const json = (await activeRes.json()) as {
         cashouts: ActiveCashoutRow[];
         recentlyFailed?: ActiveCashoutRow[];
         recentlyCompleted?: ActiveCashoutRow[];
       };
-      const next = json.cashouts ?? [];
+      const active = json.cashouts ?? [];
       setRecentlyFailed(json.recentlyFailed ?? []);
       setRecentlyCompleted(json.recentlyCompleted ?? []);
+
+      // Refresh the recoverable cache only when we actually fetched.
+      // Between scans, lastRecoverableRef keeps the previously-found
+      // orphans visible — they don't disappear just because we
+      // skipped a tick.
+      if (fetchRecoverable && recoverableRes?.ok) {
+        const rec = (await recoverableRes.json()) as {
+          recoverable?: Array<{
+            identifier: string;
+            envelope: "Groceries" | "Tuition" | "Savings";
+            amountToken: number;
+            amountPhp: number;
+            beneficiary_bank_code: string;
+            beneficiary_account_name: string;
+            beneficiary_account_number: string;
+            created_at: string;
+          }>;
+        };
+        lastRecoverableRef.current = (rec.recoverable ?? []).map((r) => ({
+          identifier: r.identifier,
+          envelope: r.envelope,
+          amount_usdc: r.amountToken,
+          amount_php: r.amountPhp,
+          status: "pending" as const,
+          failure_reason: null,
+          beneficiary_bank_code: r.beneficiary_bank_code,
+          beneficiary_account_name: r.beneficiary_account_name,
+          beneficiary_account_number: r.beneficiary_account_number,
+          created_at: r.created_at,
+          recoverable: true,
+        }));
+      }
+
+      // Merge: /active rows + cached recoverable rows /active didn't
+      // surface (deduped by identifier).
+      const activeIds = new Set(active.map((c) => c.identifier));
+      const recoverable = lastRecoverableRef.current.filter(
+        (r) => !activeIds.has(r.identifier),
+      );
+      const next = [...active, ...recoverable];
       const nextIds = new Set(next.map((c) => c.identifier));
 
       // Detect drop-offs: rows that were active last tick but aren't
@@ -118,13 +192,17 @@ export function useActiveCashouts(
       // Background drive: nudge every non-terminal row forward. Parallel
       // best-effort — failures just retry on the next heartbeat. The
       // modal's polling does the same job when open; the server treats
-      // both as idempotent state-machine ticks.
+      // both as idempotent state-machine ticks. Skip recoverable rows
+      // because their server-side state is "pending" by design — they
+      // need the user to confirm via the recovery prompt, not a tick.
       await Promise.all(
-        next.map((c) =>
-          fetch(`/api/pdax/withdrawals/${c.identifier}/poll-status`).catch(
-            () => null,
+        next
+          .filter((c) => !c.recoverable)
+          .map((c) =>
+            fetch(`/api/pdax/withdrawals/${c.identifier}/poll-status`).catch(
+              () => null,
+            ),
           ),
-        ),
       );
 
       // Fan-out terminal-state notifications. /row returns the current
@@ -132,7 +210,11 @@ export function useActiveCashouts(
       // cashout-recovery localStorage entry whenever the row tied to it
       // reaches a terminal state — the spend's "lost" state isn't
       // recoverable anymore once paid or failed has been decided.
+      // Skip recoverable rows that transiently dropped off (e.g. RPC
+      // blip returned an empty page) — they aren't transitioning to a
+      // terminal state, so a /row lookup is just wasted bytes.
       for (const row of droppedOff) {
+        if (row.recoverable) continue;
         void fetch(`/api/pdax/withdrawals/${row.identifier}/row`)
           .then(async (r) => {
             if (!r.ok) return;
