@@ -514,6 +514,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           )}
           failedDeposits={activeDeposits.recentlyFailed}
           failedCashouts={activeCashouts.recentlyFailed}
+          completedCashouts={activeCashouts.recentlyCompleted}
           onResumeCashout={(identifier) => {
             setResumeCashoutId(identifier);
             setCashoutOpen(true);

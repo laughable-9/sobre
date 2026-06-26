@@ -21,8 +21,19 @@ import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
-import { displayEnvelopeName } from "@/lib/config";
-import { formatPhpLocale, shortenAddress } from "@/lib/format";
+import { displayEnvelopeName, STROOPS_PER_TOKEN } from "@/lib/config";
+import {
+  formatPhpLocale,
+  maskAccountNumber,
+  shortenAddress,
+} from "@/lib/format";
+
+/** Friendly bank labels for the two UAT-supported banks. Falls back to
+ *  the raw bank code if a new one ever lands here. */
+const BANK_NAME: Record<string, string> = {
+  BASECPH: "Security Bank",
+  BACTBPH: "CTBC Bank",
+};
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
   const now = new Date();
@@ -78,6 +89,9 @@ interface ActivityFeedProps {
    *  cashouts/deposits that didn't go through. */
   failedDeposits?: ActiveDepositRow[];
   failedCashouts?: ActiveCashoutRow[];
+  /** Successful (paid) cashouts. Activity feed correlates these against
+   *  on-chain Spend events to show the destination bank inline. */
+  completedCashouts?: ActiveCashoutRow[];
 }
 
 export function ActivityFeed({
@@ -94,6 +108,7 @@ export function ActivityFeed({
   onResumeCashout,
   failedDeposits,
   failedCashouts,
+  completedCashouts,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -109,6 +124,39 @@ export function ActivityFeed({
     return profile.emoji
       ? `${profile.emoji} ${profile.name}`
       : profile.name;
+  };
+
+  // Index completed cashouts by envelope+amount+rough-minute so the
+  // on-chain Spend event renderer can look up the destination bank
+  // without a server round-trip. Same envelope + amount + ~1min window
+  // is enough disambiguation in practice — collisions would require
+  // the user to fire two identical cashouts in the same minute.
+  const cashoutByEventKey = useMemo(() => {
+    const out = new Map<string, ActiveCashoutRow>();
+    for (const c of completedCashouts ?? []) {
+      const stroops = BigInt(Math.round(c.amount_usdc * STROOPS_PER_TOKEN));
+      const minuteKey = Math.floor(
+        new Date(c.created_at).getTime() / 60_000,
+      );
+      // Try a couple of nearby minutes too — the on-chain ledger close
+      // timestamp can lag/lead the row created_at by ~5-15s.
+      for (const offset of [-1, 0, 1]) {
+        out.set(
+          `${c.envelope}:${stroops}:${minuteKey + offset}`,
+          c,
+        );
+      }
+    }
+    return out;
+  }, [completedCashouts]);
+
+  const matchCompleted = (
+    ev: FeedEvent & { kind: "Spend" },
+  ): ActiveCashoutRow | undefined => {
+    const minuteKey = Math.floor(
+      new Date(ev.ledgerClosedAt).getTime() / 60_000,
+    );
+    return cashoutByEventKey.get(`${ev.envelope}:${ev.amount}:${minuteKey}`);
   };
   // FeedEntry is the union of on-chain events and PDAX-side failure
   // rows. We render them as a single time-sorted stream per day so the
@@ -221,6 +269,10 @@ export function ActivityFeed({
             {groups[day].map((entry) => {
               if (entry.kind === "event") {
                 const ev = entry.data;
+                const completed =
+                  ev.kind === "Spend" && ev.memo === "PDAX cashout"
+                    ? matchCompleted(ev)
+                    : undefined;
                 return (
                   <ActivityRow
                     key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
@@ -228,6 +280,7 @@ export function ActivityFeed({
                     isNew={ev.txHash === newestTxHash}
                     labelFor={labelFor}
                     envelopeNames={envelopeNames}
+                    completedCashout={completed}
                   />
                 );
               }
@@ -502,11 +555,16 @@ function ActivityRow({
   isNew,
   labelFor,
   envelopeNames,
+  completedCashout,
 }: {
   ev: FeedEvent;
   isNew: boolean;
   labelFor: (addr: string) => string;
   envelopeNames: string[];
+  /** When this Spend event matches a successfully-paid PDAX cashout
+   *  row, the matching row is passed in so we can render the destination
+   *  bank inline ("✓ Sent to Security Bank •••1461"). */
+  completedCashout?: ActiveCashoutRow;
 }) {
   const time = fmtTime(ev.ledgerClosedAt);
   const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
@@ -590,6 +648,25 @@ function ActivityRow({
             </div>
             {ev.memo && !isCashout ? (
               <div className="where">&quot;{ev.memo}&quot;</div>
+            ) : null}
+            {isCashout && completedCashout ? (
+              <div
+                className="where"
+                style={{
+                  color: "var(--sobre-accent)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 4,
+                }}
+              >
+                <CheckCheck size={12} strokeWidth={2.5} />
+                Sent to{" "}
+                {BANK_NAME[completedCashout.beneficiary_bank_code] ??
+                  completedCashout.beneficiary_bank_code}{" "}
+                {maskAccountNumber(
+                  completedCashout.beneficiary_account_number,
+                )}
+              </div>
             ) : null}
             <div className="meta">{time} · view tx ↗</div>
           </div>
