@@ -318,6 +318,26 @@ export interface PdaxFiatTransactionsResponse {
   status: string;
 }
 
+/** Look up a single transaction in PDAX's /fiat/transactions index by
+ *  identifier. Returns undefined when PDAX hasn't surfaced the tx yet
+ *  (their reporting endpoint lags actual settlement by a few seconds).
+ *  Used in every place where we need to learn the live PDAX status for
+ *  a deposit or cashout — cancel pre-check, poll-status drivers, and
+ *  the /active resurrect pass.
+ *
+ *  Throws on transport errors so callers can decide whether to bail or
+ *  fall through. */
+export async function getPdaxFiatTx(
+  identifier: string,
+  mode: "CashIn" | "CashOut",
+): Promise<PdaxFiatTransaction | undefined> {
+  const resp = await pdaxFetch<PdaxFiatTransactionsResponse>(
+    "/pdax-institution/v1/fiat/transactions",
+    { query: { identifier, mode, page: 1, pageSize: 10 } },
+  );
+  return resp.data.find((t) => t.identifier === identifier);
+}
+
 /** Build the heavy `/fiat/deposit` request body. PDAX's required fields
  *  are mostly KYC/Travel-Rule shaped; for the hackathon demo we use the
  *  sender's Google profile + sensible defaults. */

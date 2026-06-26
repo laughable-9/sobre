@@ -132,10 +132,17 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
         : null;
     const update: Record<string, unknown> = { status, amount_php: p.amount };
     if (failureReason) update.failure_reason = failureReason;
+    // Guard against a stale/late FAILED webhook overwriting a row that
+    // the 10s processing-grace already promoted to `paid`. Webhooks can
+    // arrive out of order or after the user has seen the success state,
+    // and flipping `paid` → `failed` mid-demo would be the worst kind of
+    // visible bug. The poll-status grace itself also re-checks PDAX
+    // before promoting, so a `paid` row reflects a confirmed signal.
     await admin
       .from("pdax_withdrawals")
       .update(update)
-      .eq("identifier", p.identifier);
+      .eq("identifier", p.identifier)
+      .not("status", "eq", "paid");
     return;
   }
 }

@@ -41,19 +41,39 @@ export interface CashoutRecoverySnapshot {
 const MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const KEY = "sobre.cashout-recovery.v1";
 
+// In-memory mirror of the snapshot. localStorage can be unavailable
+// (Safari private, quota, disabled storage) — silently dropping the
+// snapshot there would let signAndForward's catch route the user back
+// to the InputStep, where tapping Confirm fires a SECOND spend() and
+// double-debits the envelope. The memory mirror survives any number of
+// modal unmounts/remounts inside the same tab, which is the window the
+// recovery prompt actually needs to cover.
+let memorySnapshot: CashoutRecoverySnapshot | null = null;
+
 export function saveCashoutRecovery(
   snapshot: Omit<CashoutRecoverySnapshot, "savedAt">,
 ): void {
+  const full: CashoutRecoverySnapshot = { ...snapshot, savedAt: Date.now() };
+  memorySnapshot = full;
   try {
-    const full: CashoutRecoverySnapshot = { ...snapshot, savedAt: Date.now() };
     window.localStorage.setItem(KEY, JSON.stringify(full));
   } catch {
-    // localStorage may be disabled (Safari private, quota); recovery falls
-    // back to the server-side detection path.
+    // localStorage may be disabled (Safari private, quota); the in-memory
+    // mirror above keeps the recovery path alive for this tab, and the
+    // server-side /recoverable scan covers cross-tab/cross-session cases.
   }
 }
 
 export function readCashoutRecovery(): CashoutRecoverySnapshot | null {
+  // Memory wins because it can only be set by a save that already
+  // happened this session — strictly fresher than anything on disk.
+  if (memorySnapshot) {
+    if (Date.now() - memorySnapshot.savedAt > MAX_AGE_MS) {
+      memorySnapshot = null;
+    } else {
+      return memorySnapshot;
+    }
+  }
   try {
     const raw = window.localStorage.getItem(KEY);
     if (!raw) return null;
@@ -69,6 +89,7 @@ export function readCashoutRecovery(): CashoutRecoverySnapshot | null {
 }
 
 export function clearCashoutRecovery(): void {
+  memorySnapshot = null;
   try {
     window.localStorage.removeItem(KEY);
   } catch {

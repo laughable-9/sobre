@@ -27,10 +27,10 @@ import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
 import { PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
-import { pdaxErrorToResponse, pdaxFetch } from "@/lib/pdax/client";
-import type {
-  PdaxFiatTransaction,
-  PdaxFiatTransactionsResponse,
+import { pdaxErrorToResponse } from "@/lib/pdax/client";
+import {
+  getPdaxFiatTx,
+  type PdaxFiatTransaction,
 } from "@/lib/pdax/deposits";
 import {
   convertAndPayoutPhp,
@@ -269,18 +269,7 @@ async function advanceFromConverted(args: {
   const admin = getSupabaseAdmin();
   let pdaxTx: PdaxFiatTransaction | undefined;
   try {
-    const resp = await pdaxFetch<PdaxFiatTransactionsResponse>(
-      "/pdax-institution/v1/fiat/transactions",
-      {
-        query: {
-          identifier: args.identifier,
-          mode: "CashOut",
-          page: 1,
-          pageSize: 10,
-        },
-      },
-    );
-    pdaxTx = resp.data.find((t) => t.identifier === args.identifier);
+    pdaxTx = await getPdaxFiatTx(args.identifier, "CashOut");
   } catch (e) {
     return pdaxErrorToResponse(e, "PDAX /fiat/transactions poll failed");
   }
@@ -335,13 +324,21 @@ async function advanceFromConverted(args: {
  *  webhook with status=COMPLETED, which `handleFiat` upgrades to `paid`
  *  on its own. In dev/preview without a webhook URL this never fires,
  *  so we fall back to a time-based promotion: after PROCESSING_GRACE_MS
- *  in the processing state, we promote to paid.
+ *  in the processing state, we re-check PDAX and promote to paid (or
+ *  failed) based on the live tx status.
  *
  *  The grace period exists purely so the user-facing copy doesn't lie.
  *  PDAX UAT may settle instantly, but giving "processing" 10 seconds of
  *  airtime gives the user a chance to read the state and (more
  *  importantly) for PDAX's settlement email to actually arrive before
- *  the dashboard's "₱X arrived in your bank" toast fires. */
+ *  the dashboard's "₱X arrived in your bank" toast fires.
+ *
+ *  Before promoting, we re-fetch /fiat/transactions one more time.
+ *  Without the webhook we'd otherwise be flying blind: a row that PDAX
+ *  flips COMPLETED → FAILED inside the 10s window (rare, but plausible
+ *  with bank-side rejections like PRC011) would still be promoted to
+ *  paid, and the dashboard would lie about settlement. The recheck
+ *  costs one PDAX call per cashout and gives us a faithful signal. */
 async function advanceFromProcessing(args: {
   identifier: string;
   processingSince: string | null;
@@ -358,6 +355,33 @@ async function advanceFromProcessing(args: {
       status: "processing",
       msRemaining: PROCESSING_GRACE_MS - elapsed,
     });
+  }
+  // Re-check PDAX before promoting. If they've flipped the tx to FAILED
+  // inside the grace window, mark the row failed instead of silently
+  // promoting to paid. If the call itself fails we fall back to the
+  // time-based promotion — better a small lie than stranding the row
+  // in `processing` forever if PDAX's API is temporarily flaky.
+  let pdaxTx: PdaxFiatTransaction | undefined;
+  try {
+    pdaxTx = await getPdaxFiatTx(args.identifier, "CashOut");
+  } catch (e) {
+    console.warn(
+      "[pdax withdraw poll-status advanceFromProcessing] PDAX recheck failed; falling back to time-based promote",
+      e,
+    );
+  }
+  if (pdaxTx?.status === "FAILED") {
+    const raw = pdaxTx as unknown as Record<string, unknown>;
+    const failureReason =
+      (raw.rejection_reason as string | undefined) ??
+      (raw.fail_reason as string | undefined) ??
+      "PDAX rejected the bank settlement";
+    await admin
+      .from("pdax_withdrawals")
+      .update({ status: "failed", failure_reason: failureReason })
+      .eq("identifier", args.identifier)
+      .eq("status", "processing");
+    return NextResponse.json({ ok: true, status: "failed" });
   }
   await admin
     .from("pdax_withdrawals")

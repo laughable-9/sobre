@@ -376,21 +376,25 @@ export function PdaxWithdrawModal({
     if (!source) return;
     setLocalPhase("signing");
     try {
-      // Use the relayG from the snapshot if present; otherwise resolve
-      // via initiate, which is idempotent server-side (returns the
-      // existing row if identifier matches).
-      let relayG = source.relayG;
-      if (!relayG) {
-        const init = await initiate({
-          envelope: source.envelope,
-          amountToken: source.amountToken,
-          amountPhp: source.amountPhp,
-          bankCode: source.bankCode,
-          accountName: source.accountName,
-          accountNumber: source.accountNumber,
-        });
-        relayG = init.relayG;
-      }
+      // Always call initiate during recovery, even if the snapshot
+      // already has a relayG. Two reasons:
+      //  1. initiate sets the hook's identifierRef — confirmSigned
+      //     depends on it later, and would throw "No withdrawal in
+      //     flight" if we skipped this call.
+      //  2. /fiat/withdraw is idempotent on `identifier` now: when the
+      //     row already exists it short-circuits the insert and just
+      //     returns the same relayG, so this costs one Supabase select
+      //     and avoids creating an orphan pending row.
+      const init = await initiate({
+        envelope: source.envelope,
+        amountToken: source.amountToken,
+        amountPhp: source.amountPhp,
+        bankCode: source.bankCode,
+        accountName: source.accountName,
+        accountNumber: source.accountNumber,
+        identifier: source.identifier,
+      });
+      const relayG = source.relayG || init.relayG;
       const { spendTxHash, forwardTxHash } = await retryForward({
         spendTxHash: source.spendTxHash,
         amountStroops: BigInt(source.amountStroops),

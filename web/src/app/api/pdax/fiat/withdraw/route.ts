@@ -47,6 +47,14 @@ interface RequestBody {
   bank_code?: string;
   account_name?: string;
   account_number?: string;
+  /** Optional caller-supplied identifier. The server-fallback recovery
+   *  flow passes the original cashout's identifier here so we don't mint
+   *  a fresh UUID and leave an orphan `pending` row alongside the real
+   *  one — which is what /recoverable would keep re-surfacing forever.
+   *  When the identifier is provided AND a row already exists for it,
+   *  this endpoint short-circuits the insert and returns the same
+   *  `relayG`, making the call safely idempotent. */
+  identifier?: string;
 }
 
 export async function POST(req: Request) {
@@ -120,7 +128,36 @@ export async function POST(req: Request) {
     accountNumber = accountNumber ?? b.account_number;
   }
 
-  const identifier = crypto.randomUUID();
+  const relayG = getRelayPublicKey();
+
+  // Idempotency: if the caller supplied an identifier we've already seen,
+  // skip the insert and return the existing row's relayG. The recovery
+  // flow needs this so it can re-resolve the relay address for an
+  // existing pending row without minting a fresh orphan.
+  if (body.identifier) {
+    const { data: existing } = await admin
+      .from("pdax_withdrawals")
+      .select("identifier, family_wallet_id, status")
+      .eq("identifier", body.identifier)
+      .maybeSingle();
+    if (existing) {
+      const e = existing as { family_wallet_id: string; status: string };
+      if (e.family_wallet_id !== familyWalletId) {
+        return NextResponse.json(
+          { error: "Identifier belongs to another wallet" },
+          { status: 403 },
+        );
+      }
+      return NextResponse.json({
+        identifier: body.identifier,
+        relayG,
+        resumed: true,
+        status: e.status,
+      });
+    }
+  }
+
+  const identifier = body.identifier ?? crypto.randomUUID();
   const { error: insertErr } = await admin.from("pdax_withdrawals").insert({
     identifier,
     family_wallet_id: familyWalletId,
@@ -140,8 +177,6 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-
-  const relayG = getRelayPublicKey();
 
   // ─── Mock-mode short-circuit ──────────────────────────────────────────
   if (pdaxEnv().mock) {

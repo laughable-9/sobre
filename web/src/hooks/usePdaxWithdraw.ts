@@ -55,6 +55,12 @@ export interface InitiateArgs {
   bankCode?: string;
   accountName?: string;
   accountNumber?: string;
+  /** Optional identifier. When set, /fiat/withdraw treats the call as
+   *  idempotent — if a row with this identifier exists it returns the
+   *  same relayG without inserting a fresh row. The recovery flow uses
+   *  this to re-resolve relayG for a half-completed cashout without
+   *  spawning an orphan pending row. */
+  identifier?: string;
 }
 
 export interface InitiateResult {
@@ -131,6 +137,7 @@ export function usePdaxWithdraw(
             bank_code: args.bankCode,
             account_name: args.accountName,
             account_number: args.accountNumber,
+            identifier: args.identifier,
           }),
         });
         const json = (await res.json()) as
