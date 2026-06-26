@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
@@ -36,20 +36,42 @@ type Phase =
   | "input"
   | "preparing"
   | "awaiting"
+  | "celebrating"
   | "confirm"
   | "splitting"
   | "done"
   | "failed";
 
-/** Status-line copy for the AwaitingStep spinner. Hoisted so the record
- *  literal isn't allocated per-render. */
-const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
-  pending: "Waiting for your GrabPay payment…",
-  funded: "Payment in. Buying XLM through PDAX…",
-  credited: "Funds landed in your wallet",
-  split: "Done",
-  failed: "Failed",
-};
+/** Rotating headlines per row status. The AwaitingStep cycles through
+ *  these on a 3.5s interval so the spinner feels alive while we wait on
+ *  PDAX. First entry is the on-arrival message; later entries are
+ *  reassurance variants. */
+const PENDING_MESSAGES = [
+  "Waiting for your GrabPay payment…",
+  "Almost there…",
+  "Still listening for PDAX…",
+];
+
+const FUNDED_MESSAGES = [
+  "Buying XLM through PDAX…",
+  "Locking in the rate…",
+  "Sending to your wallet…",
+];
+
+function rotatingTitlesFor(status: DepositStatus): string[] {
+  switch (status) {
+    case "pending":
+      return PENDING_MESSAGES;
+    case "funded":
+      return FUNDED_MESSAGES;
+    case "credited":
+      return ["Funds landed in your wallet"];
+    case "split":
+      return ["Done"];
+    case "failed":
+      return ["Failed"];
+  }
+}
 
 /** Title shown during the on-chain split step. Two sub-phases:
  *  - checking_balance: polling the SAC `balance()` until the relay's
@@ -127,7 +149,34 @@ export function PdaxDepositModal({
   // to a centered-spinner step immediately and update copy as the URL
   // arrives.
   const [preparing, setPreparing] = useState(false);
+  // Brief celebration overlay when the row transitions to a new milestone
+  // (pending → funded shows "Payment confirmed!", funded → credited shows
+  // "Funds arrived!"). Adds a beat of feedback between the long loading
+  // phases instead of letting the spinner swap silently. Cleared by a
+  // setTimeout below.
+  const [celebration, setCelebration] = useState<
+    "payment_confirmed" | "funds_arrived" | null
+  >(null);
+  const lastStatusRef = useRef<DepositStatus | null>(null);
   const { phpPerToken } = useTokenRate();
+
+  // Watch for status transitions to fire celebrations.
+  useEffect(() => {
+    const current = row?.status;
+    if (!current) return;
+    const last = lastStatusRef.current;
+    lastStatusRef.current = current;
+    if (last === "pending" && current === "funded") {
+      setCelebration("payment_confirmed");
+      const t = setTimeout(() => setCelebration(null), 1500);
+      return () => clearTimeout(t);
+    }
+    if (last === "funded" && current === "credited") {
+      setCelebration("funds_arrived");
+      const t = setTimeout(() => setCelebration(null), 1500);
+      return () => clearTimeout(t);
+    }
+  }, [row?.status]);
 
   // Modal mounts → focus the amount input so the user can type immediately.
   useEffect(() => {
@@ -142,19 +191,32 @@ export function PdaxDepositModal({
     ? "preparing"
     : !row
       ? "input"
-      : splitting
-        ? "splitting"
-        : phaseFromStatus(row.status);
+      : celebration
+        ? "celebrating"
+        : splitting
+          ? "splitting"
+          : phaseFromStatus(row.status);
 
-  // Wrap onClose: distinguish a terminal close ("Done" / "Close") from a
-  // mid-flight dismiss (backdrop click while the row is still working).
-  // The latter fires onCancelMidFlight so the parent can flash a toast.
+  // Wrap onClose with safety rails:
+  // - LOCKED states (modal refuses to close): celebrating, splitting,
+  //   confirm, and awaiting once status is past pending. Closing while
+  //   money is at PDAX or sitting in the smart wallet would strand
+  //   funds where the user can't easily recover them mid-demo.
+  // - CANCELLABLE in-flight states: preparing + awaiting/pending. PDAX
+  //   may have a half-started checkout but no money has moved yet, so
+  //   a cancel toast is honest signal. If the user had already paid
+  //   GrabPay, the row sits at pending until polling re-detects it
+  //   (modal would have to be re-opened from Activity, follow-up work).
+  // - Terminal states (done/failed) and pre-start (input): plain close.
   const handleClose = () => {
-    const inFlight =
-      phase === "preparing" ||
-      phase === "awaiting" ||
+    const locked =
+      phase === "celebrating" ||
+      phase === "splitting" ||
       phase === "confirm" ||
-      phase === "splitting";
+      (phase === "awaiting" && row?.status !== "pending");
+    if (locked) return;
+
+    const inFlight = phase === "preparing" || phase === "awaiting";
     if (inFlight && onCancelMidFlight) onCancelMidFlight();
     onClose();
   };
@@ -233,6 +295,17 @@ export function PdaxDepositModal({
           />
         ) : null}
 
+        {phase === "celebrating" ? (
+          <CenteredCopy
+            icon={<Check size={28} strokeWidth={2.5} />}
+            title={
+              celebration === "payment_confirmed"
+                ? "Payment confirmed!"
+                : "Funds arrived!"
+            }
+          />
+        ) : null}
+
         {phase === "confirm" && row ? (
           <ConfirmStep
             amountToken={row.amount_usdc ?? expectedToken}
@@ -240,7 +313,6 @@ export function PdaxDepositModal({
             state={state}
             pending={depositPending || pdaxPending}
             onConfirm={() => void handleConfirmSplit()}
-            onCancel={handleClose}
             error={error}
           />
         ) : null}
@@ -417,10 +489,29 @@ function AwaitingStep({
     polling,
   );
 
+  // Rotate through the per-status titles so the spinner doesn't feel
+  // frozen during the multi-second waits. 3.5s cadence — long enough to
+  // read, short enough to feel like progress. Reset to the first entry
+  // whenever the status changes so the user sees the "headline" message
+  // first as each new step begins.
+  const titles = useMemo(() => rotatingTitlesFor(status), [status]);
+  const [titleIdx, setTitleIdx] = useState(0);
+  useEffect(() => {
+    setTitleIdx(0);
+  }, [status]);
+  useEffect(() => {
+    if (titles.length <= 1) return;
+    const t = setInterval(
+      () => setTitleIdx((i) => (i + 1) % titles.length),
+      3500,
+    );
+    return () => clearInterval(t);
+  }, [titles]);
+
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
-      title={DEPOSIT_STATUS_LABELS[status]}
+      title={titles[titleIdx]}
       footer={
         status === "pending" && checkoutUrl ? (
           <a
@@ -445,7 +536,6 @@ function ConfirmStep({
   state,
   pending,
   onConfirm,
-  onCancel,
   error,
 }: {
   amountToken: number;
@@ -453,7 +543,6 @@ function ConfirmStep({
   state: WalletState;
   pending: boolean;
   onConfirm: () => void;
-  onCancel: () => void;
   error: string | null;
 }) {
   const amountPhp = amountToken * phpPerToken;
@@ -481,14 +570,10 @@ function ConfirmStep({
         </p>
       ) : null}
 
-      <div className="sobre-modal-actions">
-        <button
-          className="sobre-btn sobre-btn-soft"
-          onClick={onCancel}
-          disabled={pending}
-        >
-          Not now
-        </button>
+      <div
+        className="sobre-modal-actions"
+        style={{ justifyContent: "center" }}
+      >
         <button
           className="sobre-btn sobre-btn-primary"
           onClick={onConfirm}
