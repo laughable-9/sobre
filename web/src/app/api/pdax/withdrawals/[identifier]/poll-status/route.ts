@@ -34,7 +34,6 @@ import type {
 } from "@/lib/pdax/deposits";
 import {
   convertAndPayoutPhp,
-  findPdaxCryptoCredit,
   getPdaxCryptoDepositAddr,
   isRelayPaymentIncluded,
 } from "@/lib/pdax/withdrawals";
@@ -188,9 +187,13 @@ async function advanceFromSpent(args: {
     });
   }
 
-  // We have a real hash. One-shot Horizon check — the modal's 3s poll
-  // means a NOT_FOUND just retries on the next tick rather than blocking
-  // this response for 30s.
+  // Horizon confirmation alone advances the row. The relay's classic
+  // Stellar payment is atomic — once Horizon marks the tx successful, the
+  // XLM is in PDAX's custody at their deposit address with the correct
+  // memo, full stop. Their own /crypto/transactions accounting is silent
+  // on inbound deposits in UAT (probably broken, definitely unreliable);
+  // there's no value in waiting for a signal that may never arrive when
+  // the underlying chain payment is already final.
   const horizonOk = await isRelayPaymentIncluded({
     submittedHash: args.transferTxHash,
   });
@@ -202,26 +205,12 @@ async function advanceFromSpent(args: {
     });
   }
 
-  try {
-    const credit = await findPdaxCryptoCredit({
-      transactionHash: args.transferTxHash,
-    });
-    if (!credit || credit.status !== "completed") {
-      return NextResponse.json({
-        ok: true,
-        status: "spent",
-        relayLeg: "pdax_pending",
-      });
-    }
-    await admin
-      .from("pdax_withdrawals")
-      .update({ status: "transferred" })
-      .eq("identifier", args.identifier)
-      .eq("status", "spent");
-    return NextResponse.json({ ok: true, status: "transferred" });
-  } catch (e) {
-    return pdaxErrorToResponse(e, "PDAX /crypto/transactions poll failed");
-  }
+  await admin
+    .from("pdax_withdrawals")
+    .update({ status: "transferred" })
+    .eq("identifier", args.identifier)
+    .eq("status", "spent");
+  return NextResponse.json({ ok: true, status: "transferred" });
 }
 
 async function advanceFromTransferred(args: {

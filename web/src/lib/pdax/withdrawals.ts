@@ -237,32 +237,3 @@ export async function isRelayPaymentIncluded(args: {
   return body.successful === true;
 }
 
-/**
- * Look up the institution's view of the relay's classic payment in
- * /crypto/transactions. Returns the matching row when PDAX has credited the
- * institution balance (status='completed'); null otherwise.
- *
- * Match strategy: by `transaction_hash` — the Stellar tx hash the relay
- * submitted. PDAX exposes the same hash on their record so this is
- * unambiguous (unlike amount-matching which collides on identical-amount
- * deposits).
- *
- * PDAX's `status` field on inbound crypto credits IS reliable (unlike
- * outbound withdrawals where it lags chain settlement). The on-chain
- * settlement happened before PDAX even saw it — by the time it's in their
- * /crypto/transactions list, they have the funds.
- */
-export async function findPdaxCryptoCredit(args: {
-  transactionHash: string;
-}): Promise<PdaxCryptoInTransaction | null> {
-  const resp = await pdaxFetch<PdaxCryptoTransactionsResponse>(
-    "/pdax-institution/v1/crypto/transactions",
-    {
-      query: { type: "crypto_in", page: 1, pageSize: 20 },
-    },
-  );
-  return (
-    resp.data.find((t) => t.transaction_hash === args.transactionHash) ?? null
-  );
-}
-

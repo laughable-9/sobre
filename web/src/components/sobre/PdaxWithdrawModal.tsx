@@ -263,7 +263,6 @@ export function PdaxWithdrawModal({
 
         {phase === "awaiting" && row ? (
           <AwaitingStep
-            identifier={row.identifier}
             status={row.status}
             amountPhp={Number(row.amount_php ?? amountPhp)}
             bankName={
@@ -589,40 +588,18 @@ function SigningStep({
 }
 
 function AwaitingStep({
-  identifier,
   status,
   amountPhp,
   bankName,
   accountNumber,
   onClose,
 }: {
-  identifier: string;
   status: WithdrawStatus;
   amountPhp: number;
   bankName: string;
   accountNumber: string;
   onClose: () => void;
 }) {
-  const [simulating, setSimulating] = useState(false);
-  const [simError, setSimError] = useState<string | null>(null);
-
-  const simulate = async () => {
-    setSimulating(true);
-    setSimError(null);
-    try {
-      const res = await fetch(
-        `/api/pdax/withdrawals/${identifier}/simulate-credit`,
-        { method: "POST" },
-      );
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-    } catch (e) {
-      setSimError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSimulating(false);
-    }
-  };
-
   return (
     <>
       <h2>Cashing out</h2>
@@ -644,38 +621,6 @@ function AwaitingStep({
           {STATUS_LABELS[status]}
         </span>
       </div>
-
-      {/* Dev shortcut: PDAX UAT doesn't credit inbound XLM deposits via
-          /crypto/transactions even after the on-chain payment settles, so
-          the spent→transferred transition stalls indefinitely. This
-          fast-forwards past it; the sell trade + fiat withdraw still run
-          against PDAX's actual institution balance. */}
-      {status === "spent" ? (
-        <details className="mb-3" style={{ color: "var(--text-3)" }}>
-          <summary className="text-[12px] cursor-pointer">
-            Dev: simulate PDAX credit
-          </summary>
-          <button
-            type="button"
-            className="sobre-btn sobre-btn-soft mt-2"
-            style={{ padding: "8px 12px", fontSize: 12 }}
-            onClick={() => void simulate()}
-            disabled={simulating}
-          >
-            {simulating
-              ? "Marking transferred…"
-              : "Skip PDAX credit check → continue"}
-          </button>
-          {simError ? (
-            <p
-              className="text-xs break-all mt-2"
-              style={{ color: "var(--sobre-danger)" }}
-            >
-              {simError}
-            </p>
-          ) : null}
-        </details>
-      ) : null}
 
       <div className="sobre-modal-actions">
         <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
