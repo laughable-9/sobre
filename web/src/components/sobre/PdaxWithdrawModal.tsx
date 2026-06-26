@@ -513,7 +513,12 @@ export function PdaxWithdrawModal({
         {phase === "failed" && row ? (
           <CenteredCopy
             icon={<Clock size={28} strokeWidth={2} />}
-            title="Something went wrong"
+            title="Cashout couldn't complete"
+            body={
+              row.failure_reason
+                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX — contact support to recover or retry from your wallet.`
+                : "The cashout didn't complete. Your funds are recoverable — contact support if they're stuck at PDAX."
+            }
             footer={
               <button
                 className="sobre-btn sobre-btn-soft"

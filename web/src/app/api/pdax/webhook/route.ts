@@ -119,9 +119,22 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
         : p.status === "FAILED"
           ? "failed"
           : "processing";
+    // PDAX's webhook may carry a rejection code we don't have a strict
+    // type for (e.g. "rejection_reason" or "fail_reason"). Persist
+    // whatever they send so the modal can show the user something
+    // actionable instead of the generic "Something went wrong".
+    const raw = p as unknown as Record<string, unknown>;
+    const failureReason =
+      status === "failed"
+        ? (raw.rejection_reason as string | undefined) ??
+          (raw.fail_reason as string | undefined) ??
+          "PDAX rejected the bank settlement"
+        : null;
+    const update: Record<string, unknown> = { status, amount_php: p.amount };
+    if (failureReason) update.failure_reason = failureReason;
     await admin
       .from("pdax_withdrawals")
-      .update({ status, amount_php: p.amount })
+      .update(update)
       .eq("identifier", p.identifier);
     return;
   }
