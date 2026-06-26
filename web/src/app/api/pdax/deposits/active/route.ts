@@ -46,12 +46,19 @@ export async function GET(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
 
-  // GrabPay/PayMongo source URLs hard-expire after roughly an hour; once
-  // they do, PDAX never flips the corresponding /fiat/transactions row to
-  // COMPLETED and our `pending` row sits in the bucket forever. Eagerly
-  // mark anything past PENDING_TTL_MIN as failed before returning so the
-  // PENDING list stays honest.
-  const PENDING_TTL_MIN = 60;
+  // GrabPay/PayMongo source URLs hard-expire; once they do, PDAX never
+  // flips the corresponding /fiat/transactions row to COMPLETED and our
+  // `pending` row sits in the bucket forever. Eagerly mark anything past
+  // PENDING_TTL_MIN as failed before returning so the PENDING list stays
+  // honest.
+  //
+  // PayMongo's documented source TTL is ~1 hour, but PDAX UAT sources
+  // hit "expired" well before that in practice (~5-15 minutes in Kyle's
+  // testing). Going conservative at 15 minutes: false-positive expires
+  // can be re-initiated by the user with a single click and don't lose
+  // funds (no money has moved at pending), so over-eager beats letting
+  // an unusable URL sit in the feed.
+  const PENDING_TTL_MIN = 15;
   const cutoff = new Date(
     Date.now() - PENDING_TTL_MIN * 60_000,
   ).toISOString();
