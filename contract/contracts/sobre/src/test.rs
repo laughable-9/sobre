@@ -1,8 +1,8 @@
 #![cfg(test)]
 use super::*;
 use soroban_sdk::{
-    testutils::{Address as _, Events as _},
-    token, vec, Env, String,
+    testutils::{Address as _, Events as _, Ledger as _},
+    token, vec, Bytes, BytesN, Env, String,
 };
 
 /// SEP-41 tokens on Stellar use 7 decimals. 1 token = 10_000_000 stroops.
@@ -105,12 +105,30 @@ impl Fixture {
     fn funded_with_member() -> (Self, Address) {
         let f = Self::funded();
         let member = Address::generate(&f.env);
+        let token = f.create_invite();
         f.client().join_wallet(
             &member,
             &String::from_str(&f.env, "Maria"),
             &String::from_str(&f.env, "🌺"),
+            &token,
         );
         (f, member)
+    }
+
+    /// Mint a single-use invite token with a fixed plaintext and return it.
+    /// The test fixture's `mock_all_auths` lets us call `create_invite` from
+    /// any caller; the persisted hash matches what `join_wallet` will compute
+    /// from the returned plaintext.
+    fn create_invite(&self) -> BytesN<32> {
+        let token = BytesN::from_array(&self.env, &[7u8; 32]);
+        let hash: BytesN<32> = self
+            .env
+            .crypto()
+            .sha256(&Bytes::from(token.clone()))
+            .into();
+        let expires_at = self.env.ledger().sequence() + 1000;
+        self.client().create_invite(&hash, &expires_at);
+        token
     }
 
     fn empty_policy(&self) -> SpendPolicy {
@@ -195,17 +213,19 @@ fn set_envelope_names_rejects_too_long() {
     ]);
 }
 
-// ─── join_wallet ──────────────────────────────────────────────────────────
+// ─── join_wallet + create_invite ──────────────────────────────────────────
 
 #[test]
 fn join_wallet_appends_profiled_member() {
     let f = Fixture::new();
     let maria = Address::generate(&f.env);
+    let token = f.create_invite();
 
     f.client().join_wallet(
         &maria,
         &String::from_str(&f.env, "Maria"),
         &String::from_str(&f.env, "🌺"),
+        &token,
     );
 
     let state = f.client().get_state();
@@ -220,11 +240,13 @@ fn join_wallet_appends_profiled_member() {
 #[should_panic(expected = "Error(Contract, #4)")]
 fn join_wallet_rejects_duplicate() {
     let f = Fixture::new();
+    let token = f.create_invite();
     // Admin already a member; trying to join again is a duplicate.
     f.client().join_wallet(
         &f.admin,
         &String::from_str(&f.env, "Admin again"),
         &String::from_str(&f.env, "🥭"),
+        &token,
     );
 }
 
@@ -233,17 +255,100 @@ fn join_wallet_rejects_duplicate() {
 fn join_wallet_rejects_when_at_max() {
     let f = Fixture::new();
     let m1 = Address::generate(&f.env);
+    let t1 = f.create_invite();
     f.client().join_wallet(
         &m1,
         &String::from_str(&f.env, "Maria"),
         &String::from_str(&f.env, "🌺"),
+        &t1,
     );
+    // Second invite uses a different plaintext (the fixture helper would
+    // reuse the same one, but join_wallet deletes it after the first
+    // redemption so we mint a fresh one with a distinct byte pattern).
+    let t2_plain = BytesN::from_array(&f.env, &[9u8; 32]);
+    let t2_hash: BytesN<32> = f
+        .env
+        .crypto()
+        .sha256(&Bytes::from(t2_plain.clone()))
+        .into();
+    f.client()
+        .create_invite(&t2_hash, &(f.env.ledger().sequence() + 1000));
     let m2 = Address::generate(&f.env);
     f.client().join_wallet(
         &m2,
         &String::from_str(&f.env, "Pedro"),
         &String::from_str(&f.env, "🌴"),
+        &t2_plain,
     );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn join_wallet_rejects_unknown_token() {
+    let f = Fixture::new();
+    let bogus = BytesN::from_array(&f.env, &[0xAAu8; 32]);
+    let maria = Address::generate(&f.env);
+    f.client().join_wallet(
+        &maria,
+        &String::from_str(&f.env, "Maria"),
+        &String::from_str(&f.env, "🌺"),
+        &bogus,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #14)")]
+fn join_wallet_rejects_expired_token() {
+    let f = Fixture::new();
+    let token = f.create_invite();
+    // Jump the ledger past the invite's expires_at (`now + 1000` in the
+    // helper). +2000 puts us well past it without depending on the exact
+    // offset.
+    f.env.ledger().with_mut(|l| l.sequence_number += 2000);
+    let maria = Address::generate(&f.env);
+    f.client().join_wallet(
+        &maria,
+        &String::from_str(&f.env, "Maria"),
+        &String::from_str(&f.env, "🌺"),
+        &token,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn join_wallet_rejects_replayed_token() {
+    let f = Fixture::new();
+    let token = f.create_invite();
+    let maria = Address::generate(&f.env);
+    f.client().join_wallet(
+        &maria,
+        &String::from_str(&f.env, "Maria"),
+        &String::from_str(&f.env, "🌺"),
+        &token,
+    );
+    // Same token, fresh attempt — should be gone from storage.
+    let pedro = Address::generate(&f.env);
+    f.client().join_wallet(
+        &pedro,
+        &String::from_str(&f.env, "Pedro"),
+        &String::from_str(&f.env, "🌴"),
+        &token,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #14)")]
+fn create_invite_rejects_past_expiry() {
+    let f = Fixture::new();
+    let token = BytesN::from_array(&f.env, &[3u8; 32]);
+    let hash: BytesN<32> = f
+        .env
+        .crypto()
+        .sha256(&Bytes::from(token))
+        .into();
+    // expires_at <= current ledger sequence — must reject upfront so an
+    // already-stale token never lands in storage.
+    f.client().create_invite(&hash, &f.env.ledger().sequence());
 }
 
 // ─── remove_member ────────────────────────────────────────────────────────

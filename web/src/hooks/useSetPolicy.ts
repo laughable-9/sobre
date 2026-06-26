@@ -39,7 +39,6 @@ export function useSetPolicy(
           contractId,
           "set_policy",
           args,
-          adminAddress,
         );
         setLastHash(hash);
         return hash;

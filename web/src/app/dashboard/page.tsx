@@ -13,19 +13,19 @@ import { SobreCardSkeleton } from "@/components/sobre/Skeletons";
 import { TopBar } from "@/components/sobre/TopBar";
 import { Button } from "@/components/ui/button";
 
-import { useFreighter } from "@/hooks/useFreighter";
+import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useSobreSummary } from "@/hooks/useSobreSummary";
 import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile } from "@/lib/profile";
-import { STROOPS_PER_XLM } from "@/lib/config";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { STROOPS_PER_USDC } from "@/lib/config";
+import { PHP_PER_USDC } from "@/lib/config";
 
 type Mode = "list" | "new" | "join";
 
 export default function MySobresPage() {
-  const wallet = useFreighter();
+  const wallet = usePasskeyWallet();
   const { address } = wallet;
   const router = useRouter();
   const adminSobres = useSobresOfAdmin(address);
@@ -58,49 +58,46 @@ export default function MySobresPage() {
     setClosedSet(all);
   }, [adminSobres.sobres, joined]);
 
-  // ─── Phase 1: not connected ─────────────────────────────────────────
+  // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
     return (
       <div className="sobre-app">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <Image
-              src="/sobre-logo2.svg"
-              alt=""
-              width={56}
-              height={56}
-              priority
-              className="mx-auto"
-            />
-            <h1 className="font-serif text-[40px] font-semibold mt-5 mb-3 tracking-tight leading-[1.05]">
-              Isang sobre.
-              <br />
-              Isang pamilya.
-            </h1>
-            <p
-              className="text-[16px] mb-6"
-              style={{ color: "var(--text-2)" }}
-            >
-              Connect your wallet to see your Sobres or open a new one.
-            </p>
-            {wallet.status === "not-installed" ? (
-              <a
-                href="https://www.freighter.app/"
-                target="_blank"
-                rel="noreferrer"
-                className="sobre-btn sobre-btn-primary"
-                style={{ padding: "14px 22px", fontSize: 15 }}
-              >
-                Install Freighter
-                <ChevronRight size={16} strokeWidth={2.5} />
-              </a>
-            ) : (
-              <Button onClick={wallet.connect} size="lg">
-                Connect Wallet
+          {wallet.status === "signed-out" ? (
+            <div className="text-center max-w-md">
+              <Image
+                src="/sobre-logo2.svg"
+                alt=""
+                width={56}
+                height={56}
+                priority
+                className="mx-auto"
+              />
+              <h1 className="font-serif text-[40px] font-semibold mt-5 mb-3 tracking-tight leading-[1.05]">
+                Isang sobre.
+                <br />
+                Isang pamilya.
+              </h1>
+              <Button onClick={() => void wallet.connect()} size="lg">
+                Continue with Google
               </Button>
-            )}
-          </div>
+              {wallet.error ? (
+                <p
+                  className="text-xs mt-3"
+                  style={{ color: "var(--sobre-danger)" }}
+                >
+                  {wallet.error}
+                </p>
+              ) : null}
+            </div>
+          ) : (
+            <p style={{ color: "var(--text-2)" }}>
+              {wallet.status === "creating"
+                ? "Setting up your wallet…"
+                : "Loading…"}
+            </p>
+          )}
         </main>
       </div>
     );
@@ -115,6 +112,7 @@ export default function MySobresPage() {
         <TopBar wallet={wallet} />
         <ProfileSetupScreen
           address={address}
+          defaultName={wallet.user?.name}
           onDone={() => setHasProfile(true)}
         />
       </div>
@@ -333,7 +331,6 @@ function SobreCard({
    *  card from the list. Only fired for `role === "member"`. */
   onNotAMember?: () => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const { summary, loading } = useSobreSummary(contractId, callerAddress);
 
   const stillAMember =
@@ -347,9 +344,9 @@ function SobreCard({
 
   if (summary && !stillAMember) return null;
 
-  const totalXlm =
-    summary !== null ? Number(summary.totalStroops) / STROOPS_PER_XLM : 0;
-  const totalPhp = totalXlm * PHP_PER_XLM;
+  const totalUsdc =
+    summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;
+  const totalPhp = totalUsdc * PHP_PER_USDC;
 
   return (
     <Link
@@ -440,7 +437,7 @@ function SobreCard({
           className="text-[11px] tabular mt-0.5"
           style={{ color: "var(--text-3)" }}
         >
-          {totalXlm.toFixed(4)} XLM
+          {totalUsdc.toFixed(4)} USDC
         </div>
       </div>
 

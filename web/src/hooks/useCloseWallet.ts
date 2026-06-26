@@ -33,7 +33,6 @@ export function useCloseWallet(
         contractId,
         "close_wallet",
         [],
-        adminAddress,
       );
       return hash;
     } catch (e) {

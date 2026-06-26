@@ -14,7 +14,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 
-import { useFreighter } from "@/hooks/useFreighter";
+import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Reveal } from "@/components/sobre/Reveal";
 import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
@@ -40,7 +40,7 @@ function GithubMark({ size = 18 }: { size?: number }) {
 const STATS = [
   {
     num: "$35.6B",
-    desc: "yearly remittances from OFWs — yet most families struggle to save.",
+    desc: "yearly remittances from OFWs, yet most families struggle to save.",
   },
   {
     num: ["8", "10"] as const,
@@ -118,7 +118,7 @@ const FAMILY_POINTS = [
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain, and the contract is token-agnostic — we use XLM today, with USDC support on the roadmap.",
+    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in XLM, with USDC support on the roadmap. The contract is token-agnostic so other assets can plug in without redeploying.",
   },
   {
     q: "What do I need to start?",
@@ -126,11 +126,11 @@ const FAQS = [
   },
   {
     q: "How do I send money in?",
-    a: "Send native XLM from any Stellar wallet (we use Freighter for the demo). On-ramp partners like Transak that convert pesos to Stellar tokens are on the roadmap.",
+    a: "Pay in pesos via PDAX. InstaPay QR from your bank or e-wallet. PDAX converts to XLM and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
-    a: "Yes — through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
+    a: "Yes. Through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
   },
   {
     q: "What if the family disagrees?",
@@ -204,28 +204,24 @@ function MobileCTABar() {
 }
 
 function Nav() {
-  const wallet = useFreighter();
+  const wallet = usePasskeyWallet();
   const { status, address, connect } = wallet;
+  const busy = status === "checking" || status === "creating";
 
   const connectButton = address ? (
     <WalletMenu wallet={wallet} />
-  ) : status === "not-installed" ? (
-    <a
-      href="https://www.freighter.app/"
-      target="_blank"
-      rel="noreferrer"
-      className="sobre-btn-nav sobre-btn-nav-soft"
-    >
-      Install Freighter
-    </a>
   ) : (
     <button
       type="button"
       onClick={() => void connect()}
       className="sobre-btn-nav sobre-btn-nav-soft"
-      disabled={status === "checking"}
+      disabled={busy}
     >
-      {status === "checking" ? "Checking…" : "Connect"}
+      {status === "checking"
+        ? "Checking…"
+        : status === "creating"
+          ? "Setting up…"
+          : "Continue with Google"}
     </button>
   );
 
@@ -738,7 +734,7 @@ function SavingsVisual() {
             ₱ 11,856.90
           </div>
           <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-741 XLM
+204.43 XLM
           </div>
         </div>
         <span
@@ -803,10 +799,10 @@ function Trust() {
             Built on infrastructure you can audit.
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
-            Sobre is built on Stellar — the same chain used by MoneyGram for
-            cross-border payouts. The contract is token-agnostic, so the same
-            wallet works for XLM today and stablecoins on the roadmap. Every
-            transaction is public and verifiable.
+            Sobre is built on Stellar, the same chain used by MoneyGram for
+            cross-border payouts. Your balance lives in XLM today, with USDC
+            on the roadmap, so amounts can settle to a stablecoin without a
+            contract redeploy. Every transaction is public and verifiable.
           </p>
         </div>
 

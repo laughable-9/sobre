@@ -16,12 +16,53 @@
 export const FACTORY_CONTRACT_ID =
   "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
 
-/** XLM native Stellar Asset Contract (the SEP-41 wrapper around native XLM).
- *  Deterministic per network — different address per network because the SAC
- *  derivation hashes the network passphrase.
- *  Testnet: CDLZFC3S... | Mainnet: CAS3J7GY... (kept here for reference) */
+/**
+ * USDC on Stellar — the SEP-41 SAC for Circle's testnet USDC.
+ *
+ * Testnet issuer (Circle): `GBBD47IF6LWK7P7MDEVSCWR7DPUWV3NY3DTQEVFL4NAT4AQH3ZLLFLA5`.
+ * Mainnet USDC SAC needs to be re-resolved against Circle's mainnet issuer
+ * `GA5ZSEJYB37JRC5AVCIA5MOP4RHTM335X2KGX3IHOJAPP5RE34K4KZVN` when promoting.
+ */
+export const USDC_SAC_ID =
+  "CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA";
+
+/**
+ * XLM native SAC on testnet. Same address every deploy (deterministic).
+ * Fetch on any network with `stellar contract id asset --asset native`.
+ */
 export const XLM_SAC_ID =
   "CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC";
+
+/**
+ * Payment-token switch. The Sobre contract's `init(payment_token)` is
+ * token-agnostic — every new family wallet bakes its choice at deploy time
+ * (it can't change after init). This single const decides which asset new
+ * deploys use; all PDAX routes + family-wallet code read from it.
+ *
+ * "XLM" — the only PDAX UAT path that works end-to-end right now.
+ *   - PDAX trades PHP↔XLM (works).
+ *   - PDAX `/crypto/withdraw` delivers XLM to Stellar G/C addresses.
+ *
+ * "USDC" — preferred stablecoin path. Blocked in PDAX UAT today:
+ *   - PDAX rejects `quote_currency=USDCXLM` on /trade/quote (OT010016
+ *     "Asset unavailable") on both v1 and v2.
+ *   - The `USDC` bucket trades land in is the ERC-20 USDC bucket — there's
+ *     no documented USDC→USDCXLM bridge endpoint, and no PHP↔USDCXLM pair.
+ *   Flip back to "USDC" the moment PDAX support fixes the bucket bridge or
+ *   enables the PHP↔USDCXLM market.
+ */
+export type PaymentToken = "XLM" | "USDC";
+
+/** Cast away the literal narrowing so downstream comparisons against
+ *  "USDC" don't trip TS2367 ("comparison appears unintentional"). The
+ *  ternary below should remain meaningful — flipping the literal here
+ *  cascades to PAYMENT_TOKEN_SAC_ID without touching call sites. */
+export const PAYMENT_TOKEN = "XLM" as PaymentToken;
+
+/** The SAC contract ID passed to every new family wallet's `init` as
+ *  `payment_token`. Drives `deposit` / `spend` / SAC `transfer`. */
+export const PAYMENT_TOKEN_SAC_ID: string =
+  PAYMENT_TOKEN === "USDC" ? USDC_SAC_ID : XLM_SAC_ID;
 
 /** Origin used in invite URLs the admin shares. Hardcoded to the deployed
  *  domain so a link generated from `localhost:3000` during local dev still
@@ -36,12 +77,45 @@ export const NETWORK = {
   horizonUrl: "https://horizon-testnet.stellar.org",
 } as const;
 
-/** Stellar's native unit is the stroop. 1 XLM = 10,000,000 stroops. */
-export const STROOPS_PER_XLM = 10_000_000;
+/**
+ * passkey-kit pre-uploaded testnet artifact. The smart-wallet contract
+ * WASM is shared across every passkey-kit user on testnet — Sobre does
+ * not deploy this WASM, just instantiates new contracts per user with
+ * the user's passkey as the secp256r1 signer.
+ *
+ * Verification is inline in the wallet contract (no separate WebAuthn
+ * verifier contract like OZ smart-account-kit needs).
+ *
+ * Mainnet uses a different hash; flip alongside FACTORY_CONTRACT_ID +
+ * NETWORK when promoting to mainnet.
+ */
+export const PASSKEY_KIT = {
+  walletWasmHash:
+    "ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90",
+} as const;
 
-/** Fallback XLM → PHP rate. Used until CoinGecko comes back (or if it
- *  fails). Live rate is fetched + cached by lib/usePhpPerXlm. */
-export const PHP_PER_XLM = 16;
+/** Stellar's on-chain unit for SEP-41 tokens is 10^7 sub-units per token.
+ *  Both USDC and XLM use 7-decimal precision, so 1 token = 10,000,000 stroops
+ *  regardless of which payment token the family wallet was initialised with. */
+export const STROOPS_PER_TOKEN = 10_000_000;
+
+/** Back-compat alias. Kept so older call sites keep working while the
+ *  codebase migrates to STROOPS_PER_TOKEN. */
+export const STROOPS_PER_USDC = STROOPS_PER_TOKEN;
+
+/** First-paint fallback for PHP per token. Live rate comes from
+ *  `GET /api/pdax/price` (which proxies PDAX's `/v1/trade/price`). Values
+ *  here are roughly today's PDAX UAT indicative rates so the modal doesn't
+ *  flash an obviously-wrong number before the live rate lands. */
+export const PHP_PER_TOKEN_FALLBACK: Record<"XLM" | "USDC", number> = {
+  XLM: 7.575,
+  USDC: 62.205,
+};
+
+/** Back-compat alias. PHP_PER_USDC was hardcoded everywhere; now resolves
+ *  from the active token's fallback constant. Reads only — components should
+ *  prefer the live rate from `useTokenRate()`. */
+export const PHP_PER_USDC = PHP_PER_TOKEN_FALLBACK[PAYMENT_TOKEN];
 
 export const ENVELOPE_LABELS = ["Groceries", "Tuition", "Savings"] as const;
 export type EnvelopeName = (typeof ENVELOPE_LABELS)[number];

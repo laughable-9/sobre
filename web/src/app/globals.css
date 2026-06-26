@@ -905,6 +905,9 @@
   margin: 6px 4px;
 }
 
+/* Custom keyframe kept for back-compat — WalletMenu's refresh button uses
+ * it via an inline animation. The PDAX modals now use Tailwind's
+ * animate-spin utility (provided by tw-animate-css) instead. */
 @keyframes sobre-spin {
   from { transform: rotate(0deg); }
   to   { transform: rotate(360deg); }

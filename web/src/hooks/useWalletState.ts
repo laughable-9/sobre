@@ -9,7 +9,7 @@ import {
 } from "@stellar/stellar-sdk";
 
 import { NETWORK, type EnvelopeName } from "@/lib/config";
-import { getServer } from "@/lib/contract";
+import { getServer, simulateSourceAccount } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
 
 export interface SpendPolicy {
@@ -69,6 +69,14 @@ export function useWalletState(
   // address flipping mid-fetch.
   const generationRef = useRef(0);
   const lastRetvalXdrRef = useRef<string | null>(null);
+  // Highest `latestLedger` we've successfully applied. Soroban RPC's
+  // simulateTransaction includes the ledger the snapshot came from; when
+  // a fresh poll hits an under-replicated RPC node we sometimes see an
+  // OLDER snapshot than the one already on screen. Without this guard the
+  // dashboard flickers between pre- and post-deposit state for a few
+  // seconds after a `deposit()` lands. Tracking the high-water mark and
+  // ignoring lower-ledger snapshots stops the regression.
+  const lastLedgerRef = useRef<number>(0);
 
   const fetchState = useCallback(async () => {
     if (!userAddress || !contractId) return;
@@ -84,7 +92,7 @@ export function useWalletState(
     const isInitialFetch = lastRetvalXdrRef.current === null;
     if (isInitialFetch) setLoading(true);
     try {
-      const source = await server.getAccount(userAddress);
+      const source = simulateSourceAccount();
       const contract = new Contract(contractId);
       const tx = new TransactionBuilder(source, {
         fee: BASE_FEE,
@@ -102,11 +110,19 @@ export function useWalletState(
       if (!sim.result?.retval) {
         throw new Error("simulation returned no value");
       }
+      // Reject snapshots from a ledger we've already moved past — see the
+      // lastLedgerRef comment above. The 0-ledger case is the first poll
+      // for a wallet (no high-water mark yet) and always wins.
+      const simLedger = Number(sim.latestLedger ?? 0);
+      if (simLedger > 0 && simLedger < lastLedgerRef.current) {
+        return;
+      }
       const retvalXdr = sim.result.retval.toXDR("base64");
       if (retvalXdr === lastRetvalXdrRef.current) {
         return; // no-op poll; keep references stable
       }
       lastRetvalXdrRef.current = retvalXdr;
+      lastLedgerRef.current = Math.max(lastLedgerRef.current, simLedger);
       const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
       setState(normalizeWalletState(raw));
       setError(null);
@@ -122,6 +138,7 @@ export function useWalletState(
   // Sobres always re-issues a fresh fetch.
   useEffect(() => {
     lastRetvalXdrRef.current = null;
+    lastLedgerRef.current = 0;
     setState(null);
     setError(null);
   }, [contractId]);

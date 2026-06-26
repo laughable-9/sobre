@@ -12,12 +12,12 @@ import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 
 const QUICK_PHP = [50, 100, 500, 1000];
 
@@ -53,12 +53,11 @@ export function SpendModal({
     envelope: EnvelopeName;
   }) => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const idx = ENVELOPE_LABELS.indexOf(envelope);
   const displayName = displayEnvelopeName(envelope, state.envelope_names);
   const balanceStroops = state.balances[idx] ?? 0n;
-  const balanceXlm = Number(balanceStroops) / STROOPS_PER_XLM;
-  const balancePhp = balanceXlm * PHP_PER_XLM;
+  const balanceUsdc = Number(balanceStroops) / STROOPS_PER_USDC;
+  const balancePhp = balanceUsdc * PHP_PER_USDC;
 
   const [phpStr, setPhpStr] = useState("");
   const [memo, setMemo] = useState("");
@@ -66,8 +65,8 @@ export function SpendModal({
   const { spend, pending, error } = useSpend(userAddress, contractId);
 
   const php = Number(phpStr) || 0;
-  const xlm = php / PHP_PER_XLM;
-  const stroopsRequested = BigInt(Math.round(xlm * STROOPS_PER_XLM));
+  const usdc = php / PHP_PER_USDC;
+  const stroopsRequested = BigInt(Math.round(usdc * STROOPS_PER_USDC));
   const overspend = stroopsRequested > balanceStroops;
 
   // Predict whether the contract will route this to a pending request,
@@ -88,10 +87,10 @@ export function SpendModal({
 
   const dailyLimitPhp =
     dailyLimitStroops !== null
-      ? (Number(dailyLimitStroops) / STROOPS_PER_XLM) * PHP_PER_XLM
+      ? (Number(dailyLimitStroops) / STROOPS_PER_USDC) * PHP_PER_USDC
       : 0;
   const dailySpentPhp =
-    (Number(dailySpent) / STROOPS_PER_XLM) * PHP_PER_XLM;
+    (Number(dailySpent) / STROOPS_PER_USDC) * PHP_PER_USDC;
   const fmtPhpAmt = (n: number) =>
     `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 
@@ -144,7 +143,7 @@ export function SpendModal({
               maximumFractionDigits: 2,
             })}
           </b>{" "}
-          · <span className="tabular">{balanceXlm.toFixed(4)} XLM</span>
+          · <span className="tabular">{balanceUsdc.toFixed(4)} USDC</span>
         </p>
 
         {willGoPending ? (
@@ -262,7 +261,7 @@ export function SpendModal({
               className="mt-2 text-[12px]"
               style={{ color: "var(--text-3)" }}
             >
-              ≈ {xlm.toFixed(4)} XLM
+              ≈ {usdc.toFixed(4)} USDC
             </div>
           ) : null}
         </div>

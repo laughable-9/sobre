@@ -24,6 +24,7 @@
         }
       ]
     ],
+    [],
     [
       [
         "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
@@ -31,51 +32,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "__constructor",
+              "function_name": "create_invite",
               "args": [
                 {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  "bytes": "4bb06f8e4e3a7715d201d573d0aa423762e55dabd61a2c02278fa56cc6d294e0"
                 },
                 {
-                  "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
-                },
-                {
-                  "vec": [
-                    {
-                      "u32": 50
-                    },
-                    {
-                      "u32": 30
-                    },
-                    {
-                      "u32": 20
-                    }
-                  ]
-                },
-                {
-                  "vec": [
-                    {
-                      "string": "Groceries"
-                    },
-                    {
-                      "string": "Tuition"
-                    },
-                    {
-                      "string": "Savings"
-                    }
-                  ]
-                },
-                {
-                  "string": "Pagunsan Family"
-                },
-                {
-                  "string": "Kuya Jun"
-                },
-                {
-                  "string": "\\xf0\\x9f\\xa5\\xad"
-                },
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAITA4"
+                  "u32": 1000
                 }
               ]
             }
@@ -101,6 +64,9 @@
                 },
                 {
                   "string": "\\xf0\\x9f\\x8c\\xba"
+                },
+                {
+                  "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                 }
               ]
             }

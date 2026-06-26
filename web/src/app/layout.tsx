@@ -2,7 +2,6 @@ import type { Metadata } from "next";
 import { Fraunces, Inter } from "next/font/google";
 import "./globals.css";
 
-import { PhpRateBoot } from "@/lib/usePhpPerXlm";
 import { EnvelopeTransition } from "@/components/sobre/EnvelopeTransition";
 
 const inter = Inter({
@@ -53,7 +52,6 @@ export default function RootLayout({
       className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <PhpRateBoot />
         {children}
         <EnvelopeTransition />
       </body>

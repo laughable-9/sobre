@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Account,
   Address,
   BASE_FEE,
   Contract,
@@ -10,14 +11,26 @@ import {
   scValToNative,
   xdr,
 } from "@stellar/stellar-sdk";
-import { signTransaction } from "@stellar/freighter-api";
 
 import { NETWORK } from "@/lib/config";
+import {
+  getDeployerAddress,
+  signTransaction,
+  submitPasskeySigned,
+} from "@/lib/passkey";
 
 let cachedServer: rpc.Server | null = null;
 export function getServer(): rpc.Server {
   if (!cachedServer) cachedServer = new rpc.Server(NETWORK.rpcUrl);
   return cachedServer;
+}
+
+/** Stub `Account` for read-only simulations. simulateTransaction ignores
+ *  the source's on-chain seq so we save the getAccount RPC. The user's
+ *  smart-wallet C-address can't be the source either way because
+ *  `server.getAccount()` only resolves G-account ledger entries. */
+export function simulateSourceAccount(): Account {
+  return new Account(getDeployerAddress(), "0");
 }
 
 export interface WriteResult {
@@ -27,67 +40,84 @@ export interface WriteResult {
   returnValue: unknown;
 }
 
+/** Runtime AT shape with the bits we read after sign — the simulationData
+ *  block isn't on the public type, hence the local alias. */
+type ATWithSim = import(
+  "@stellar/stellar-sdk/contract"
+).AssembledTransaction<unknown> & {
+  simulationData?: {
+    result?: { retval?: xdr.ScVal };
+    transactionData?: unknown;
+  };
+};
+
 /**
- * Build → prepare (simulate + assemble) → Freighter-sign → submit → poll.
- * Returns the tx hash + decoded return value on success. The contract ID is
- * per-call so the same helper drives the factory plus every per-family Sobre.
+ * Passkey-signed contract write. Three phases, each owned by a different
+ * module: build the raw tx here, hand to passkey-kit (FaceID prompt) which
+ * returns an AT carrying signed auth entries, then post-sign rebuild +
+ * submit lives in `submitPasskeySigned` (shared with `createFamilyWallet`).
+ *
+ * Between sign and submit we re-simulate the AT: the buildWithOp simulate
+ * passkey-kit runs internally executes without signatures, so it misses the
+ * signer-storage reads `__check_auth` does. The footprint widens here.
+ *
+ * Return value is decoded from the simulation retval rather than the
+ * post-inclusion result so callers don't pay the inclusion-poll latency
+ * twice.
  */
 export async function invokeWrite(
   contractId: string,
   method: string,
   args: xdr.ScVal[],
-  userAddress: string,
 ): Promise<WriteResult> {
   const server = getServer();
   const contract = new Contract(contractId);
 
-  const source = await server.getAccount(userAddress);
+  const source = await server.getAccount(getDeployerAddress());
   const built = new TransactionBuilder(source, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK.passphrase,
   })
     .addOperation(contract.call(method, ...args))
-    .setTimeout(60)
+    .setTimeout(30)
     .build();
 
-  // prepareTransaction runs the simulation and bakes the auth+footprint
-  // into the tx so it's ready to sign and submit.
+  // Pre-simulate to populate the auth entry with recording-mode credentials.
+  // Without this, passkey-kit's sign() takes a fromXDR fast path that doesn't
+  // simulate internally, leaves the AT with zero auth entries, and
+  // signAuthEntries no-ops — no FaceID prompt, submit fails at require_auth.
   const prepared = await server.prepareTransaction(built);
 
-  const { signedTxXdr, error: signErr } = await signTransaction(
-    prepared.toXDR(),
-    {
-      networkPassphrase: NETWORK.passphrase,
-      address: userAddress,
-    },
-  );
-  if (signErr) {
-    throw new Error(signErr.message ?? "Freighter denied the signature.");
+  // FaceID prompt fires inside signTransaction. See the gotcha note in
+  // passkey.ts:signTransaction — we MUST use the return value.
+  const signedAT = (await signTransaction<unknown>(prepared)) as ATWithSim;
+
+  // Capture the signed auth entries — the re-simulate below applies the
+  // RPC's auth response back to .built.operations[0].auth and would wipe
+  // the signatures otherwise. Submit-time __check_auth then traps with
+  // UnreachableCodeReached because the signer lookup runs without a
+  // signature to match.
+  const signedAuth = (
+    signedAT.built?.operations[0] as
+      | { auth?: unknown[] }
+      | undefined
+  )?.auth;
+
+  // Widen the footprint to cover signer-storage reads __check_auth performs.
+  // The initial sim passkey-kit ran was unsigned, so it never executed
+  // __check_auth — the footprint missed the smart wallet's signer reads.
+  await signedAT.simulate({ restore: true });
+
+  // Restore the captured signatures over whatever the re-simulate wrote.
+  if (signedAuth && signedAT.built) {
+    (signedAT.built.operations[0] as { auth?: unknown }).auth = signedAuth;
   }
 
-  const signed = TransactionBuilder.fromXDR(signedTxXdr, NETWORK.passphrase);
-  const sent = await server.sendTransaction(signed);
+  const sent = await submitPasskeySigned(signedAT);
 
-  if (sent.status === "ERROR") {
-    const xdrStr = sent.errorResult?.toXDR("base64");
-    throw new Error(`send failed: ${xdrStr ?? "unknown"}`);
-  }
-
-  // Poll for inclusion (Stellar settles in ~5-6s on both testnet and mainnet).
-  for (let i = 0; i < 30; i++) {
-    const result = await server.getTransaction(sent.hash);
-    if (result.status === "SUCCESS") {
-      const returnValue = result.returnValue
-        ? scValToNative(result.returnValue)
-        : null;
-      return { hash: sent.hash, returnValue };
-    }
-    if (result.status === "FAILED") {
-      throw new Error("tx failed on chain");
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error("tx not confirmed within 30s");
+  const retval = signedAT.simulationData?.result?.retval;
+  const returnValue = retval ? scValToNative(retval) : null;
+  return { hash: sent.hash, returnValue };
 }
 
 /**
@@ -95,18 +125,19 @@ export async function invokeWrite(
  * value (whatever scValToNative produces for the contract's return type).
  * Throws on simulation error or missing retval.
  *
- * Caller is only used as the simulation's source account — no signature is
- * required because simulateTransaction doesn't broadcast.
+ * Source is a stub `Account` for the deployer G-address: simulateTransaction
+ * ignores the source's on-chain seq so we save an RPC by not fetching it.
+ * The user's smart-wallet C-address can't be the source either way because
+ * `server.getAccount()` only resolves G-account ledger entries.
  */
 export async function simulateRead<T = unknown>(
   contractId: string,
   method: string,
   args: xdr.ScVal[],
-  callerAddress: string,
 ): Promise<T> {
   const server = getServer();
   const contract = new Contract(contractId);
-  const source = await server.getAccount(callerAddress);
+  const source = simulateSourceAccount();
   const tx = new TransactionBuilder(source, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK.passphrase,

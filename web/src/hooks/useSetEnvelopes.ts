@@ -28,7 +28,6 @@ export function useSetEnvelopes(
           contractId,
           "set_envelopes",
           [percentsScVal(percents)],
-          adminAddress,
         );
         return hash;
       } catch (e) {

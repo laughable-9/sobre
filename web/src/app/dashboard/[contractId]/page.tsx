@@ -3,8 +3,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { useRouter, useSearchParams } from "next/navigation";
-import { AlertTriangle, ChevronLeft, Clock, Plus, UserPlus } from "lucide-react";
+import { AlertTriangle, ChevronLeft, Plus, UserPlus } from "lucide-react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -13,31 +12,34 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
-import { DepositModal } from "@/components/sobre/DepositModal";
+import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
+import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
-import { JoinForm } from "@/components/sobre/JoinForm";
 import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
 import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
+import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SpendModal } from "@/components/sobre/SpendModal";
 import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
 import type { Member } from "@/hooks/useWalletState";
 
-import { useFreighter } from "@/hooks/useFreighter";
+import { useActiveCashouts } from "@/hooks/useActiveCashouts";
+import { useActiveDeposits } from "@/hooks/useActiveDeposits";
+import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
-  STROOPS_PER_XLM,
+  STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
-import { forgetJoinedSobre, rememberJoinedSobre } from "@/lib/joinedSobres";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { forgetJoinedSobre } from "@/lib/joinedSobres";
+import { PHP_PER_USDC } from "@/lib/config";
 
 type Tab = "envelopes" | "settings";
 const SETTINGS_HASH = "#settings";
@@ -66,25 +68,18 @@ function DashboardLoading() {
 }
 
 function Dashboard({ contractId }: { contractId: string }) {
-  const PHP_PER_XLM = usePhpPerXlm();
-  const wallet = useFreighter();
+  const wallet = usePasskeyWallet();
   const { address } = wallet;
   const walletState = useWalletState(address, contractId);
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  const joinParam = searchParams.get("join");
-  // Missing, non-numeric, or past-dated expiry is treated as expired so old
-  // links and hand-edited URLs can't bypass the 30-min window.
-  const inviteExpiresAt = Number(searchParams.get("expires"));
-  const inviteExpired =
-    !Number.isFinite(inviteExpiresAt) || inviteExpiresAt * 1000 < Date.now();
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
     void walletState.refresh();
     void txFeed.refresh();
+    void activeDeposits.refresh();
+    void activeCashouts.refresh();
   };
 
   const isAdmin = Boolean(state && address && state.admin === address);
@@ -93,16 +88,48 @@ function Dashboard({ contractId }: { contractId: string }) {
   );
 
   // Kicked-member cleanup: when state has loaded and confirms this address
-  // isn't a member (and we didn't arrive via an invite link), drop any
-  // localStorage joined-Sobre entry so "My Sobres" stops listing it.
+  // isn't a member, drop any localStorage joined-Sobre entry so "My Sobres"
+  // stops listing it.
   useEffect(() => {
     if (!state || !address) return;
-    if (joinParam === contractId) return;
     if (isMember) return;
     forgetJoinedSobre(address, contractId);
-  }, [state, address, isMember, contractId, joinParam]);
+  }, [state, address, isMember, contractId]);
 
   const [depositOpen, setDepositOpen] = useState(false);
+  // Identifier of an existing pdax_deposits row to resume into. When set,
+  // the modal hydrates from that row and lands on whichever step matches
+  // its status — e.g. ConfirmStep for a row at `credited`. Cleared on
+  // close so a fresh "Add money" click starts a new flow.
+  const [resumeDepositId, setResumeDepositId] = useState<string | null>(null);
+  // Identifier of the row the deposit modal is currently working on,
+  // surfaced via PdaxDepositModal.onActiveIdentifierChange. Used to
+  // filter out the in-modal row from the PENDING bucket in the activity
+  // feed so the same deposit doesn't render in two places at once.
+  const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
+  const activeDeposits = useActiveDeposits(contractId);
+  const [cashoutOpen, setCashoutOpen] = useState(false);
+  const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
+  const [activeCashoutId, setActiveCashoutId] = useState<string | null>(null);
+  const activeCashouts = useActiveCashouts(contractId, {
+    // Fires whenever a cashout the dashboard was tracking drops off the
+    // active list because it hit `paid`. The modal's onSuccess only
+    // fires while the modal is open; this covers the close-and-walk-
+    // away path the new modal explicitly allows.
+    onPaid: (row) => {
+      flash(
+        `₱${Number(row.amount_php ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
+        "ok",
+      );
+    },
+    onFailed: (row) => {
+      flash(
+        `Cashout of ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} couldn't complete.`,
+        "warn",
+      );
+      void row; // reserved for surfacing failure_reason later
+    },
+  });
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -190,10 +217,10 @@ function Dashboard({ contractId }: { contractId: string }) {
     return sum;
   }, [txFeed.events, address]);
 
-  const handleDepositSuccess = (xlmDeposited: number) => {
+  const handleDepositSuccess = (usdcDeposited: number) => {
     setDepositOpen(false);
     triggerHeroAnimation();
-    flash(`+ ${xlmDeposited.toFixed(2)} XLM auto-split across envelopes`, "ok");
+    flash(`+ ${usdcDeposited.toFixed(2)} USDC auto-split across envelopes`, "ok");
     refreshAll();
   };
 
@@ -203,7 +230,7 @@ function Dashboard({ contractId }: { contractId: string }) {
     envelope: EnvelopeName;
   }) => {
     setSpendOpen(null);
-    const php = (Number(info.amount) / STROOPS_PER_XLM) * PHP_PER_XLM;
+    const php = (Number(info.amount) / STROOPS_PER_USDC) * PHP_PER_USDC;
     const fmtPhp = `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     const envLabel = state
       ? displayEnvelopeName(info.envelope, state.envelope_names)
@@ -279,86 +306,14 @@ function Dashboard({ contractId }: { contractId: string }) {
     );
   }
 
-  // ─── Phase 1: not connected ───────────────────────────────────────────
+  // ─── Phase 1: not signed in / wallet bootstrapping ────────────────────
   if (!address) {
     return (
       <div className="sobre-app">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <h1 className="font-serif text-[32px] font-semibold mb-3">
-              Connect your wallet
-            </h1>
-            <p className="text-[15px]" style={{ color: "var(--text-2)" }}>
-              You need to connect your wallet to open this Sobre.
-            </p>
-          </div>
+          <SignInPanel wallet={wallet} title="Sign in to open this Sobre" />
         </main>
-      </div>
-    );
-  }
-
-  // ─── Phase 2: invite-link landed here ─────────────────────────────────
-  const invitedHere = joinParam === contractId;
-  if (invitedHere && inviteExpired && state && !isMember) {
-    return (
-      <div className="sobre-app">
-        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
-        <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <div
-              className="grid place-items-center mx-auto"
-              style={{
-                color: "var(--text-3)",
-                width: 64,
-                height: 64,
-                borderRadius: "50%",
-                background: "var(--surface-alt)",
-                border: "1.5px solid var(--border)",
-              }}
-            >
-              <Clock size={28} strokeWidth={1.8} />
-            </div>
-            <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
-              This invite link has expired
-            </h1>
-            <p
-              className="text-[14px] mb-5"
-              style={{ color: "var(--text-2)" }}
-            >
-              Invite links to <em>{state.wallet_name}</em> expire 30 minutes
-              after they&apos;re generated, and each link can only be used
-              once. Ask the admin to send a fresh link.
-            </p>
-            <Link
-              href="/dashboard"
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "10px 16px", fontSize: 13 }}
-            >
-              <ChevronLeft size={14} />
-              My Sobres
-            </Link>
-          </div>
-        </main>
-      </div>
-    );
-  }
-  if (invitedHere && state && !isMember) {
-    return (
-      <div className="sobre-app">
-        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
-        <JoinForm
-          userAddress={address}
-          state={state}
-          contractId={contractId}
-          onSuccess={() => {
-            rememberJoinedSobre(address, contractId);
-            refreshAll();
-            flash("You're in. Welcome!", "ok");
-            router.replace(`/dashboard/${contractId}`);
-          }}
-          onCancel={() => router.replace(`/dashboard/${contractId}`)}
-        />
       </div>
     );
   }
@@ -491,6 +446,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           address={address}
           onDeposit={() => setDepositOpen(true)}
+          onCashout={() => setCashoutOpen(true)}
           dailySpent={dailySpent}
           onKick={isAdmin ? handleKick : undefined}
           onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
@@ -550,6 +506,45 @@ function Dashboard({ contractId }: { contractId: string }) {
           newestTxHash={newestTxHash}
           members={state.members}
           envelopeNames={state.envelope_names}
+          pendingDeposits={activeDeposits.deposits.filter(
+            (d) => d.identifier !== activeDepositId,
+          )}
+          pendingCashouts={activeCashouts.cashouts.filter(
+            (c) => c.identifier !== activeCashoutId,
+          )}
+          failedDeposits={activeDeposits.recentlyFailed}
+          failedCashouts={activeCashouts.recentlyFailed}
+          completedCashouts={activeCashouts.recentlyCompleted}
+          onResumeCashout={(identifier) => {
+            setResumeCashoutId(identifier);
+            setCashoutOpen(true);
+          }}
+          onResumeDeposit={(identifier) => {
+            setResumeDepositId(identifier);
+            setDepositOpen(true);
+          }}
+          onCancelDeposit={async (identifier) => {
+            try {
+              const res = await fetch(
+                `/api/pdax/deposits/${identifier}/cancel`,
+                { method: "POST" },
+              );
+              if (res.status === 409) {
+                flash(
+                  "PDAX already received your payment. Finishing your deposit.",
+                  "ok",
+                );
+                await activeDeposits.refresh();
+                return { ok: false, alreadyPaid: true };
+              }
+              flash("Deposit cancelled.", "warn");
+              await activeDeposits.refresh();
+              return { ok: true };
+            } catch {
+              await activeDeposits.refresh();
+              return { ok: false };
+            }
+          }}
         />
       </div>
       ) : null}
@@ -674,13 +669,110 @@ function Dashboard({ contractId }: { contractId: string }) {
       ) : null}
 
       {depositOpen ? (
-        <DepositModal
+        <PdaxDepositModal
           userAddress={address}
           state={state}
           contractId={contractId}
-          onClose={() => setDepositOpen(false)}
-          onSuccess={({ xlm }) => {
-            handleDepositSuccess(xlm);
+          resumeIdentifier={resumeDepositId ?? undefined}
+          onActiveIdentifierChange={setActiveDepositId}
+          onClose={() => {
+            setDepositOpen(false);
+            setResumeDepositId(null);
+            void activeDeposits.refresh();
+          }}
+          onAttemptCancel={async (identifier) => {
+            // Run /cancel, flash the right toast, and report
+            // alreadyPaid back to the modal. The modal decides
+            // whether to close (200) or stay open (409). Keeping
+            // the modal open in the 409 path avoids the misleading
+            // "Awaiting payment · tap to resume" entry in the
+            // activity feed for a row that's already paid — the
+            // user instead watches their deposit advance.
+            let alreadyPaid = false;
+            if (identifier) {
+              try {
+                const res = await fetch(
+                  `/api/pdax/deposits/${identifier}/cancel`,
+                  { method: "POST" },
+                );
+                if (res.status === 409) alreadyPaid = true;
+              } catch {
+                // best effort; the TTL sweep will catch it eventually
+                return { ok: false };
+              }
+            }
+            flash(
+              alreadyPaid
+                ? "PDAX already received your payment. Finishing your deposit."
+                : "Deposit cancelled.",
+              alreadyPaid ? "ok" : "warn",
+            );
+            if (alreadyPaid && identifier) {
+              // Fire-and-forget kick so the row advances from
+              // pending → funded server-side promptly, even if the
+              // user closes the tab. The modal's own poll-status
+              // loop is still firing in parallel; this is the
+              // belt-and-suspenders kick for the case where the
+              // user closes the modal right after the 409.
+              void fetch(
+                `/api/pdax/deposits/${identifier}/poll-status`,
+              ).catch(() => {});
+            } else if (identifier) {
+              // 200 OK cancel path: PDAX's /fiat/transactions reporting
+              // can lag the actual settlement, so the cancel went
+              // through even though the user really did pay. Schedule
+              // re-refreshes — the active route's resurrect pass scans
+              // recently-cancelled rows and re-checks PDAX, resurrecting
+              // any that PDAX has since marked COMPLETED. Two delays
+              // (5s + 15s) catch PDAX's typical reporting lag; the 30s
+              // tick is covered by useActiveDeposits' own heartbeat.
+              for (const delay of [5_000, 15_000]) {
+                setTimeout(() => void activeDeposits.refresh(), delay);
+              }
+            }
+            await activeDeposits.refresh();
+            return { ok: true, alreadyPaid };
+          }}
+          onSuccess={({ usdc }) => {
+            setResumeDepositId(null);
+            handleDepositSuccess(usdc);
+          }}
+        />
+      ) : null}
+
+      {cashoutOpen ? (
+        <PdaxWithdrawModal
+          userAddress={address}
+          state={state}
+          contractId={contractId}
+          resumeIdentifier={resumeCashoutId ?? undefined}
+          onActiveIdentifierChange={setActiveCashoutId}
+          onClose={() => {
+            // Modal closes while the row may still be transferred /
+            // converted / processing. The activity feed picks it up and
+            // tracks it through to `paid`, at which point the toast
+            // below fires from the auto-driver path.
+            setCashoutOpen(false);
+            setResumeCashoutId(null);
+            void activeCashouts.refresh();
+          }}
+          onCancelMidFlight={() => {
+            // Locked modal — onCancelMidFlight never fires for cashouts now,
+            // but keep the prop wired for prop-type compat with the modal.
+            setCashoutOpen(false);
+            setResumeCashoutId(null);
+            flash("Cashout cancelled.", "warn");
+          }}
+          onSuccess={({ php }) => {
+            // Only fires when the row hit `paid`, which now means
+            // PDAX confirmed bank settlement (webhook) OR the
+            // post-processing grace period elapsed without a failure.
+            setResumeCashoutId(null);
+            flash(
+              `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
+              "ok",
+            );
+            refreshAll();
           }}
         />
       ) : null}

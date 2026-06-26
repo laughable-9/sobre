@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
-    vec, Address, BytesN, Env, String, Vec,
+    vec, Address, Bytes, BytesN, Env, String, Vec,
 };
 
 const ENVELOPE_COUNT: u32 = 3;
@@ -67,6 +67,11 @@ pub enum DataKey {
     /// `upgrade()` so the admin can opt into the factory's current wasm hash
     /// without having to remember it themselves.
     Factory,
+    /// Invite token hash → expires_at_ledger. Key is `sha256(plaintext_token)`
+    /// (not the plaintext itself) so a passive Soroban indexer can't read the
+    /// storage entry and redeem the invite before the legitimate recipient.
+    /// Deleted by `join_wallet` on redemption — single-use by construction.
+    Invite(BytesN<32>),
 }
 
 /// All three checks compose with OR — any one triggering routes the spend
@@ -168,6 +173,29 @@ pub struct RequestDenied {
     pub request_id: u64,
 }
 
+/// Emitted when admin creates a single-use invite token. The hash topic lets
+/// the admin's dashboard correlate the create_invite tx with the eventual
+/// InviteRedeemed event without needing to store the plaintext server-side.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct InviteCreated {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+    pub expires_at_ledger: u32,
+}
+
+/// Emitted when a non-admin redeems an invite token to join. Pairs with
+/// InviteCreated by the matching invite_hash topic. The joiner's profile +
+/// address are also captured by the MemberJoined event that fires alongside.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct InviteRedeemed {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+    #[topic]
+    pub member: Address,
+}
+
 /// Emitted when a non-admin self-joins via the invite-link flow.
 #[contractevent]
 #[derive(Clone, Debug)]
@@ -235,6 +263,8 @@ pub enum Error {
     MemberNotFound = 10,
     CannotRemoveAdmin = 11,
     InvalidEnvelopeNames = 12,
+    InviteNotFound = 13,
+    InviteExpired = 14,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -259,6 +289,45 @@ fn validate_envelope_names(env: &Env, names: &Vec<String>) {
             panic_with_error!(env, Error::InvalidEnvelopeNames);
         }
     }
+}
+
+/// Shared body for `init` and `__constructor`. Skips the `admin.require_auth()`
+/// check because both public callers (the auth-required `init` and the
+/// factory's `__constructor` whose admin auth is already verified upstream)
+/// arrive here with the same args and the same intent — set this contract
+/// up once and never again.
+fn init_inner(
+    env: Env,
+    admin: Address,
+    payment_token: Address,
+    percents: Vec<u32>,
+    envelope_names: Vec<String>,
+    wallet_name: String,
+    admin_name: String,
+    admin_emoji: String,
+    factory: Address,
+) {
+    if env.storage().instance().has(&DataKey::Admin) {
+        panic_with_error!(&env, Error::AlreadyInitialized);
+    }
+    validate_percents(&env, &percents);
+    validate_envelope_names(&env, &envelope_names);
+
+    let inst = env.storage().instance();
+    inst.set(&DataKey::Admin, &admin);
+    inst.set(&DataKey::PaymentToken, &payment_token);
+    inst.set(&DataKey::Percents, &percents);
+    inst.set(&DataKey::EnvelopeNames, &envelope_names);
+    inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
+    inst.set(&DataKey::WalletName, &wallet_name);
+    inst.set(&DataKey::Factory, &factory);
+
+    let admin_member = Member {
+        address: admin,
+        name: admin_name,
+        emoji: admin_emoji,
+    };
+    inst.set(&DataKey::Members, &vec![&env, admin_member]);
 }
 
 /// Panics `NotInitialized` if init hasn't run — caller might otherwise expect
@@ -476,6 +545,12 @@ impl SobreContract {
     /// Auto-invoked on deploy_v2 with the constructor args, so the
     /// SobreFactory can deploy + init atomically (no front-run window).
     /// Manual deploys can still call `init` directly with the same args.
+    ///
+    /// The constructor calls `init_inner` (no auth check) instead of the
+    /// public `init`. Admin's intent is already verified at the factory
+    /// layer by `create_sobre`'s `admin.require_auth()`; requiring it again
+    /// here would produce a nested two-context auth tree that's awkward
+    /// for passkey-signed wallets to authorize in a single signature.
     pub fn __constructor(
         env: Env,
         admin: Address,
@@ -487,7 +562,7 @@ impl SobreContract {
         admin_emoji: String,
         factory: Address,
     ) {
-        Self::init(
+        init_inner(
             env,
             admin,
             payment_token,
@@ -500,11 +575,16 @@ impl SobreContract {
         );
     }
 
-    /// One-time setup. The caller becomes the admin AND the first profiled
-    /// member of the wallet. `factory` is the SobreFactory that deployed this
-    /// instance; `upgrade()` reads its `current_sobre_wasm` view to opt this
-    /// Sobre into the latest contract code without trusting the admin to
-    /// pass the right hash by hand.
+    /// One-time setup for manual (non-factory) deploys. Requires admin
+    /// authorization explicitly because there's no factory upstream to
+    /// have done it. Factory-deployed instances skip this path via
+    /// `__constructor` → `init_inner`.
+    ///
+    /// `factory` is the SobreFactory that deployed this instance (or zero
+    /// address for manual deploys); `upgrade()` reads its
+    /// `current_sobre_wasm` view to opt this Sobre into the latest
+    /// contract code without trusting the admin to pass the right hash
+    /// by hand.
     pub fn init(
         env: Env,
         admin: Address,
@@ -516,37 +596,76 @@ impl SobreContract {
         admin_emoji: String,
         factory: Address,
     ) {
-        if env.storage().instance().has(&DataKey::Admin) {
-            panic_with_error!(&env, Error::AlreadyInitialized);
-        }
         admin.require_auth();
-        validate_percents(&env, &percents);
-        validate_envelope_names(&env, &envelope_names);
-
-        let inst = env.storage().instance();
-        inst.set(&DataKey::Admin, &admin);
-        inst.set(&DataKey::PaymentToken, &payment_token);
-        inst.set(&DataKey::Percents, &percents);
-        inst.set(&DataKey::EnvelopeNames, &envelope_names);
-        inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
-        inst.set(&DataKey::WalletName, &wallet_name);
-        inst.set(&DataKey::Factory, &factory);
-
-        let admin_member = Member {
-            address: admin,
-            name: admin_name,
-            emoji: admin_emoji,
-        };
-        inst.set(&DataKey::Members, &vec![&env, admin_member]);
+        init_inner(
+            env,
+            admin,
+            payment_token,
+            percents,
+            envelope_names,
+            wallet_name,
+            admin_name,
+            admin_emoji,
+            factory,
+        );
     }
 
-    /// Self-service join used by the invite-link flow. Anyone with the link
-    /// can call this until the 2-member cap is reached — the cap is the
-    /// demo's safety net since the URL itself isn't authenticated.
-    pub fn join_wallet(env: Env, caller: Address, name: String, emoji: String) {
+    /// Admin-only. Persists a single-use invite token that the admin's client
+    /// generated off-chain. The contract stores `sha256(plaintext)` rather
+    /// than the plaintext so a Soroban indexer reading the storage entry
+    /// can't redeem the invite; only the URL recipient (who holds the
+    /// plaintext) can. The persistent entry's TTL is extended to cover the
+    /// expiry window so it's still readable at redemption time.
+    pub fn create_invite(env: Env, token_hash: BytesN<32>, expires_at_ledger: u32) {
+        require_admin_auth(&env);
+
+        let now = env.ledger().sequence();
+        if expires_at_ledger <= now {
+            panic_with_error!(&env, Error::InviteExpired);
+        }
+        let ttl = expires_at_ledger - now;
+
+        let key = DataKey::Invite(token_hash.clone());
+        env.storage().persistent().set(&key, &expires_at_ledger);
+        env.storage().persistent().extend_ttl(&key, ttl, ttl);
+
+        InviteCreated {
+            invite_hash: token_hash,
+            expires_at_ledger,
+        }
+        .publish(&env);
+    }
+
+    /// Self-service join used by the invite-link flow. Caller must present
+    /// the plaintext invite token whose `sha256` was previously stored by
+    /// `create_invite`. The entry is deleted on redemption so each token is
+    /// single-use; the 2-member cap is the demo's safety net even though
+    /// the invite gate already enforces it.
+    pub fn join_wallet(
+        env: Env,
+        caller: Address,
+        name: String,
+        emoji: String,
+        invite_token: BytesN<32>,
+    ) {
         caller.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::NotInitialized);
+        }
+
+        let token_hash: BytesN<32> = env
+            .crypto()
+            .sha256(&Bytes::from(invite_token))
+            .into();
+        let invite_key = DataKey::Invite(token_hash.clone());
+        let expires_at_ledger: u32 = env
+            .storage()
+            .persistent()
+            .get(&invite_key)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::InviteNotFound));
+        if env.ledger().sequence() > expires_at_ledger {
+            env.storage().persistent().remove(&invite_key);
+            panic_with_error!(&env, Error::InviteExpired);
         }
 
         let inst = env.storage().instance();
@@ -564,10 +683,17 @@ impl SobreContract {
         });
         inst.set(&DataKey::Members, &members);
 
+        env.storage().persistent().remove(&invite_key);
+
         MemberJoined {
-            member: caller,
+            member: caller.clone(),
             name,
             emoji,
+        }
+        .publish(&env);
+        InviteRedeemed {
+            invite_hash: token_hash,
+            member: caller,
         }
         .publish(&env);
     }

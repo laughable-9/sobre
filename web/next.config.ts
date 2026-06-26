@@ -1,7 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  // passkey-kit + its sibling SDK packages ship TypeScript source (no
+  // precompiled dist/), so Turbopack needs them on the transpile list.
+  transpilePackages: ["passkey-kit", "passkey-kit-sdk", "sac-sdk"],
 };
 
 export default nextConfig;

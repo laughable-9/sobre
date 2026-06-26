@@ -74,6 +74,13 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   const startLedgerRef = useRef<number | null>(null);
   const lastSignatureRef = useRef<string>("");
   const generationRef = useRef(0);
+  // Accumulate events across polls so a stale RPC snapshot (one replica
+  // hasn't indexed the latest ledger yet) can't make a just-landed event
+  // disappear from the feed and reappear on the next poll. Map key is
+  // tx_hash + kind + ledger so a single tx with multiple events still
+  // gets distinct entries. Capped at MAX_EVENTS so the demo doesn't keep
+  // growing memory after a long session.
+  const eventsMapRef = useRef<Map<string, FeedEvent>>(new Map());
 
   const fetchEvents = useCallback(async () => {
     if (!contractId) return;
@@ -162,13 +169,34 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
           });
         }
       }
-      parsed.reverse();
+      // Union-merge into the accumulator. We never remove events that
+      // were once seen — the only way a previously-emitted Soroban event
+      // disappears is if the chain re-orgs, which Stellar doesn't do.
+      // A stale RPC snapshot returning fewer events than we already know
+      // about is now a no-op instead of a flicker.
+      for (const ev of parsed) {
+        const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
+        if (!eventsMapRef.current.has(key)) {
+          eventsMapRef.current.set(key, ev);
+        }
+      }
 
-      // Identity-based dedupe — only re-render if the visible set changed.
-      const signature = `${parsed.length}:${parsed[0]?.txHash ?? ""}`;
+      // Cap memory. Keep the newest MAX_EVENTS by ledger; drop older.
+      if (eventsMapRef.current.size > MAX_EVENTS) {
+        const sorted = Array.from(eventsMapRef.current.entries()).sort(
+          (a, b) => b[1].ledger - a[1].ledger,
+        );
+        eventsMapRef.current = new Map(sorted.slice(0, MAX_EVENTS));
+      }
+
+      const merged = Array.from(eventsMapRef.current.values()).sort(
+        (a, b) => b.ledger - a.ledger,
+      );
+
+      const signature = `${merged.length}:${merged[0]?.txHash ?? ""}:${merged[0]?.kind ?? ""}`;
       if (signature !== lastSignatureRef.current) {
         lastSignatureRef.current = signature;
-        setEvents(parsed);
+        setEvents(merged);
       }
     } catch (e) {
       if (gen !== generationRef.current) return;
@@ -183,6 +211,7 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   useEffect(() => {
     startLedgerRef.current = null;
     lastSignatureRef.current = "";
+    eventsMapRef.current = new Map();
     setEvents([]);
   }, [contractId]);
 
@@ -195,3 +224,8 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
 
   return { events, loading, error, refresh: fetchEvents };
 }
+
+/** Bound the in-memory accumulator so a long-running session doesn't grow
+ *  the Map indefinitely. 500 events is generous — the dashboard only
+ *  renders the last few buckets anyway. */
+const MAX_EVENTS = 500;

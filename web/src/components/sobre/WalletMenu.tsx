@@ -10,7 +10,7 @@ import {
   RefreshCw,
 } from "lucide-react";
 
-import type { FreighterState } from "@/hooks/useFreighter";
+import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { shortenAddress } from "@/lib/format";
 import { getProfile, type UserProfile } from "@/lib/profile";
 import { ProfileEditModal } from "@/components/sobre/ProfileEditModal";
@@ -18,15 +18,14 @@ import { ProfileEditModal } from "@/components/sobre/ProfileEditModal";
 /**
  * Connected-wallet pill + dropdown menu. Lives in the landing nav (and any
  * other surface that wants a compact wallet affordance). Tailored to the
- * Sobre design tokens — warm cream surface, mango accents, palm-green
- * indicator dot.
+ * Sobre design tokens — warm cream surface, mango accents.
  *
  * Menu items:
  *  - Copy address — clipboard, with a brief "Copied!" affordance
- *  - Refresh — re-pulls address + network from Freighter
- *  - Disconnect — UX-only sign-out via the useFreighter disconnect flag
+ *  - Refresh — re-pulls the wallet row from Supabase
+ *  - Disconnect — sign out of Supabase + drop the passkey-kit instance
  */
-export function WalletMenu({ wallet }: { wallet: FreighterState }) {
+export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
   const { address, disconnect, refresh } = wallet;
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -87,7 +86,7 @@ export function WalletMenu({ wallet }: { wallet: FreighterState }) {
 
   const handleDisconnect = () => {
     setOpen(false);
-    disconnect();
+    void disconnect();
   };
 
   return (

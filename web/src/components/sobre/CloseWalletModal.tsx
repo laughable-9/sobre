@@ -5,10 +5,10 @@ import { AlertTriangle } from "lucide-react";
 
 import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { STROOPS_PER_XLM } from "@/lib/config";
+import { STROOPS_PER_USDC } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
 import { backdropClose } from "@/lib/ui";
-import { usePhpPerXlm } from "@/lib/usePhpPerXlm";
+import { PHP_PER_USDC } from "@/lib/config";
 
 export function CloseWalletModal({
   adminAddress,
@@ -26,15 +26,14 @@ export function CloseWalletModal({
    *  the dashboard renders a "closed" screen on subsequent visits. */
   onSuccess: () => void;
 }) {
-  const PHP_PER_XLM = usePhpPerXlm();
   const [confirmText, setConfirmText] = useState("");
   const { closeWallet, pending, error } = useCloseWallet(
     adminAddress,
     contractId,
   );
   const total = state.balances.reduce((a, b) => a + b, 0n);
-  const totalXlm = Number(total) / STROOPS_PER_XLM;
-  const totalPhp = totalXlm * PHP_PER_XLM;
+  const totalUsdc = Number(total) / STROOPS_PER_USDC;
+  const totalPhp = totalUsdc * PHP_PER_USDC;
 
   const confirmed = confirmText.trim().toUpperCase() === "CLOSE";
 
@@ -100,7 +99,7 @@ export function CloseWalletModal({
             className="text-[12px] tabular mt-0.5"
             style={{ color: "var(--text-2)" }}
           >
-            {totalXlm.toFixed(4)} XLM across all 3 envelopes
+            {totalUsdc.toFixed(4)} USDC across all 3 envelopes
           </div>
         </div>
 

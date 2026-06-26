@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import type { Session } from "@supabase/supabase-js";
 import {
   ArrowRight,
   Check,
@@ -12,16 +14,158 @@ import {
   Sparkles,
 } from "lucide-react";
 
+import {
+  createFamilyWallet,
+  deriveFamilyName,
+} from "@/lib/familyWallets";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { findOrCreateWallet, type WalletRow } from "@/lib/wallets";
+
 import { MobileScreen, PrimaryCta } from "../_shared";
 
 const TOTAL = 5;
 
+type HouseholdType = "family-at-home" | "both-abroad" | "scratch";
+
+interface SetupEnvelope {
+  name: string;
+  percent: number;
+}
+
+interface SetupConfig {
+  householdType: HouseholdType;
+  envelopes: SetupEnvelope[];
+}
+
+const DEFAULT_ENVELOPES: SetupEnvelope[] = [
+  { name: "Daily needs", percent: 50 },
+  { name: "Tuition", percent: 25 },
+  { name: "Savings", percent: 25 },
+];
+
+const DEFAULT_SETUP: SetupConfig = {
+  householdType: "family-at-home",
+  envelopes: DEFAULT_ENVELOPES,
+};
+
 export default function SetupFlow() {
   const [step, setStep] = useState(1);
+  const [session, setSession] = useState<Session | null>(null);
+  const [wallet, setWallet] = useState<WalletRow | null>(null);
+  const [walletStatus, setWalletStatus] = useState<
+    "idle" | "creating" | "error"
+  >("idle");
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [config, setConfig] = useState<SetupConfig>(DEFAULT_SETUP);
+  const [setupStatus, setSetupStatus] = useState<
+    "idle" | "creating" | "error"
+  >("idle");
+  const [setupError, setSetupError] = useState<string | null>(null);
+  const router = useRouter();
+
+  const envSum = config.envelopes.reduce((s, e) => s + e.percent, 0);
+  const envSumOk = envSum === 100;
+
+  const adminName =
+    session?.user.user_metadata?.full_name ?? session?.user.email ?? "Sobre";
+  const familyName = deriveFamilyName(adminName);
+
+  async function handleCreate() {
+    if (!wallet || !session) {
+      setSetupError("Sign in is required before creating a family wallet.");
+      setSetupStatus("error");
+      return;
+    }
+    if (!envSumOk) {
+      setSetupError(
+        `Envelope percentages must sum to 100 (currently ${envSum}).`,
+      );
+      setSetupStatus("error");
+      return;
+    }
+
+    setSetupError(null);
+    setSetupStatus("creating");
+    try {
+      const { familyContractId } = await createFamilyWallet({
+        myWalletContractId: wallet.contract_id,
+        myWalletDbId: wallet.id,
+        envelopeNames: [
+          config.envelopes[0].name,
+          config.envelopes[1].name,
+          config.envelopes[2].name,
+        ],
+        percents: [
+          config.envelopes[0].percent,
+          config.envelopes[1].percent,
+          config.envelopes[2].percent,
+        ],
+        walletName: familyName,
+        adminName,
+        adminEmoji: "🌴",
+      });
+      router.push(`/dashboard/${familyContractId}`);
+    } catch (err) {
+      setSetupError(err instanceof Error ? err.message : String(err));
+      setSetupStatus("error");
+    }
+  }
+
   const next = () => setStep((s) => Math.min(TOTAL, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
 
+  // Subscribe to Supabase session. On bounce-back from /auth/callback the
+  // session lands in cookies; this picks it up and triggers wallet bootstrap.
+  useEffect(() => {
+    const supabase = getSupabaseBrowserClient();
+    supabase.auth.getSession().then(({ data }) => setSession(data.session));
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) =>
+      setSession(s),
+    );
+    return () => sub.subscription.unsubscribe();
+  }, []);
+
+  // Surface ?auth_error from the OAuth callback if Google rejected us.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const err = params.get("auth_error");
+    if (err) setAuthError(err);
+  }, []);
+
+  // When a session lands and we don't yet have a wallet, fire passkey signup
+  // (or silent reconnect if returning) and advance to Step 2 once the row is
+  // in Supabase.
+  useEffect(() => {
+    if (!session || wallet || walletStatus !== "idle") return;
+    const displayName =
+      session.user.user_metadata?.full_name ?? session.user.email ?? "Sobre";
+    setWalletStatus("creating");
+    findOrCreateWallet(session.user.id, displayName, session.user.email ?? "")
+      .then(({ wallet: w }) => {
+        setWallet(w);
+        setWalletStatus("idle");
+        setStep(2);
+      })
+      .catch((err: unknown) => {
+        setAuthError(err instanceof Error ? err.message : String(err));
+        setWalletStatus("error");
+      });
+  }, [session, wallet, walletStatus]);
+
+  async function handleGoogleSignIn() {
+    setAuthError(null);
+    const supabase = getSupabaseBrowserClient();
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback?next=/mockup/setup`,
+      },
+    });
+    if (error) setAuthError(error.message);
+  }
+
   if (step === 1) {
+    const busy = walletStatus === "creating";
     return (
       <MobileScreen
         step={1}
@@ -29,10 +173,22 @@ export default function SetupFlow() {
         onBack={back}
         cta={
           <>
-            <GoogleCta onClick={next}>
+            <GoogleCta onClick={handleGoogleSignIn} disabled={busy}>
               <GoogleG size={18} />
-              Continue with Google
+              {busy ? "Setting up your wallet…" : "Continue with Google"}
             </GoogleCta>
+            {authError && (
+              <p
+                style={{
+                  marginTop: 10,
+                  fontSize: 12,
+                  color: "#c0392b",
+                  textAlign: "center",
+                }}
+              >
+                {authError}
+              </p>
+            )}
             <SignInLink>
               Already have an account?{" "}
               <span style={{ color: "var(--text-1)", fontWeight: 600 }}>
@@ -52,6 +208,8 @@ export default function SetupFlow() {
   }
 
   if (step === 2) {
+    const setHousehold = (value: HouseholdType) =>
+      setConfig((c) => ({ ...c, householdType: value }));
     return (
       <MobileScreen
         title="Household type"
@@ -70,23 +228,30 @@ export default function SetupFlow() {
           icon={<Home size={20} strokeWidth={2} />}
           title="Supporting family at home"
           sub="Worker abroad + family in PH"
-          selected
+          selected={config.householdType === "family-at-home"}
+          onClick={() => setHousehold("family-at-home")}
         />
         <ChoiceCard
           icon={<Plane size={20} strokeWidth={2} />}
           title="Both working abroad"
           sub="Two workers, family back home"
+          selected={config.householdType === "both-abroad"}
+          onClick={() => setHousehold("both-abroad")}
         />
         <ChoiceCard
           icon={<Sparkles size={20} strokeWidth={2} />}
           title="Start from scratch"
           sub="Build your own structure"
+          selected={config.householdType === "scratch"}
+          onClick={() => setHousehold("scratch")}
         />
       </MobileScreen>
     );
   }
 
   if (step === 3) {
+    const youName =
+      session?.user.user_metadata?.full_name ?? session?.user.email ?? "You";
     return (
       <MobileScreen
         title="Add members"
@@ -103,19 +268,12 @@ export default function SetupFlow() {
         <Question>Who&apos;s in this Sobre?</Question>
         <Section>Co-Admins</Section>
         <Person
-          initials="MR"
-          name="Maria (you)"
-          role="Admin · Hong Kong"
+          initials={initialsOf(youName)}
+          name={`${youName} (you)`}
+          role="Admin"
         />
-        <Person initials="JL" name="Joel" role="Admin · Manila" />
         <AddRow label="Add another Admin" />
         <Section>Recipients</Section>
-        <Person
-          initials="LL"
-          name="Lola Edna"
-          role="Recipient · monthly allowance"
-          green
-        />
         <AddRow label="Add a Recipient" />
       </MobileScreen>
     );
@@ -136,36 +294,75 @@ export default function SetupFlow() {
         }
       >
         <Question>How should every deposit split?</Question>
-        <EnvRow name="Daily needs" pct={40} amount="₱ 12,000" />
-        <EnvRow name="Bills & utilities" pct={25} amount="₱ 7,500" />
-        <EnvRow name="Kids" pct={20} amount="₱ 6,000" />
-        <EnvRow name="Savings" pct={15} amount="₱ 4,500" locked />
-        <SumRow />
+        {config.envelopes.map((env, i) => (
+          <EnvRow
+            key={env.name}
+            name={env.name}
+            pct={env.percent}
+            amount={`₱ ${pesoFor(env.percent).toLocaleString()}`}
+            locked={env.name === "Savings"}
+          />
+        ))}
+        <SumRow sum={envSum} ok={envSumOk} />
       </MobileScreen>
     );
   }
 
+  const busy = setupStatus === "creating";
+  const envSummary = `3 · ${config.envelopes.map((e) => e.percent).join(" / ")}`;
+
   return (
     <MobileScreen
-      title="Send invites"
+      title="Confirm and create"
       step={5}
       total={TOTAL}
-      onBack={back}
+      onBack={busy ? () => undefined : back}
       cta={
-        <PrimaryCta onClick={() => setStep(1)}>
-          <Send size={16} strokeWidth={2.5} />
-          Send invites
-        </PrimaryCta>
+        <>
+          <PrimaryCta onClick={busy ? () => undefined : handleCreate}>
+            {busy ? (
+              "Creating your family wallet…"
+            ) : (
+              <>
+                <Send size={16} strokeWidth={2.5} />
+                Create wallet
+              </>
+            )}
+          </PrimaryCta>
+          {setupError && (
+            <p
+              style={{
+                marginTop: 10,
+                fontSize: 12,
+                color: "#c0392b",
+                textAlign: "center",
+              }}
+            >
+              {setupError}
+            </p>
+          )}
+        </>
       }
     >
       <Eyebrow>All set</Eyebrow>
-      <BigTitle>Familia Reyes</BigTitle>
+      <BigTitle>{familyName}</BigTitle>
       <div style={{ marginTop: 24 }}>
-        <SummaryRow label="Admins" value="Maria, Joel" />
-        <SummaryRow label="Recipient" value="Lola Edna" />
-        <SummaryRow label="Envelopes" value="4 · 40 / 25 / 20 / 15" />
+        <SummaryRow label="Admin" value={adminName} />
+        <SummaryRow
+          label="Envelopes"
+          value={config.envelopes.map((e) => e.name).join(", ")}
+        />
+        <SummaryRow label="Split" value={envSummary} />
         <SummaryRow label="Savings" value="Protected" green />
-        <SummaryRow label="Backup destination" value="Set after first deposit" muted />
+        <SummaryRow
+          label="Smart wallet"
+          value={
+            wallet?.contract_id
+              ? `${wallet.contract_id.slice(0, 6)}…${wallet.contract_id.slice(-4)}`
+              : "—"
+          }
+          muted
+        />
       </div>
     </MobileScreen>
   );
@@ -228,14 +425,25 @@ function ChoiceCard({
   title,
   sub,
   selected,
+  onClick,
 }: {
   icon: React.ReactNode;
   title: string;
   sub: string;
   selected?: boolean;
+  onClick?: () => void;
 }) {
   return (
     <div
+      onClick={onClick}
+      role={onClick ? "button" : undefined}
+      tabIndex={onClick ? 0 : undefined}
+      onKeyDown={(e) => {
+        if (onClick && (e.key === "Enter" || e.key === " ")) {
+          e.preventDefault();
+          onClick();
+        }
+      }}
       style={{
         background: selected ? "#fbe7d2" : "var(--surface)",
         border: `1.5px solid ${selected ? "var(--sobre-primary)" : "var(--border)"}`,
@@ -245,6 +453,7 @@ function ChoiceCard({
         display: "flex",
         alignItems: "center",
         gap: 14,
+        cursor: onClick ? "pointer" : "default",
       }}
     >
       <div
@@ -435,14 +644,14 @@ function EnvRow({
   );
 }
 
-function SumRow() {
+function SumRow({ sum, ok }: { sum: number; ok: boolean }) {
   return (
     <div
       style={{
         display: "flex",
         justifyContent: "space-between",
-        background: "var(--accent-soft)",
-        color: "var(--sobre-accent)",
+        background: ok ? "var(--accent-soft)" : "#fbe2dd",
+        color: ok ? "var(--sobre-accent)" : "#a13a2c",
         borderRadius: 12,
         padding: "12px 14px",
         fontSize: 13,
@@ -450,10 +659,26 @@ function SumRow() {
         marginTop: 4,
       }}
     >
-      <span>Total allocated</span>
-      <span>100% · ₱ 30,000</span>
+      <span>{ok ? "Total allocated" : "Allocate to 100%"}</span>
+      <span>
+        {sum}% · ₱ {pesoFor(sum).toLocaleString()}
+      </span>
     </div>
   );
+}
+
+/** Indicative monthly deposit used purely for the split preview. */
+const PREVIEW_DEPOSIT_PESOS = 30000;
+
+function pesoFor(percent: number): number {
+  return Math.round((percent * PREVIEW_DEPOSIT_PESOS) / 100);
+}
+
+function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function SummaryRow({
@@ -579,14 +804,17 @@ function TermsLine({ children }: { children: React.ReactNode }) {
 function GoogleCta({
   children,
   onClick,
+  disabled,
 }: {
   children: React.ReactNode;
   onClick: () => void;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      disabled={disabled}
       style={{
         width: "100%",
         background: "var(--surface)",
@@ -601,6 +829,8 @@ function GoogleCta({
         justifyContent: "center",
         gap: 12,
         boxShadow: "var(--shadow-sm)",
+        opacity: disabled ? 0.6 : 1,
+        cursor: disabled ? "wait" : "pointer",
       }}
     >
       {children}

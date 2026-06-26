@@ -12,21 +12,24 @@ export function JoinForm({
   userAddress,
   state,
   contractId,
+  inviteToken,
   onSuccess,
   onCancel,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** 32-byte plaintext token from the `/invite/<token>` URL. Passed to
+   *  `join_wallet` so the contract can verify against the on-chain hash. */
+  inviteToken: Uint8Array;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
   const savedProfile = getProfile(userAddress);
   const { joinWallet, pending, error } = useJoinWallet(userAddress, contractId);
 
-  const alreadyMember = state.members.some(
-    (m) => m.address === userAddress,
-  );
+  // `alreadyMember` is handled one altitude up — the /invite/[token] page
+  // bounces to the dashboard before this form ever renders.
   const isFull = state.members.length >= 2;
 
   return (
@@ -52,28 +55,7 @@ export function JoinForm({
           <b style={{ color: "var(--text-1)" }}>{state.wallet_name}</b>.
         </p>
 
-        {alreadyMember ? (
-          <>
-            <div
-              className="sobre-warning-bar"
-              style={{
-                background: "var(--accent-soft)",
-                borderColor: "#cfe0d4",
-                color: "var(--sobre-accent)",
-              }}
-            >
-              <div>You&apos;re already a member of this wallet.</div>
-            </div>
-            <button
-              type="button"
-              onClick={onCancel}
-              className="sobre-btn sobre-btn-primary w-full justify-center mt-4"
-              style={{ padding: "14px 22px", fontSize: 15 }}
-            >
-              Go to the dashboard
-            </button>
-          </>
-        ) : isFull ? (
+        {isFull ? (
           <>
             <div className="sobre-warning-bar">
               <div>
@@ -100,7 +82,11 @@ export function JoinForm({
             onCancel={onCancel}
             onConfirm={async () => {
               try {
-                await joinWallet(savedProfile.name, savedProfile.emoji);
+                await joinWallet(
+                  savedProfile.name,
+                  savedProfile.emoji,
+                  inviteToken,
+                );
                 onSuccess();
               } catch {
                 /* error on hook */
@@ -115,7 +101,7 @@ export function JoinForm({
             onCancel={onCancel}
             onSubmit={async (name, emoji) => {
               try {
-                await joinWallet(name, emoji);
+                await joinWallet(name, emoji, inviteToken);
                 onSuccess();
               } catch {
                 /* error on hook */
