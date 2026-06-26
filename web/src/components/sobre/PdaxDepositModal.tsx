@@ -233,9 +233,11 @@ export function PdaxDepositModal({
   //   funds where the user can't easily recover them mid-demo.
   // - CANCELLABLE in-flight states: preparing + awaiting/pending. PDAX
   //   may have a half-started checkout but no money has moved yet, so
-  //   a cancel toast is honest signal. If the user had already paid
-  //   GrabPay, the row sits at pending until polling re-detects it
-  //   (modal would have to be re-opened from Activity, follow-up work).
+  //   we fire the cancel endpoint server-side here — without it the
+  //   row stays at status='pending' and immediately re-surfaces in the
+  //   PENDING bucket via the activity feed's refresh, which then 404s
+  //   the resume because the row is technically still pending. Calling
+  //   /cancel ensures the row is `failed` by the time the feed reads.
   // - Terminal states (done/failed) and pre-start (input): plain close.
   const handleClose = () => {
     const locked =
@@ -246,7 +248,14 @@ export function PdaxDepositModal({
     if (locked) return;
 
     const inFlight = phase === "preparing" || phase === "awaiting";
-    if (inFlight && onCancelMidFlight) onCancelMidFlight();
+    if (inFlight) {
+      if (row?.identifier) {
+        void fetch(`/api/pdax/deposits/${row.identifier}/cancel`, {
+          method: "POST",
+        });
+      }
+      onCancelMidFlight?.();
+    }
     onClose();
   };
 
