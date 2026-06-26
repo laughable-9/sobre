@@ -46,14 +46,16 @@ type Phase =
  *  these on a 3.5s interval so the spinner feels alive while we wait on
  *  PDAX. First entry is the on-arrival message; later entries are
  *  reassurance variants. */
+/** Every title sits on one line so the modal height doesn't bob as the
+ *  rotation cycles. Keep new entries under ~28 characters. */
 const PENDING_MESSAGES = [
-  "Waiting for your GrabPay payment…",
+  "Waiting for payment…",
   "Almost there…",
-  "Still listening for PDAX…",
+  "Still listening…",
 ];
 
 const FUNDED_MESSAGES = [
-  "Buying XLM through PDAX…",
+  "Buying XLM…",
   "Locking in the rate…",
   "Sending to your wallet…",
 ];
@@ -65,7 +67,7 @@ function rotatingTitlesFor(status: DepositStatus): string[] {
     case "funded":
       return FUNDED_MESSAGES;
     case "credited":
-      return ["Funds landed in your wallet"];
+      return ["Funds landed"];
     case "split":
       return ["Done"];
     case "failed":

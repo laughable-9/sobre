@@ -31,7 +31,19 @@ export function CenteredCopy({
       >
         {icon}
       </div>
-      <h2 className="mb-2">{title}</h2>
+      {/* nowrap so rotating titles never push the modal height around. If a
+       *  string somehow exceeds the modal width it'll ellipsis rather than
+       *  wrap onto a second line and bob the layout. */}
+      <h2
+        className="mb-2"
+        style={{
+          whiteSpace: "nowrap",
+          overflow: "hidden",
+          textOverflow: "ellipsis",
+        }}
+      >
+        {title}
+      </h2>
       {body ? <p className="sub mb-4">{body}</p> : null}
       {/* Centered footer — the shared sobre-modal-actions class right-aligns,
        *  which clashes with a centered title/body layout. Override to keep

@@ -79,13 +79,13 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
 }
 
 /** Status-line copy for the AwaitingStep spinner. Hoisted so the record
- *  literal isn't allocated per-render. Worded as activities the user can
- *  feel are happening, not static state names. */
+ *  literal isn't allocated per-render. Each fits on one line so the
+ *  modal height stays stable as it advances. */
 const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
-  spent: "Forwarding your XLM to PDAX…",
-  transferred: "PDAX has it. Converting to pesos…",
-  converted: "Sending pesos to your bank via InstaPay…",
+  spent: "Forwarding to PDAX…",
+  transferred: "Converting to pesos…",
+  converted: "Paying out to your bank…",
   paid: "Done",
   failed: "Failed",
 };
