@@ -6,6 +6,7 @@ import {
   Operation,
   rpc,
   TransactionBuilder,
+  xdr,
   type Transaction,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
@@ -233,14 +234,15 @@ export async function submit(
   const send = await server.sendTransaction(tx);
   if (send.status === "ERROR") {
     const errXdr = send.errorResult?.toXDR("base64") ?? "unknown";
-    // Decode common pre-inclusion errors so the user sees a useful
-    // message instead of a base64 blob. `AAAAAAAAiZ/////7AAAAAA==` is
-    // the canonical txBAD_SEQ result — the deployer's sequence number
-    // on the signed tx lagged the chain, usually because Soroban RPC
-    // hadn't indexed our previous tx yet when we fetched the account.
-    // Manual retry refetches the account and lands on the next
-    // sequence cleanly.
-    if (errXdr === "AAAAAAAAiZ/////7AAAAAA==") {
+    // Decode the TransactionResult so the user sees a useful message
+    // instead of a base64 blob. The canonical case we hit is txBAD_SEQ
+    // — the deployer's sequence number on the signed tx lagged the
+    // chain, usually because Soroban RPC hadn't indexed our previous
+    // tx yet when we fetched the account. The fee_charged field varies
+    // per tx so exact-string matching on the base64 doesn't work; we
+    // properly parse the XDR and check the result code.
+    const code = decodeTxResultCode(errXdr);
+    if (code === "txBadSeq") {
       throw new Error(
         "Network is catching up to your previous transaction. Tap again in a few seconds.",
       );
@@ -269,6 +271,18 @@ export async function submit(
   throw new Error(
     `tx failed on chain | hash=${send.hash} | result=${resultXdr} | events=${events}`,
   );
+}
+
+/** Parse a base64 TransactionResult XDR and return the canonical result-
+ *  code name (e.g. "txBadSeq", "txInsufficientFee"). Returns null on any
+ *  decode error so the caller falls through to the raw XDR string. */
+function decodeTxResultCode(errXdr: string): string | null {
+  try {
+    const result = xdr.TransactionResult.fromXDR(errXdr, "base64");
+    return result.result().switch().name;
+  } catch {
+    return null;
+  }
 }
 
 /** Disconnect — passkey-kit doesn't keep server state, just clear the
