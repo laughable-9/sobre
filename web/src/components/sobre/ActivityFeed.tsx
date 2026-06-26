@@ -189,6 +189,8 @@ export function ActivityFeed({
  *  it `failed` server-side). Cancel at status='credited' doesn't pull
  *  XLM back out of the smart wallet — that's a caveat we accept for the
  *  demo. */
+const ROW_EXIT_MS = 300;
+
 function PendingDepositRow({
   deposit,
   onResume,
@@ -199,11 +201,15 @@ function PendingDepositRow({
   onCancel?: (identifier: string) => void | Promise<void>;
 }) {
   const [cancelling, setCancelling] = useState(false);
-  // Out-animation gate: when the user taps the trash, we play a quick
-  // slide+fade out before the API + parent refresh remove the row from
-  // the underlying list. Makes the cancel feel like a real action
-  // instead of the row blinking away.
+  // Two-step exit so the row stays gone even between "animation done" and
+  // "API + parent refresh complete":
+  // - exiting: applies the animate-out classes
+  // - hidden: returns null after ROW_EXIT_MS so the row doesn't pop back
+  //   into view when the css animation ends (tw-animate-css doesn't pin
+  //   the final state) and isn't seen twice if the parent refreshes
+  //   later than the animation finishes.
   const [exiting, setExiting] = useState(false);
+  const [hidden, setHidden] = useState(false);
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
@@ -217,16 +223,18 @@ function PendingDepositRow({
     if (!onCancel || cancelling) return;
     setCancelling(true);
     setExiting(true);
-    // Wait for the exit animation to mostly finish before firing the
-    // API so the user sees the motion. The dashboard's refresh then
-    // unmounts the row naturally.
-    await new Promise((r) => setTimeout(r, 280));
+    setTimeout(() => setHidden(true), ROW_EXIT_MS);
     try {
       await onCancel(deposit.identifier);
+    } catch {
+      // Restore if the API call failed so the user can retry.
+      setHidden(false);
+      setExiting(false);
     } finally {
       setCancelling(false);
     }
   };
+  if (hidden) return null;
   return (
     <div
       role="button"
