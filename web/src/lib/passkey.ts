@@ -182,10 +182,24 @@ export async function signTransaction<T>(
     | string,
 ): Promise<import("@stellar/stellar-sdk/contract").AssembledTransaction<T>> {
   const kit = getKit();
-  return (await kit.sign(
-    txn as unknown as Parameters<typeof kit.sign>[0],
-  )) as unknown as import("@stellar/stellar-sdk/contract").AssembledTransaction<T>;
+  // Default expiration of `latestLedger + SIG_EXPIRATION_WINDOW_LEDGERS`
+  // gives the signed TX a comfortable window between sign and inclusion.
+  // Without an explicit value, passkey-kit / stellar-sdk has fallen back
+  // to ~1 ledger on testnet, which races against RPC indexing lag and
+  // surfaces as "signature has expired" at execution time. 100 ledgers
+  // (~8 minutes) is well beyond any reasonable sign→submit→include
+  // pipeline without becoming a replay-attack risk for the demo.
+  const { sequence } = await getServer().getLatestLedger();
+  return (await kit.sign(txn as unknown as Parameters<typeof kit.sign>[0], {
+    expiration: sequence + SIG_EXPIRATION_WINDOW_LEDGERS,
+  })) as unknown as import(
+    "@stellar/stellar-sdk/contract"
+  ).AssembledTransaction<T>;
 }
+
+/** How many ledgers ahead to set every passkey-signed TX's
+ *  signature_expiration_ledger. 1 ledger ≈ 5s → 100 ledgers ≈ 8 minutes. */
+const SIG_EXPIRATION_WINDOW_LEDGERS = 100;
 
 /**
  * Kept for the eventual mainnet path: submits via the OpenZeppelin
