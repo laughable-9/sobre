@@ -5,6 +5,10 @@ import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { envelopeScVal, invokeWrite } from "@/lib/contract";
 import { PAYMENT_TOKEN_SAC_ID, type EnvelopeName } from "@/lib/config";
+import {
+  clearCashoutRecovery,
+  saveCashoutRecovery,
+} from "@/lib/cashoutRecovery";
 
 /**
  * Cashout's two user-signed legs, packaged back-to-back:
@@ -28,9 +32,31 @@ import { PAYMENT_TOKEN_SAC_ID, type EnvelopeName } from "@/lib/config";
  *  was a PDAX cashout rather than a regular merchant spend. */
 const SPEND_MEMO = "PDAX cashout";
 
+/** Details a caller passes in alongside the on-chain args so a half-
+ *  completed cashout (spend tx landed, SAC transfer didn't) can be fully
+ *  re-attempted from cashoutRecovery state — including hitting /confirmed
+ *  on the original row without losing the bank info. */
+export interface CashoutLegArgs {
+  identifier: string;
+  envelope: EnvelopeName;
+  amountStroops: bigint;
+  amountPhp: number;
+  amountToken: number;
+  relayG: string;
+  bankCode: string;
+  accountName: string;
+  accountNumber: string;
+}
+
 export interface UseCashoutSignaturesResult {
-  signAndForward: (args: {
-    envelope: EnvelopeName;
+  signAndForward: (
+    args: CashoutLegArgs,
+  ) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
+  /** Just the SAC transfer leg — for resuming a cashout whose spend
+   *  already landed on chain. Recovers from a localStorage snapshot OR
+   *  the server-side recoverable-rows endpoint. */
+  retryForward: (args: {
+    spendTxHash: string;
     amountStroops: bigint;
     relayG: string;
   }) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
@@ -50,11 +76,9 @@ export function useCashoutSignatures(
   const [step, setStep] = useState<"idle" | "spending" | "forwarding">("idle");
 
   const signAndForward = useCallback(
-    async (args: {
-      envelope: EnvelopeName;
-      amountStroops: bigint;
-      relayG: string;
-    }): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
+    async (
+      args: CashoutLegArgs,
+    ): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
@@ -69,6 +93,24 @@ export function useCashoutSignatures(
         ];
         const spendResult = await invokeWrite(contractId, "spend", spendArgs);
 
+        // Persist the moment we know the spend succeeded but BEFORE the
+        // SAC transfer is even attempted. This is the partial-state
+        // window where a failure used to strand XLM in the smart wallet
+        // forever — now the modal can pick it up on the next mount.
+        saveCashoutRecovery({
+          identifier: args.identifier,
+          contractId,
+          spendTxHash: spendResult.hash,
+          amountStroops: args.amountStroops.toString(),
+          relayG: args.relayG,
+          envelope: args.envelope,
+          amountPhp: args.amountPhp,
+          amountToken: args.amountToken,
+          bankCode: args.bankCode,
+          accountName: args.accountName,
+          accountNumber: args.accountNumber,
+        });
+
         setStep("forwarding");
         const transferArgs = [
           Address.fromString(userAddress).toScVal(),
@@ -81,6 +123,8 @@ export function useCashoutSignatures(
           transferArgs,
         );
 
+        // SAC transfer landed too — modal's /confirmed call will clear
+        // the snapshot once it lands the row at status='spent'.
         return {
           spendTxHash: spendResult.hash,
           forwardTxHash: forwardResult.hash,
@@ -97,5 +141,45 @@ export function useCashoutSignatures(
     [userAddress, contractId],
   );
 
-  return { signAndForward, pending, error, step };
+  const retryForward = useCallback(
+    async (args: {
+      spendTxHash: string;
+      amountStroops: bigint;
+      relayG: string;
+    }): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
+      if (!userAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
+      setPending(true);
+      setError(null);
+      try {
+        setStep("forwarding");
+        const transferArgs = [
+          Address.fromString(userAddress).toScVal(),
+          Address.fromString(args.relayG).toScVal(),
+          nativeToScVal(args.amountStroops, { type: "i128" }),
+        ];
+        const forwardResult = await invokeWrite(
+          PAYMENT_TOKEN_SAC_ID,
+          "transfer",
+          transferArgs,
+        );
+        return {
+          spendTxHash: args.spendTxHash,
+          forwardTxHash: forwardResult.hash,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setStep("idle");
+        setPending(false);
+      }
+    },
+    [userAddress, contractId],
+  );
+
+  return { signAndForward, retryForward, pending, error, step };
 }
+
+export { clearCashoutRecovery };

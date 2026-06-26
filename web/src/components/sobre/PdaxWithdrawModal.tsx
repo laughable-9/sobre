@@ -13,7 +13,10 @@ import {
 } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
-import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
+import {
+  clearCashoutRecovery,
+  useCashoutSignatures,
+} from "@/hooks/useCashoutSignatures";
 import {
   usePdaxWithdraw,
   type WithdrawStatus,
@@ -27,6 +30,10 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import {
+  readCashoutRecovery,
+  type CashoutRecoverySnapshot,
+} from "@/lib/cashoutRecovery";
 import { maskAccountNumber } from "@/lib/format";
 import { backdropClose } from "@/lib/ui";
 
@@ -55,7 +62,8 @@ type LocalPhase =
   | "loading_bank"
   | "register_bank"
   | "input"
-  | "signing";
+  | "signing"
+  | "recovery_prompt";
 
 type Phase = LocalPhase | "awaiting" | "done" | "failed";
 
@@ -142,17 +150,88 @@ export function PdaxWithdrawModal({
   }, [row?.identifier, onActiveIdentifierChange]);
   const {
     signAndForward,
+    retryForward,
     pending: signPending,
     error: signError,
     step: signStep,
   } = useCashoutSignatures(userAddress, contractId);
 
-  // Load the member's default bank on mount.
+  // Recovery state. Either of these being set means the modal opens at
+  // the recovery_prompt phase instead of the input form. Snapshot wins
+  // when both are present (localStorage carries the bank info verbatim;
+  // the server endpoint is the fallback for users who lost it).
+  const [recoverySnapshot, setRecoverySnapshot] =
+    useState<CashoutRecoverySnapshot | null>(null);
+  const [recoveryFromServer, setRecoveryFromServer] = useState<{
+    identifier: string;
+    spendTxHash: string;
+    amountStroops: string;
+    amountPhp: number;
+    amountToken: number;
+    envelope: EnvelopeName;
+    bankCode: string;
+    accountName: string;
+    accountNumber: string;
+  } | null>(null);
+
+  // Load the member's default bank on mount, AND check for a recoverable
+  // half-completed cashout before settling on the input step.
   useEffect(() => {
     let cancelled = false;
-    void fetch("/api/member/bank")
-      .then((r) => r.json())
-      .then((j: { bank: BankRecord | null }) => {
+    void (async () => {
+      // Localstorage is the fast path — written by useCashoutSignatures
+      // right after the spend tx returns SUCCESS.
+      const snap = readCashoutRecovery();
+      if (snap && snap.contractId === contractId && !cancelled) {
+        setRecoverySnapshot(snap);
+        setLocalPhase("recovery_prompt");
+        return;
+      }
+      // Server fallback for users without a snapshot (Kyle's case): scan
+      // pdax_withdrawals + on-chain Spend events to find pending rows
+      // whose spend already landed.
+      try {
+        const res = await fetch(
+          `/api/pdax/withdrawals/recoverable?contract_id=${encodeURIComponent(contractId)}`,
+        );
+        if (res.ok) {
+          const json = (await res.json()) as {
+            recoverable: Array<{
+              identifier: string;
+              envelope: EnvelopeName;
+              amountStroops: string;
+              amountPhp: number;
+              amountToken: number;
+              beneficiary_bank_code: string;
+              beneficiary_account_name: string;
+              beneficiary_account_number: string;
+              spendTxHash: string;
+            }>;
+          };
+          if (json.recoverable.length > 0 && !cancelled) {
+            const r = json.recoverable[0];
+            setRecoveryFromServer({
+              identifier: r.identifier,
+              spendTxHash: r.spendTxHash,
+              amountStroops: r.amountStroops,
+              amountPhp: r.amountPhp,
+              amountToken: r.amountToken,
+              envelope: r.envelope,
+              bankCode: r.beneficiary_bank_code,
+              accountName: r.beneficiary_account_name,
+              accountNumber: r.beneficiary_account_number,
+            });
+            setLocalPhase("recovery_prompt");
+            return;
+          }
+        }
+      } catch {
+        // server-side scan failed; fall through to fresh cashout flow
+      }
+      // No recovery — load the member's default bank and go to input.
+      try {
+        const r = await fetch("/api/member/bank");
+        const j = (await r.json()) as { bank: BankRecord | null };
         if (cancelled) return;
         if (j.bank) {
           setBank(j.bank);
@@ -160,14 +239,14 @@ export function PdaxWithdrawModal({
         } else {
           setLocalPhase("register_bank");
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) setLocalPhase("register_bank");
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [contractId]);
 
   // Derived phase: server-driven status wins for spent/.../paid/failed,
   // local state owns the pre-signing UI. Computing this inline avoids an
@@ -232,7 +311,7 @@ export function PdaxWithdrawModal({
     if (!validAmount || overspend || !bank) return;
     setLocalPhase("signing");
     try {
-      const { relayG } = await initiate({
+      const { identifier, relayG } = await initiate({
         envelope,
         amountToken,
         amountPhp,
@@ -242,22 +321,84 @@ export function PdaxWithdrawModal({
       });
 
       const { spendTxHash, forwardTxHash } = await signAndForward({
+        identifier,
         envelope,
         amountStroops,
+        amountPhp,
+        amountToken,
         relayG,
+        bankCode: bank.bank_code,
+        accountName: bank.account_name,
+        accountNumber: bank.account_number,
       });
 
       await confirmSigned({ spendTxHash, forwardTxHash });
-      // Row goes to 'spent' via Realtime; phase advances to awaiting in the
-      // status effect above.
+      // /confirmed landed the row at status='spent' — the recovery
+      // snapshot is no longer load-bearing.
+      clearCashoutRecovery();
     } catch {
-      // Errors surface via hook state. Walk back to input so the user can
-      // retry. If the spend leg landed but the forward leg didn't, the XLM
-      // is in the user's smart wallet — they can retry, the spend amount is
-      // additive, and the pdax_withdrawals row still says 'pending' so a
-      // retry just lands a new SAC transfer to relay.
+      // signAndForward already persisted the snapshot if the spend
+      // succeeded; we walk back to input so the user can dismiss or
+      // open a fresh modal that will offer Resume.
       setLocalPhase("input");
     }
+  };
+
+  // Recovery path: skip the spend (it already landed) and re-attempt only
+  // the SAC transfer + /confirmed. snap takes precedence over server data
+  // when both are present.
+  const handleResumeRecovery = async () => {
+    const source =
+      recoverySnapshot ??
+      (recoveryFromServer
+        ? {
+            identifier: recoveryFromServer.identifier,
+            spendTxHash: recoveryFromServer.spendTxHash,
+            amountStroops: recoveryFromServer.amountStroops,
+            relayG: "",
+            envelope: recoveryFromServer.envelope,
+            amountPhp: recoveryFromServer.amountPhp,
+            amountToken: recoveryFromServer.amountToken,
+            bankCode: recoveryFromServer.bankCode,
+            accountName: recoveryFromServer.accountName,
+            accountNumber: recoveryFromServer.accountNumber,
+          }
+        : null);
+    if (!source) return;
+    setLocalPhase("signing");
+    try {
+      // Use the relayG from the snapshot if present; otherwise resolve
+      // via initiate, which is idempotent server-side (returns the
+      // existing row if identifier matches).
+      let relayG = source.relayG;
+      if (!relayG) {
+        const init = await initiate({
+          envelope: source.envelope,
+          amountToken: source.amountToken,
+          amountPhp: source.amountPhp,
+          bankCode: source.bankCode,
+          accountName: source.accountName,
+          accountNumber: source.accountNumber,
+        });
+        relayG = init.relayG;
+      }
+      const { spendTxHash, forwardTxHash } = await retryForward({
+        spendTxHash: source.spendTxHash,
+        amountStroops: BigInt(source.amountStroops),
+        relayG,
+      });
+      await confirmSigned({ spendTxHash, forwardTxHash });
+      clearCashoutRecovery();
+    } catch {
+      setLocalPhase("recovery_prompt");
+    }
+  };
+
+  const handleDiscardRecovery = () => {
+    clearCashoutRecovery();
+    setRecoverySnapshot(null);
+    setRecoveryFromServer(null);
+    setLocalPhase(bank ? "input" : "loading_bank");
   };
 
   const error = pdaxError ?? signError;
@@ -285,6 +426,31 @@ export function PdaxWithdrawModal({
               setBank(b);
               setLocalPhase("input");
             }}
+          />
+        ) : null}
+
+        {phase === "recovery_prompt" ? (
+          <RecoveryPromptStep
+            envelopeNames={state.envelope_names}
+            envelope={
+              recoverySnapshot?.envelope ??
+              recoveryFromServer?.envelope ??
+              "Groceries"
+            }
+            amountPhp={
+              recoverySnapshot?.amountPhp ?? recoveryFromServer?.amountPhp ?? 0
+            }
+            bankName={
+              BANKS.find(
+                (b) =>
+                  b.code ===
+                  (recoverySnapshot?.bankCode ?? recoveryFromServer?.bankCode),
+              )?.name ?? "your bank"
+            }
+            error={error}
+            pending={pdaxPending || signPending}
+            onResume={() => void handleResumeRecovery()}
+            onDiscard={handleDiscardRecovery}
           />
         ) : null}
 
@@ -596,6 +762,84 @@ function InputStep({
           }
         >
           {pending ? "Preparing…" : "Confirm cashout"}
+        </button>
+      </div>
+    </>
+  );
+}
+
+function RecoveryPromptStep({
+  envelope,
+  envelopeNames,
+  amountPhp,
+  bankName,
+  error,
+  pending,
+  onResume,
+  onDiscard,
+}: {
+  envelope: EnvelopeName;
+  envelopeNames: string[];
+  amountPhp: number;
+  bankName: string;
+  error: string | null;
+  pending: boolean;
+  onResume: () => void;
+  onDiscard: () => void;
+}) {
+  const envLabel = displayEnvelopeName(envelope, envelopeNames);
+  return (
+    <>
+      <div className="flex items-center gap-3 mb-3">
+        <div
+          className="grid place-items-center"
+          style={{
+            width: 36,
+            height: 36,
+            borderRadius: 10,
+            background: "var(--accent-soft)",
+            color: "var(--sobre-accent)",
+          }}
+        >
+          <AlertTriangle size={18} strokeWidth={2} />
+        </div>
+        <h2 style={{ margin: 0 }}>Finish your cashout?</h2>
+      </div>
+      <p className="sub">
+        Your previous cashout of{" "}
+        <b style={{ color: "var(--text-1)" }}>
+          ₱{amountPhp.toLocaleString("en-PH", { minimumFractionDigits: 2 })}
+        </b>{" "}
+        from {envLabel} to {bankName} debited the envelope on chain but the
+        second confirmation didn&apos;t go through. Your XLM is still in
+        your wallet. Tap continue to resume the cashout with one passkey
+        prompt — no second debit.
+      </p>
+
+      {error ? (
+        <p
+          className="text-xs break-all mb-3"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <div className="sobre-modal-actions">
+        <button
+          className="sobre-btn sobre-btn-soft"
+          onClick={onDiscard}
+          disabled={pending}
+        >
+          Not now
+        </button>
+        <button
+          className="sobre-btn sobre-btn-primary"
+          onClick={onResume}
+          disabled={pending}
+          style={pending ? { opacity: 0.5 } : {}}
+        >
+          {pending ? "Resuming…" : "Continue cashout"}
         </button>
       </div>
     </>

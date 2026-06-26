@@ -427,6 +427,11 @@ function ActivityRow({
         </>,
       );
     case "Spend": {
+      // Cashout-spends and regular spends are both Spend events on chain;
+      // we differentiate by the memo. For the cashout-flavored entry,
+      // describe what truly happened — the envelope was debited — without
+      // claiming the bank received the money. That's what the PENDING
+      // bucket + the bank-arrival toast are for.
       const isCashout = ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
@@ -442,11 +447,12 @@ function ActivityRow({
             <div className="who">
               {isCashout ? (
                 <>
-                  {labelFor(ev.caller)} cashed out{" "}
+                  {labelFor(ev.caller)} withdrew{" "}
                   <span className="amt tabular">
                     {formatPhpLocale(ev.amount)}
                   </span>{" "}
-                  to bank
+                  from {displayEnvelopeName(ev.envelope, envelopeNames)} for
+                  cashout
                 </>
               ) : (
                 <>

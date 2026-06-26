@@ -3,6 +3,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WithdrawStatus } from "@/hooks/usePdaxWithdraw";
+import {
+  clearCashoutRecovery,
+  readCashoutRecovery,
+} from "@/lib/cashoutRecovery";
 
 /**
  * Lists the signed-in member's non-terminal cashout rows for a family
@@ -104,7 +108,10 @@ export function useActiveCashouts(
       );
 
       // Fan-out terminal-state notifications. /row returns the current
-      // status so we know which callback to fire.
+      // status so we know which callback to fire. Also tear down the
+      // cashout-recovery localStorage entry whenever the row tied to it
+      // reaches a terminal state — the spend's "lost" state isn't
+      // recoverable anymore once paid or failed has been decided.
       for (const row of droppedOff) {
         void fetch(`/api/pdax/withdrawals/${row.identifier}/row`)
           .then(async (r) => {
@@ -113,6 +120,10 @@ export function useActiveCashouts(
               cashout: ActiveCashoutRow;
             };
             const final = body.cashout;
+            const snap = readCashoutRecovery();
+            if (snap && snap.identifier === final.identifier) {
+              clearCashoutRecovery();
+            }
             if (final.status === "paid") callbacksRef.current?.onPaid?.(final);
             else if (final.status === "failed")
               callbacksRef.current?.onFailed?.(final);
