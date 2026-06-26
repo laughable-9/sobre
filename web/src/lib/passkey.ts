@@ -232,9 +232,20 @@ export async function submit(
   const server = getServer();
   const send = await server.sendTransaction(tx);
   if (send.status === "ERROR") {
-    throw new Error(
-      `submit failed: ${send.errorResult?.toXDR("base64") ?? "unknown"}`,
-    );
+    const errXdr = send.errorResult?.toXDR("base64") ?? "unknown";
+    // Decode common pre-inclusion errors so the user sees a useful
+    // message instead of a base64 blob. `AAAAAAAAiZ/////7AAAAAA==` is
+    // the canonical txBAD_SEQ result — the deployer's sequence number
+    // on the signed tx lagged the chain, usually because Soroban RPC
+    // hadn't indexed our previous tx yet when we fetched the account.
+    // Manual retry refetches the account and lands on the next
+    // sequence cleanly.
+    if (errXdr === "AAAAAAAAiZ/////7AAAAAA==") {
+      throw new Error(
+        "Network is catching up to your previous transaction. Tap again in a few seconds.",
+      );
+    }
+    throw new Error(`submit failed: ${errXdr}`);
   }
 
   const result = await server.pollTransaction(send.hash, { attempts: 30 });

@@ -337,10 +337,19 @@ export function PdaxWithdrawModal({
       // snapshot is no longer load-bearing.
       clearCashoutRecovery();
     } catch {
-      // signAndForward already persisted the snapshot if the spend
-      // succeeded; we walk back to input so the user can dismiss or
-      // open a fresh modal that will offer Resume.
-      setLocalPhase("input");
+      // CRITICAL: if signAndForward saved a snapshot (i.e. the spend
+      // landed before whatever failed), DO NOT route back to the input
+      // form. Re-running handleConfirm would fire another spend and
+      // debit the envelope a second time — which is exactly what
+      // Kyle hit before this fix. Route to the recovery prompt so the
+      // next action is retryForward, not signAndForward.
+      const snap = readCashoutRecovery();
+      if (snap) {
+        setRecoverySnapshot(snap);
+        setLocalPhase("recovery_prompt");
+      } else {
+        setLocalPhase("input");
+      }
     }
   };
 
