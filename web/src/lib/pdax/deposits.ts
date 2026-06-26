@@ -331,7 +331,14 @@ export function buildFiatDepositBody(args: {
   const middle = args.senderMiddleName?.trim() || MIDDLE_NAME_FALLBACK;
   return {
     amount: String(args.amountPhp),
-    method: "instapay_upay_cashin",
+    // `instapay_upay_cashin` and `ub_online_upay_cashin` both route to
+    // UnionBank's UPay gateway (ubotpsentry-tst1.outsystemsenterprise.com),
+    // which is currently down on UnionBank's side — PDAX support confirmed
+    // ("may problem yung upay"). Our cash-ins were timing out because
+    // payment never landed at the broken checkout page. GrabPay uses Grab's
+    // debit-pull backend (different processor) and works end-to-end. Flip
+    // back when PDAX confirms UPay is restored.
+    method: "grabpay_cashin",
     identifier: args.identifier,
     currency: "PHP",
     sender_first_name: args.senderFirstName,
