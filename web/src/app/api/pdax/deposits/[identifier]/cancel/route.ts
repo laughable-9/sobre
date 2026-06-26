@@ -25,6 +25,7 @@ import { NextResponse } from "next/server";
 import { requireFamilyMember } from "@/lib/auth/familyMember";
 import { PdaxError } from "@/lib/pdax/client";
 import { getPdaxFiatTx } from "@/lib/pdax/deposits";
+import { isFreshClaim } from "@/lib/pdax/depositClaim";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -81,52 +82,62 @@ export async function POST(
     }
   }
 
-  // Single atomic update — flip pending rows to failed, returning
-  // family_wallet_id for membership gate. Already-terminal AND
-  // mid-claim rows return zero affected rows so we bail with
-  // noChange and let poll-status keep driving them.
-  //
-  // The `.is("withdraw_tx_hash", null)` guard is the cancel/trade
-  // race protection: poll-status flips withdraw_tx_hash to
-  // 'claiming' before calling kickOffPdaxWithdraw, so any concurrent
-  // cancel here is refused while the external PDAX trade is in
-  // flight — preventing a failed row with stranded XLM at the relay.
-  const { data: claimed, error } = await admin
+  // Read the row + its claim state. The cancel-vs-trade race is guarded
+  // by withdraw_tx_hash: poll-status sets it to `claiming:<ISO>` before
+  // calling kickOffPdaxWithdraw, so a concurrent cancel here is refused
+  // while the external PDAX trade is in flight (preventing a failed
+  // row with stranded XLM at the relay). A STALE claim (>60s old) is
+  // treated as null — the original handler died, so cancel can proceed.
+  const { data: row } = await admin
+    .from("pdax_deposits")
+    .select("family_wallet_id, status, withdraw_tx_hash")
+    .eq("identifier", identifier)
+    .single();
+  if (!row) {
+    return NextResponse.json({ error: "Deposit not found" }, { status: 404 });
+  }
+  const r = row as {
+    family_wallet_id: string;
+    status: string;
+    withdraw_tx_hash: string | null;
+  };
+  const membership = await requireFamilyMember(r.family_wallet_id);
+  if (membership instanceof NextResponse) return membership;
+
+  if (r.status !== "pending") {
+    return NextResponse.json({ ok: true, noChange: true, status: r.status });
+  }
+  if (isFreshClaim(r.withdraw_tx_hash)) {
+    return NextResponse.json({ ok: true, noChange: true, status: r.status });
+  }
+
+  // Atomic CAS on whatever withdraw_tx_hash currently holds (NULL OR a
+  // stale claim) so a fresh claim acquired between our read and update
+  // wins the race. Supabase's `.eq` doesn't match NULLs — use `.is`
+  // when the read returned NULL.
+  let cancelQuery = admin
     .from("pdax_deposits")
     .update({
       status: "failed",
       failure_reason: "Cancelled by user",
     })
     .eq("identifier", identifier)
-    .eq("status", "pending")
-    .is("withdraw_tx_hash", null)
-    .select("family_wallet_id");
+    .eq("status", "pending");
+  cancelQuery =
+    r.withdraw_tx_hash === null
+      ? cancelQuery.is("withdraw_tx_hash", null)
+      : cancelQuery.eq("withdraw_tx_hash", r.withdraw_tx_hash);
+  const { data: claimed, error } = await cancelQuery.select("identifier");
   if (error) {
     return NextResponse.json(
       { error: `pdax_deposits update failed: ${error.message}` },
       { status: 500 },
     );
   }
-
   if (!claimed?.length) {
-    // Either it doesn't exist or it's already terminal. Read the existing
-    // row to disambiguate so the caller gets a useful status code.
-    const { data: existing } = await admin
-      .from("pdax_deposits")
-      .select("family_wallet_id, status")
-      .eq("identifier", identifier)
-      .single();
-    if (!existing) {
-      return NextResponse.json({ error: "Deposit not found" }, { status: 404 });
-    }
-    const e = existing as { family_wallet_id: string; status: string };
-    const membership = await requireFamilyMember(e.family_wallet_id);
-    if (membership instanceof NextResponse) return membership;
-    return NextResponse.json({ ok: true, noChange: true, status: e.status });
+    // Lost the race — a fresh claim was acquired between our read and
+    // update. Treat as noChange.
+    return NextResponse.json({ ok: true, noChange: true, status: r.status });
   }
-
-  const c = claimed[0] as { family_wallet_id: string };
-  const membership = await requireFamilyMember(c.family_wallet_id);
-  if (membership instanceof NextResponse) return membership;
   return NextResponse.json({ ok: true, status: "failed" });
 }

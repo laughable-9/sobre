@@ -38,6 +38,10 @@ import {
   tryCompleteWithdrawAndTransfer,
   type PdaxFiatTransaction,
 } from "@/lib/pdax/deposits";
+import {
+  acquireDepositClaim,
+  releaseDepositClaim,
+} from "@/lib/pdax/depositClaim";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -188,26 +192,13 @@ async function advanceFromPending(args: {
   }
 
   // COMPLETED: fiat is in. Atomically claim the right to run the
-  // trade + withdraw BEFORE making the external PDAX call. Without
-  // this, a concurrent /cancel could flip status to 'failed' during
-  // the (10-30s) kickOffPdaxWithdraw window — PDAX would still
-  // execute the trade and ship XLM to the relay against a row that
-  // the cancel route already wrote off, stranding PHP-as-XLM at the
-  // relay. The claim flips withdraw_tx_hash from NULL to 'claiming',
-  // which cancel checks to refuse cancellation while we're in flight.
-  // The sentinel is cleared on the funded update so phase 2 can
-  // re-use the same column for its own claim.
-  const { data: claimed } = await admin
-    .from("pdax_deposits")
-    .update({ withdraw_tx_hash: "claiming" })
-    .eq("identifier", args.identifier)
-    .eq("status", "pending")
-    .is("withdraw_tx_hash", null)
-    .select("identifier");
-  if (!claimed?.length) {
-    // Another poll won the claim, or the row was just cancelled.
-    // Either way, bail without touching PDAX — the winner (or the
-    // cancel) owns the next transition.
+  // trade + withdraw BEFORE making the external PDAX call. The claim
+  // is `claiming:<isoTimestamp>` so a handler that dies mid-trade
+  // doesn't deadlock the row — a later tick can steal a stale claim
+  // (>60s old) via acquireDepositClaim's path B.
+  const claim = await acquireDepositClaim(admin, args.identifier, "pending");
+  if (!claim) {
+    // Another poll holds a fresh claim, or the row was just cancelled.
     return NextResponse.json({
       ok: true,
       status: "pending",
@@ -232,7 +223,8 @@ async function advanceFromPending(args: {
         withdraw_tx_hash: null,
       })
       .eq("identifier", args.identifier)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .eq("withdraw_tx_hash", claim);
 
     return NextResponse.json({
       ok: true,
@@ -244,12 +236,9 @@ async function advanceFromPending(args: {
   } catch (e) {
     // Roll the claim back so a future poll can retry (or so the
     // user can cancel) — the trade failed, no PDAX-side state to
-    // protect anymore.
-    await admin
-      .from("pdax_deposits")
-      .update({ withdraw_tx_hash: null })
-      .eq("identifier", args.identifier)
-      .eq("withdraw_tx_hash", "claiming");
+    // protect anymore. Match the exact claim value so we never wipe
+    // a hash that landed under us.
+    await releaseDepositClaim(admin, args.identifier, claim);
     return await markFailedAndRespond(args.identifier, e, "kickOffPdaxWithdraw");
   }
 }
@@ -261,18 +250,13 @@ async function advanceFromFunded(args: {
   kickedOffAt: string;
 }): Promise<Response> {
   const admin = getSupabaseAdmin();
-  // Atomic claim: flip withdraw_tx_hash from NULL to a sentinel. Only one
-  // concurrent poll wins; the rest see still_pending and bail. The sentinel
-  // is replaced with the actual Stellar tx hash once the SAC transfer
-  // confirms.
+  // Atomic claim with TTL: a handler that dies between claim and SAC
+  // transfer doesn't deadlock the row — a later tick can steal a stale
+  // claim via acquireDepositClaim's path B.
+  let phase2Claim: string | null = null;
   const claimSacTransfer = async (): Promise<boolean> => {
-    const { data } = await admin
-      .from("pdax_deposits")
-      .update({ withdraw_tx_hash: "claiming" })
-      .eq("identifier", args.identifier)
-      .is("withdraw_tx_hash", null)
-      .select("identifier");
-    return (data?.length ?? 0) > 0;
+    phase2Claim = await acquireDepositClaim(admin, args.identifier, "funded");
+    return phase2Claim !== null;
   };
   try {
     const result = await tryCompleteWithdrawAndTransfer({

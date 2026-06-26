@@ -20,6 +20,7 @@ import {
   kickOffPdaxWithdraw,
   type PdaxFiatTransaction,
 } from "@/lib/pdax/deposits";
+import { mintClaim } from "@/lib/pdax/depositClaim";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -180,17 +181,17 @@ async function resurrectOne(
   if (!tx || tx.status !== "COMPLETED") return;
 
   // Atomic resurrect + claim. Move status=failed → status=pending AND
-  // flip withdraw_tx_hash from NULL to 'claiming' in one update so a
-  // concurrent /active tick or modal poll can't race in and double-fire
-  // the trade. The poll-status route uses the same 'claiming' sentinel
-  // — once we mark `funded` below, the column resets to NULL and
-  // phase 2 (SAC transfer to smart wallet) takes over.
+  // stamp the claim sentinel in one update so a concurrent /active
+  // tick or modal poll can't race in and double-fire the trade. The
+  // claim carries an ISO timestamp so a handler that dies mid-trade
+  // doesn't deadlock the row (see depositClaim.ts).
+  const claim = mintClaim();
   const { data: claimed } = await admin
     .from("pdax_deposits")
     .update({
       status: "pending",
       failure_reason: null,
-      withdraw_tx_hash: "claiming",
+      withdraw_tx_hash: claim,
     })
     .eq("identifier", identifier)
     .eq("status", "failed")
@@ -213,7 +214,8 @@ async function resurrectOne(
         withdraw_tx_hash: null,
       })
       .eq("identifier", identifier)
-      .eq("status", "pending");
+      .eq("status", "pending")
+      .eq("withdraw_tx_hash", claim);
   } catch (e) {
     // Trade failed — back out the claim. Row stays at status=pending so
     // the next /active tick or modal poll retries. Surfacing the actual
@@ -224,6 +226,6 @@ async function resurrectOne(
       .from("pdax_deposits")
       .update({ withdraw_tx_hash: null })
       .eq("identifier", identifier)
-      .eq("withdraw_tx_hash", "claiming");
+      .eq("withdraw_tx_hash", claim);
   }
 }
