@@ -86,6 +86,7 @@ export async function GET(
     return await advanceFromPending({
       identifier,
       amountPhp: r.amount_php,
+      createdAt: r.created_at,
     });
   }
 
@@ -126,8 +127,31 @@ export async function GET(
 async function advanceFromPending(args: {
   identifier: string;
   amountPhp: number;
+  createdAt: string;
 }): Promise<Response> {
   const admin = getSupabaseAdmin();
+  // Staleness gate: PDAX UAT often leaves canceled/failed GrabPay sources
+  // either absent from /fiat/transactions or stuck on IN-PROGRESS instead
+  // of flipping to FAILED. Without a time-based fallback the modal sits
+  // on "Waiting for payment…" indefinitely after the user hits GrabPay's
+  // FAIL THIS TRANSACTION button. After PENDING_STALE_MS we presume the
+  // checkout went bad and mark the row failed so the UI transitions to
+  // the failed state. False positives just mean the user retries with a
+  // fresh checkout — cheap.
+  const PENDING_STALE_MS = 5 * 60_000;
+  const ageMs = Date.now() - new Date(args.createdAt).getTime();
+  const isStale = ageMs > PENDING_STALE_MS;
+  const markFailedExpired = async () => {
+    await admin
+      .from("pdax_deposits")
+      .update({
+        status: "failed",
+        failure_reason: "Checkout cancelled or expired",
+      })
+      .eq("identifier", args.identifier);
+    return NextResponse.json({ ok: true, status: "failed" });
+  };
+
   let pdaxTx: PdaxFiatTransaction | undefined;
   try {
     const resp = await pdaxFetch<PdaxFiatTransactionsResponse>(
@@ -147,6 +171,7 @@ async function advanceFromPending(args: {
   }
 
   if (!pdaxTx) {
+    if (isStale) return await markFailedExpired();
     return NextResponse.json({
       ok: true,
       status: "pending",
@@ -163,6 +188,7 @@ async function advanceFromPending(args: {
   }
 
   if (pdaxTx.status === "IN-PROGRESS") {
+    if (isStale) return await markFailedExpired();
     return NextResponse.json({
       ok: true,
       status: "pending",

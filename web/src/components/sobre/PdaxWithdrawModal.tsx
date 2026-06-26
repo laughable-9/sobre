@@ -97,15 +97,22 @@ export function PdaxWithdrawModal({
   onClose,
   onCancelMidFlight,
   onSuccess,
+  resumeIdentifier,
+  onActiveIdentifierChange,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
   onClose: () => void;
-  /** Same contract as PdaxDepositModal — fires on user dismiss while a
-   *  cashout row is mid-flight so the parent can flash a toast. */
+  /** Legacy callback kept for prop compatibility, never fires now that
+   *  the modal locks itself closed during every in-flight phase. */
   onCancelMidFlight?: () => void;
   onSuccess: (info: { php: number }) => void;
+  /** Re-open the modal at the awaiting view for an existing cashout. */
+  resumeIdentifier?: string;
+  /** Same contract as the deposit modal — surfaces the active row id so
+   *  the dashboard can filter it out of the PENDING bucket while open. */
+  onActiveIdentifierChange?: (identifier: string | null) => void;
 }) {
   const [localPhase, setLocalPhase] = useState<LocalPhase>("loading_bank");
   const [bank, setBank] = useState<BankRecord | null>(null);
@@ -120,7 +127,14 @@ export function PdaxWithdrawModal({
     row,
     pending: pdaxPending,
     error: pdaxError,
-  } = usePdaxWithdraw(contractId);
+  } = usePdaxWithdraw(contractId, resumeIdentifier);
+
+  // Mirror the deposit pattern: surface the active row identifier so the
+  // dashboard can hide it from the PENDING bucket while we're handling it.
+  useEffect(() => {
+    onActiveIdentifierChange?.(row?.identifier ?? null);
+    return () => onActiveIdentifierChange?.(null);
+  }, [row?.identifier, onActiveIdentifierChange]);
   const {
     signAndForward,
     pending: signPending,
@@ -155,14 +169,25 @@ export function PdaxWithdrawModal({
   // extra effect that would cascade-render.
   const phase: Phase = phaseFromStatus(row?.status) ?? localPhase;
 
-  // Same close-wrapper pattern as the deposit modal: only signal a cancel
-  // when the user dismisses while a row is actively working.
+  // Same lock pattern as the deposit modal: refuse to close during any
+  // phase where money has already moved. Mid-cashout dismiss was firing a
+  // misleading "Cashout cancelled." toast even though the on-chain ops
+  // had landed and PDAX's payout was already settling.
+  //
+  // LOCKED states (close ignored):
+  // - signing: passkey prompts active, on-chain spend + SAC transfer signing
+  // - awaiting + spent: XLM at relay, server about to forward to PDAX
+  // - awaiting + transferred: XLM at PDAX, sell trade running
+  // - awaiting + converted: PHP at PDAX, InstaPay payout fired, awaiting settle
+  //
+  // CANCELLABLE in-flight states: none — by the time the user has signed
+  // the two passkey ops, money has moved and there's no clean rollback.
+  //
+  // Pre-signing (input/register_bank/loading_bank) and terminal
+  // (done/failed) close normally.
   const handleClose = () => {
-    const inFlight =
-      phase === "signing" ||
-      phase === "awaiting" ||
-      (row !== null && row.status !== "paid" && row.status !== "failed");
-    if (inFlight && onCancelMidFlight) onCancelMidFlight();
+    const locked = phase === "signing" || phase === "awaiting";
+    if (locked) return;
     onClose();
   };
 

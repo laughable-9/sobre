@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRowRealtime } from "@/hooks/useRowRealtime";
 
@@ -69,11 +69,34 @@ export interface UsePdaxWithdrawResult {
 
 export function usePdaxWithdraw(
   contractId: string | null,
+  /** When set, hydrate from an existing row instead of waiting for
+   *  initiate(). Drives the activity-feed "tap to view" affordance for
+   *  in-flight cashouts. */
+  resumeIdentifier?: string | null,
 ): UsePdaxWithdrawResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [row, setRow] = useState<PdaxWithdrawRow | null>(null);
   const identifierRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!resumeIdentifier) return;
+    let cancelled = false;
+    identifierRef.current = resumeIdentifier;
+    void fetch(`/api/pdax/withdrawals/${resumeIdentifier}/row`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { cashout: PdaxWithdrawRow };
+        if (cancelled) return;
+        setRow(json.cashout);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeIdentifier]);
 
   useRowRealtime<PdaxWithdrawRow>(
     "pdax_withdrawals",

@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import { useState } from "react";
 import {
   ArrowDownToLine,
+  ArrowUpFromLine,
   CheckCheck,
   Clock,
   Hourglass,
@@ -14,6 +15,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 
+import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
@@ -60,6 +62,11 @@ interface ActivityFeedProps {
    *  dashboard hits /api/pdax/deposits/[id]/cancel and refreshes the
    *  active list. */
   onCancelDeposit?: (identifier: string) => void | Promise<void>;
+  /** In-flight cashouts surfaced alongside pending deposits. Money has
+   *  already moved by the time these appear; the row exists so the user
+   *  knows where it is. Tap re-opens the modal at the awaiting view. */
+  pendingCashouts?: ActiveCashoutRow[];
+  onResumeCashout?: (identifier: string) => void;
 }
 
 export function ActivityFeed({
@@ -72,6 +79,8 @@ export function ActivityFeed({
   pendingDeposits,
   onResumeDeposit,
   onCancelDeposit,
+  pendingCashouts,
+  onResumeCashout,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -123,10 +132,11 @@ export function ActivityFeed({
             closed the modal mid-flow can see them the moment the dashboard
             re-mounts. Each row's Resume button rehydrates the modal at the
             phase matching the row's status (typically the ConfirmStep). */}
-        {pendingDeposits && pendingDeposits.length > 0 ? (
+        {(pendingDeposits && pendingDeposits.length > 0) ||
+        (pendingCashouts && pendingCashouts.length > 0) ? (
           <div>
             <div className="sobre-day">PENDING</div>
-            {pendingDeposits.map((d) => (
+            {pendingDeposits?.map((d) => (
               <PendingDepositRow
                 key={d.identifier}
                 deposit={d}
@@ -134,10 +144,20 @@ export function ActivityFeed({
                 onCancel={onCancelDeposit}
               />
             ))}
+            {pendingCashouts?.map((c) => (
+              <PendingCashoutRow
+                key={c.identifier}
+                cashout={c}
+                onResume={onResumeCashout}
+              />
+            ))}
           </div>
         ) : null}
 
-        {!error && events.length === 0 && !pendingDeposits?.length ? (
+        {!error &&
+        events.length === 0 &&
+        !pendingDeposits?.length &&
+        !pendingCashouts?.length ? (
           <p className="text-xs" style={{ color: "var(--text-3)" }}>
             {loading ? "Loading events…" : "No on-chain events yet."}
           </p>
@@ -250,6 +270,60 @@ function PendingDepositRow({
           <Trash2 size={14} strokeWidth={2} />
         </button>
       ) : null}
+    </div>
+  );
+}
+
+/** In-flight cashout row. Unlike deposits there's no cancel — by the
+ *  time the row exists, money has moved and the server is settling
+ *  toward `paid` regardless. Tap re-opens the modal so the user can
+ *  watch the spinner advance. */
+function PendingCashoutRow({
+  cashout,
+  onResume,
+}: {
+  cashout: ActiveCashoutRow;
+  onResume?: (identifier: string) => void;
+}) {
+  const time = fmtTime(cashout.created_at);
+  const statusLabel: Record<ActiveCashoutRow["status"], string> = {
+    pending: "Preparing",
+    spent: "Forwarding to PDAX",
+    transferred: "Converting to pesos",
+    converted: "Paying out to bank",
+    paid: "Done",
+    failed: "Failed",
+  };
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={() => onResume?.(cashout.identifier)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onResume?.(cashout.identifier);
+        }
+      }}
+      className="sobre-activity-item pending"
+      style={{
+        cursor: "pointer",
+        background: "var(--accent-soft)",
+      }}
+    >
+      <div className="ic">
+        <ArrowUpFromLine size={16} strokeWidth={2} />
+      </div>
+      <div className="body">
+        <div className="who">
+          Cashout{" "}
+          <span className="amt tabular">
+            ₱{Number(cashout.amount_php ?? 0).toLocaleString("en-PH")}
+          </span>
+        </div>
+        <div className="where">{statusLabel[cashout.status]} · tap to view</div>
+        <div className="meta">{time}</div>
+      </div>
     </div>
   );
 }

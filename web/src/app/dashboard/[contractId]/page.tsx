@@ -25,6 +25,7 @@ import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
 import type { Member } from "@/hooks/useWalletState";
 
+import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
@@ -78,6 +79,7 @@ function Dashboard({ contractId }: { contractId: string }) {
     void walletState.refresh();
     void txFeed.refresh();
     void activeDeposits.refresh();
+    void activeCashouts.refresh();
   };
 
   const isAdmin = Boolean(state && address && state.admin === address);
@@ -107,6 +109,9 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
   const activeDeposits = useActiveDeposits(contractId);
   const [cashoutOpen, setCashoutOpen] = useState(false);
+  const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
+  const [activeCashoutId, setActiveCashoutId] = useState<string | null>(null);
+  const activeCashouts = useActiveCashouts(contractId);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -486,6 +491,13 @@ function Dashboard({ contractId }: { contractId: string }) {
           pendingDeposits={activeDeposits.deposits.filter(
             (d) => d.identifier !== activeDepositId,
           )}
+          pendingCashouts={activeCashouts.cashouts.filter(
+            (c) => c.identifier !== activeCashoutId,
+          )}
+          onResumeCashout={(identifier) => {
+            setResumeCashoutId(identifier);
+            setCashoutOpen(true);
+          }}
           onResumeDeposit={(identifier) => {
             setResumeDepositId(identifier);
             setDepositOpen(true);
@@ -653,12 +665,22 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           state={state}
           contractId={contractId}
-          onClose={() => setCashoutOpen(false)}
-          onCancelMidFlight={() => {
+          resumeIdentifier={resumeCashoutId ?? undefined}
+          onActiveIdentifierChange={setActiveCashoutId}
+          onClose={() => {
             setCashoutOpen(false);
+            setResumeCashoutId(null);
+            void activeCashouts.refresh();
+          }}
+          onCancelMidFlight={() => {
+            // Locked modal — onCancelMidFlight never fires for cashouts now,
+            // but keep the prop wired for prop-type compat with the modal.
+            setCashoutOpen(false);
+            setResumeCashoutId(null);
             flash("Cashout cancelled.", "warn");
           }}
           onSuccess={({ php }) => {
+            setResumeCashoutId(null);
             flash(
               `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to your bank`,
               "ok",
