@@ -24,6 +24,13 @@ export type WithdrawStatus =
   | "spent"
   | "transferred"
   | "converted"
+  /** PDAX returned COMPLETED for the fiat WITHDRAWAL — they accepted the
+   *  payout request. The InstaPay rail still has to actually settle to
+   *  the user's bank, which happens out-of-band. We keep the row here
+   *  until either the webhook signals the truly-paid state or a
+   *  conservative wait elapses, so the user never sees
+   *  "Money in your bank" before the bank actually has it. */
+  | "processing"
   | "paid"
   | "failed";
 

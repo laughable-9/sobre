@@ -53,7 +53,7 @@ export async function GET(req: Request) {
     )
     .eq("family_wallet_id", familyWalletId)
     .eq("member_id", memberId)
-    .in("status", ["pending", "spent", "transferred", "converted"])
+    .in("status", ["pending", "spent", "transferred", "converted", "processing"])
     .order("created_at", { ascending: false });
   if (error) {
     return NextResponse.json(

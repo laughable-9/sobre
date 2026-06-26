@@ -80,12 +80,17 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
 
 /** Status-line copy for the AwaitingStep spinner. Hoisted so the record
  *  literal isn't allocated per-render. Each fits on one line so the
- *  modal height stays stable as it advances. */
+ *  modal height stays stable as it advances.
+ *
+ *  Honest labels at every stage — "paying out" doesn't claim the bank
+ *  has it yet; "settling at your bank" matches the real wait while
+ *  InstaPay actually moves the money. */
 const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
   spent: "Forwarding to PDAX…",
   transferred: "Converting to pesos…",
-  converted: "Paying out to your bank…",
+  converted: "Sending payout request…",
+  processing: "Settling at your bank…",
   paid: "Done",
   failed: "Failed",
 };
@@ -169,24 +174,27 @@ export function PdaxWithdrawModal({
   // extra effect that would cascade-render.
   const phase: Phase = phaseFromStatus(row?.status) ?? localPhase;
 
-  // Same lock pattern as the deposit modal: refuse to close during any
-  // phase where money has already moved. Mid-cashout dismiss was firing a
-  // misleading "Cashout cancelled." toast even though the on-chain ops
-  // had landed and PDAX's payout was already settling.
+  // The user can SAFELY close the modal once the on-chain ops have
+  // landed — the rest is server-side, the activity feed shows live
+  // progress, and we'll surface the final outcome via a toast when the
+  // money lands in their bank. Trapping them in the modal for 30+
+  // seconds of server settlement feels custodial in a bad way.
   //
   // LOCKED states (close ignored):
-  // - signing: passkey prompts active, on-chain spend + SAC transfer signing
-  // - awaiting + spent: XLM at relay, server about to forward to PDAX
-  // - awaiting + transferred: XLM at PDAX, sell trade running
-  // - awaiting + converted: PHP at PDAX, InstaPay payout fired, awaiting settle
+  // - signing: passkey prompts active, on-chain ops in flight
+  // - awaiting + spent: XLM at relay but server hasn't claimed the
+  //   forward yet — closing here risks a half-claimed row.
   //
-  // CANCELLABLE in-flight states: none — by the time the user has signed
-  // the two passkey ops, money has moved and there's no clean rollback.
+  // CLOSABLE while still in flight (`transferred`, `converted`,
+  // `processing`): server-side pipeline continues regardless, the
+  // activity feed surfaces the live state, and the dashboard flashes
+  // "₱X arrived in your <bank>" when status hits `paid`.
   //
   // Pre-signing (input/register_bank/loading_bank) and terminal
   // (done/failed) close normally.
   const handleClose = () => {
-    const locked = phase === "signing" || phase === "awaiting";
+    const locked =
+      phase === "signing" || (phase === "awaiting" && row?.status === "spent");
     if (locked) return;
     onClose();
   };

@@ -53,6 +53,7 @@ interface WithdrawRow {
   beneficiary_account_number: string;
   status: string;
   transfer_tx_hash: string | null;
+  processing_since: string | null;
 }
 
 export async function GET(
@@ -68,7 +69,7 @@ export async function GET(
   const { data: row } = await admin
     .from("pdax_withdrawals")
     .select(
-      "family_wallet_id, member_id, amount_usdc, amount_php, envelope, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number, status, transfer_tx_hash",
+      "family_wallet_id, member_id, amount_usdc, amount_php, envelope, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number, status, transfer_tx_hash, processing_since",
     )
     .eq("identifier", identifier)
     .single();
@@ -113,6 +114,13 @@ export async function GET(
 
   if (r.status === "converted") {
     return await advanceFromConverted({ identifier });
+  }
+
+  if (r.status === "processing") {
+    return await advanceFromProcessing({
+      identifier,
+      processingSince: r.processing_since,
+    });
   }
 
   // pending — user hasn't signed yet. Modal drives that step locally.
@@ -301,14 +309,61 @@ async function advanceFromConverted(args: {
     });
   }
 
-  // COMPLETED — bank received the PHP.
+  // COMPLETED from PDAX means *they* accepted the withdrawal request,
+  // not that InstaPay has actually settled to the user's bank. PDAX
+  // sends two distinct emails: "Request Is Being Processed" first
+  // (their internal accept) and "Has Been Processed" later (real
+  // settlement). Marking paid on the first signal lies to the user
+  // and we lose trust when their email lags our toast.
+  //
+  // Move to `processing` instead and let advanceFromProcessing decide
+  // when it's safe to call paid — either the fiat WITHDRAWAL webhook
+  // arrives, or the conservative wait elapses.
   await admin
     .from("pdax_withdrawals")
     .update({
-      status: "paid",
+      status: "processing",
+      processing_since: new Date().toISOString(),
       amount_php: pdaxTx.amount !== undefined ? Number(pdaxTx.amount) : null,
     })
-    .eq("identifier", args.identifier);
+    .eq("identifier", args.identifier)
+    .eq("status", "converted");
+  return NextResponse.json({ ok: true, status: "processing" });
+}
+
+/** processing → paid. The authoritative signal is PDAX's fiat WITHDRAWAL
+ *  webhook with status=COMPLETED, which `handleFiat` upgrades to `paid`
+ *  on its own. In dev/preview without a webhook URL this never fires,
+ *  so we fall back to a time-based promotion: after PROCESSING_GRACE_MS
+ *  in the processing state, we promote to paid.
+ *
+ *  The grace period exists purely so the user-facing copy doesn't lie.
+ *  PDAX UAT may settle instantly, but giving "processing" 10 seconds of
+ *  airtime gives the user a chance to read the state and (more
+ *  importantly) for PDAX's settlement email to actually arrive before
+ *  the dashboard's "₱X arrived in your bank" toast fires. */
+async function advanceFromProcessing(args: {
+  identifier: string;
+  processingSince: string | null;
+}): Promise<Response> {
+  const admin = getSupabaseAdmin();
+  const PROCESSING_GRACE_MS = 10_000;
+  const since = args.processingSince
+    ? new Date(args.processingSince).getTime()
+    : Date.now();
+  const elapsed = Date.now() - since;
+  if (elapsed < PROCESSING_GRACE_MS) {
+    return NextResponse.json({
+      ok: true,
+      status: "processing",
+      msRemaining: PROCESSING_GRACE_MS - elapsed,
+    });
+  }
+  await admin
+    .from("pdax_withdrawals")
+    .update({ status: "paid" })
+    .eq("identifier", args.identifier)
+    .eq("status", "processing");
   return NextResponse.json({ ok: true, status: "paid" });
 }
 

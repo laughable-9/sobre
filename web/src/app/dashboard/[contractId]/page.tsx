@@ -111,7 +111,25 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [cashoutOpen, setCashoutOpen] = useState(false);
   const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
   const [activeCashoutId, setActiveCashoutId] = useState<string | null>(null);
-  const activeCashouts = useActiveCashouts(contractId);
+  const activeCashouts = useActiveCashouts(contractId, {
+    // Fires whenever a cashout the dashboard was tracking drops off the
+    // active list because it hit `paid`. The modal's onSuccess only
+    // fires while the modal is open; this covers the close-and-walk-
+    // away path the new modal explicitly allows.
+    onPaid: (row) => {
+      flash(
+        `₱${Number(row.amount_php ?? 0).toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
+        "ok",
+      );
+    },
+    onFailed: (row) => {
+      flash(
+        `Cashout of ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} couldn't complete.`,
+        "warn",
+      );
+      void row; // reserved for surfacing failure_reason later
+    },
+  });
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -705,6 +723,10 @@ function Dashboard({ contractId }: { contractId: string }) {
           resumeIdentifier={resumeCashoutId ?? undefined}
           onActiveIdentifierChange={setActiveCashoutId}
           onClose={() => {
+            // Modal closes while the row may still be transferred /
+            // converted / processing. The activity feed picks it up and
+            // tracks it through to `paid`, at which point the toast
+            // below fires from the auto-driver path.
             setCashoutOpen(false);
             setResumeCashoutId(null);
             void activeCashouts.refresh();
@@ -717,9 +739,12 @@ function Dashboard({ contractId }: { contractId: string }) {
             flash("Cashout cancelled.", "warn");
           }}
           onSuccess={({ php }) => {
+            // Only fires when the row hit `paid`, which now means
+            // PDAX confirmed bank settlement (webhook) OR the
+            // post-processing grace period elapsed without a failure.
             setResumeCashoutId(null);
             flash(
-              `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to your bank`,
+              `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
               "ok",
             );
             refreshAll();

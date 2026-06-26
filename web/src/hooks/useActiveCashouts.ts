@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { WithdrawStatus } from "@/hooks/usePdaxWithdraw";
 
@@ -45,14 +45,32 @@ export interface UseActiveCashoutsResult {
 
 const HEARTBEAT_MS = 8000;
 
+/** Fires for cashouts that just settled (paid) or failed. The dashboard
+ *  uses it to flash "₱X landed in your bank" when a cashout the user
+ *  closed the modal on finally completes in the background. */
+export interface ActiveCashoutsCallbacks {
+  onPaid?: (row: ActiveCashoutRow) => void;
+  onFailed?: (row: ActiveCashoutRow) => void;
+}
+
 export function useActiveCashouts(
   contractId: string | null,
+  callbacks?: ActiveCashoutsCallbacks,
 ): UseActiveCashoutsResult {
   const [cashouts, setCashouts] = useState<ActiveCashoutRow[]>([]);
+  // Snapshot the previous active list so we can detect rows that
+  // dropped off into a terminal state since the last heartbeat. The
+  // /active endpoint excludes paid/failed, so a row vanishing from
+  // there means "transitioned to terminal" — we look up which terminal
+  // state via /row to fire the right callback.
+  const lastActiveRef = useRef<Map<string, ActiveCashoutRow>>(new Map());
+  const callbacksRef = useRef(callbacks);
+  callbacksRef.current = callbacks;
 
   const refresh = useCallback(async () => {
     if (!contractId) {
       setCashouts([]);
+      lastActiveRef.current = new Map();
       return;
     }
     try {
@@ -62,6 +80,15 @@ export function useActiveCashouts(
       if (!res.ok) return;
       const json = (await res.json()) as { cashouts: ActiveCashoutRow[] };
       const next = json.cashouts ?? [];
+      const nextIds = new Set(next.map((c) => c.identifier));
+
+      // Detect drop-offs: rows that were active last tick but aren't
+      // now. Look up their terminal state and notify.
+      const droppedOff: ActiveCashoutRow[] = [];
+      for (const [id, row] of lastActiveRef.current) {
+        if (!nextIds.has(id)) droppedOff.push(row);
+      }
+      lastActiveRef.current = new Map(next.map((c) => [c.identifier, c]));
       setCashouts(next);
 
       // Background drive: nudge every non-terminal row forward. Parallel
@@ -75,6 +102,23 @@ export function useActiveCashouts(
           ),
         ),
       );
+
+      // Fan-out terminal-state notifications. /row returns the current
+      // status so we know which callback to fire.
+      for (const row of droppedOff) {
+        void fetch(`/api/pdax/withdrawals/${row.identifier}/row`)
+          .then(async (r) => {
+            if (!r.ok) return;
+            const body = (await r.json()) as {
+              cashout: ActiveCashoutRow;
+            };
+            const final = body.cashout;
+            if (final.status === "paid") callbacksRef.current?.onPaid?.(final);
+            else if (final.status === "failed")
+              callbacksRef.current?.onFailed?.(final);
+          })
+          .catch(() => null);
+      }
     } catch {
       // best effort
     }

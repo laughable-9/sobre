@@ -334,7 +334,8 @@ function PendingCashoutRow({
     pending: "Preparing",
     spent: "Forwarding to PDAX",
     transferred: "Converting to pesos",
-    converted: "Paying out to bank",
+    converted: "Sending payout request",
+    processing: "Settling at your bank",
     paid: "Done",
     failed: "Failed",
   };
@@ -425,24 +426,46 @@ function ActivityRow({
           </div>
         </>,
       );
-    case "Spend":
+    case "Spend": {
+      const isCashout = ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
         <>
           <div className="ic">
-            <ShoppingBag size={16} strokeWidth={2} />
+            {isCashout ? (
+              <ArrowUpFromLine size={16} strokeWidth={2} />
+            ) : (
+              <ShoppingBag size={16} strokeWidth={2} />
+            )}
           </div>
           <div className="body">
             <div className="who">
-              {labelFor(ev.caller)} spent{" "}
-              <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
-              from {displayEnvelopeName(ev.envelope, envelopeNames)}
+              {isCashout ? (
+                <>
+                  {labelFor(ev.caller)} cashed out{" "}
+                  <span className="amt tabular">
+                    {formatPhpLocale(ev.amount)}
+                  </span>{" "}
+                  to bank
+                </>
+              ) : (
+                <>
+                  {labelFor(ev.caller)} spent{" "}
+                  <span className="amt tabular">
+                    {formatPhpLocale(ev.amount)}
+                  </span>{" "}
+                  from {displayEnvelopeName(ev.envelope, envelopeNames)}
+                </>
+              )}
             </div>
-            {ev.memo ? <div className="where">&quot;{ev.memo}&quot;</div> : null}
+            {ev.memo && !isCashout ? (
+              <div className="where">&quot;{ev.memo}&quot;</div>
+            ) : null}
             <div className="meta">{time} · view tx ↗</div>
           </div>
         </>,
       );
+    }
     case "RequestCreated":
       return wrap(
         "pending",

@@ -107,7 +107,18 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
   }
 
   if (p.transaction_type === "WITHDRAWAL") {
-    const status = p.status === "COMPLETED" ? "paid" : p.status === "FAILED" ? "failed" : "converted";
+    // PDAX's fiat WITHDRAWAL webhook is the authoritative settlement
+    // signal. COMPLETED here means InstaPay actually landed money in
+    // the user's bank (matches their "Has Been Processed" email). We
+    // skip the `processing` grace period entirely and go straight to
+    // `paid`. IN-PROGRESS keeps us at `processing` so the modal /
+    // activity feed don't flip backwards on transient signals.
+    const status =
+      p.status === "COMPLETED"
+        ? "paid"
+        : p.status === "FAILED"
+          ? "failed"
+          : "processing";
     await admin
       .from("pdax_withdrawals")
       .update({ status, amount_php: p.amount })
