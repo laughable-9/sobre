@@ -35,22 +35,12 @@ import { pdaxErrorToResponse, pdaxFetch } from "@/lib/pdax/client";
 import {
   kickOffPdaxWithdraw,
   tryCompleteWithdrawAndTransfer,
+  type PdaxFiatTransaction,
+  type PdaxFiatTransactionsResponse,
 } from "@/lib/pdax/deposits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
-
-interface PdaxFiatTransaction {
-  identifier: string;
-  status: "IN-PROGRESS" | "COMPLETED" | "FAILED";
-  amount?: string | number;
-  mode?: "CashIn" | "CashOut";
-}
-
-interface PdaxFiatTransactionsResponse {
-  data: PdaxFiatTransaction[];
-  status: string;
-}
 
 export async function GET(
   _req: Request,

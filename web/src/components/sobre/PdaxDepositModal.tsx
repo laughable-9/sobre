@@ -3,8 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Check, Clock, Copy, ExternalLink, Loader2, Send } from "lucide-react";
 
+import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { useDeposit } from "@/hooks/useDeposit";
 import { usePdaxDeposit, type DepositStatus } from "@/hooks/usePdaxDeposit";
+import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
@@ -31,6 +33,16 @@ const QUICK_PHP = [100, 500, 1000, 5000];
  *   failed   → any step errored; show the reason + a Close
  */
 type Phase = "input" | "awaiting" | "confirm" | "splitting" | "done" | "failed";
+
+/** Status-line copy for the AwaitingStep spinner. Hoisted so the record
+ *  literal isn't allocated per-render. */
+const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
+  pending: "Waiting for your payment",
+  funded: "Payment received — crediting your wallet",
+  credited: "Funds landed",
+  split: "Done",
+  failed: "Failed",
+};
 
 function phaseFromStatus(status: DepositStatus | undefined): Phase {
   switch (status) {
@@ -333,36 +345,14 @@ function AwaitingStep({
   const [simulating, setSimulating] = useState(false);
   const [simError, setSimError] = useState<string | null>(null);
 
-  // Poll PDAX's fiat/transactions every 3s. When the cash-in flips to
-  // COMPLETED on their side, the route auto-orchestrates the trade +
-  // withdraw and flips our row to 'credited' — Supabase Realtime then
-  // surfaces the change to the parent and the modal advances.
-  useEffect(() => {
-    if (status === "credited" || status === "split" || status === "failed") {
-      return;
-    }
-    let cancelled = false;
-    const tick = async () => {
-      try {
-        await fetch(`/api/pdax/deposits/${identifier}/poll-status`, {
-          method: "GET",
-        });
-      } catch {
-        // poll is best-effort; the next tick will retry
-      }
-    };
-    void tick();
-    // 1s polling: the funded→credited transition trips as soon as the
-    // Horizon payment lands at the relay, so polling faster shaves real
-    // wall-clock latency rather than just spamming the route.
-    const t = setInterval(() => {
-      if (!cancelled) void tick();
-    }, 1000);
-    return () => {
-      cancelled = true;
-      clearInterval(t);
-    };
-  }, [identifier, status]);
+  // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
+  // step; Realtime surfaces the resulting row updates to the modal.
+  const polling =
+    status !== "credited" && status !== "split" && status !== "failed";
+  usePollStatus(
+    polling ? `/api/pdax/deposits/${identifier}/poll-status` : null,
+    polling,
+  );
 
   const simulate = async () => {
     setSimulating(true);
@@ -379,13 +369,6 @@ function AwaitingStep({
     } finally {
       setSimulating(false);
     }
-  };
-  const labelByStatus: Record<DepositStatus, string> = {
-    pending: "Waiting for your payment",
-    funded: "Payment received — crediting your wallet",
-    credited: "Funds landed",
-    split: "Done",
-    failed: "Failed",
   };
 
   const copy = async () => {
@@ -458,7 +441,7 @@ function AwaitingStep({
           style={{ color: "var(--sobre-accent)" }}
         />
         <span className="text-[13px]" style={{ color: "var(--text-1)" }}>
-          {labelByStatus[status]}
+          {DEPOSIT_STATUS_LABELS[status]}
         </span>
       </div>
 
@@ -571,38 +554,6 @@ function ConfirmStep({
         </button>
       </div>
     </>
-  );
-}
-
-function CenteredCopy({
-  icon,
-  title,
-  body,
-  footer,
-}: {
-  icon: React.ReactNode;
-  title: string;
-  body: string;
-  footer?: React.ReactNode;
-}) {
-  return (
-    <div className="text-center py-4">
-      <div
-        className="grid place-items-center mx-auto mb-4"
-        style={{
-          width: 56,
-          height: 56,
-          borderRadius: "50%",
-          background: "var(--accent-soft)",
-          color: "var(--sobre-accent)",
-        }}
-      >
-        {icon}
-      </div>
-      <h2 className="mb-2">{title}</h2>
-      <p className="sub mb-4">{body}</p>
-      {footer ? <div className="sobre-modal-actions">{footer}</div> : null}
-    </div>
   );
 }
 

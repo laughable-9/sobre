@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useRowRealtime } from "@/hooks/useRowRealtime";
 
 /**
  * Drives the "Add money via PDAX" flow:
@@ -60,30 +60,11 @@ export function usePdaxDeposit(contractId: string | null): UsePdaxDepositResult 
   const [row, setRow] = useState<PdaxDepositRow | null>(null);
   const identifierRef = useRef<string | null>(null);
 
-  // Subscribe to the matching row's updates whenever `identifier` is set.
-  useEffect(() => {
-    const identifier = row?.identifier ?? identifierRef.current;
-    if (!identifier) return;
-    const supabase = getSupabaseBrowserClient();
-    const channel = supabase
-      .channel(`pdax_deposit:${identifier}`)
-      .on(
-        "postgres_changes" as never,
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "pdax_deposits",
-          filter: `identifier=eq.${identifier}`,
-        },
-        (payload: { new: PdaxDepositRow }) => {
-          setRow(payload.new);
-        },
-      )
-      .subscribe();
-    return () => {
-      void supabase.removeChannel(channel);
-    };
-  }, [row?.identifier]);
+  useRowRealtime<PdaxDepositRow>(
+    "pdax_deposits",
+    row?.identifier ?? null,
+    setRow,
+  );
 
   const initiate = useCallback(
     async (amountPhp: number) => {
