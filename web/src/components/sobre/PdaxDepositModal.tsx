@@ -143,12 +143,29 @@ export function PdaxDepositModal({
 
   const handleGenerate = async () => {
     if (!validAmount) return;
+    // Open an about:blank tab SYNCHRONOUSLY on click so it counts as a user
+    // gesture. Browsers block window.open() that fires after an async await,
+    // which is why our older "open after initiate returns" path was getting
+    // silently swallowed for some users. We redirect this tab to the actual
+    // checkout URL once PDAX responds; close it if /fiat/deposit errors.
+    const checkoutWindow = window.open("about:blank", "_blank");
     setPreparing(true);
     try {
       const result = await initiate(amountPhp);
-      window.open(result.paymentCheckoutUrl, "_blank", "noopener,noreferrer");
+      if (checkoutWindow) {
+        checkoutWindow.location.href = result.paymentCheckoutUrl;
+      } else {
+        // Popup got blocked despite the synchronous open — last-resort
+        // attempt without the window reference. May still be blocked but
+        // there's nothing further we can do.
+        window.open(
+          result.paymentCheckoutUrl,
+          "_blank",
+          "noopener,noreferrer",
+        );
+      }
     } catch {
-      // surfaces via hook error state; fall back to the input step
+      checkoutWindow?.close();
       setPreparing(false);
     }
   };
@@ -203,11 +220,7 @@ export function PdaxDepositModal({
         ) : null}
 
         {phase === "awaiting" && row ? (
-          <AwaitingStep
-            status={row.status}
-            identifier={row.identifier}
-            onClose={onClose}
-          />
+          <AwaitingStep status={row.status} identifier={row.identifier} />
         ) : null}
 
         {phase === "confirm" && row ? (
@@ -375,11 +388,9 @@ function InputStep({
 function AwaitingStep({
   status,
   identifier,
-  onClose,
 }: {
   status: DepositStatus;
   identifier: string;
-  onClose: () => void;
 }) {
   // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
   // step; Realtime surfaces the resulting row updates to the modal.
@@ -394,11 +405,6 @@ function AwaitingStep({
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
       title={DEPOSIT_STATUS_LABELS[status]}
-      footer={
-        <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
-          Close, keep paying
-        </button>
-      }
     />
   );
 }
