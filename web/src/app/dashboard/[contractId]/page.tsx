@@ -680,36 +680,58 @@ function Dashboard({ contractId }: { contractId: string }) {
             setResumeDepositId(null);
             void activeDeposits.refresh();
           }}
-          onCancelMidFlight={(identifier) => {
-            setDepositOpen(false);
-            setResumeDepositId(null);
-            // Cancel-then-refresh in sequence so the row is `failed`
-            // server-side by the time the active list re-reads. The
-            // cancel endpoint refuses (409 already_paid) when PDAX
-            // already has the PHP; in that case we swap the toast for
-            // the reassuring "Finishing your deposit" message and let
-            // the auto-driver finish the pipeline.
-            void (async () => {
-              let alreadyPaid = false;
-              if (identifier) {
-                try {
-                  const res = await fetch(
-                    `/api/pdax/deposits/${identifier}/cancel`,
-                    { method: "POST" },
-                  );
-                  if (res.status === 409) alreadyPaid = true;
-                } catch {
-                  // best effort; the TTL sweep will catch it eventually
-                }
+          onAttemptCancel={async (identifier) => {
+            // Run /cancel, flash the right toast, and report
+            // alreadyPaid back to the modal. The modal decides
+            // whether to close (200) or stay open (409). Keeping
+            // the modal open in the 409 path avoids the misleading
+            // "Awaiting payment · tap to resume" entry in the
+            // activity feed for a row that's already paid — the
+            // user instead watches their deposit advance.
+            let alreadyPaid = false;
+            if (identifier) {
+              try {
+                const res = await fetch(
+                  `/api/pdax/deposits/${identifier}/cancel`,
+                  { method: "POST" },
+                );
+                if (res.status === 409) alreadyPaid = true;
+              } catch {
+                // best effort; the TTL sweep will catch it eventually
+                return { ok: false };
               }
-              flash(
-                alreadyPaid
-                  ? "PDAX already received your payment. Finishing your deposit."
-                  : "Deposit cancelled.",
-                alreadyPaid ? "ok" : "warn",
-              );
-              await activeDeposits.refresh();
-            })();
+            }
+            flash(
+              alreadyPaid
+                ? "PDAX already received your payment. Finishing your deposit."
+                : "Deposit cancelled.",
+              alreadyPaid ? "ok" : "warn",
+            );
+            if (alreadyPaid && identifier) {
+              // Fire-and-forget kick so the row advances from
+              // pending → funded server-side promptly, even if the
+              // user closes the tab. The modal's own poll-status
+              // loop is still firing in parallel; this is the
+              // belt-and-suspenders kick for the case where the
+              // user closes the modal right after the 409.
+              void fetch(
+                `/api/pdax/deposits/${identifier}/poll-status`,
+              ).catch(() => {});
+            } else if (identifier) {
+              // 200 OK cancel path: PDAX's /fiat/transactions reporting
+              // can lag the actual settlement, so the cancel went
+              // through even though the user really did pay. Schedule
+              // re-refreshes — the active route's resurrect pass scans
+              // recently-cancelled rows and re-checks PDAX, resurrecting
+              // any that PDAX has since marked COMPLETED. Two delays
+              // (5s + 15s) catch PDAX's typical reporting lag; the 30s
+              // tick is covered by useActiveDeposits' own heartbeat.
+              for (const delay of [5_000, 15_000]) {
+                setTimeout(() => void activeDeposits.refresh(), delay);
+              }
+            }
+            await activeDeposits.refresh();
+            return { ok: true, alreadyPaid };
           }}
           onSuccess={({ usdc }) => {
             setResumeDepositId(null);

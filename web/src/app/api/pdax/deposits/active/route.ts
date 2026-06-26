@@ -14,6 +14,12 @@
 import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { PAYMENT_TOKEN } from "@/lib/config";
+import {
+  getPdaxFiatTx,
+  kickOffPdaxWithdraw,
+  type PdaxFiatTransaction,
+} from "@/lib/pdax/deposits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -73,6 +79,20 @@ export async function GET(req: Request) {
     .eq("status", "pending")
     .lt("created_at", cutoff);
 
+  // Self-heal: PDAX's /fiat/transactions endpoint can lag the actual
+  // settlement by a few seconds — the user may have paid via GrabPay,
+  // gotten the confirmation email, but our /cancel pre-check found
+  // nothing in PDAX's reporting API and let the cancel through. The
+  // user's money is at PDAX but our row says "Cancelled by user".
+  //
+  // For every recently-cancelled row (within 5 minutes), re-check PDAX.
+  // If they now show COMPLETED, atomically resurrect the row, run the
+  // trade + crypto withdraw inline, and mark it `funded` so the modal /
+  // activity feed pick it back up like any other deposit. The
+  // PdaxDepositModal's resume affordance + poll-status loop will drive
+  // it through to `credited` from there.
+  await resurrectCancelledIfPaid(familyWalletId, memberId);
+
   const { data: rows, error } = await admin
     .from("pdax_deposits")
     .select(
@@ -110,4 +130,100 @@ export async function GET(req: Request) {
     deposits: rows ?? [],
     recentlyFailed: failedRows ?? [],
   });
+}
+
+/** Window in minutes after a row was marked "Cancelled by user" where
+ *  we'll keep re-checking PDAX in case their reporting catches up. Beyond
+ *  this the row stays terminal — the user can always start a fresh
+ *  deposit and the cancelled row is just history at that point. */
+const RESURRECT_WINDOW_MIN = 5;
+
+async function resurrectCancelledIfPaid(
+  familyWalletId: string,
+  memberId: string,
+): Promise<void> {
+  const admin = getSupabaseAdmin();
+  const since = new Date(
+    Date.now() - RESURRECT_WINDOW_MIN * 60_000,
+  ).toISOString();
+  const { data: candidates } = await admin
+    .from("pdax_deposits")
+    .select("identifier, amount_php")
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", "failed")
+    .eq("failure_reason", "Cancelled by user")
+    .gte("created_at", since);
+  if (!candidates?.length) return;
+
+  // Re-check PDAX for each candidate in parallel. Most calls return
+  // "no tx found" cheaply; the rare COMPLETED triggers the resurrect.
+  await Promise.all(
+    (candidates as Array<{ identifier: string; amount_php: number }>).map(
+      (c) => resurrectOne(c.identifier, c.amount_php),
+    ),
+  );
+}
+
+async function resurrectOne(
+  identifier: string,
+  amountPhp: number,
+): Promise<void> {
+  const admin = getSupabaseAdmin();
+  let tx: PdaxFiatTransaction | undefined;
+  try {
+    tx = await getPdaxFiatTx(identifier, "CashIn");
+  } catch {
+    // PDAX errored — try again on the next /active tick.
+    return;
+  }
+  if (!tx || tx.status !== "COMPLETED") return;
+
+  // Atomic resurrect + claim. Move status=failed → status=pending AND
+  // flip withdraw_tx_hash from NULL to 'claiming' in one update so a
+  // concurrent /active tick or modal poll can't race in and double-fire
+  // the trade. The poll-status route uses the same 'claiming' sentinel
+  // — once we mark `funded` below, the column resets to NULL and
+  // phase 2 (SAC transfer to smart wallet) takes over.
+  const { data: claimed } = await admin
+    .from("pdax_deposits")
+    .update({
+      status: "pending",
+      failure_reason: null,
+      withdraw_tx_hash: "claiming",
+    })
+    .eq("identifier", identifier)
+    .eq("status", "failed")
+    .eq("failure_reason", "Cancelled by user")
+    .is("withdraw_tx_hash", null)
+    .select("identifier");
+  if (!claimed?.length) return;
+
+  try {
+    const { netAmount } = await kickOffPdaxWithdraw({
+      identifier,
+      amountPhp,
+    });
+    await admin
+      .from("pdax_deposits")
+      .update({
+        status: "funded",
+        amount_usdc: netAmount,
+        token_currency: PAYMENT_TOKEN,
+        withdraw_tx_hash: null,
+      })
+      .eq("identifier", identifier)
+      .eq("status", "pending");
+  } catch (e) {
+    // Trade failed — back out the claim. Row stays at status=pending so
+    // the next /active tick or modal poll retries. Surfacing the actual
+    // failure_reason here would be misleading (the original cancellation
+    // is no longer the active reason), so we leave it null.
+    console.error("[pdax /active resurrect]", e);
+    await admin
+      .from("pdax_deposits")
+      .update({ withdraw_tx_hash: null })
+      .eq("identifier", identifier)
+      .eq("withdraw_tx_hash", "claiming");
+  }
 }

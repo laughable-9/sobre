@@ -40,7 +40,8 @@ type Phase =
   | "confirm"
   | "splitting"
   | "done"
-  | "failed";
+  | "failed"
+  | "cancelling";
 
 /** Rotating headlines per row status. The AwaitingStep cycles through
  *  these on a 3.5s interval so the spinner feels alive while we wait on
@@ -110,7 +111,7 @@ export function PdaxDepositModal({
   state,
   contractId,
   onClose,
-  onCancelMidFlight,
+  onAttemptCancel,
   onSuccess,
   resumeIdentifier,
   onActiveIdentifierChange,
@@ -119,14 +120,19 @@ export function PdaxDepositModal({
   state: WalletState;
   contractId: string;
   /** Plain close. Called for terminal-state closes (done / failed / never
-   *  started) and after the user explicitly tapped a Close button. */
+   *  started) and once an in-flight cancel has resolved. The modal never
+   *  closes itself behind onAttemptCancel's back. */
   onClose: () => void;
-  /** Called when the user dismisses the modal while a row is mid-flight.
-   *  Receives the row identifier (or null if the user closed before the
-   *  /fiat/deposit call returned) so the parent can hit /cancel and
-   *  refresh the activity feed in the correct order — refresh-then-
-   *  cancel races and leaves stale PENDING entries. */
-  onCancelMidFlight?: (identifier: string | null) => void;
+  /** Resolves when the parent has finished its server-side cancel +
+   *  flash + activity-feed refresh. Returning `alreadyPaid: true`
+   *  keeps the modal OPEN so the user sees their deposit continue
+   *  through buying/credited rather than landing on a confusing
+   *  pending-but-paid row in the activity feed. The identifier is null
+   *  when the user closed before /fiat/deposit returned — there's
+   *  nothing to cancel server-side in that case. */
+  onAttemptCancel?: (
+    identifier: string | null,
+  ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
   onSuccess: (info: { usdc: number; stroops: bigint }) => void;
   /** When set, the modal hydrates state from this existing deposit row
    *  and skips the input/preparing steps. The user lands on whichever
@@ -173,6 +179,26 @@ export function PdaxDepositModal({
   const [celebration, setCelebration] = useState<
     "payment_confirmed" | "funds_arrived" | null
   >(null);
+  // Cancel state lifted to the modal so the inline "Cancel this checkout"
+  // button and the backdrop-close path share one source of truth (and
+  // never split into two competing /cancel calls). `alreadyPaidNotice`
+  // is set when /cancel returns 409 — the modal STAYS OPEN at that
+  // point so the user sees their already-paid deposit continue through
+  // buying → credited, rather than landing on a confusing
+  // pending-but-paid row in the activity feed.
+  // `cancelling` doubles as the deferred-cancel flag: when set with no
+  // row yet, the effect below holds the modal at the "Cancelling…"
+  // spinner and fires /cancel the moment /fiat/deposit returns. Without
+  // that the row would be born orphaned at status=pending after the
+  // modal had already closed.
+  const [cancelling, setCancelling] = useState(false);
+  const [alreadyPaidNotice, setAlreadyPaidNotice] = useState(false);
+  // Guard against the deferred-cancel effect firing /cancel twice when
+  // the parent re-renders mid-await (onAttemptCancel / onClose are
+  // inline arrows in the dashboard, so their identity changes on every
+  // render). Setting the ref before kicking the IIFE makes the second
+  // run a no-op.
+  const cancelFiredRef = useRef(false);
   const lastStatusRef = useRef<DepositStatus | null>(null);
   const { phpPerToken } = useTokenRate();
 
@@ -218,47 +244,117 @@ export function PdaxDepositModal({
   // the preparing phase whenever a resume hydration is pending so the
   // user only ever sees the spinner.
   const hydrating = !row && Boolean(resumeIdentifier);
-  const phase: Phase = (preparing || hydrating) && !row
-    ? "preparing"
-    : !row
-      ? "input"
-      : celebration
-        ? "celebrating"
-        : splitting
-          ? "splitting"
-          : phaseFromStatus(row.status);
+  // While the user-initiated cancel is in flight, the row may flip to
+  // `failed` via Supabase Realtime BEFORE the parent's onAttemptCancel
+  // promise resolves and triggers onClose. Without this override the
+  // failed phase ("Something went wrong") flashes for a beat between
+  // the Realtime push and the modal closing. Showing a "Cancelling…"
+  // spinner instead keeps the close feeling intentional.
+  let phase: Phase;
+  if (cancelling) phase = "cancelling";
+  else if ((preparing || hydrating) && !row) phase = "preparing";
+  else if (!row) phase = "input";
+  else if (celebration) phase = "celebrating";
+  else if (splitting) phase = "splitting";
+  else phase = phaseFromStatus(row.status);
 
-  // Wrap onClose with safety rails:
-  // - LOCKED states (modal refuses to close): celebrating, splitting,
-  //   confirm, and awaiting once status is past pending. Closing while
-  //   money is at PDAX or sitting in the smart wallet would strand
-  //   funds where the user can't easily recover them mid-demo.
-  // - CANCELLABLE in-flight states: preparing + awaiting/pending. PDAX
-  //   may have a half-started checkout but no money has moved yet, so
-  //   we fire the cancel endpoint server-side here — without it the
-  //   row stays at status='pending' and immediately re-surfaces in the
-  //   PENDING bucket via the activity feed's refresh, which then 404s
-  //   the resume because the row is technically still pending. Calling
-  //   /cancel ensures the row is `failed` by the time the feed reads.
-  // - Terminal states (done/failed) and pre-start (input): plain close.
-  const handleClose = () => {
-    const locked =
+  // One close path for the inline "Cancel this checkout" button AND the
+  // backdrop/escape close. Safety rails:
+  // - LOCKED (refuses to close): celebrating, splitting, confirm, and
+  //   awaiting once status is past pending. Closing while money is at
+  //   PDAX or sitting in the smart wallet would strand funds where the
+  //   user can't easily recover them mid-demo.
+  // - Terminal / pre-start (input, done, failed): plain close, no
+  //   cancel call needed.
+  // - After 409 (alreadyPaidNotice set): plain close too — we already
+  //   determined PDAX has the money on a prior cancel attempt, so don't
+  //   ping /cancel again, and don't try to talk the user out of
+  //   leaving.
+  // - In-flight cancellable (preparing, awaiting+pending): delegate
+  //   to onAttemptCancel. If parent reports `alreadyPaid: true`, we
+  //   KEEP THE MODAL OPEN and let poll-status drive the row through
+  //   funded → credited. Otherwise we close after the parent's cancel
+  //   + refresh resolves.
+  const attemptCancel = async () => {
+    const lockedPhase =
       phase === "celebrating" ||
       phase === "splitting" ||
       phase === "confirm" ||
       (phase === "awaiting" && row?.status !== "pending");
-    if (locked) return;
+    if (lockedPhase) return;
 
-    const inFlight = phase === "preparing" || phase === "awaiting";
-    if (inFlight) {
-      // Hand the identifier to the parent so it can sequence the cancel
-      // POST + the activity-feed refresh. Doing the fetch in-modal racy:
-      // the parent's refresh runs before /cancel commits, and the row
-      // re-surfaces in PENDING the moment the modal unmounts.
-      onCancelMidFlight?.(row?.identifier ?? null);
+    const cleanClose =
+      phase === "input" ||
+      phase === "done" ||
+      phase === "failed" ||
+      alreadyPaidNotice;
+    if (cleanClose) {
+      onClose();
+      return;
     }
-    onClose();
+
+    if (cancelling) return;
+    setCancelling(true);
+
+    // No row yet because /fiat/deposit hasn't returned. The effect
+    // below holds the modal at "Cancelling…" and fires /cancel the
+    // moment the row appears — otherwise the row would be born
+    // orphaned at status=pending after the modal had already closed.
+    if (!row?.identifier) return;
+
+    cancelFiredRef.current = true;
+    try {
+      const result = (await onAttemptCancel?.(row.identifier)) ?? { ok: true };
+      if (result.alreadyPaid) {
+        // PDAX has the payment. The parent has already flashed the
+        // reassuring toast and kicked /poll-status server-side. Keep
+        // the modal open so the user watches the deposit advance
+        // instead of seeing it land in the activity feed as
+        // "Awaiting payment" — which reads as if their tap did
+        // nothing.
+        setAlreadyPaidNotice(true);
+        cancelFiredRef.current = false;
+        setCancelling(false);
+        return;
+      }
+      onClose();
+    } finally {
+      if (!alreadyPaidNotice) {
+        cancelFiredRef.current = false;
+        setCancelling(false);
+      }
+    }
   };
+
+  // Deferred-cancel driver for the "user closed during preparing"
+  // path. Fires when:
+  //  - the row finally arrives → fire /cancel on it, then close.
+  //  - /fiat/deposit failed (preparing flipped off without a row) →
+  //    nothing to cancel server-side, just close.
+  // The ref guard prevents a double-POST when the parent re-renders
+  // mid-await (onAttemptCancel/onClose are inline arrows in the
+  // dashboard, so their identity changes per render).
+  useEffect(() => {
+    if (!cancelling) return;
+    if (cancelFiredRef.current) return;
+    if (row?.identifier) {
+      cancelFiredRef.current = true;
+      void (async () => {
+        try {
+          await onAttemptCancel?.(row.identifier);
+        } finally {
+          cancelFiredRef.current = false;
+          setCancelling(false);
+          onClose();
+        }
+      })();
+      return;
+    }
+    if (!preparing) {
+      setCancelling(false);
+      onClose();
+    }
+  }, [cancelling, row?.identifier, preparing, onAttemptCancel, onClose]);
 
   const error = pdaxError ?? depositError;
 
@@ -293,7 +389,10 @@ export function PdaxDepositModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(handleClose)}>
+    <div
+      className="sobre-modal-bg"
+      onMouseDown={backdropClose(() => void attemptCancel())}
+    >
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         {/* key={phase} on the inner wrapper remounts the active phase on
             every transition. animate-in fade-in (tw-animate-css) then
@@ -313,7 +412,7 @@ export function PdaxDepositModal({
             expectedToken={expectedToken}
             phpPerToken={phpPerToken}
             state={state}
-            onCancel={handleClose}
+            onCancel={() => void attemptCancel()}
             onGenerate={() => void handleGenerate()}
             error={error}
           />
@@ -326,11 +425,21 @@ export function PdaxDepositModal({
           />
         ) : null}
 
+        {phase === "cancelling" ? (
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title="Cancelling…"
+          />
+        ) : null}
+
         {phase === "awaiting" && row ? (
           <AwaitingStep
             status={row.status}
             identifier={row.identifier}
             checkoutUrl={row.payment_checkout_url}
+            cancelling={cancelling}
+            alreadyPaidNotice={alreadyPaidNotice}
+            onCancel={() => void attemptCancel()}
           />
         ) : null}
 
@@ -510,6 +619,9 @@ function AwaitingStep({
   status,
   identifier,
   checkoutUrl,
+  cancelling,
+  alreadyPaidNotice,
+  onCancel,
 }: {
   status: DepositStatus;
   identifier: string;
@@ -517,6 +629,16 @@ function AwaitingStep({
    *  user always has a reliable way back to GrabPay if the auto-open got
    *  blocked or the tab was closed. */
   checkoutUrl: string | null;
+  /** Disable the cancel affordance while the parent's /cancel is in
+   *  flight. Lifted to the modal so backdrop close + inline button
+   *  share the same in-flight state. */
+  cancelling: boolean;
+  /** True once the parent has confirmed PDAX already has the payment.
+   *  Swaps the spinner copy to "Finishing your deposit…" and hides the
+   *  cancel/checkout affordances; poll-status (still firing below)
+   *  advances the row to funded → credited within a few seconds. */
+  alreadyPaidNotice: boolean;
+  onCancel: () => void;
 }) {
   // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
   // step; Realtime surfaces the resulting row updates to the modal. Cleanup
@@ -528,43 +650,22 @@ function AwaitingStep({
     polling,
   );
 
-  // Manual escape on the pending state. PDAX's /fiat/transactions can
-  // lag (or never surface) a failed GrabPay payment, and the 90s
-  // time-based fallback in the poll-status route is still 90s the user
-  // has to wait. Tapping this hits /cancel immediately, flips the row
-  // to failed, and the modal transitions out via Realtime.
-  //
-  // Safety: the cancel route refuses (409 already_paid) when PDAX has
-  // already received the PHP. We catch that and show a friendly inline
-  // notice instead of pretending the cancel went through.
-  const [cancelling, setCancelling] = useState(false);
-  const [alreadyPaidNotice, setAlreadyPaidNotice] = useState(false);
-  const cancel = async () => {
-    if (cancelling) return;
-    setCancelling(true);
-    setAlreadyPaidNotice(false);
-    try {
-      const res = await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
-        method: "POST",
-      });
-      if (res.status === 409) {
-        setAlreadyPaidNotice(true);
-      }
-    } finally {
-      setCancelling(false);
-    }
-  };
-
   // Rotate through the per-status titles so the spinner doesn't feel
   // frozen during the multi-second waits. 3.5s cadence — long enough to
   // read, short enough to feel like progress. Reset to the first entry
   // whenever the status changes so the user sees the "headline" message
-  // first as each new step begins.
-  const titles = useMemo(() => rotatingTitlesFor(status), [status]);
+  // first as each new step begins. When PDAX has already received the
+  // payment (alreadyPaidNotice), we override the rotation with a single
+  // reassuring title since the PENDING_MESSAGES copy ("Waiting for
+  // payment…") would be misleading.
+  const titles = useMemo(
+    () =>
+      alreadyPaidNotice && status === "pending"
+        ? ["Finishing your deposit…"]
+        : rotatingTitlesFor(status),
+    [status, alreadyPaidNotice],
+  );
   const [titleIdx, setTitleIdx] = useState(0);
-  useEffect(() => {
-    setTitleIdx(0);
-  }, [status]);
   useEffect(() => {
     if (titles.length <= 1) return;
     const t = setInterval(
@@ -577,9 +678,12 @@ function AwaitingStep({
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
-      title={titles[titleIdx]}
+      // Modulo guards against a stale titleIdx (carried over from a
+      // longer rotation) landing outside the new titles array — no
+      // reset effect needed.
+      title={titles[titleIdx % titles.length]}
       footer={
-        status === "pending" ? (
+        status === "pending" && !alreadyPaidNotice ? (
           <div className="flex flex-col items-center gap-2">
             {checkoutUrl ? (
               <a
@@ -595,36 +699,34 @@ function AwaitingStep({
             ) : null}
             <button
               type="button"
-              onClick={() => void cancel()}
-              disabled={cancelling || alreadyPaidNotice}
+              onClick={onCancel}
+              disabled={cancelling}
               style={{
                 background: "transparent",
                 border: "none",
                 color: "var(--text-3)",
                 fontSize: 12,
-                cursor:
-                  cancelling || alreadyPaidNotice ? "not-allowed" : "pointer",
-                textDecoration: alreadyPaidNotice ? "none" : "underline",
+                cursor: cancelling ? "not-allowed" : "pointer",
+                textDecoration: "underline",
               }}
             >
               {cancelling ? "Cancelling…" : "Cancel this checkout"}
             </button>
-            {alreadyPaidNotice ? (
-              <p
-                style={{
-                  fontSize: 11,
-                  color: "var(--sobre-accent)",
-                  textAlign: "center",
-                  margin: 0,
-                  maxWidth: 260,
-                  lineHeight: 1.4,
-                }}
-              >
-                PDAX already has your payment. Finishing your deposit
-                automatically.
-              </p>
-            ) : null}
           </div>
+        ) : alreadyPaidNotice ? (
+          <p
+            style={{
+              fontSize: 11,
+              color: "var(--sobre-accent)",
+              textAlign: "center",
+              margin: 0,
+              maxWidth: 260,
+              lineHeight: 1.4,
+            }}
+          >
+            PDAX already has your payment. We&apos;ll finish your deposit
+            automatically.
+          </p>
         ) : undefined
       }
     />
