@@ -33,7 +33,14 @@ export function CenteredCopy({
       </div>
       <h2 className="mb-2">{title}</h2>
       {body ? <p className="sub mb-4">{body}</p> : null}
-      {footer ? <div className="sobre-modal-actions">{footer}</div> : null}
+      {/* Centered footer — the shared sobre-modal-actions class right-aligns,
+       *  which clashes with a centered title/body layout. Override to keep
+       *  the call-to-action visually anchored to the column. */}
+      {footer ? (
+        <div className="sobre-modal-actions" style={{ justifyContent: "center" }}>
+          {footer}
+        </div>
+      ) : null}
     </div>
   );
 }

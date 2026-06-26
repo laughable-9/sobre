@@ -599,6 +599,10 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           contractId={contractId}
           onClose={() => setDepositOpen(false)}
+          onCancelMidFlight={() => {
+            setDepositOpen(false);
+            flash("Cancelled. Try again whenever.", "warn");
+          }}
           onSuccess={({ usdc }) => {
             handleDepositSuccess(usdc);
           }}
@@ -611,6 +615,10 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           contractId={contractId}
           onClose={() => setCashoutOpen(false)}
+          onCancelMidFlight={() => {
+            setCashoutOpen(false);
+            flash("Cancelled. Try again whenever.", "warn");
+          }}
           onSuccess={({ php }) => {
             flash(
               `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to your bank`,

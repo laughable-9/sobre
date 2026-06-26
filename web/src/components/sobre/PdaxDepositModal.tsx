@@ -86,12 +86,19 @@ export function PdaxDepositModal({
   state,
   contractId,
   onClose,
+  onCancelMidFlight,
   onSuccess,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** Plain close — called for terminal-state closes (done / failed / never
+   *  started) and after the user explicitly tapped a Close button. */
   onClose: () => void;
+  /** Called when the user dismisses the modal while a row is mid-flight
+   *  (preparing through credited). Parent surfaces a "cancelled, try again"
+   *  toast. The polling effect tears down on unmount automatically. */
+  onCancelMidFlight?: () => void;
   onSuccess: (info: { usdc: number; stroops: bigint }) => void;
 }) {
   const [amountStr, setAmountStr] = useState("500");
@@ -139,33 +146,32 @@ export function PdaxDepositModal({
         ? "splitting"
         : phaseFromStatus(row.status);
 
+  // Wrap onClose: distinguish a terminal close ("Done" / "Close") from a
+  // mid-flight dismiss (backdrop click while the row is still working).
+  // The latter fires onCancelMidFlight so the parent can flash a toast.
+  const handleClose = () => {
+    const inFlight =
+      phase === "preparing" ||
+      phase === "awaiting" ||
+      phase === "confirm" ||
+      phase === "splitting";
+    if (inFlight && onCancelMidFlight) onCancelMidFlight();
+    onClose();
+  };
+
   const error = pdaxError ?? depositError;
 
   const handleGenerate = async () => {
     if (!validAmount) return;
-    // Open an about:blank tab SYNCHRONOUSLY on click so it counts as a user
-    // gesture. Browsers block window.open() that fires after an async await,
-    // which is why our older "open after initiate returns" path was getting
-    // silently swallowed for some users. We redirect this tab to the actual
-    // checkout URL once PDAX responds; close it if /fiat/deposit errors.
-    const checkoutWindow = window.open("about:blank", "_blank");
     setPreparing(true);
     try {
       const result = await initiate(amountPhp);
-      if (checkoutWindow) {
-        checkoutWindow.location.href = result.paymentCheckoutUrl;
-      } else {
-        // Popup got blocked despite the synchronous open — last-resort
-        // attempt without the window reference. May still be blocked but
-        // there's nothing further we can do.
-        window.open(
-          result.paymentCheckoutUrl,
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }
+      // Best-effort auto-open. Some browsers block this (no user gesture
+      // after an awaited call); the AwaitingStep always renders an
+      // "Open checkout" anchor as the reliable fallback so the user
+      // never gets stranded.
+      window.open(result.paymentCheckoutUrl, "_blank", "noopener,noreferrer");
     } catch {
-      checkoutWindow?.close();
       setPreparing(false);
     }
   };
@@ -186,7 +192,7 @@ export function PdaxDepositModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(handleClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         {/* key={phase} on the inner wrapper remounts the active phase on
             every transition. animate-in fade-in (tw-animate-css) then
@@ -206,7 +212,7 @@ export function PdaxDepositModal({
             expectedToken={expectedToken}
             phpPerToken={phpPerToken}
             state={state}
-            onCancel={onClose}
+            onCancel={handleClose}
             onGenerate={() => void handleGenerate()}
             error={error}
           />
@@ -234,7 +240,7 @@ export function PdaxDepositModal({
             state={state}
             pending={depositPending || pdaxPending}
             onConfirm={() => void handleConfirmSplit()}
-            onCancel={onClose}
+            onCancel={handleClose}
             error={error}
           />
         ) : null}
@@ -396,12 +402,14 @@ function AwaitingStep({
 }: {
   status: DepositStatus;
   identifier: string;
-  /** Set when the synchronous window.open on Continue was blocked OR null.
-   *  Drives the fallback "Open checkout" button below. */
+  /** Surfaces as a manual "Open checkout" anchor under the spinner so the
+   *  user always has a reliable way back to GrabPay if the auto-open got
+   *  blocked or the tab was closed. */
   checkoutUrl: string | null;
 }) {
   // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
-  // step; Realtime surfaces the resulting row updates to the modal.
+  // step; Realtime surfaces the resulting row updates to the modal. Cleanup
+  // on unmount in usePollStatus stops the loop when the modal closes.
   const polling =
     status !== "credited" && status !== "split" && status !== "failed";
   usePollStatus(
@@ -409,24 +417,12 @@ function AwaitingStep({
     polling,
   );
 
-  // After a brief delay show a manual "Open checkout" anchor as a fallback
-  // for popup-blocked browsers or users who closed the GrabPay tab by
-  // accident. Anchor with target="_blank" works under user gesture
-  // semantics that bypass popup blockers.
-  const [showFallback, setShowFallback] = useState(false);
-  useEffect(() => {
-    if (status !== "pending") return;
-    if (!checkoutUrl) return;
-    const t = setTimeout(() => setShowFallback(true), 3000);
-    return () => clearTimeout(t);
-  }, [status, checkoutUrl]);
-
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
       title={DEPOSIT_STATUS_LABELS[status]}
       footer={
-        showFallback && checkoutUrl ? (
+        status === "pending" && checkoutUrl ? (
           <a
             className="sobre-btn sobre-btn-soft"
             href={checkoutUrl}

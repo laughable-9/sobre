@@ -95,12 +95,16 @@ export function PdaxWithdrawModal({
   state,
   contractId,
   onClose,
+  onCancelMidFlight,
   onSuccess,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
   onClose: () => void;
+  /** Same contract as PdaxDepositModal — fires on user dismiss while a
+   *  cashout row is mid-flight so the parent can flash a toast. */
+  onCancelMidFlight?: () => void;
   onSuccess: (info: { php: number }) => void;
 }) {
   const [localPhase, setLocalPhase] = useState<LocalPhase>("loading_bank");
@@ -150,6 +154,17 @@ export function PdaxWithdrawModal({
   // local state owns the pre-signing UI. Computing this inline avoids an
   // extra effect that would cascade-render.
   const phase: Phase = phaseFromStatus(row?.status) ?? localPhase;
+
+  // Same close-wrapper pattern as the deposit modal: only signal a cancel
+  // when the user dismisses while a row is actively working.
+  const handleClose = () => {
+    const inFlight =
+      phase === "signing" ||
+      phase === "awaiting" ||
+      (row !== null && row.status !== "paid" && row.status !== "failed");
+    if (inFlight && onCancelMidFlight) onCancelMidFlight();
+    onClose();
+  };
 
   // Drive the server-side pipeline by hitting poll-status. Each call is a
   // single state-machine step; Realtime relays row updates back to the hook.
@@ -215,7 +230,7 @@ export function PdaxWithdrawModal({
   const error = pdaxError ?? signError;
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
+    <div className="sobre-modal-bg" onMouseDown={backdropClose(handleClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         {/* See PdaxDepositModal for the rationale on key={phase} + the
             entry animation classes. */}
@@ -232,7 +247,7 @@ export function PdaxWithdrawModal({
 
         {phase === "register_bank" ? (
           <RegisterBankStep
-            onCancel={onClose}
+            onCancel={handleClose}
             onSaved={(b) => {
               setBank(b);
               setLocalPhase("input");
@@ -256,7 +271,7 @@ export function PdaxWithdrawModal({
             amountToken={amountToken}
             bank={bank}
             onChangeBank={() => setLocalPhase("register_bank")}
-            onCancel={onClose}
+            onCancel={handleClose}
             onConfirm={() => void handleConfirm()}
             pending={pdaxPending || signPending}
             error={error}
@@ -268,16 +283,7 @@ export function PdaxWithdrawModal({
         ) : null}
 
         {phase === "awaiting" && row ? (
-          <AwaitingStep
-            status={row.status}
-            amountPhp={Number(row.amount_php ?? amountPhp)}
-            bankName={
-              BANKS.find((b) => b.code === row.beneficiary_bank_code)?.name ??
-              row.beneficiary_bank_code
-            }
-            accountNumber={row.beneficiary_account_number}
-            onClose={onClose}
-          />
+          <AwaitingStep status={row.status} />
         ) : null}
 
         {phase === "done" && row ? (
@@ -582,45 +588,14 @@ function SigningStep({
 
 function AwaitingStep({
   status,
-  amountPhp,
-  bankName,
-  accountNumber,
-  onClose,
 }: {
   status: WithdrawStatus;
-  amountPhp: number;
-  bankName: string;
-  accountNumber: string;
-  onClose: () => void;
 }) {
   return (
-    <>
-      <h2>Cashing out</h2>
-      <p className="sub">
-        ₱{amountPhp.toLocaleString("en-PH", { minimumFractionDigits: 2 })} →{" "}
-        {bankName} · {maskAccountNumber(accountNumber)}
-      </p>
-
-      <div
-        className="flex items-center gap-3 p-3 rounded-[10px] mb-4"
-        style={{ background: "var(--accent-soft)" }}
-      >
-        <Loader2
-          size={18}
-          className="animate-spin"
-          style={{ color: "var(--sobre-accent)" }}
-        />
-        <span className="text-[13px]" style={{ color: "var(--text-1)" }}>
-          {STATUS_LABELS[status]}
-        </span>
-      </div>
-
-      <div className="sobre-modal-actions">
-        <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
-          Close, keep going
-        </button>
-      </div>
-    </>
+    <CenteredCopy
+      icon={<Loader2 size={28} className="animate-spin" />}
+      title={STATUS_LABELS[status]}
+    />
   );
 }
 
