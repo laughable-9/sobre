@@ -518,6 +518,24 @@ function AwaitingStep({
     polling,
   );
 
+  // Manual escape on the pending state. PDAX's /fiat/transactions can
+  // lag (or never surface) a failed GrabPay payment, and the 90s
+  // time-based fallback in the poll-status route is still 90s the user
+  // has to wait. Tapping this hits /cancel immediately, flips the row
+  // to failed, and the modal transitions out via Realtime.
+  const [cancelling, setCancelling] = useState(false);
+  const cancel = async () => {
+    if (cancelling) return;
+    setCancelling(true);
+    try {
+      await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
+        method: "POST",
+      });
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   // Rotate through the per-status titles so the spinner doesn't feel
   // frozen during the multi-second waits. 3.5s cadence — long enough to
   // read, short enough to feel like progress. Reset to the first entry
@@ -542,17 +560,36 @@ function AwaitingStep({
       icon={<Loader2 size={28} className="animate-spin" />}
       title={titles[titleIdx]}
       footer={
-        status === "pending" && checkoutUrl ? (
-          <a
-            className="sobre-btn sobre-btn-soft"
-            href={checkoutUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            style={{ padding: "10px 16px", fontSize: 13 }}
-          >
-            <ExternalLink size={14} strokeWidth={2.2} />
-            Open checkout
-          </a>
+        status === "pending" ? (
+          <div className="flex flex-col items-center gap-2">
+            {checkoutUrl ? (
+              <a
+                className="sobre-btn sobre-btn-soft"
+                href={checkoutUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{ padding: "10px 16px", fontSize: 13 }}
+              >
+                <ExternalLink size={14} strokeWidth={2.2} />
+                Open checkout
+              </a>
+            ) : null}
+            <button
+              type="button"
+              onClick={() => void cancel()}
+              disabled={cancelling}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "var(--text-3)",
+                fontSize: 12,
+                cursor: cancelling ? "not-allowed" : "pointer",
+                textDecoration: "underline",
+              }}
+            >
+              {cancelling ? "Cancelling…" : "Cancel this checkout"}
+            </button>
+          </div>
         ) : undefined
       }
     />

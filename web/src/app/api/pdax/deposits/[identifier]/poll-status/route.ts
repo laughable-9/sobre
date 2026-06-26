@@ -136,9 +136,11 @@ async function advanceFromPending(args: {
   // on "Waiting for payment…" indefinitely after the user hits GrabPay's
   // FAIL THIS TRANSACTION button. After PENDING_STALE_MS we presume the
   // checkout went bad and mark the row failed so the UI transitions to
-  // the failed state. False positives just mean the user retries with a
-  // fresh checkout — cheap.
-  const PENDING_STALE_MS = 5 * 60_000;
+  // the failed state. 90 seconds is aggressive enough that a clicked
+  // "Fail" feels responsive, but still long enough for a real slow
+  // payment to slip through — and the in-modal "Cancel" button gives the
+  // user an instant escape if they want one.
+  const PENDING_STALE_MS = 90_000;
   const ageMs = Date.now() - new Date(args.createdAt).getTime();
   const isStale = ageMs > PENDING_STALE_MS;
   const markFailedExpired = async () => {
