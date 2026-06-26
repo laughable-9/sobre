@@ -89,5 +89,25 @@ export async function GET(req: Request) {
     );
   }
 
-  return NextResponse.json({ deposits: rows ?? [] });
+  // Recently-failed deposits surface in the activity feed too — see the
+  // matching block in /api/pdax/withdrawals/active for rationale.
+  const RECENT_FAILED_LOOKBACK_DAYS = 7;
+  const failedCutoff = new Date(
+    Date.now() - RECENT_FAILED_LOOKBACK_DAYS * 24 * 60 * 60_000,
+  ).toISOString();
+  const { data: failedRows } = await admin
+    .from("pdax_deposits")
+    .select(
+      "identifier, amount_php, amount_usdc, payment_checkout_url, status, failure_reason, created_at",
+    )
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", "failed")
+    .gte("created_at", failedCutoff)
+    .order("created_at", { ascending: false });
+
+  return NextResponse.json({
+    deposits: rows ?? [],
+    recentlyFailed: failedRows ?? [],
+  });
 }

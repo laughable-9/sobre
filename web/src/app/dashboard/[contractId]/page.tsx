@@ -512,6 +512,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           pendingCashouts={activeCashouts.cashouts.filter(
             (c) => c.identifier !== activeCashoutId,
           )}
+          failedDeposits={activeDeposits.recentlyFailed}
+          failedCashouts={activeCashouts.recentlyFailed}
           onResumeCashout={(identifier) => {
             setResumeCashoutId(identifier);
             setCashoutOpen(true);

@@ -44,6 +44,10 @@ export interface ActiveCashoutRow {
 
 export interface UseActiveCashoutsResult {
   cashouts: ActiveCashoutRow[];
+  /** Recently-failed cashouts for the activity feed to render. Without
+   *  this they vanish silently after status=failed and the user has no
+   *  trail of "what happened to my cashout". */
+  recentlyFailed: ActiveCashoutRow[];
   refresh: () => Promise<void>;
 }
 
@@ -62,6 +66,7 @@ export function useActiveCashouts(
   callbacks?: ActiveCashoutsCallbacks,
 ): UseActiveCashoutsResult {
   const [cashouts, setCashouts] = useState<ActiveCashoutRow[]>([]);
+  const [recentlyFailed, setRecentlyFailed] = useState<ActiveCashoutRow[]>([]);
   // Snapshot the previous active list so we can detect rows that
   // dropped off into a terminal state since the last heartbeat. The
   // /active endpoint excludes paid/failed, so a row vanishing from
@@ -74,6 +79,7 @@ export function useActiveCashouts(
   const refresh = useCallback(async () => {
     if (!contractId) {
       setCashouts([]);
+      setRecentlyFailed([]);
       lastActiveRef.current = new Map();
       return;
     }
@@ -82,8 +88,12 @@ export function useActiveCashouts(
         `/api/pdax/withdrawals/active?contract_id=${encodeURIComponent(contractId)}`,
       );
       if (!res.ok) return;
-      const json = (await res.json()) as { cashouts: ActiveCashoutRow[] };
+      const json = (await res.json()) as {
+        cashouts: ActiveCashoutRow[];
+        recentlyFailed?: ActiveCashoutRow[];
+      };
       const next = json.cashouts ?? [];
+      setRecentlyFailed(json.recentlyFailed ?? []);
       const nextIds = new Set(next.map((c) => c.identifier));
 
       // Detect drop-offs: rows that were active last tick but aren't
@@ -141,5 +151,5 @@ export function useActiveCashouts(
     return () => clearInterval(t);
   }, [refresh]);
 
-  return { cashouts, refresh };
+  return { cashouts, recentlyFailed, refresh };
 }

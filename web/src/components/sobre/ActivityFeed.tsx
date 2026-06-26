@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import { useState } from "react";
 import {
+  AlertTriangle,
   ArrowDownToLine,
   ArrowUpFromLine,
   CheckCheck,
@@ -72,6 +73,11 @@ interface ActivityFeedProps {
    *  knows where it is. Tap re-opens the modal at the awaiting view. */
   pendingCashouts?: ActiveCashoutRow[];
   onResumeCashout?: (identifier: string) => void;
+  /** Terminal failed rows (~last 7 days) — rendered as warning entries
+   *  in the appropriate day bucket so the user has an honest trail of
+   *  cashouts/deposits that didn't go through. */
+  failedDeposits?: ActiveDepositRow[];
+  failedCashouts?: ActiveCashoutRow[];
 }
 
 export function ActivityFeed({
@@ -86,6 +92,8 @@ export function ActivityFeed({
   onCancelDeposit,
   pendingCashouts,
   onResumeCashout,
+  failedDeposits,
+  failedCashouts,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -102,17 +110,56 @@ export function ActivityFeed({
       ? `${profile.emoji} ${profile.name}`
       : profile.name;
   };
+  // FeedEntry is the union of on-chain events and PDAX-side failure
+  // rows. We render them as a single time-sorted stream per day so the
+  // user sees "Cashout failed at 11:38 PM" right next to the
+  // corresponding on-chain "withdrew for cashout" event.
+  type FeedEntry =
+    | { kind: "event"; when: string; data: FeedEvent }
+    | {
+        kind: "failed_deposit";
+        when: string;
+        data: ActiveDepositRow;
+      }
+    | {
+        kind: "failed_cashout";
+        when: string;
+        data: ActiveCashoutRow;
+      };
   const groups = useMemo(() => {
-    const out: Record<"TODAY" | "YESTERDAY" | "EARLIER", FeedEvent[]> = {
+    const out: Record<"TODAY" | "YESTERDAY" | "EARLIER", FeedEntry[]> = {
       TODAY: [],
       YESTERDAY: [],
       EARLIER: [],
     };
     for (const ev of events) {
-      out[bucket(ev.ledgerClosedAt)].push(ev);
+      out[bucket(ev.ledgerClosedAt)].push({
+        kind: "event",
+        when: ev.ledgerClosedAt,
+        data: ev,
+      });
+    }
+    for (const d of failedDeposits ?? []) {
+      out[bucket(d.created_at)].push({
+        kind: "failed_deposit",
+        when: d.created_at,
+        data: d,
+      });
+    }
+    for (const c of failedCashouts ?? []) {
+      out[bucket(c.created_at)].push({
+        kind: "failed_cashout",
+        when: c.created_at,
+        data: c,
+      });
+    }
+    for (const day of ["TODAY", "YESTERDAY", "EARLIER"] as const) {
+      out[day].sort(
+        (a, b) => new Date(b.when).getTime() - new Date(a.when).getTime(),
+      );
     }
     return out;
-  }, [events]);
+  }, [events, failedDeposits, failedCashouts]);
 
   const ordered = (["TODAY", "YESTERDAY", "EARLIER"] as const).filter(
     (day) => groups[day].length > 0,
@@ -171,19 +218,96 @@ export function ActivityFeed({
         {ordered.map((day) => (
           <div key={day}>
             <div className="sobre-day">{day}</div>
-            {groups[day].map((ev) => (
-              <ActivityRow
-                key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
-                ev={ev}
-                isNew={ev.txHash === newestTxHash}
-                labelFor={labelFor}
-                envelopeNames={envelopeNames}
-              />
-            ))}
+            {groups[day].map((entry) => {
+              if (entry.kind === "event") {
+                const ev = entry.data;
+                return (
+                  <ActivityRow
+                    key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
+                    ev={ev}
+                    isNew={ev.txHash === newestTxHash}
+                    labelFor={labelFor}
+                    envelopeNames={envelopeNames}
+                  />
+                );
+              }
+              if (entry.kind === "failed_deposit") {
+                return (
+                  <FailedDepositRow
+                    key={`fd:${entry.data.identifier}`}
+                    deposit={entry.data}
+                  />
+                );
+              }
+              return (
+                <FailedCashoutRow
+                  key={`fc:${entry.data.identifier}`}
+                  cashout={entry.data}
+                />
+              );
+            })}
           </div>
         ))}
       </div>
     </aside>
+  );
+}
+
+/** Terminal failed deposit row. Renders the failure reason inline so the
+ *  user gets a clear audit trail instead of the row silently disappearing
+ *  the moment status flipped to `failed`. */
+function FailedDepositRow({ deposit }: { deposit: ActiveDepositRow }) {
+  const time = fmtTime(deposit.created_at);
+  return (
+    <div
+      className="sobre-activity-item outflow"
+      style={{ background: "var(--surface-alt)" }}
+    >
+      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
+        <AlertTriangle size={16} strokeWidth={2} />
+      </div>
+      <div className="body">
+        <div className="who">
+          Deposit didn&apos;t complete{" "}
+          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
+            ₱{Number(deposit.amount_php).toLocaleString("en-PH")}
+          </span>
+        </div>
+        {deposit.failure_reason ? (
+          <div className="where">{deposit.failure_reason}</div>
+        ) : null}
+        <div className="meta">{time}</div>
+      </div>
+    </div>
+  );
+}
+
+/** Terminal failed cashout row. The PDAX failure reason (from the
+ *  webhook or poll-status) lands in failure_reason — surface it inline
+ *  so the demo viewer sees what actually broke. */
+function FailedCashoutRow({ cashout }: { cashout: ActiveCashoutRow }) {
+  const time = fmtTime(cashout.created_at);
+  return (
+    <div
+      className="sobre-activity-item outflow"
+      style={{ background: "var(--surface-alt)" }}
+    >
+      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
+        <AlertTriangle size={16} strokeWidth={2} />
+      </div>
+      <div className="body">
+        <div className="who">
+          Cashout didn&apos;t complete{" "}
+          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
+            ₱{Number(cashout.amount_php ?? 0).toLocaleString("en-PH")}
+          </span>
+        </div>
+        {cashout.failure_reason ? (
+          <div className="where">{cashout.failure_reason}</div>
+        ) : null}
+        <div className="meta">{time}</div>
+      </div>
+    </div>
   );
 }
 

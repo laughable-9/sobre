@@ -30,6 +30,10 @@ export interface ActiveDepositRow {
 
 export interface UseActiveDepositsResult {
   deposits: ActiveDepositRow[];
+  /** Recently-failed deposits (within ~7 days) for the activity feed to
+   *  render as terminal warning entries. The active list excludes
+   *  failed status, so without this they'd vanish from view. */
+  recentlyFailed: ActiveDepositRow[];
   refresh: () => Promise<void>;
 }
 
@@ -37,10 +41,12 @@ export function useActiveDeposits(
   contractId: string | null,
 ): UseActiveDepositsResult {
   const [deposits, setDeposits] = useState<ActiveDepositRow[]>([]);
+  const [recentlyFailed, setRecentlyFailed] = useState<ActiveDepositRow[]>([]);
 
   const refresh = useCallback(async () => {
     if (!contractId) {
       setDeposits([]);
+      setRecentlyFailed([]);
       return;
     }
     try {
@@ -48,8 +54,12 @@ export function useActiveDeposits(
         `/api/pdax/deposits/active?contract_id=${encodeURIComponent(contractId)}`,
       );
       if (!res.ok) return;
-      const json = (await res.json()) as { deposits: ActiveDepositRow[] };
+      const json = (await res.json()) as {
+        deposits: ActiveDepositRow[];
+        recentlyFailed?: ActiveDepositRow[];
+      };
       setDeposits(json.deposits ?? []);
+      setRecentlyFailed(json.recentlyFailed ?? []);
     } catch {
       // best effort; the next refresh / poll will retry
     }
@@ -63,5 +73,5 @@ export function useActiveDeposits(
     return () => clearInterval(t);
   }, [refresh]);
 
-  return { deposits, refresh };
+  return { deposits, recentlyFailed, refresh };
 }

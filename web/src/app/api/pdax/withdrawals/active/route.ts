@@ -83,5 +83,27 @@ export async function GET(req: Request) {
     return new Date(row.created_at).getTime() >= staleCutoffMs;
   });
 
-  return NextResponse.json({ cashouts: filtered });
+  // Surface recently-failed cashouts so the activity feed can render an
+  // honest "Cashout couldn't complete" entry. Without this, a failed
+  // cashout just disappears — only the on-chain spend stays visible
+  // and the user is left guessing what happened to the bank-side.
+  const RECENT_FAILED_LOOKBACK_DAYS = 7;
+  const failedCutoff = new Date(
+    Date.now() - RECENT_FAILED_LOOKBACK_DAYS * 24 * 60 * 60_000,
+  ).toISOString();
+  const { data: failedRows } = await admin
+    .from("pdax_withdrawals")
+    .select(
+      "identifier, envelope, amount_usdc, amount_php, status, failure_reason, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number, created_at",
+    )
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", "failed")
+    .gte("created_at", failedCutoff)
+    .order("created_at", { ascending: false });
+
+  return NextResponse.json({
+    cashouts: filtered,
+    recentlyFailed: failedRows ?? [],
+  });
 }
