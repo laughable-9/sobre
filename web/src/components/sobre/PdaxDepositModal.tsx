@@ -32,13 +32,20 @@ const QUICK_PHP = [100, 500, 1000, 5000];
  *   done     → split lands on chain; close modal, dashboard refreshes
  *   failed   → any step errored; show the reason + a Close
  */
-type Phase = "input" | "awaiting" | "confirm" | "splitting" | "done" | "failed";
+type Phase =
+  | "input"
+  | "preparing"
+  | "awaiting"
+  | "confirm"
+  | "splitting"
+  | "done"
+  | "failed";
 
 /** Status-line copy for the AwaitingStep spinner. Hoisted so the record
  *  literal isn't allocated per-render. */
 const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
   pending: "Waiting for your GrabPay payment…",
-  funded: "Payment received — buying XLM through PDAX…",
+  funded: "Payment in. Buying XLM through PDAX…",
   credited: "Funds landed in your wallet",
   split: "Done",
   failed: "Failed",
@@ -116,6 +123,13 @@ export function PdaxDepositModal({
   } = useDeposit(userAddress, contractId);
 
   const [splitting, setSplitting] = useState(false);
+  // "preparing" covers the gap between "user clicked Continue" and "PDAX
+  // returned a checkout URL". The /fiat/deposit call takes 1-3s; without
+  // this flag the modal stays on the input step with a frozen-looking
+  // "Generating…" button, which reads as broken. With the flag we flip
+  // to a centered-spinner step immediately and update copy as the URL
+  // arrives.
+  const [preparing, setPreparing] = useState(false);
   const { phpPerToken } = useTokenRate();
 
   // Modal mounts → focus the amount input so the user can type immediately.
@@ -127,21 +141,25 @@ export function PdaxDepositModal({
   const validAmount = Number.isFinite(amountPhp) && amountPhp > 0;
   const expectedToken = amountPhp / phpPerToken;
 
-  const phase: Phase = !row
-    ? "input"
-    : splitting
-      ? "splitting"
-      : phaseFromStatus(row.status);
+  const phase: Phase = preparing && !row
+    ? "preparing"
+    : !row
+      ? "input"
+      : splitting
+        ? "splitting"
+        : phaseFromStatus(row.status);
 
   const error = pdaxError ?? depositError;
 
   const handleGenerate = async () => {
     if (!validAmount) return;
+    setPreparing(true);
     try {
       const result = await initiate(amountPhp);
       window.open(result.paymentCheckoutUrl, "_blank", "noopener,noreferrer");
     } catch {
-      // surfaces via hook error state
+      // surfaces via hook error state; fall back to the input step
+      setPreparing(false);
     }
   };
 
@@ -163,6 +181,14 @@ export function PdaxDepositModal({
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+        {/* key={phase} on the inner wrapper remounts the active phase on
+            every transition. animate-in fade-in (tw-animate-css) then
+            plays an entry animation so the user sees motion as the modal
+            advances. duration-300 keeps it snappy. */}
+        <div
+          key={phase}
+          className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+        >
         {phase === "input" ? (
           <InputStep
             amountStr={amountStr}
@@ -176,6 +202,14 @@ export function PdaxDepositModal({
             onCancel={onClose}
             onGenerate={() => void handleGenerate()}
             error={error}
+          />
+        ) : null}
+
+        {phase === "preparing" ? (
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title="Setting up your checkout…"
+            body="Asking PDAX to open a GrabPay session. Usually a couple of seconds."
           />
         ) : null}
 
@@ -203,7 +237,7 @@ export function PdaxDepositModal({
 
         {phase === "splitting" ? (
           <CenteredCopy
-            icon={<Loader2 size={28} className="sobre-spin" />}
+            icon={<Loader2 size={28} className="animate-spin" />}
             title={SPLIT_STEP_COPY[depositStep].title}
             body={SPLIT_STEP_COPY[depositStep].body}
           />
@@ -242,6 +276,7 @@ export function PdaxDepositModal({
             }
           />
         ) : null}
+        </div>
       </div>
     </div>
   );
@@ -462,7 +497,7 @@ function AwaitingStep({
       >
         <Loader2
           size={18}
-          className="sobre-spin"
+          className="animate-spin"
           style={{ color: "var(--sobre-accent)" }}
         />
         <span className="text-[13px]" style={{ color: "var(--text-1)" }}>
@@ -501,7 +536,7 @@ function AwaitingStep({
 
       <div className="sobre-modal-actions">
         <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
-          Close — keep paying
+          Close, keep paying
         </button>
         {url ? (
           <a

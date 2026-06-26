@@ -84,7 +84,7 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
 const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
   spent: "Forwarding your XLM to PDAX…",
-  transferred: "PDAX received it — converting to pesos…",
+  transferred: "PDAX has it. Converting to pesos…",
   converted: "Sending pesos to your bank via InstaPay…",
   paid: "Done",
   failed: "Failed",
@@ -217,9 +217,15 @@ export function PdaxWithdrawModal({
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+        {/* See PdaxDepositModal for the rationale on key={phase} + the
+            entry animation classes. */}
+        <div
+          key={phase}
+          className="animate-in fade-in slide-in-from-bottom-1 duration-300"
+        >
         {phase === "loading_bank" ? (
           <CenteredCopy
-            icon={<Loader2 size={28} className="sobre-spin" />}
+            icon={<Loader2 size={28} className="animate-spin" />}
             title="Loading…"
             body="Checking your registered bank."
           />
@@ -311,6 +317,7 @@ export function PdaxWithdrawModal({
             }
           />
         ) : null}
+        </div>
       </div>
     </div>
   );
@@ -575,13 +582,13 @@ function SigningStep({
       : "Withdrawing from envelope…";
   const body =
     step === "forwarding"
-      ? "Step 2 of 2 — confirm with your passkey to send the XLM onward to PDAX."
-      : `Step 1 of 2 — confirm with your passkey to release ₱${amountPhp.toLocaleString(
+      ? "Step 2 of 2. Confirm with your passkey to send the XLM onward to PDAX."
+      : `Step 1 of 2. Confirm with your passkey to release ₱${amountPhp.toLocaleString(
           "en-PH",
         )} from your envelope.`;
   return (
     <CenteredCopy
-      icon={<Loader2 size={28} className="sobre-spin" />}
+      icon={<Loader2 size={28} className="animate-spin" />}
       title={title}
       body={body}
     />
@@ -615,7 +622,7 @@ function AwaitingStep({
       >
         <Loader2
           size={18}
-          className="sobre-spin"
+          className="animate-spin"
           style={{ color: "var(--sobre-accent)" }}
         />
         <span className="text-[13px]" style={{ color: "var(--text-1)" }}>
@@ -625,7 +632,7 @@ function AwaitingStep({
 
       <div className="sobre-modal-actions">
         <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
-          Close — keep going
+          Close, keep going
         </button>
       </div>
     </>
