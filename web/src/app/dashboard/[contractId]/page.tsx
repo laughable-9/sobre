@@ -647,11 +647,25 @@ function Dashboard({ contractId }: { contractId: string }) {
             setResumeDepositId(null);
             void activeDeposits.refresh();
           }}
-          onCancelMidFlight={() => {
+          onCancelMidFlight={(identifier) => {
             setDepositOpen(false);
             setResumeDepositId(null);
             flash("Deposit cancelled.", "warn");
-            void activeDeposits.refresh();
+            // Cancel-then-refresh in sequence so the row is `failed`
+            // server-side by the time the active list re-reads. Doing
+            // them in parallel left a stale `pending` row in PENDING.
+            void (async () => {
+              if (identifier) {
+                try {
+                  await fetch(`/api/pdax/deposits/${identifier}/cancel`, {
+                    method: "POST",
+                  });
+                } catch {
+                  // best effort; the TTL sweep will catch it eventually
+                }
+              }
+              await activeDeposits.refresh();
+            })();
           }}
           onSuccess={({ usdc }) => {
             setResumeDepositId(null);

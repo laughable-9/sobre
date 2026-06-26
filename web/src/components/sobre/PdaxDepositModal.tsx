@@ -121,10 +121,12 @@ export function PdaxDepositModal({
   /** Plain close. Called for terminal-state closes (done / failed / never
    *  started) and after the user explicitly tapped a Close button. */
   onClose: () => void;
-  /** Called when the user dismisses the modal while a row is mid-flight
-   *  (preparing through credited). Parent surfaces a "cancelled, try again"
-   *  toast. The polling effect tears down on unmount automatically. */
-  onCancelMidFlight?: () => void;
+  /** Called when the user dismisses the modal while a row is mid-flight.
+   *  Receives the row identifier (or null if the user closed before the
+   *  /fiat/deposit call returned) so the parent can hit /cancel and
+   *  refresh the activity feed in the correct order — refresh-then-
+   *  cancel races and leaves stale PENDING entries. */
+  onCancelMidFlight?: (identifier: string | null) => void;
   onSuccess: (info: { usdc: number; stroops: bigint }) => void;
   /** When set, the modal hydrates state from this existing deposit row
    *  and skips the input/preparing steps. The user lands on whichever
@@ -249,12 +251,11 @@ export function PdaxDepositModal({
 
     const inFlight = phase === "preparing" || phase === "awaiting";
     if (inFlight) {
-      if (row?.identifier) {
-        void fetch(`/api/pdax/deposits/${row.identifier}/cancel`, {
-          method: "POST",
-        });
-      }
-      onCancelMidFlight?.();
+      // Hand the identifier to the parent so it can sequence the cancel
+      // POST + the activity-feed refresh. Doing the fetch in-modal racy:
+      // the parent's refresh runs before /cancel commits, and the row
+      // re-surfaces in PENDING the moment the modal unmounts.
+      onCancelMidFlight?.(row?.identifier ?? null);
     }
     onClose();
   };
