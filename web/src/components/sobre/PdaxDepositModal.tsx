@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock, Loader2, Send } from "lucide-react";
+import { Check, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { useDeposit } from "@/hooks/useDeposit";
@@ -220,7 +220,11 @@ export function PdaxDepositModal({
         ) : null}
 
         {phase === "awaiting" && row ? (
-          <AwaitingStep status={row.status} identifier={row.identifier} />
+          <AwaitingStep
+            status={row.status}
+            identifier={row.identifier}
+            checkoutUrl={row.payment_checkout_url}
+          />
         ) : null}
 
         {phase === "confirm" && row ? (
@@ -388,9 +392,13 @@ function InputStep({
 function AwaitingStep({
   status,
   identifier,
+  checkoutUrl,
 }: {
   status: DepositStatus;
   identifier: string;
+  /** Set when the synchronous window.open on Continue was blocked OR null.
+   *  Drives the fallback "Open checkout" button below. */
+  checkoutUrl: string | null;
 }) {
   // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
   // step; Realtime surfaces the resulting row updates to the modal.
@@ -401,10 +409,36 @@ function AwaitingStep({
     polling,
   );
 
+  // After a brief delay show a manual "Open checkout" anchor as a fallback
+  // for popup-blocked browsers or users who closed the GrabPay tab by
+  // accident. Anchor with target="_blank" works under user gesture
+  // semantics that bypass popup blockers.
+  const [showFallback, setShowFallback] = useState(false);
+  useEffect(() => {
+    if (status !== "pending") return;
+    if (!checkoutUrl) return;
+    const t = setTimeout(() => setShowFallback(true), 3000);
+    return () => clearTimeout(t);
+  }, [status, checkoutUrl]);
+
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
       title={DEPOSIT_STATUS_LABELS[status]}
+      footer={
+        showFallback && checkoutUrl ? (
+          <a
+            className="sobre-btn sobre-btn-soft"
+            href={checkoutUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ padding: "10px 16px", fontSize: 13 }}
+          >
+            <ExternalLink size={14} strokeWidth={2.2} />
+            Open checkout
+          </a>
+        ) : undefined
+      }
     />
   );
 }
