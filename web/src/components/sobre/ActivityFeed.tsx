@@ -1,12 +1,14 @@
 "use client";
 
 import { useMemo } from "react";
+import { useState } from "react";
 import {
   ArrowDownToLine,
   CheckCheck,
   Clock,
   Hourglass,
   ShoppingBag,
+  Trash2,
   UserMinus,
   UserPlus,
   X as XIcon,
@@ -54,6 +56,10 @@ interface ActivityFeedProps {
   /** Called when the user taps Resume on a pending deposit. The dashboard
    *  opens the modal with `resumeIdentifier=identifier`. */
   onResumeDeposit?: (identifier: string) => void;
+  /** Called when the user taps the cancel icon on a pending deposit. The
+   *  dashboard hits /api/pdax/deposits/[id]/cancel and refreshes the
+   *  active list. */
+  onCancelDeposit?: (identifier: string) => void | Promise<void>;
 }
 
 export function ActivityFeed({
@@ -65,6 +71,7 @@ export function ActivityFeed({
   envelopeNames,
   pendingDeposits,
   onResumeDeposit,
+  onCancelDeposit,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -124,6 +131,7 @@ export function ActivityFeed({
                 key={d.identifier}
                 deposit={d}
                 onResume={onResumeDeposit}
+                onCancel={onCancelDeposit}
               />
             ))}
           </div>
@@ -155,15 +163,21 @@ export function ActivityFeed({
 }
 
 /** Row rendered above the on-chain bucket for a non-terminal `pdax_deposits`
- *  row. The status label changes per state, but the action — Resume —
- *  is always the same: re-open the modal at the matching phase. */
+ *  row. The primary tap resumes the modal at whatever phase matches the
+ *  row's status. A small trash icon on the right cancels the row (marks
+ *  it `failed` server-side). Cancel at status='credited' doesn't pull
+ *  XLM back out of the smart wallet — that's a caveat we accept for the
+ *  demo. */
 function PendingDepositRow({
   deposit,
   onResume,
+  onCancel,
 }: {
   deposit: ActiveDepositRow;
   onResume?: (identifier: string) => void;
+  onCancel?: (identifier: string) => void | Promise<void>;
 }) {
+  const [cancelling, setCancelling] = useState(false);
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
@@ -172,17 +186,31 @@ function PendingDepositRow({
     split: "Split",
     failed: "Failed",
   };
+  const handleCancel = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!onCancel || cancelling) return;
+    setCancelling(true);
+    try {
+      await onCancel(deposit.identifier);
+    } finally {
+      setCancelling(false);
+    }
+  };
   return (
-    <button
-      type="button"
+    <div
+      role="button"
+      tabIndex={0}
       onClick={() => onResume?.(deposit.identifier)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onResume?.(deposit.identifier);
+        }
+      }}
       className="sobre-activity-item pending"
       style={{
         cursor: "pointer",
-        textAlign: "left",
-        width: "100%",
         background: "var(--accent-soft)",
-        border: "none",
       }}
     >
       <div className="ic">
@@ -200,7 +228,29 @@ function PendingDepositRow({
         </div>
         <div className="meta">{time}</div>
       </div>
-    </button>
+      {onCancel ? (
+        <button
+          type="button"
+          onClick={(e) => void handleCancel(e)}
+          disabled={cancelling}
+          aria-label="Cancel this pending deposit"
+          title="Cancel"
+          className="grid place-items-center"
+          style={{
+            width: 30,
+            height: 30,
+            borderRadius: 8,
+            background: "transparent",
+            border: "none",
+            color: "var(--text-3)",
+            cursor: cancelling ? "not-allowed" : "pointer",
+            flexShrink: 0,
+          }}
+        >
+          <Trash2 size={14} strokeWidth={2} />
+        </button>
+      ) : null}
+    </div>
   );
 }
 

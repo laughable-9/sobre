@@ -193,7 +193,13 @@ export function PdaxDepositModal({
   const validAmount = Number.isFinite(amountPhp) && amountPhp > 0;
   const expectedToken = amountPhp / phpPerToken;
 
-  const phase: Phase = preparing && !row
+  // When the modal opens via "Resume", row is null for one paint while the
+  // hydration fetch is in flight. Showing InputStep in that gap reads as
+  // a glitch (the form flashes for a moment before the spinner). Force
+  // the preparing phase whenever a resume hydration is pending so the
+  // user only ever sees the spinner.
+  const hydrating = !row && Boolean(resumeIdentifier);
+  const phase: Phase = (preparing || hydrating) && !row
     ? "preparing"
     : !row
       ? "input"

@@ -483,6 +483,16 @@ function Dashboard({ contractId }: { contractId: string }) {
             setResumeDepositId(identifier);
             setDepositOpen(true);
           }}
+          onCancelDeposit={async (identifier) => {
+            try {
+              await fetch(
+                `/api/pdax/deposits/${identifier}/cancel`,
+                { method: "POST" },
+              );
+            } finally {
+              await activeDeposits.refresh();
+            }
+          }}
         />
       </div>
       ) : null}
