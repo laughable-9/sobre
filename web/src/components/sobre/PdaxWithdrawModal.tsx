@@ -227,7 +227,6 @@ export function PdaxWithdrawModal({
           <CenteredCopy
             icon={<Loader2 size={28} className="animate-spin" />}
             title="Loading…"
-            body="Checking your registered bank."
           />
         ) : null}
 
@@ -265,7 +264,7 @@ export function PdaxWithdrawModal({
         ) : null}
 
         {phase === "signing" ? (
-          <SigningStep step={signStep} amountPhp={amountPhp} />
+          <SigningStep step={signStep} />
         ) : null}
 
         {phase === "awaiting" && row ? (
@@ -285,10 +284,6 @@ export function PdaxWithdrawModal({
           <CenteredCopy
             icon={<Check size={28} strokeWidth={2.5} />}
             title="Sent to your bank"
-            body={`₱${Number(row.amount_php ?? amountPhp).toLocaleString(
-              "en-PH",
-              { minimumFractionDigits: 2 },
-            )} is on its way via InstaPay.`}
             footer={
               <button
                 className="sobre-btn sobre-btn-primary"
@@ -305,7 +300,6 @@ export function PdaxWithdrawModal({
           <CenteredCopy
             icon={<Clock size={28} strokeWidth={2} />}
             title="Something went wrong"
-            body={row.failure_reason ?? "The cashout didn't complete."}
             footer={
               <button
                 className="sobre-btn sobre-btn-soft"
@@ -571,26 +565,17 @@ function InputStep({
 
 function SigningStep({
   step,
-  amountPhp,
 }: {
   step: "idle" | "spending" | "forwarding";
-  amountPhp: number;
 }) {
   const title =
     step === "forwarding"
       ? "Forwarding to PDAX…"
       : "Withdrawing from envelope…";
-  const body =
-    step === "forwarding"
-      ? "Step 2 of 2. Confirm with your passkey to send the XLM onward to PDAX."
-      : `Step 1 of 2. Confirm with your passkey to release ₱${amountPhp.toLocaleString(
-          "en-PH",
-        )} from your envelope.`;
   return (
     <CenteredCopy
       icon={<Loader2 size={28} className="animate-spin" />}
       title={title}
-      body={body}
     />
   );
 }

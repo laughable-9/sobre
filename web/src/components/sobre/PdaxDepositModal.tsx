@@ -51,28 +51,18 @@ const DEPOSIT_STATUS_LABELS: Record<DepositStatus, string> = {
   failed: "Failed",
 };
 
-/** Copy shown during the on-chain split step. Two sub-phases:
- *  - checking_balance: the SAC transfer just landed at the smart wallet but
- *    the next read can lag for a few seconds on under-replicated nodes; we
- *    poll the SAC `balance()` until it's caught up before triggering
- *    deposit(). Tells the user we're waiting on the chain, not stuck.
+/** Title shown during the on-chain split step. Two sub-phases:
+ *  - checking_balance: polling the SAC `balance()` until the relay's
+ *    transfer to the smart wallet has propagated. Surfaces as a distinct
+ *    title so the user knows we're waiting on the chain, not stuck.
  *  - depositing: the passkey prompt is up and we're submitting deposit(). */
-const SPLIT_STEP_COPY: Record<
+const SPLIT_STEP_TITLE: Record<
   "idle" | "checking_balance" | "depositing",
-  { title: string; body: string }
+  string
 > = {
-  idle: {
-    title: "Splitting across envelopes…",
-    body: "Confirm with your passkey when prompted.",
-  },
-  checking_balance: {
-    title: "Waiting for funds to settle…",
-    body: "Your wallet is receiving the XLM. This usually takes a few seconds.",
-  },
-  depositing: {
-    title: "Splitting across envelopes…",
-    body: "Confirm with your passkey when prompted.",
-  },
+  idle: "Splitting across envelopes…",
+  checking_balance: "Waiting for funds to settle…",
+  depositing: "Splitting across envelopes…",
 };
 
 function phaseFromStatus(status: DepositStatus | undefined): Phase {
@@ -235,8 +225,7 @@ export function PdaxDepositModal({
         {phase === "splitting" ? (
           <CenteredCopy
             icon={<Loader2 size={28} className="animate-spin" />}
-            title={SPLIT_STEP_COPY[depositStep].title}
-            body={SPLIT_STEP_COPY[depositStep].body}
+            title={SPLIT_STEP_TITLE[depositStep]}
           />
         ) : null}
 
@@ -244,7 +233,6 @@ export function PdaxDepositModal({
           <CenteredCopy
             icon={<Check size={28} strokeWidth={2.5} />}
             title="Money landed"
-            body="Your envelopes have been updated."
             footer={
               <button
                 className="sobre-btn sobre-btn-primary"
@@ -261,7 +249,6 @@ export function PdaxDepositModal({
           <CenteredCopy
             icon={<Clock size={28} strokeWidth={2} />}
             title="Something went wrong"
-            body={row.failure_reason ?? "The deposit didn't complete. Try again."}
             footer={
               <button
                 className="sobre-btn sobre-btn-soft"
