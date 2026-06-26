@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock, Copy, ExternalLink, Loader2, Send } from "lucide-react";
+import { Check, Clock, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { useDeposit } from "@/hooks/useDeposit";
@@ -209,15 +209,12 @@ export function PdaxDepositModal({
           <CenteredCopy
             icon={<Loader2 size={28} className="animate-spin" />}
             title="Setting up your checkout…"
-            body="Asking PDAX to open a GrabPay session. Usually a couple of seconds."
           />
         ) : null}
 
         {phase === "awaiting" && row ? (
           <AwaitingStep
-            url={row.payment_checkout_url}
             status={row.status}
-            amountPhp={row.amount_php}
             identifier={row.identifier}
             onClose={onClose}
           />
@@ -389,22 +386,14 @@ function InputStep({
 }
 
 function AwaitingStep({
-  url,
   status,
-  amountPhp,
   identifier,
   onClose,
 }: {
-  url: string | null;
   status: DepositStatus;
-  amountPhp: number;
   identifier: string;
   onClose: () => void;
 }) {
-  const [copied, setCopied] = useState(false);
-  const [simulating, setSimulating] = useState(false);
-  const [simError, setSimError] = useState<string | null>(null);
-
   // Drive PDAX's pipeline. Each tick on poll-status advances one state-machine
   // step; Realtime surfaces the resulting row updates to the modal.
   const polling =
@@ -414,143 +403,16 @@ function AwaitingStep({
     polling,
   );
 
-  const simulate = async () => {
-    setSimulating(true);
-    setSimError(null);
-    try {
-      const res = await fetch(
-        `/api/pdax/deposits/${identifier}/simulate-complete`,
-        { method: "POST" },
-      );
-      const json = (await res.json()) as { error?: string };
-      if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
-    } catch (e) {
-      setSimError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSimulating(false);
-    }
-  };
-
-  const copy = async () => {
-    if (!url) return;
-    try {
-      await navigator.clipboard.writeText(url);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      // ignore
-    }
-  };
-
   return (
-    <>
-      <h2>Waiting for your payment</h2>
-      <p className="sub">
-        Pay ₱{amountPhp.toLocaleString("en-PH")} on the PDAX checkout page
-        we opened. Sobre updates the second PDAX confirms the payment.
-      </p>
-
-      {url ? (
-        <div
-          className="rounded-[10px] p-3 flex items-center gap-3 mb-3"
-          style={{
-            background: "var(--surface-alt)",
-            border: "1.5px dashed var(--border-strong)",
-          }}
-        >
-          <ExternalLink
-            size={18}
-            strokeWidth={2}
-            style={{ color: "var(--sobre-accent)", flexShrink: 0 }}
-          />
-          <code
-            className="text-[12px] break-all flex-1"
-            style={{ color: "var(--text-1)" }}
-          >
-            {url}
-          </code>
-          <button
-            type="button"
-            onClick={() => void copy()}
-            className="grid place-items-center"
-            style={{
-              width: 32,
-              height: 32,
-              borderRadius: 8,
-              color: "var(--text-2)",
-              flexShrink: 0,
-            }}
-            aria-label="Copy link"
-          >
-            {copied ? (
-              <Check size={16} strokeWidth={2.5} />
-            ) : (
-              <Copy size={16} strokeWidth={2} />
-            )}
-          </button>
-        </div>
-      ) : null}
-
-      <div
-        className="flex items-center gap-3 p-3 rounded-[10px] mb-4"
-        style={{ background: "var(--accent-soft)" }}
-      >
-        <Loader2
-          size={18}
-          className="animate-spin"
-          style={{ color: "var(--sobre-accent)" }}
-        />
-        <span className="text-[13px]" style={{ color: "var(--text-1)" }}>
-          {DEPOSIT_STATUS_LABELS[status]}
-        </span>
-      </div>
-
-      {/* Dev shortcut: skip the PDAX hosted-payment page and run the
-          PHP trade + crypto withdraw against PDAX UAT directly. Useful
-          while the test.web.pdax.ph payment page is IP-blocked or when
-          localhost can't receive PDAX webhooks. */}
-      <details className="mb-3" style={{ color: "var(--text-3)" }}>
-        <summary className="text-[12px] cursor-pointer">
-          Dev: simulate PDAX completion
-        </summary>
-        <button
-          type="button"
-          className="sobre-btn sobre-btn-soft mt-2"
-          style={{ padding: "8px 12px", fontSize: 12 }}
-          onClick={() => void simulate()}
-          disabled={simulating}
-        >
-          {simulating
-            ? "Triggering PDAX trade + withdraw…"
-            : "Simulate fiat-completed → trigger crypto withdraw"}
-        </button>
-        {simError ? (
-          <p
-            className="text-xs break-all mt-2"
-            style={{ color: "var(--sobre-danger)" }}
-          >
-            {simError}
-          </p>
-        ) : null}
-      </details>
-
-      <div className="sobre-modal-actions">
+    <CenteredCopy
+      icon={<Loader2 size={28} className="animate-spin" />}
+      title={DEPOSIT_STATUS_LABELS[status]}
+      footer={
         <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
           Close, keep paying
         </button>
-        {url ? (
-          <a
-            className="sobre-btn sobre-btn-primary"
-            href={url}
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <ExternalLink size={14} strokeWidth={2.2} />
-            Open PDAX
-          </a>
-        ) : null}
-      </div>
-    </>
+      }
+    />
   );
 }
 
