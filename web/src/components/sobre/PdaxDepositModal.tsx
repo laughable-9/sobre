@@ -113,6 +113,7 @@ export function PdaxDepositModal({
   onCancelMidFlight,
   onSuccess,
   resumeIdentifier,
+  onActiveIdentifierChange,
 }: {
   userAddress: string;
   state: WalletState;
@@ -130,6 +131,11 @@ export function PdaxDepositModal({
    *  phase matches the row's current status (typically `awaiting` or
    *  `confirm`). Drives the activity-feed "Resume" affordance. */
   resumeIdentifier?: string;
+  /** Fires whenever the modal acquires (or releases) a row identifier.
+   *  The parent uses it to filter the currently-handled row out of the
+   *  PENDING bucket in the activity feed so the same deposit doesn't
+   *  show up in two places at once. */
+  onActiveIdentifierChange?: (identifier: string | null) => void;
 }) {
   const [amountStr, setAmountStr] = useState("500");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -167,6 +173,15 @@ export function PdaxDepositModal({
   >(null);
   const lastStatusRef = useRef<DepositStatus | null>(null);
   const { phpPerToken } = useTokenRate();
+
+  // Surface the active identifier to the parent. Null on mount (and
+  // again on unmount) so the dashboard can hide the row from PENDING
+  // while it's being handled here, then re-surface it the moment the
+  // modal closes mid-flight.
+  useEffect(() => {
+    onActiveIdentifierChange?.(row?.identifier ?? null);
+    return () => onActiveIdentifierChange?.(null);
+  }, [row?.identifier, onActiveIdentifierChange]);
 
   // Watch for status transitions to fire celebrations.
   useEffect(() => {

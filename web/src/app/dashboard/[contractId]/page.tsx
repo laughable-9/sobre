@@ -100,6 +100,11 @@ function Dashboard({ contractId }: { contractId: string }) {
   // its status — e.g. ConfirmStep for a row at `credited`. Cleared on
   // close so a fresh "Add money" click starts a new flow.
   const [resumeDepositId, setResumeDepositId] = useState<string | null>(null);
+  // Identifier of the row the deposit modal is currently working on,
+  // surfaced via PdaxDepositModal.onActiveIdentifierChange. Used to
+  // filter out the in-modal row from the PENDING bucket in the activity
+  // feed so the same deposit doesn't render in two places at once.
+  const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
   const activeDeposits = useActiveDeposits(contractId);
   const [cashoutOpen, setCashoutOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
@@ -478,7 +483,9 @@ function Dashboard({ contractId }: { contractId: string }) {
           newestTxHash={newestTxHash}
           members={state.members}
           envelopeNames={state.envelope_names}
-          pendingDeposits={activeDeposits.deposits}
+          pendingDeposits={activeDeposits.deposits.filter(
+            (d) => d.identifier !== activeDepositId,
+          )}
           onResumeDeposit={(identifier) => {
             setResumeDepositId(identifier);
             setDepositOpen(true);
@@ -622,6 +629,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           contractId={contractId}
           resumeIdentifier={resumeDepositId ?? undefined}
+          onActiveIdentifierChange={setActiveDepositId}
           onClose={() => {
             setDepositOpen(false);
             setResumeDepositId(null);
