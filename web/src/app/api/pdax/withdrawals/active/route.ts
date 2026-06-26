@@ -18,6 +18,15 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+/** Pending rows that have sat untouched for longer than this are hidden
+ *  from the PENDING bucket. They stay in the DB but don't clutter the
+ *  activity feed — either the user abandoned the modal before signing,
+ *  or signing failed before any tx hash got recorded. If the row is
+ *  actually recoverable (the spend tx DID land on chain), the modal's
+ *  /api/pdax/withdrawals/recoverable check on mount will still find
+ *  it via on-chain Spend events and surface the resume prompt. */
+const PENDING_DISPLAY_TTL_MIN = 5;
+
 export async function GET(req: Request) {
   const url = new URL(req.url);
   const contractId = url.searchParams.get("contract_id");
@@ -62,5 +71,17 @@ export async function GET(req: Request) {
     );
   }
 
-  return NextResponse.json({ cashouts: rows ?? [] });
+  // Drop stale pending rows from the response so abandoned cashouts
+  // (user closed the modal before signing) don't sit in the activity
+  // feed's PENDING bucket forever. Non-pending statuses always pass
+  // through — once a spend tx has landed we want the row visible until
+  // it settles either way.
+  const staleCutoffMs = Date.now() - PENDING_DISPLAY_TTL_MIN * 60_000;
+  const filtered = (rows ?? []).filter((r) => {
+    const row = r as { status: string; created_at: string };
+    if (row.status !== "pending") return true;
+    return new Date(row.created_at).getTime() >= staleCutoffMs;
+  });
+
+  return NextResponse.json({ cashouts: filtered });
 }
