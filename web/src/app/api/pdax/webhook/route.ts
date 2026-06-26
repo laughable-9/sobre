@@ -37,7 +37,22 @@ export const runtime = "nodejs";
 export async function POST(req: Request) {
   const env = pdaxEnv();
   const url = new URL(req.url);
-  if (env.webhookSecret && url.searchParams.get("key") !== env.webhookSecret) {
+  // If PDAX_WEBHOOK_SECRET isn't set, refuse ALL webhook calls — the
+  // old `env.webhookSecret && ...` guard short-circuited to "accept"
+  // when the env was missing, which would let any anonymous POST drive
+  // the state machine (flip deposits to funded → triggers PDAX trade,
+  // mark withdrawals to paid, etc). Reject with 503 so a misconfigured
+  // deploy is loud rather than silently exploitable.
+  if (!env.webhookSecret) {
+    console.error(
+      "[pdax webhook] PDAX_WEBHOOK_SECRET not configured; rejecting webhook",
+    );
+    return NextResponse.json(
+      { error: "Webhook handler not configured" },
+      { status: 503 },
+    );
+  }
+  if (url.searchParams.get("key") !== env.webhookSecret) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -67,10 +82,15 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
 
   if (p.transaction_type === "DEPOSIT") {
     if (p.status !== "COMPLETED") {
+      // Guard against a late IN-PROGRESS / FAILED webhook downgrading a
+      // row that the polling path already advanced to funded/credited/
+      // split. Only mutate `pending` rows here — anything past pending
+      // owns its own terminal state.
       await admin
         .from("pdax_deposits")
         .update({ status: p.status === "FAILED" ? "failed" : "pending" })
-        .eq("identifier", p.identifier);
+        .eq("identifier", p.identifier)
+        .eq("status", "pending");
       return;
     }
 
@@ -159,6 +179,11 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
     // a legacy column name; it holds whatever token the family wallet
     // uses, and `token_currency` records which.
     const status = p.status === "completed" ? "credited" : p.status === "failed" ? "failed" : "funded";
+    // Guard against a late webhook overwriting a row past `funded` — a
+    // stale "failed" arriving after the polling path already credited
+    // / split the row would otherwise reverse a delivered deposit.
+    // Only mutate rows still at `funded` (the only state this webhook
+    // legitimately advances from).
     await admin
       .from("pdax_deposits")
       .update({
@@ -167,7 +192,8 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
         amount_usdc: p.amount,
         token_currency: PAYMENT_TOKEN,
       })
-      .eq("identifier", p.identifier);
+      .eq("identifier", p.identifier)
+      .eq("status", "funded");
     return;
   }
 

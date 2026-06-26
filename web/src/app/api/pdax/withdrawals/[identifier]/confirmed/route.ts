@@ -49,11 +49,30 @@ export async function POST(
   }
 
   const admin = getSupabaseAdmin();
-  // Single atomic claim: flip pending→spent and stamp both tx hashes in one
-  // round-trip. RETURNING family_wallet_id lets us verify membership after
-  // the fact rather than reading the row up-front, saving one query per
-  // /confirmed call. A row that's already past 'pending' returns 0 rows
-  // here — we then read the existing status for an informative response.
+  // Read first + auth-gate BEFORE the atomic flip. The earlier version
+  // mutated the row and ran requireFamilyMember on the result, which
+  // let anyone who learned the identifier (shared screen, log leak)
+  // poison the row to `spent` with attacker-supplied tx hashes and
+  // receive a 401 — the row was already wrecked by the time the auth
+  // check ran. Now: row lookup → membership check → atomic flip.
+  const { data: existing } = await admin
+    .from("pdax_withdrawals")
+    .select("family_wallet_id, status")
+    .eq("identifier", identifier)
+    .single();
+  if (!existing) {
+    return NextResponse.json(
+      { error: "Withdrawal not found" },
+      { status: 404 },
+    );
+  }
+  const ex = existing as { family_wallet_id: string; status: string };
+  const membership = await requireFamilyMember(ex.family_wallet_id);
+  if (membership instanceof NextResponse) return membership;
+
+  // Now safe to mutate. Atomic claim still guards against double-fires:
+  // a row past 'pending' returns 0 rows and we surface its current
+  // status as noChange.
   const { data: claimed, error: updateErr } = await admin
     .from("pdax_withdrawals")
     .update({
@@ -63,7 +82,7 @@ export async function POST(
     })
     .eq("identifier", identifier)
     .eq("status", "pending")
-    .select("family_wallet_id");
+    .select("identifier");
   if (updateErr) {
     return NextResponse.json(
       { error: `pdax_withdrawals update failed: ${updateErr.message}` },
@@ -72,29 +91,8 @@ export async function POST(
   }
 
   if (!claimed?.length) {
-    // Either the row doesn't exist, or its status has already advanced
-    // past 'pending'. Disambiguate so a 404 surfaces correctly and a stale
-    // /confirmed retry returns ok-noChange.
-    const { data: existing } = await admin
-      .from("pdax_withdrawals")
-      .select("family_wallet_id, status")
-      .eq("identifier", identifier)
-      .single();
-    if (!existing) {
-      return NextResponse.json(
-        { error: "Withdrawal not found" },
-        { status: 404 },
-      );
-    }
-    const e = existing as { family_wallet_id: string; status: string };
-    const membership = await requireFamilyMember(e.family_wallet_id);
-    if (membership instanceof NextResponse) return membership;
-    return NextResponse.json({ ok: true, noChange: true, status: e.status });
+    return NextResponse.json({ ok: true, noChange: true, status: ex.status });
   }
-
-  const c = claimed[0] as { family_wallet_id: string };
-  const membership = await requireFamilyMember(c.family_wallet_id);
-  if (membership instanceof NextResponse) return membership;
 
   return NextResponse.json({ ok: true, status: "spent" });
 }

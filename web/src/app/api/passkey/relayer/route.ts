@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
+import { requireWallet } from "@/lib/auth/familyMember";
+
 /**
  * Server-side proxy from passkey-kit's `PasskeyServer` (which wraps the
  * `@openzeppelin/relayer-plugin-channels` ChannelsClient) to the OpenZeppelin
@@ -13,12 +15,20 @@ import { NextRequest, NextResponse } from "next/server";
  *
  * Runtime: nodejs (not edge). The proxy is body-passthrough so it doesn't
  * pull in anything heavy, but explicit is safer.
+ *
+ * Auth: requireWallet() gates every call so anonymous traffic can't burn
+ * the CHANNELS_API_KEY quota or submit arbitrary tx envelopes through
+ * our relayer credit. Only signed-in members with a registered smart
+ * wallet can drive this proxy.
  */
 export const runtime = "nodejs";
 
 const CHANNELS_ENDPOINT = "https://channels.openzeppelin.com/testnet";
 
 export async function POST(req: NextRequest) {
+  const ctx = await requireWallet();
+  if (ctx instanceof NextResponse) return ctx;
+
   const apiKey = process.env.CHANNELS_API_KEY;
   if (!apiKey) {
     return NextResponse.json(

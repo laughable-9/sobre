@@ -7,12 +7,19 @@
 
 import { NextResponse } from "next/server";
 
+import { requireWallet } from "@/lib/auth/familyMember";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxFetch, resetPdaxTokens, PdaxError } from "@/lib/pdax/client";
 
 export const runtime = "nodejs";
 
 export async function POST() {
+  // Gate on signed-in wallet — without this, anonymous callers could
+  // force PDAX token refreshes (denial-of-service against our cached
+  // session) and read back institutional balances.
+  const ctx = await requireWallet();
+  if (ctx instanceof NextResponse) return ctx;
+
   const env = pdaxEnv();
   if (env.mock) {
     return NextResponse.json({ ok: true, mock: true });
