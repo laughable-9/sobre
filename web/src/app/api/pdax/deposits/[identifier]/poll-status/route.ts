@@ -31,12 +31,12 @@ import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
 import { PAYMENT_TOKEN } from "@/lib/config";
-import { pdaxErrorToResponse, pdaxFetch } from "@/lib/pdax/client";
+import { pdaxErrorToResponse } from "@/lib/pdax/client";
 import {
+  getPdaxFiatTx,
   kickOffPdaxWithdraw,
   tryCompleteWithdrawAndTransfer,
   type PdaxFiatTransaction,
-  type PdaxFiatTransactionsResponse,
 } from "@/lib/pdax/deposits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -156,18 +156,7 @@ async function advanceFromPending(args: {
 
   let pdaxTx: PdaxFiatTransaction | undefined;
   try {
-    const resp = await pdaxFetch<PdaxFiatTransactionsResponse>(
-      "/pdax-institution/v1/fiat/transactions",
-      {
-        query: {
-          identifier: args.identifier,
-          mode: "CashIn",
-          page: 1,
-          pageSize: 10,
-        },
-      },
-    );
-    pdaxTx = resp.data.find((t) => t.identifier === args.identifier);
+    pdaxTx = await getPdaxFiatTx(args.identifier, "CashIn");
   } catch (e) {
     return pdaxErrorToResponse(e, "PDAX poll failed");
   }
@@ -198,7 +187,33 @@ async function advanceFromPending(args: {
     });
   }
 
-  // COMPLETED: fiat is in, kick off the withdraw → relay.
+  // COMPLETED: fiat is in. Atomically claim the right to run the
+  // trade + withdraw BEFORE making the external PDAX call. Without
+  // this, a concurrent /cancel could flip status to 'failed' during
+  // the (10-30s) kickOffPdaxWithdraw window — PDAX would still
+  // execute the trade and ship XLM to the relay against a row that
+  // the cancel route already wrote off, stranding PHP-as-XLM at the
+  // relay. The claim flips withdraw_tx_hash from NULL to 'claiming',
+  // which cancel checks to refuse cancellation while we're in flight.
+  // The sentinel is cleared on the funded update so phase 2 can
+  // re-use the same column for its own claim.
+  const { data: claimed } = await admin
+    .from("pdax_deposits")
+    .update({ withdraw_tx_hash: "claiming" })
+    .eq("identifier", args.identifier)
+    .eq("status", "pending")
+    .is("withdraw_tx_hash", null)
+    .select("identifier");
+  if (!claimed?.length) {
+    // Another poll won the claim, or the row was just cancelled.
+    // Either way, bail without touching PDAX — the winner (or the
+    // cancel) owns the next transition.
+    return NextResponse.json({
+      ok: true,
+      status: "pending",
+      race: "claimed_by_another",
+    });
+  }
   try {
     const { amountToken, netAmount, pdaxWithdrawTxId } =
       await kickOffPdaxWithdraw({
@@ -212,6 +227,9 @@ async function advanceFromPending(args: {
         status: "funded",
         amount_usdc: netAmount,
         token_currency: PAYMENT_TOKEN,
+        // Reset so phase 2's claim (advanceFromFunded → claimSacTransfer)
+        // can take over the same column.
+        withdraw_tx_hash: null,
       })
       .eq("identifier", args.identifier)
       .eq("status", "pending");
@@ -224,6 +242,14 @@ async function advanceFromPending(args: {
       pdaxWithdrawTxId,
     });
   } catch (e) {
+    // Roll the claim back so a future poll can retry (or so the
+    // user can cancel) — the trade failed, no PDAX-side state to
+    // protect anymore.
+    await admin
+      .from("pdax_deposits")
+      .update({ withdraw_tx_hash: null })
+      .eq("identifier", args.identifier)
+      .eq("withdraw_tx_hash", "claiming");
     return await markFailedAndRespond(args.identifier, e, "kickOffPdaxWithdraw");
   }
 }

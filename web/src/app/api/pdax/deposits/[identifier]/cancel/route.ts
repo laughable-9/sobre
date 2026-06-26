@@ -13,21 +13,18 @@
  * with `code: "already_paid"` so the modal / activity feed can keep
  * letting poll-status drive the deposit to completion instead.
  *
- * Caveat at status='credited': the XLM is already in the user's smart
- * wallet, so cancelling here doesn't undo anything on chain — it just
- * stops surfacing the row as a "Resume" candidate. The funds remain in
- * the smart wallet, retrievable by a fresh deposit/spend flow later.
- * Worth a confirmation UI gate, but acceptable for the demo.
+ * Cancellable states: only `pending` rows with no in-flight trade
+ * claim (`withdraw_tx_hash IS NULL`). Past that, the PHP→XLM trade
+ * has already happened on PDAX's side or the XLM is already on the
+ * way to the relay, and cancelling here would either strand the trade
+ * or wipe the resume affordance without unwinding anything on chain.
  */
 
 import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
-import { PdaxError, pdaxFetch } from "@/lib/pdax/client";
-import type {
-  PdaxFiatTransaction,
-  PdaxFiatTransactionsResponse,
-} from "@/lib/pdax/deposits";
+import { PdaxError } from "@/lib/pdax/client";
+import { getPdaxFiatTx } from "@/lib/pdax/deposits";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -59,15 +56,7 @@ export async function POST(
       .eq("identifier", identifier)
       .single();
     if (existing && (existing as { status: string }).status === "pending") {
-      const resp = await pdaxFetch<PdaxFiatTransactionsResponse>(
-        "/pdax-institution/v1/fiat/transactions",
-        {
-          query: { identifier, mode: "CashIn", page: 1, pageSize: 10 },
-        },
-      );
-      const tx: PdaxFiatTransaction | undefined = resp.data.find(
-        (t) => t.identifier === identifier,
-      );
+      const tx = await getPdaxFiatTx(identifier, "CashIn");
       if (tx && tx.status === "COMPLETED") {
         return NextResponse.json(
           {
@@ -92,9 +81,16 @@ export async function POST(
     }
   }
 
-  // Single atomic update — flip non-terminal rows to failed, returning
-  // family_wallet_id for membership gate. Already-terminal rows return
-  // zero affected rows so we can decide between 404 / no-op.
+  // Single atomic update — flip pending rows to failed, returning
+  // family_wallet_id for membership gate. Already-terminal AND
+  // mid-claim rows return zero affected rows so we bail with
+  // noChange and let poll-status keep driving them.
+  //
+  // The `.is("withdraw_tx_hash", null)` guard is the cancel/trade
+  // race protection: poll-status flips withdraw_tx_hash to
+  // 'claiming' before calling kickOffPdaxWithdraw, so any concurrent
+  // cancel here is refused while the external PDAX trade is in
+  // flight — preventing a failed row with stranded XLM at the relay.
   const { data: claimed, error } = await admin
     .from("pdax_deposits")
     .update({
@@ -102,7 +98,8 @@ export async function POST(
       failure_reason: "Cancelled by user",
     })
     .eq("identifier", identifier)
-    .in("status", ["pending", "funded", "credited"])
+    .eq("status", "pending")
+    .is("withdraw_tx_hash", null)
     .select("family_wallet_id");
   if (error) {
     return NextResponse.json(

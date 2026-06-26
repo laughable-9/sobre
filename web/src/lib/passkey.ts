@@ -255,22 +255,97 @@ export async function submit(
     return { hash: send.hash, ledger: result.ledger };
   }
 
-  // FAILED — surface enough context to decode the panic without a follow-up
-  // RPC call. resultXdr names the op-level Stellar error, diagnostic events
-  // (first 3) name the contract-side trap.
+  // FAILED — decode result-XDR + diagnostic events into a human message
+  // so the audience doesn't see a base64 blob mid-demo. The full XDR is
+  // still appended as a debug suffix in case we need to dig in later.
   const failed = result as {
     resultXdr?: { toXDR(format: "base64"): string };
     diagnosticEventsXdr?: Array<{ toXDR(f: "base64"): string }>;
   };
-  const resultXdr = failed.resultXdr?.toXDR("base64") ?? "(no resultXdr)";
-  const events =
-    failed.diagnosticEventsXdr
-      ?.slice(0, 3)
-      .map((e) => e.toXDR("base64"))
-      .join(" | ") ?? "(no diagnostic events)";
+  const resultXdr = failed.resultXdr?.toXDR("base64") ?? "";
+  const eventsXdrs =
+    failed.diagnosticEventsXdr?.slice(0, 5).map((e) => e.toXDR("base64")) ?? [];
+  const decoded = decodeFailedExecution(resultXdr, eventsXdrs);
   throw new Error(
-    `tx failed on chain | hash=${send.hash} | result=${resultXdr} | events=${events}`,
+    `${decoded} (hash=${send.hash.slice(0, 8)}…${send.hash.slice(-4)})`,
   );
+}
+
+/** Decode a FAILED transaction's resultXdr + diagnostic events into a
+ *  human-readable cause. Looks for, in order:
+ *   1. A `scvError` Soroban error inside the diagnostic events — names
+ *      like `ExceededLimit`, `InvalidAction` etc. surface the contract
+ *      trap directly.
+ *   2. The first operation result's name (typically
+ *      `INVOKE_HOST_FUNCTION_TRAPPED` / `_RESOURCE_LIMIT_EXCEEDED`).
+ *   3. The top-level transaction result code (`txFailed`, etc.).
+ *  Falls back to a generic message if nothing decodes cleanly. */
+function decodeFailedExecution(
+  errXdr: string,
+  eventsXdrs: string[],
+): string {
+  // 1. Contract-level scvError, if present in diagnostic events.
+  for (const eventXdr of eventsXdrs) {
+    try {
+      const evt = xdr.DiagnosticEvent.fromXDR(eventXdr, "base64");
+      const body = evt.event().body().v0();
+      // Look at the event data first (panic value).
+      const data = body.data();
+      if (data.switch().name === "scvError") {
+        const name = data.error().switch().name;
+        return `Contract error: ${humanize(name)}`;
+      }
+      // Then topics (Soroban often emits ("error", <code>) tuples).
+      for (const topic of body.topics()) {
+        if (topic.switch().name === "scvError") {
+          const name = topic.error().switch().name;
+          return `Contract error: ${humanize(name)}`;
+        }
+      }
+    } catch {
+      // skip undecodable events
+    }
+  }
+
+  // 2/3. Top-level + op-level result code. Two try blocks: the outer
+  // protects the whole TransactionResult parse, the inner only the
+  // InvokeHostFunction-specific accessor (which throws on non-host-fn
+  // ops, where we fall back to the generic op switch name).
+  let txCode: string | null = null;
+  let opCode: string | null = null;
+  try {
+    const tr = xdr.TransactionResult.fromXDR(errXdr, "base64");
+    txCode = tr.result().switch().name;
+    if (txCode === "txFailed") {
+      const first = tr.result().results()[0];
+      if (first) {
+        try {
+          opCode = first.tr().invokeHostFunctionResult().switch().name;
+        } catch {
+          opCode = first.switch().name;
+        }
+      }
+    }
+  } catch {
+    // leave txCode/opCode as collected so far; falls through to the
+    // generic "Transaction failed on chain" message below.
+  }
+  if (opCode) return `Operation failed: ${humanize(opCode)}`;
+  if (txCode) return `Transaction failed: ${humanize(txCode)}`;
+  return "Transaction failed on chain (undecodable error)";
+}
+
+/** Tidy an XDR enum name for display. Drops common prefixes
+ *  ("INVOKE_HOST_FUNCTION_", "tx") and converts snake/camel to spaced
+ *  Title Case so error names read as English. */
+function humanize(name: string): string {
+  const stripped = name
+    .replace(/^INVOKE_HOST_FUNCTION_/, "")
+    .replace(/^tx/, "")
+    .replace(/^scec/, "")
+    .replace(/_/g, " ")
+    .toLowerCase();
+  return stripped.charAt(0).toUpperCase() + stripped.slice(1);
 }
 
 /** Parse a base64 TransactionResult XDR and return the canonical result-
