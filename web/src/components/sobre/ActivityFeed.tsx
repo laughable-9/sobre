@@ -8,6 +8,7 @@ import {
   CheckCheck,
   Clock,
   Hourglass,
+  Loader2,
   ShoppingBag,
   Trash2,
   UserMinus,
@@ -198,6 +199,11 @@ function PendingDepositRow({
   onCancel?: (identifier: string) => void | Promise<void>;
 }) {
   const [cancelling, setCancelling] = useState(false);
+  // Out-animation gate: when the user taps the trash, we play a quick
+  // slide+fade out before the API + parent refresh remove the row from
+  // the underlying list. Makes the cancel feel like a real action
+  // instead of the row blinking away.
+  const [exiting, setExiting] = useState(false);
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
@@ -210,6 +216,11 @@ function PendingDepositRow({
     e.stopPropagation();
     if (!onCancel || cancelling) return;
     setCancelling(true);
+    setExiting(true);
+    // Wait for the exit animation to mostly finish before firing the
+    // API so the user sees the motion. The dashboard's refresh then
+    // unmounts the row naturally.
+    await new Promise((r) => setTimeout(r, 280));
     try {
       await onCancel(deposit.identifier);
     } finally {
@@ -219,18 +230,24 @@ function PendingDepositRow({
   return (
     <div
       role="button"
-      tabIndex={0}
-      onClick={() => onResume?.(deposit.identifier)}
+      tabIndex={exiting ? -1 : 0}
+      onClick={exiting ? undefined : () => onResume?.(deposit.identifier)}
       onKeyDown={(e) => {
+        if (exiting) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onResume?.(deposit.identifier);
         }
       }}
-      className="sobre-activity-item pending"
+      className={`sobre-activity-item pending ${
+        exiting
+          ? "animate-out fade-out slide-out-to-right duration-300"
+          : ""
+      }`}
       style={{
-        cursor: "pointer",
+        cursor: exiting ? "default" : "pointer",
         background: "var(--accent-soft)",
+        pointerEvents: cancelling ? "none" : undefined,
       }}
     >
       <div className="ic">
@@ -262,12 +279,17 @@ function PendingDepositRow({
             borderRadius: 8,
             background: "transparent",
             border: "none",
-            color: "var(--text-3)",
+            color: cancelling ? "var(--sobre-accent)" : "var(--text-3)",
             cursor: cancelling ? "not-allowed" : "pointer",
             flexShrink: 0,
+            transition: "color 150ms ease",
           }}
         >
-          <Trash2 size={14} strokeWidth={2} />
+          {cancelling ? (
+            <Loader2 size={14} strokeWidth={2} className="animate-spin" />
+          ) : (
+            <Trash2 size={14} strokeWidth={2} />
+          )}
         </button>
       ) : null}
     </div>

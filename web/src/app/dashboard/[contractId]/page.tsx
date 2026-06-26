@@ -508,6 +508,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 `/api/pdax/deposits/${identifier}/cancel`,
                 { method: "POST" },
               );
+              flash("Deposit cancelled.", "warn");
             } finally {
               await activeDeposits.refresh();
             }
