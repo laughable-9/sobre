@@ -95,6 +95,6 @@ async function waitForSacBalance(
     await new Promise((r) => setTimeout(r, 500));
   }
   throw new Error(
-    "Funds haven't fully landed in your wallet yet — try again in a few seconds.",
+    "Funds haven't fully landed in your wallet yet. Try again in a few seconds.",
   );
 }

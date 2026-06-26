@@ -40,7 +40,7 @@ function GithubMark({ size = 18 }: { size?: number }) {
 const STATS = [
   {
     num: "$35.6B",
-    desc: "yearly remittances from OFWs — yet most families struggle to save.",
+    desc: "yearly remittances from OFWs, yet most families struggle to save.",
   },
   {
     num: ["8", "10"] as const,
@@ -118,7 +118,7 @@ const FAMILY_POINTS = [
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in USDC, a stablecoin pegged 1:1 to the US dollar. The contract is token-agnostic so other assets can plug in without redeploying.",
+    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in XLM, with USDC support on the roadmap. The contract is token-agnostic so other assets can plug in without redeploying.",
   },
   {
     q: "What do I need to start?",
@@ -126,11 +126,11 @@ const FAQS = [
   },
   {
     q: "How do I send money in?",
-    a: "Pay in pesos via PDAX — InstaPay QR from your bank or e-wallet. PDAX converts to USDC and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
+    a: "Pay in pesos via PDAX. InstaPay QR from your bank or e-wallet. PDAX converts to XLM and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
-    a: "Yes — through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
+    a: "Yes. Through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
   },
   {
     q: "What if the family disagrees?",
@@ -522,7 +522,7 @@ function SplitVisual() {
               marginTop: 2,
             }}
           >
-            625 USDC · from Riyadh
+            625 XLM · from Riyadh
           </div>
         </div>
         <ArrowRight
@@ -734,7 +734,7 @@ function SavingsVisual() {
             ₱ 11,856.90
           </div>
           <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-204.43 USDC
+204.43 XLM
           </div>
         </div>
         <span
@@ -799,10 +799,10 @@ function Trust() {
             Built on infrastructure you can audit.
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
-            Sobre is built on Stellar — the same chain used by MoneyGram for
-            cross-border payouts. Your balance lives in USDC, a stablecoin
-            pegged 1:1 to the US dollar, so amounts don&apos;t move with
-            crypto volatility. Every transaction is public and verifiable.
+            Sobre is built on Stellar, the same chain used by MoneyGram for
+            cross-border payouts. Your balance lives in XLM today, with USDC
+            on the roadmap, so amounts can settle to a stablecoin without a
+            contract redeploy. Every transaction is public and verifiable.
           </p>
         </div>
 

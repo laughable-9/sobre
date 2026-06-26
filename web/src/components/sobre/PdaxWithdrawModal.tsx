@@ -541,8 +541,8 @@ export function PdaxWithdrawModal({
             title="Cashout couldn't complete"
             body={
               row.failure_reason
-                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX — contact support to recover or retry from your wallet.`
-                : "The cashout didn't complete. Your funds are recoverable — contact support if they're stuck at PDAX."
+                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX. Contact support to recover, or retry from your wallet.`
+                : "The cashout didn't complete. Your funds are recoverable. Contact support if they're stuck at PDAX."
             }
             footer={
               <button
@@ -852,7 +852,7 @@ function RecoveryPromptStep({
         from {envLabel} to {bankName} debited the envelope on chain but the
         second confirmation didn&apos;t go through. Your XLM is still in
         your wallet. Tap continue to resume the cashout with one passkey
-        prompt — no second debit.
+        prompt. No second debit.
       </p>
 
       {error ? (

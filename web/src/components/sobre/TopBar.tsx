@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Check, Pencil, X } from "lucide-react";
 
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
@@ -31,7 +32,7 @@ export function TopBar({
     <header className="sobre-topbar">
       <div className="sobre-topbar-inner">
         <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-2.5">
+          <Link href="/" className="flex items-center gap-2.5">
             <Image
               src="/sobre-logo2.svg"
               alt="Sobre"
@@ -40,7 +41,7 @@ export function TopBar({
               priority
             />
             <span className="font-serif text-[19px] font-semibold">Sobre</span>
-          </a>
+          </Link>
         </div>
 
         {walletState && contractId ? (
