@@ -630,7 +630,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           onCancelMidFlight={() => {
             setDepositOpen(false);
             setResumeDepositId(null);
-            flash("Cancelled. Try again whenever.", "warn");
+            flash("Deposit cancelled.", "warn");
             void activeDeposits.refresh();
           }}
           onSuccess={({ usdc }) => {
@@ -648,7 +648,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClose={() => setCashoutOpen(false)}
           onCancelMidFlight={() => {
             setCashoutOpen(false);
-            flash("Cancelled. Try again whenever.", "warn");
+            flash("Cashout cancelled.", "warn");
           }}
           onSuccess={({ php }) => {
             flash(
