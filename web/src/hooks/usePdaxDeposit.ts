@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useRowRealtime } from "@/hooks/useRowRealtime";
 
@@ -54,11 +54,37 @@ export interface UsePdaxDepositResult {
   error: string | null;
 }
 
-export function usePdaxDeposit(contractId: string | null): UsePdaxDepositResult {
+export function usePdaxDeposit(
+  contractId: string | null,
+  /** When set, the hook hydrates state from this existing deposit row
+   *  instead of waiting for `initiate()`. Used by the "Resume deposit"
+   *  flow off the activity feed. */
+  resumeIdentifier?: string | null,
+): UsePdaxDepositResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [row, setRow] = useState<PdaxDepositRow | null>(null);
   const identifierRef = useRef<string | null>(null);
+
+  // Hydrate on resume: fetch the row once, then let Realtime take over.
+  useEffect(() => {
+    if (!resumeIdentifier) return;
+    let cancelled = false;
+    identifierRef.current = resumeIdentifier;
+    void fetch(`/api/pdax/deposits/${resumeIdentifier}/row`)
+      .then(async (res) => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = (await res.json()) as { deposit: PdaxDepositRow };
+        if (cancelled) return;
+        setRow(json.deposit);
+      })
+      .catch((e) => {
+        if (!cancelled) setError(e instanceof Error ? e.message : String(e));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeIdentifier]);
 
   useRowRealtime<PdaxDepositRow>(
     "pdax_deposits",

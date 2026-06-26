@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import {
   ArrowDownToLine,
   CheckCheck,
+  Clock,
   Hourglass,
   ShoppingBag,
   UserMinus,
@@ -11,6 +12,7 @@ import {
   X as XIcon,
 } from "lucide-react";
 
+import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
 import { displayEnvelopeName } from "@/lib/config";
@@ -45,6 +47,13 @@ interface ActivityFeedProps {
   /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
   members: Member[];
   envelopeNames: string[];
+  /** Non-terminal deposit rows surfaced as "pending" affordances at the top
+   *  of the feed. The Resume button reopens the deposit modal at whatever
+   *  step matches the row's status. */
+  pendingDeposits?: ActiveDepositRow[];
+  /** Called when the user taps Resume on a pending deposit. The dashboard
+   *  opens the modal with `resumeIdentifier=identifier`. */
+  onResumeDeposit?: (identifier: string) => void;
 }
 
 export function ActivityFeed({
@@ -54,6 +63,8 @@ export function ActivityFeed({
   newestTxHash,
   members,
   envelopeNames,
+  pendingDeposits,
+  onResumeDeposit,
 }: ActivityFeedProps) {
   const nameByAddress = useMemo(() => {
     const out = new Map<string, { name: string; emoji: string }>();
@@ -101,7 +112,24 @@ export function ActivityFeed({
           </p>
         ) : null}
 
-        {!error && events.length === 0 ? (
+        {/* Pending deposits live above the on-chain bucket so a user who
+            closed the modal mid-flow can see them the moment the dashboard
+            re-mounts. Each row's Resume button rehydrates the modal at the
+            phase matching the row's status (typically the ConfirmStep). */}
+        {pendingDeposits && pendingDeposits.length > 0 ? (
+          <div>
+            <div className="sobre-day">PENDING</div>
+            {pendingDeposits.map((d) => (
+              <PendingDepositRow
+                key={d.identifier}
+                deposit={d}
+                onResume={onResumeDeposit}
+              />
+            ))}
+          </div>
+        ) : null}
+
+        {!error && events.length === 0 && !pendingDeposits?.length ? (
           <p className="text-xs" style={{ color: "var(--text-3)" }}>
             {loading ? "Loading events…" : "No on-chain events yet."}
           </p>
@@ -123,6 +151,56 @@ export function ActivityFeed({
         ))}
       </div>
     </aside>
+  );
+}
+
+/** Row rendered above the on-chain bucket for a non-terminal `pdax_deposits`
+ *  row. The status label changes per state, but the action — Resume —
+ *  is always the same: re-open the modal at the matching phase. */
+function PendingDepositRow({
+  deposit,
+  onResume,
+}: {
+  deposit: ActiveDepositRow;
+  onResume?: (identifier: string) => void;
+}) {
+  const time = fmtTime(deposit.created_at);
+  const statusLabel: Record<ActiveDepositRow["status"], string> = {
+    pending: "Awaiting payment",
+    funded: "Buying XLM",
+    credited: "Ready to split",
+    split: "Split",
+    failed: "Failed",
+  };
+  return (
+    <button
+      type="button"
+      onClick={() => onResume?.(deposit.identifier)}
+      className="sobre-activity-item pending"
+      style={{
+        cursor: "pointer",
+        textAlign: "left",
+        width: "100%",
+        background: "var(--accent-soft)",
+        border: "none",
+      }}
+    >
+      <div className="ic">
+        <Clock size={16} strokeWidth={2} />
+      </div>
+      <div className="body">
+        <div className="who">
+          Pending deposit{" "}
+          <span className="amt tabular">
+            ₱{Number(deposit.amount_php).toLocaleString("en-PH")}
+          </span>
+        </div>
+        <div className="where">
+          {statusLabel[deposit.status]} · tap to resume
+        </div>
+        <div className="meta">{time}</div>
+      </div>
+    </button>
   );
 }
 

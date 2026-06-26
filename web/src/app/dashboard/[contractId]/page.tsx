@@ -25,6 +25,7 @@ import { SummaryCard } from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
 import type { Member } from "@/hooks/useWalletState";
 
+import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
 import { useTxFeed } from "@/hooks/useTxFeed";
@@ -76,6 +77,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   const refreshAll = () => {
     void walletState.refresh();
     void txFeed.refresh();
+    void activeDeposits.refresh();
   };
 
   const isAdmin = Boolean(state && address && state.admin === address);
@@ -93,6 +95,12 @@ function Dashboard({ contractId }: { contractId: string }) {
   }, [state, address, isMember, contractId]);
 
   const [depositOpen, setDepositOpen] = useState(false);
+  // Identifier of an existing pdax_deposits row to resume into. When set,
+  // the modal hydrates from that row and lands on whichever step matches
+  // its status — e.g. ConfirmStep for a row at `credited`. Cleared on
+  // close so a fresh "Add money" click starts a new flow.
+  const [resumeDepositId, setResumeDepositId] = useState<string | null>(null);
+  const activeDeposits = useActiveDeposits(contractId);
   const [cashoutOpen, setCashoutOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -470,6 +478,11 @@ function Dashboard({ contractId }: { contractId: string }) {
           newestTxHash={newestTxHash}
           members={state.members}
           envelopeNames={state.envelope_names}
+          pendingDeposits={activeDeposits.deposits}
+          onResumeDeposit={(identifier) => {
+            setResumeDepositId(identifier);
+            setDepositOpen(true);
+          }}
         />
       </div>
       ) : null}
@@ -598,12 +611,20 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           state={state}
           contractId={contractId}
-          onClose={() => setDepositOpen(false)}
+          resumeIdentifier={resumeDepositId ?? undefined}
+          onClose={() => {
+            setDepositOpen(false);
+            setResumeDepositId(null);
+            void activeDeposits.refresh();
+          }}
           onCancelMidFlight={() => {
             setDepositOpen(false);
+            setResumeDepositId(null);
             flash("Cancelled. Try again whenever.", "warn");
+            void activeDeposits.refresh();
           }}
           onSuccess={({ usdc }) => {
+            setResumeDepositId(null);
             handleDepositSuccess(usdc);
           }}
         />

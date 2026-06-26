@@ -110,11 +110,12 @@ export function PdaxDepositModal({
   onClose,
   onCancelMidFlight,
   onSuccess,
+  resumeIdentifier,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
-  /** Plain close — called for terminal-state closes (done / failed / never
+  /** Plain close. Called for terminal-state closes (done / failed / never
    *  started) and after the user explicitly tapped a Close button. */
   onClose: () => void;
   /** Called when the user dismisses the modal while a row is mid-flight
@@ -122,6 +123,11 @@ export function PdaxDepositModal({
    *  toast. The polling effect tears down on unmount automatically. */
   onCancelMidFlight?: () => void;
   onSuccess: (info: { usdc: number; stroops: bigint }) => void;
+  /** When set, the modal hydrates state from this existing deposit row
+   *  and skips the input/preparing steps. The user lands on whichever
+   *  phase matches the row's current status (typically `awaiting` or
+   *  `confirm`). Drives the activity-feed "Resume" affordance. */
+  resumeIdentifier?: string;
 }) {
   const [amountStr, setAmountStr] = useState("500");
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -132,7 +138,7 @@ export function PdaxDepositModal({
     markSplit,
     pending: pdaxPending,
     error: pdaxError,
-  } = usePdaxDeposit(contractId);
+  } = usePdaxDeposit(contractId, resumeIdentifier);
 
   const {
     deposit,
