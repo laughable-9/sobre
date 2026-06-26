@@ -46,6 +46,26 @@ export async function GET(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
 
+  // GrabPay/PayMongo source URLs hard-expire after roughly an hour; once
+  // they do, PDAX never flips the corresponding /fiat/transactions row to
+  // COMPLETED and our `pending` row sits in the bucket forever. Eagerly
+  // mark anything past PENDING_TTL_MIN as failed before returning so the
+  // PENDING list stays honest.
+  const PENDING_TTL_MIN = 60;
+  const cutoff = new Date(
+    Date.now() - PENDING_TTL_MIN * 60_000,
+  ).toISOString();
+  await admin
+    .from("pdax_deposits")
+    .update({
+      status: "failed",
+      failure_reason: "Checkout expired",
+    })
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", "pending")
+    .lt("created_at", cutoff);
+
   const { data: rows, error } = await admin
     .from("pdax_deposits")
     .select(
