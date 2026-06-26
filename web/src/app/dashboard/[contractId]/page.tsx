@@ -13,6 +13,7 @@ import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
+import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { InviteModal } from "@/components/sobre/InviteModal";
@@ -92,6 +93,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   }, [state, address, isMember, contractId]);
 
   const [depositOpen, setDepositOpen] = useState(false);
+  const [cashoutOpen, setCashoutOpen] = useState(false);
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   const [closeOpen, setCloseOpen] = useState(false);
@@ -408,6 +410,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           state={state}
           address={address}
           onDeposit={() => setDepositOpen(true)}
+          onCashout={() => setCashoutOpen(true)}
           dailySpent={dailySpent}
           onKick={isAdmin ? handleKick : undefined}
           onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
@@ -598,6 +601,22 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClose={() => setDepositOpen(false)}
           onSuccess={({ usdc }) => {
             handleDepositSuccess(usdc);
+          }}
+        />
+      ) : null}
+
+      {cashoutOpen ? (
+        <PdaxWithdrawModal
+          userAddress={address}
+          state={state}
+          contractId={contractId}
+          onClose={() => setCashoutOpen(false)}
+          onSuccess={({ php }) => {
+            flash(
+              `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to your bank`,
+              "ok",
+            );
+            refreshAll();
           }}
         />
       ) : null}

@@ -28,6 +28,11 @@ export function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
+/** "•••1461" from a bank account number. Preserves the last 4 chars. */
+export function maskAccountNumber(account: string): string {
+  return account.replace(/.(?=.{4})/g, "•");
+}
+
 /** Stroops (the on-chain sub-unit) → USDC. SAC tokens on Stellar use 7
  *  decimals (10^7 stroops per token). */
 export function stroopsToUsdc(stroops: bigint): number {

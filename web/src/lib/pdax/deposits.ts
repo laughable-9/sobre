@@ -288,10 +288,39 @@ async function findIncomingPaymentAtRelay(args: {
   return null;
 }
 
+/** Travel-Rule defaults shared by /fiat/deposit + /fiat/withdraw bodies.
+ *  PDAX requires every field non-empty even at sub-50k amounts; these
+ *  values are the OFW-remittance shape we use across the demo. The hyphen
+ *  middle-name placeholder is what PDAX accepts when the upstream profile
+ *  doesn't surface a real one. */
+export const TRAVEL_RULE_DEFAULTS = {
+  sender_country_origin: "Philippines",
+  source_of_funds: "Compensation",
+  purpose: "Family Support",
+  relationship_of_sender_to_beneficiary: "Myself",
+  nature_of_business: "Allowances",
+} as const;
+
+export const MIDDLE_NAME_FALLBACK = "-";
+
+/** Shape of PDAX's /fiat/transactions rows (the bits we read). Both the
+ *  deposit and withdraw poll-status routes match by `identifier`. The
+ *  `mode` distinguishes deposit (CashIn) from withdraw (CashOut). */
+export interface PdaxFiatTransaction {
+  identifier: string;
+  status: "IN-PROGRESS" | "COMPLETED" | "FAILED";
+  amount?: string | number;
+  mode?: "CashIn" | "CashOut";
+}
+
+export interface PdaxFiatTransactionsResponse {
+  data: PdaxFiatTransaction[];
+  status: string;
+}
+
 /** Build the heavy `/fiat/deposit` request body. PDAX's required fields
  *  are mostly KYC/Travel-Rule shaped; for the hackathon demo we use the
- *  sender's Google profile + sensible defaults (purpose "Family Support",
- *  source "Compensation", self-beneficiary). */
+ *  sender's Google profile + sensible defaults. */
 export function buildFiatDepositBody(args: {
   amountPhp: number;
   identifier: string;
@@ -299,10 +328,7 @@ export function buildFiatDepositBody(args: {
   senderLastName: string;
   senderMiddleName?: string;
 }) {
-  // PDAX requires middle_name to be non-empty even at sub-50k amounts where
-  // the docs imply it's optional. Default to a hyphen placeholder when the
-  // Google profile didn't surface one.
-  const middle = args.senderMiddleName?.trim() || "-";
+  const middle = args.senderMiddleName?.trim() || MIDDLE_NAME_FALLBACK;
   return {
     amount: String(args.amountPhp),
     method: "instapay_upay_cashin",
@@ -311,13 +337,9 @@ export function buildFiatDepositBody(args: {
     sender_first_name: args.senderFirstName,
     sender_middle_name: middle,
     sender_last_name: args.senderLastName,
-    sender_country_origin: "Philippines",
-    source_of_funds: "Compensation",
     beneficiary_first_name: args.senderFirstName,
     beneficiary_middle_name: middle,
     beneficiary_last_name: args.senderLastName,
-    purpose: "Family Support",
-    relationship_of_sender_to_beneficiary: "Myself",
-    nature_of_business: "Allowances",
+    ...TRAVEL_RULE_DEFAULTS,
   };
 }

@@ -243,10 +243,27 @@ export async function pdaxFetch<T>(
   }
 
   if (!res.ok) {
+    // Surface PDAX's own error fields in the Error.message so the
+    // failure_reason column + UI strings carry the actual diagnostic
+    // ("Invalid Quantity Step", "sender_middle_name is required") instead
+    // of just the bare HTTP status. PDAX's shape isn't consistent across
+    // endpoints — /trade returns {code, message}, /fiat/withdraw returns
+    // {error} — so we read all three and concatenate whatever's present.
+    const obj =
+      typeof parsed === "object" && parsed !== null
+        ? (parsed as Record<string, unknown>)
+        : null;
+    const pdaxCode = obj && "code" in obj ? String(obj.code) : null;
+    const pdaxMsg = obj && "message" in obj ? String(obj.message) : null;
+    const pdaxErr = obj && "error" in obj ? String(obj.error) : null;
+    const parts = [pdaxCode, pdaxMsg && `"${pdaxMsg}"`, pdaxErr && `"${pdaxErr}"`]
+      .filter(Boolean)
+      .join(" ");
+    const detail = parts ? ` ${parts}` : "";
     throw new PdaxError(
       res.status,
       parsed,
-      `PDAX ${opts.method ?? "GET"} ${path} → ${res.status}`,
+      `PDAX ${opts.method ?? "GET"} ${path} → ${res.status}${detail}`,
     );
   }
   return parsed as T;

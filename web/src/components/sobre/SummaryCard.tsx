@@ -1,6 +1,14 @@
 "use client";
 
-import { Check, Copy, Plus, Timer, UserPlus, X } from "lucide-react";
+import {
+  ArrowDownToLine,
+  Check,
+  Copy,
+  Plus,
+  Timer,
+  UserPlus,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
@@ -18,6 +26,7 @@ export function SummaryCard({
   state,
   address,
   onDeposit,
+  onCashout,
   dailySpent,
   onKick,
   onInvite,
@@ -26,6 +35,10 @@ export function SummaryCard({
   state: WalletState;
   address: string;
   onDeposit: () => void;
+  /** Opens the cashout modal. Rendered as a secondary action under
+   *  "Add a remittance". Any member can initiate; policy gates apply
+   *  on the spend() leg the modal triggers. */
+  onCashout: () => void;
   /** Sum of stroops the connected user has spent today (UTC). Computed from
    *  the activity feed by the dashboard. Used to render "remaining today". */
   dailySpent: bigint;
@@ -95,6 +108,22 @@ export function SummaryCard({
         >
           <Plus size={16} strokeWidth={2} />
           Add a remittance
+        </button>
+
+        <button
+          type="button"
+          onClick={onCashout}
+          disabled={totalStroops === 0n}
+          className="sobre-btn sobre-btn-soft mt-2 w-full justify-center"
+          style={{
+            padding: "12px 18px",
+            fontSize: 14,
+            opacity: totalStroops === 0n ? 0.5 : 1,
+            cursor: totalStroops === 0n ? "not-allowed" : "pointer",
+          }}
+        >
+          <ArrowDownToLine size={16} strokeWidth={2} />
+          Cash out to bank
         </button>
 
         <DailyLimitCard

@@ -21,17 +21,15 @@ import { NextResponse } from "next/server";
 
 import { PAYMENT_TOKEN } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
-import { pdaxFetch } from "@/lib/pdax/client";
 import {
   isCryptoWebhook,
   isFiatWebhook,
   kickOffPdaxWithdraw,
   type PdaxCryptoWebhook,
   type PdaxFiatWebhook,
-  type PdaxQuoteResponse,
-  type PdaxTradeResponse,
   type PdaxWebhookPayload,
 } from "@/lib/pdax/deposits";
+import { convertAndPayoutPhp } from "@/lib/pdax/withdrawals";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -143,86 +141,50 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
   }
 
   if (p.transaction_type === "DEPOSIT") {
-    // User→Sobre's PDAX account: user's USDC reached us. Move the cashout
-    // forward by triggering the USDC→PHP trade + fiat withdraw.
-    const { data: row } = await admin
+    // User → PDAX (institution credit): the relay's classic payment to PDAX
+    // has been credited. PDAX doesn't echo our internal identifier on
+    // inbound deposits, so we match by transaction_hash against the
+    // `transfer_tx_hash` the poll-status route stamped when it submitted
+    // the relay payment.
+    //
+    // The atomic claim on (status='spent' → 'transferred') guards against
+    // both this webhook AND the poll-status route firing concurrently.
+    // Whichever wins, runs convertAndPayoutPhp once.
+    const { data: claimed } = await admin
       .from("pdax_withdrawals")
+      .update({ status: "transferred" })
+      .eq("transfer_tx_hash", p.transaction_hash)
+      .eq("status", "spent")
       .select(
-        "amount_usdc, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number",
-      )
-      .eq("identifier", p.identifier)
-      .single();
-    if (!row) return;
+        "identifier, amount_php, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number",
+      );
+    if (!claimed?.length) return;
+    const row = claimed[0] as {
+      identifier: string;
+      amount_php: number;
+      beneficiary_bank_code: string;
+      beneficiary_account_name: string;
+      beneficiary_account_number: string;
+    };
 
+    // Move straight to converted+pay — same idempotent helper the
+    // poll-status route uses. Webhook + poll converge on the same path.
     await admin
       .from("pdax_withdrawals")
-      .update({ status: "transferred", transfer_tx_hash: p.transaction_hash })
-      .eq("identifier", p.identifier);
+      .update({ status: "converted" })
+      .eq("identifier", row.identifier);
 
-    await convertAndPayoutPhp({
-      identifier: p.identifier,
-      amountUsdc: (row as { amount_usdc: number }).amount_usdc,
-      bankCode: (row as { beneficiary_bank_code: string }).beneficiary_bank_code,
-      accountName: (row as { beneficiary_account_name: string }).beneficiary_account_name,
-      accountNumber: (row as { beneficiary_account_number: string })
-        .beneficiary_account_number,
+    const { totalPhp } = await convertAndPayoutPhp({
+      identifier: row.identifier,
+      amountPhp: row.amount_php,
+      bankCode: row.beneficiary_bank_code,
+      accountName: row.beneficiary_account_name,
+      accountNumber: row.beneficiary_account_number,
     });
+    await admin
+      .from("pdax_withdrawals")
+      .update({ amount_php: totalPhp, token_currency: PAYMENT_TOKEN })
+      .eq("identifier", row.identifier);
     return;
   }
-}
-
-async function convertAndPayoutPhp(args: {
-  identifier: string;
-  amountUsdc: number;
-  bankCode: string;
-  accountName: string;
-  accountNumber: string;
-}): Promise<void> {
-  const quote = await pdaxFetch<PdaxQuoteResponse>(
-    "/pdax-institution/v1/trade/quote",
-    {
-      method: "POST",
-      body: {
-        // Mirror of the buy side — sell the active payment token back to PHP.
-        // Same asset switch (PAYMENT_TOKEN) as the deposit pipeline.
-        side: "sell",
-        quote_currency: PAYMENT_TOKEN,
-        base_currency: "PHP",
-        base_quantity: String(args.amountUsdc),
-      },
-    },
-  );
-
-  await pdaxFetch<PdaxTradeResponse>("/pdax-institution/v1/trade", {
-    method: "POST",
-    body: {
-      quote_id: quote.data.quote_id,
-      side: "sell",
-      idempotency_id: args.identifier,
-    },
-  });
-
-  await pdaxFetch("/pdax-institution/v1/fiat/withdraw", {
-    method: "POST",
-    body: {
-      identifier: args.identifier,
-      amount: String(quote.data.total_amount),
-      currency: "PHP",
-      method: "PAY-TO-ACCOUNT-REAL-TIME",
-      fee_type: "Beneficiary",
-      beneficiary_bank_code: args.bankCode,
-      beneficiary_account_name: args.accountName,
-      beneficiary_account_number: args.accountNumber,
-      beneficiary_first_name: args.accountName.split(/\s+/)[0] ?? args.accountName,
-      beneficiary_last_name:
-        args.accountName.split(/\s+/).slice(-1)[0] ?? args.accountName,
-      sender_first_name: "Sobre",
-      sender_last_name: "Wallet",
-      sender_country_origin: "Philippines",
-      source_of_funds: "Compensation",
-      purpose: "Family Support",
-      relationship_of_sender_to_beneficiary: "Myself",
-      nature_of_business: "Allowances",
-    },
-  });
 }
