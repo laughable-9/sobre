@@ -37,9 +37,19 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 export const runtime = "nodejs";
 
 const SPEND_MEMO = "PDAX cashout";
-/** How far back to scan Soroban events. 7 days ≈ ~120k ledgers; well
- *  inside the 5-day Soroban event retention window plus headroom. */
-const EVENT_LOOKBACK_LEDGERS = 100_000;
+/** How far back to scan Soroban events. Soroban RPC silently returns
+ *  ZERO events when the (startLedger → latestLedger) window exceeds a
+ *  cap (empirically ~15k ledgers on testnet), so we have to stay well
+ *  under it. 5k ledgers ≈ 7 hours, which covers every realistic
+ *  recovery window — users come back within minutes, not hours, after
+ *  a failed cashout. */
+const EVENT_LOOKBACK_LEDGERS = 5_000;
+/** Soroban RPC caps events at 25 per page. We paginate forward via
+ *  cursor; this is the max pages we'll fetch (so the route can't
+ *  spin if the contract somehow has thousands of events in the
+ *  window). 20 pages × 25 = 500 events, more than any realistic
+ *  family wallet emits in 7 hours. */
+const MAX_EVENT_PAGES = 20;
 
 interface RecoverableCashout {
   identifier: string;
@@ -129,25 +139,37 @@ export async function GET(req: Request) {
     ledgerClosedAt: string;
   };
   const spendEvents: ParsedSpend[] = [];
+  // Paginate via cursor — Soroban RPC caps responses at 25 events. The
+  // first call uses startLedger; subsequent calls drop startLedger and
+  // page forward by cursor. We stop when a page returns < 25 events
+  // (final page) or we hit MAX_EVENT_PAGES (safety).
   try {
-    const raw = await server.getEvents({
-      startLedger,
-      filters: [{ type: "contract", contractIds: [contractId] }],
-    });
-    for (const ev of raw.events) {
-      const topics = ev.topic.map((t) => scValToNative(t));
-      if (String(topics[0] ?? "").toLowerCase() !== "spend") continue;
-      const data = scValToNative(ev.value) as Record<string, unknown>;
-      const memo = String(data.memo ?? "");
-      if (memo !== SPEND_MEMO) continue;
-      spendEvents.push({
-        txHash: ev.txHash,
-        caller: String(topics[1]),
-        envelope: envelopeNameFromScNative(topics[2], "Groceries"),
-        amount: data.amount as bigint,
-        memo,
-        ledgerClosedAt: ev.ledgerClosedAt,
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_EVENT_PAGES; page++) {
+      // Cursor-driven pagination: subsequent pages drop startLedger and
+      // continue from the cursor; the first page has no cursor yet.
+      const raw = await server.getEvents({
+        filters: [{ type: "contract", contractIds: [contractId] }],
+        ...(cursor ? { cursor } : { startLedger }),
       });
+      for (const ev of raw.events) {
+        const topics = ev.topic.map((t) => scValToNative(t));
+        if (String(topics[0] ?? "").toLowerCase() !== "spend") continue;
+        const data = scValToNative(ev.value) as Record<string, unknown>;
+        const memo = String(data.memo ?? "");
+        if (memo !== SPEND_MEMO) continue;
+        spendEvents.push({
+          txHash: ev.txHash,
+          caller: String(topics[1]),
+          envelope: envelopeNameFromScNative(topics[2], "Groceries"),
+          amount: data.amount as bigint,
+          memo,
+          ledgerClosedAt: ev.ledgerClosedAt,
+        });
+      }
+      if (raw.events.length < 25) break;
+      cursor = raw.cursor;
+      if (!cursor) break;
     }
   } catch {
     return NextResponse.json({ recoverable: [] });
