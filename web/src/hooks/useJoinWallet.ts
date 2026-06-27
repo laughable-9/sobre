@@ -65,10 +65,15 @@ export function useJoinWallet(
 
         // Off-chain: insert a family_members row so display name + emoji
         // surface in dashboards and PDAX routes (requireFamilyMember)
-        // recognise this user. Look up family_wallets.id + wallets.id by
-        // the two contract addresses.
+        // recognise this user.
+        //
+        // The "Recipients can self-join via invite" RLS policy gates the
+        // insert: role must be 'recipient' and wallet_id must be the
+        // caller's own. Errors are surfaced (previously swallowed) so a
+        // failed mirror doesn't leave the user with on-chain membership
+        // but no Supabase row.
         const supabase = getSupabaseBrowserClient();
-        const [{ data: walletRow }, { data: familyRow }] = await Promise.all([
+        const [walletQ, familyQ] = await Promise.all([
           supabase
             .from("wallets")
             .select("id")
@@ -80,16 +85,31 @@ export function useJoinWallet(
             .eq("contract_id", contractId)
             .single(),
         ]);
-        if (walletRow && familyRow) {
-          await supabase.from("family_members").upsert(
+        if (walletQ.error || !walletQ.data) {
+          throw new Error(
+            `Joined on chain but couldn't resolve your wallet record: ${walletQ.error?.message ?? "missing"}`,
+          );
+        }
+        if (familyQ.error || !familyQ.data) {
+          throw new Error(
+            `Joined on chain but couldn't resolve the family record: ${familyQ.error?.message ?? "missing"}`,
+          );
+        }
+        const { error: upsertErr } = await supabase
+          .from("family_members")
+          .upsert(
             {
-              family_wallet_id: (familyRow as { id: string }).id,
-              wallet_id: (walletRow as { id: string }).id,
+              family_wallet_id: (familyQ.data as { id: string }).id,
+              wallet_id: (walletQ.data as { id: string }).id,
               role: "recipient",
               name,
               emoji,
             },
             { onConflict: "family_wallet_id,wallet_id" },
+          );
+        if (upsertErr) {
+          throw new Error(
+            `Joined on chain but Supabase mirror failed: ${upsertErr.message}`,
           );
         }
 

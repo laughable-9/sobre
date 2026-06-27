@@ -12,7 +12,6 @@ import {
   signTransaction,
   submitPasskeySigned,
 } from "@/lib/passkey";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
  * Family-wallet creation flow.
@@ -79,7 +78,6 @@ type ATWithSim<T> = contract.AssembledTransaction<T> & {
 export async function createFamilyWallet(
   args: CreateFamilyArgs,
 ): Promise<CreateFamilyResult> {
-  const supabase = getSupabaseBrowserClient();
   const deployerAddress = getDeployerAddress();
 
   // Client.from fetches the factory's spec from chain. We pass the public
@@ -174,72 +172,57 @@ export async function createFamilyWallet(
     );
   }
 
-  const { data: row, error: insertErr } = await supabase
-    .from("family_wallets")
-    .insert({
-      contract_id: familyContractId,
-      display_name: args.walletName,
-      created_by: args.myWalletDbId,
-      percents: [...args.percents],
-    })
-    .select("id")
-    .single();
-
-  if (insertErr) {
-    throw new Error(`family_wallets insert failed: ${insertErr.message}`);
-  }
-  const familyWalletId = row.id;
-
-  await seedFamilyDisplay({
-    supabase,
-    familyWalletId,
-    walletDbId: args.myWalletDbId,
+  // Mirror via the server-side route that verifies caller is the on-chain
+  // admin of the new contract (closes the "predict next salt + pre-insert"
+  // squat). Client-side INSERT on family_wallets is RLS-revoked.
+  const { familyWalletId } = await mirrorFamilyCreate({
+    contractId: familyContractId,
+    displayName: args.walletName,
+    percents: args.percents,
     adminName: args.adminName,
     adminEmoji: args.adminEmoji,
     envelopeNames: args.envelopeNames,
   });
 
-  return {
-    familyContractId,
-    familyWalletId,
-  };
+  return { familyContractId, familyWalletId };
 }
 
 /**
- * Off-chain display seed for a freshly-created family wallet. Mirrors the
- * post-`create_sobre` Supabase writes used by both `createFamilyWallet`
- * (this file) and `useCreateSobre` (hook) so a future schema change lands
- * in one place. The bootstrap_family_admin trigger has already inserted
- * the admin's family_members row — we UPDATE it with display data and
- * INSERT the three envelope-name rows.
+ * POST a new family to /api/family/create. Shared by `useCreateSobre` and
+ * the cold-start `createFamilyWallet` flow so the request shape lives in
+ * one place (server-side validation in
+ * `web/src/app/api/family/create/route.ts` must agree with this body).
  */
-export async function seedFamilyDisplay({
-  supabase,
-  familyWalletId,
-  walletDbId,
-  adminName,
-  adminEmoji,
-  envelopeNames,
-}: {
-  supabase: ReturnType<typeof getSupabaseBrowserClient>;
-  familyWalletId: string;
-  walletDbId: string;
+export async function mirrorFamilyCreate(args: {
+  contractId: string;
+  displayName: string;
+  percents: readonly [number, number, number];
   adminName: string;
   adminEmoji: string;
   envelopeNames: readonly [string, string, string];
-}): Promise<void> {
-  await supabase
-    .from("family_members")
-    .update({ name: adminName, emoji: adminEmoji })
-    .eq("family_wallet_id", familyWalletId)
-    .eq("wallet_id", walletDbId);
-
-  const [g, t, s] = envelopeNames;
-  await supabase.from("family_envelope_names").insert([
-    { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g },
-    { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t },
-    { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s },
-  ]);
+}): Promise<{ familyWalletId: string }> {
+  const res = await fetch("/api/family/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contract_id: args.contractId,
+      display_name: args.displayName,
+      percents: [...args.percents],
+      admin_name: args.adminName,
+      admin_emoji: args.adminEmoji,
+      envelope_names: [...args.envelopeNames],
+    }),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(
+      `Wallet deployed on chain but Supabase mirror failed: ${j.error ?? `${res.status}`}`,
+    );
+  }
+  const { family_wallet_id } = (await res.json()) as {
+    family_wallet_id: string;
+  };
+  return { familyWalletId: family_wallet_id };
 }
 
 /** "Kyle Pagunsan" → "The Pagunsan Family". Falls back to "Sobre Family"

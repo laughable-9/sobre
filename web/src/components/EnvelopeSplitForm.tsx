@@ -77,7 +77,7 @@ export function EnvelopeSplitForm({
         .maybeSingle();
       if (updateErr) throw new Error(updateErr.message);
       if (!data) {
-        throw new Error("Couldn't save — only the family admin can change this.");
+        throw new Error("Couldn't save. Only the family admin can change this.");
       }
     },
     [familyWalletId],

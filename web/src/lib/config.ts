@@ -64,6 +64,11 @@ export const PAYMENT_TOKEN = "XLM" as PaymentToken;
 export const PAYMENT_TOKEN_SAC_ID: string =
   PAYMENT_TOKEN === "USDC" ? USDC_SAC_ID : XLM_SAC_ID;
 
+/** User-visible label for the payment token. Read this anywhere UI
+ *  copy needs to say "XLM" / "USDC" so a future token swap is a
+ *  one-line change in this file, not a 9-site sweep. */
+export const PAYMENT_TOKEN_LABEL: string = PAYMENT_TOKEN;
+
 /** Origin used in invite URLs the admin shares. Hardcoded to the deployed
  *  domain so a link generated from `localhost:3000` during local dev still
  *  resolves to the production app when the recipient opens it. */

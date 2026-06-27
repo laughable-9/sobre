@@ -37,9 +37,12 @@ export function useApproveRequest(
       const { hash } = await invokeWrite(contractId, "spend_on_behalf", args);
 
       // Mark resolved after the chain call lands so the panel doesn't blink
-      // off-then-on if the tx fails.
+      // off-then-on if the tx fails. CRITICAL: capture the update error.
+      // If this silently dropped, the realtime panel would keep showing
+      // "Approve" on a row whose money has already moved, and a second
+      // click would double-spend (the contract has no idempotency key).
       const supabase = getSupabaseBrowserClient();
-      await supabase
+      const { error: updateErr } = await supabase
         .from("family_pending_requests")
         .update({
           status: "approved",
@@ -48,6 +51,11 @@ export function useApproveRequest(
           executed_spend_tx_hash: hash,
         })
         .eq("id", req.id);
+      if (updateErr) {
+        throw new Error(
+          `Release succeeded on chain but the request status couldn't be updated (${updateErr.message}). Refresh before retrying so you don't approve twice.`,
+        );
+      }
 
       return hash;
     },

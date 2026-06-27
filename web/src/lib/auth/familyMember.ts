@@ -19,6 +19,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export interface WalletContext {
   /** `public.wallets.id` for the signed-in user. */
   memberId: string;
+  /** Caller's smart-wallet C-address (`public.wallets.contract_id`). Surfaced
+   *  here so routes that compare the caller against on-chain state don't
+   *  need a second `wallets` SELECT after auth. */
+  contractId: string;
   /** Auth user's display name (Google `full_name` → email → "Sobre User"). */
   fullName: string;
 }
@@ -43,7 +47,7 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
   const admin = getSupabaseAdmin();
   const { data: wallet } = await admin
     .from("wallets")
-    .select("id")
+    .select("id, contract_id")
     .eq("auth_id", authId)
     .single();
   if (!wallet) {
@@ -52,7 +56,8 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
       { status: 404 },
     );
   }
-  return { memberId: (wallet as { id: string }).id, fullName };
+  const w = wallet as { id: string; contract_id: string };
+  return { memberId: w.id, contractId: w.contract_id, fullName };
 }
 
 export async function requireFamilyMember(

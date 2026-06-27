@@ -40,7 +40,7 @@ export function useCreatePendingRequest(
     }): Promise<void> => {
       if (!memberAddress) throw new Error("Wallet not connected.");
       if (!memberWalletDbId) {
-        throw new Error("Your member record hasn't loaded yet — try again in a moment.");
+        throw new Error("Your member record hasn't loaded yet. Try again in a moment.");
       }
       const supabase = getSupabaseBrowserClient();
       const { error } = await supabase

@@ -8,6 +8,7 @@ import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
 import type { SpendPolicyShape } from "@/lib/contract";
 import {
   ENVELOPE_LABELS,
+  PAYMENT_TOKEN_LABEL,
   STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
@@ -141,7 +142,7 @@ export function PolicySettingsForm({
         .maybeSingle();
       if (updateErr) throw new Error(updateErr.message);
       if (!data) {
-        throw new Error("Couldn't save — only the family admin can change this.");
+        throw new Error("Couldn't save. Only the family admin can change this.");
       }
     },
     [familyWalletId],
@@ -371,7 +372,7 @@ function makeEquivLabel(input: string, unit: Unit): string | null {
   const n = Number(input);
   if (n <= 0) return null;
   if (unit === "PHP") {
-    return `≈ ${(n / PHP_PER_USDC).toFixed(4)} USDC`;
+    return `≈ ${(n / PHP_PER_USDC).toFixed(4)} ${PAYMENT_TOKEN_LABEL}`;
   }
   return `≈ ₱${(n * PHP_PER_USDC).toLocaleString("en-PH", {
     minimumFractionDigits: 0,
@@ -440,7 +441,7 @@ function UnitToggle({
           disabled={disabled}
           data-active={u === unit ? "true" : "false"}
         >
-          {u === "PHP" ? "₱ PHP" : "USDC"}
+          {u === "PHP" ? "₱ PHP" : PAYMENT_TOKEN_LABEL}
         </button>
       ))}
     </div>

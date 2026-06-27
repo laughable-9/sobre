@@ -26,6 +26,10 @@ export interface FamilyDisplayState {
   policy: SpendPolicyShape;
   membersByAddress: Map<string, FamilyMemberDisplay>;
   loading: boolean;
+  /** Non-null when the latest Supabase fetch errored. Consumers can read
+   *  this through `useWalletState` to refuse renders that would otherwise
+   *  show defaults (e.g. deposit modal splitting against stale percents). */
+  loadError: string | null;
   refresh: () => Promise<void>;
 }
 
@@ -90,18 +94,31 @@ export function useFamilyDisplay(
     Map<string, FamilyMemberDisplay>
   >(new Map());
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async () => {
     if (!contractId) return;
     setLoading(true);
     const supabase = getSupabaseBrowserClient();
+    // Surface every read error to the dashboard rather than falling
+    // through to defaults. DEFAULT_PERCENTS [50,30,20] + an open policy
+    // would split the next deposit by the wrong percentages, which is a
+    // real money-routing bug.
+    const fail = (label: string, err: { message: string }) => {
+      setLoadError(`Couldn't load ${label}: ${err.message}`);
+    };
     try {
-      const { data: family } = await supabase
+      const { data: family, error: familyErr } = await supabase
         .from("family_wallets")
         .select("id, display_name, percents, policy_json")
         .eq("contract_id", contractId)
         .maybeSingle();
+      if (familyErr) {
+        fail("family settings", familyErr);
+        return;
+      }
       if (!family) {
+        setLoadError(null);
         setFamilyWalletId(null);
         setWalletName("");
         setEnvelopeNames(DEFAULT_NAMES);
@@ -111,12 +128,8 @@ export function useFamilyDisplay(
         return;
       }
       const row = family as FamilyRow;
-      setFamilyWalletId(row.id);
-      setWalletName(row.display_name ?? "");
-      setPercents(normalizePercents(row.percents));
-      setPolicy(normalizePolicy(row.policy_json));
 
-      const [{ data: names }, { data: members }] = await Promise.all([
+      const [namesQ, membersQ] = await Promise.all([
         supabase
           .from("family_envelope_names")
           .select("envelope_key, display_name")
@@ -126,10 +139,28 @@ export function useFamilyDisplay(
           .select("wallet_id, role, name, emoji, wallets(contract_id)")
           .eq("family_wallet_id", row.id),
       ]);
+      if (namesQ.error) {
+        fail("envelope labels", namesQ.error);
+        return;
+      }
+      if (membersQ.error) {
+        fail("family members", membersQ.error);
+        return;
+      }
+
+      // Only commit state once every read succeeded, so a partial failure
+      // doesn't leave the dashboard mid-stale.
+      setLoadError(null);
+      setFamilyWalletId(row.id);
+      setWalletName(row.display_name ?? "");
+      setPercents(normalizePercents(row.percents));
+      setPolicy(normalizePolicy(row.policy_json));
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
-      for (const n of (names as Array<{ envelope_key: string; display_name: string }> | null) ??
-        []) {
+      for (const n of (namesQ.data as Array<{
+        envelope_key: string;
+        display_name: string;
+      }> | null) ?? []) {
         if (n.envelope_key === "Groceries") nextNames[0] = n.display_name;
         else if (n.envelope_key === "Tuition") nextNames[1] = n.display_name;
         else if (n.envelope_key === "Savings") nextNames[2] = n.display_name;
@@ -144,7 +175,7 @@ export function useFamilyDisplay(
         emoji: string | null;
         wallets: { contract_id: string } | { contract_id: string }[] | null;
       };
-      for (const m of (members as MemberRow[] | null) ?? []) {
+      for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
         const wallets = firstJoined(m.wallets);
         if (!wallets?.contract_id) continue;
         map.set(wallets.contract_id, {
@@ -215,6 +246,7 @@ export function useFamilyDisplay(
       policy,
       membersByAddress,
       loading,
+      loadError,
       refresh: fetchAll,
     }),
     [
@@ -225,6 +257,7 @@ export function useFamilyDisplay(
       policy,
       membersByAddress,
       loading,
+      loadError,
       fetchAll,
     ],
   );

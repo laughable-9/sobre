@@ -424,6 +424,37 @@ function Dashboard({ contractId }: { contractId: string }) {
         </Link>
       </div>
 
+      {walletState.familyError ? (
+        // Family settings (split %, policy) failed to load — dashboard
+        // would otherwise render against DEFAULT_PERCENTS [50,30,20] and
+        // an open policy, which the next deposit/spend would route by.
+        // Surface the failure + force a manual refresh so we don't move
+        // money under stale state.
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-3"
+          style={{ maxWidth: 1320 }}
+        >
+          <div
+            className="rounded-md px-4 py-3 text-sm flex items-center gap-3"
+            style={{
+              background: "rgba(220,38,38,0.07)",
+              color: "var(--sobre-danger)",
+              border: "1px solid rgba(220,38,38,0.18)",
+            }}
+          >
+            <span className="flex-1">{walletState.familyError}</span>
+            <button
+              type="button"
+              onClick={refresh}
+              className="sobre-btn sobre-btn-soft"
+              style={{ fontSize: 12, padding: "6px 10px" }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : null}
+
       <nav
         className="sobre-tabs mx-auto w-full px-4 sm:px-7 pt-4"
         style={{ maxWidth: 1320 }}
@@ -831,7 +862,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClose={() => setCloseOpen(false)}
           onSuccess={() => {
             setCloseOpen(false);
-            flash("Wallet closed — funds swept back to your address", "ok");
+            flash("Wallet closed. Funds swept back to your address.", "ok");
             setClosed(true);
             refreshAll();
           }}

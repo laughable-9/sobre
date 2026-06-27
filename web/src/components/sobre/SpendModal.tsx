@@ -13,6 +13,7 @@ import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
+  PAYMENT_TOKEN_LABEL,
   STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
@@ -116,7 +117,7 @@ export function SpendModal({
     try {
       if (willGoPending) {
         if (!familyWalletId) {
-          throw new Error("Family record not loaded yet — try again.");
+          throw new Error("Family record not loaded yet. Try again.");
         }
         await createPending({
           familyWalletId,
@@ -168,7 +169,7 @@ export function SpendModal({
               maximumFractionDigits: 2,
             })}
           </b>{" "}
-          · <span className="tabular">{balanceUsdc.toFixed(4)} USDC</span>
+          · <span className="tabular">{balanceUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}</span>
         </p>
 
         {willGoPending ? (
@@ -272,7 +273,7 @@ export function SpendModal({
                   }
                   title={
                     q > balancePhp
-                      ? `Not enough — ₱${balancePhp.toFixed(0)} available`
+                      ? `Not enough. ₱${balancePhp.toFixed(0)} available`
                       : undefined
                   }
                 >
@@ -286,7 +287,7 @@ export function SpendModal({
               className="mt-2 text-[12px]"
               style={{ color: "var(--text-3)" }}
             >
-              ≈ {usdc.toFixed(4)} USDC
+              ≈ {usdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}
             </div>
           ) : null}
         </div>

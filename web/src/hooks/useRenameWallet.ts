@@ -36,7 +36,7 @@ export function useRenameWallet(
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!data) {
-        throw new Error("Couldn't rename — only the family admin can change this.");
+        throw new Error("Couldn't rename. Only the family admin can change this.");
       }
     },
     [adminAddress, contractId],

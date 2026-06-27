@@ -41,7 +41,13 @@ export interface WalletState {
 export interface UseWalletStateResult {
   state: WalletState | null;
   loading: boolean;
+  /** Last chain-side error (`get_state` simulate). */
   error: string | null;
+  /** Last Supabase-side error from useFamilyDisplay. When non-null the
+   *  cosmetic + policy + percents fall back to defaults, so callers that
+   *  flow into a money-moving action (deposits, spends) should refuse to
+   *  proceed until it clears. */
+  familyError: string | null;
   familyWalletId: string | null;
   refresh: () => Promise<void>;
 }
@@ -168,6 +174,7 @@ export function useWalletState(
     state,
     loading,
     error,
+    familyError: display.loadError,
     familyWalletId: display.familyWalletId,
     refresh,
   };

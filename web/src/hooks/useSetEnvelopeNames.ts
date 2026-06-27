@@ -43,7 +43,7 @@ export function useSetEnvelopeNames(
         .select("envelope_key");
       if (error) throw new Error(error.message);
       if (!data || data.length === 0) {
-        throw new Error("Couldn't save — only the family admin can rename envelopes.");
+        throw new Error("Couldn't save. Only the family admin can rename envelopes.");
       }
     },
     [adminAddress],
