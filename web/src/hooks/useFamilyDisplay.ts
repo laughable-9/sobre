@@ -24,6 +24,9 @@ export interface FamilyDisplayState {
   percents: [number, number, number];
   /** Family-level spend policy. Defaults are "no gate, nobody protected". */
   policy: SpendPolicyShape;
+  /** When true, money leaving Savings needs every admin's approval. Read fresh
+   *  at release-time so adding/removing admins re-thresholds in flight. */
+  savingsLockAllAdmins: boolean;
   membersByAddress: Map<string, FamilyMemberDisplay>;
   loading: boolean;
   /** Non-null when the latest Supabase fetch errored. Consumers can read
@@ -56,6 +59,7 @@ interface FamilyRow {
     per_tx_threshold_stroops?: string | number | null;
     protected_envelopes?: EnvelopeName[];
   } | null;
+  savings_lock_all_admins: boolean | null;
 }
 
 function normalizePolicy(raw: FamilyRow["policy_json"]): SpendPolicyShape {
@@ -90,6 +94,7 @@ export function useFamilyDisplay(
   const [percents, setPercents] =
     useState<[number, number, number]>(DEFAULT_PERCENTS);
   const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
+  const [savingsLockAllAdmins, setSavingsLockAllAdmins] = useState(false);
   const [membersByAddress, setMembersByAddress] = useState<
     Map<string, FamilyMemberDisplay>
   >(new Map());
@@ -110,7 +115,9 @@ export function useFamilyDisplay(
     try {
       const { data: family, error: familyErr } = await supabase
         .from("family_wallets")
-        .select("id, display_name, percents, policy_json")
+        .select(
+          "id, display_name, percents, policy_json, savings_lock_all_admins",
+        )
         .eq("contract_id", contractId)
         .maybeSingle();
       if (familyErr) {
@@ -124,6 +131,7 @@ export function useFamilyDisplay(
         setEnvelopeNames(DEFAULT_NAMES);
         setPercents(DEFAULT_PERCENTS);
         setPolicy(DEFAULT_POLICY);
+        setSavingsLockAllAdmins(false);
         setMembersByAddress(new Map());
         return;
       }
@@ -155,6 +163,7 @@ export function useFamilyDisplay(
       setWalletName(row.display_name ?? "");
       setPercents(normalizePercents(row.percents));
       setPolicy(normalizePolicy(row.policy_json));
+      setSavingsLockAllAdmins(Boolean(row.savings_lock_all_admins));
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
       for (const n of (namesQ.data as Array<{
@@ -244,6 +253,7 @@ export function useFamilyDisplay(
       envelopeNames,
       percents,
       policy,
+      savingsLockAllAdmins,
       membersByAddress,
       loading,
       loadError,
@@ -255,6 +265,7 @@ export function useFamilyDisplay(
       envelopeNames,
       percents,
       policy,
+      savingsLockAllAdmins,
       membersByAddress,
       loading,
       loadError,

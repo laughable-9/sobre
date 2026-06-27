@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 
 import type { EnvelopeName } from "@/lib/config";
+import type { ApprovalMode } from "@/lib/policy";
+import type { PendingRequestKind } from "@/hooks/useCreatePendingRequest";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { firstJoined } from "@/lib/supabase/utils";
 
@@ -15,6 +17,14 @@ export interface PendingSpendRequest {
   amountStroops: bigint;
   memo: string;
   createdAt: string;
+  approvalMode: ApprovalMode;
+  kind: PendingRequestKind;
+  /** Populated only when kind === 'subaccount_fund'. Pass through to the
+   *  release path (fund_subaccount expects the recipient C-address). */
+  recipientAddress: string | null;
+  /** Wallet IDs that have recorded an approval. UI counts admins from this
+   *  set; the relay route also re-counts against live admin count. */
+  approversWalletIds: string[];
 }
 
 export interface UsePendingSpendRequestsResult {
@@ -32,6 +42,10 @@ interface RawRow {
   memo: string;
   status: "pending" | "approved" | "denied";
   created_at: string;
+  approval_mode: ApprovalMode;
+  kind: PendingRequestKind;
+  recipient_address: string | null;
+  approvers_wallet_ids: string[] | null;
   wallets: { contract_id: string } | { contract_id: string }[] | null;
 }
 
@@ -46,6 +60,10 @@ function normalize(row: RawRow): PendingSpendRequest | null {
     amountStroops: BigInt(row.amount_stroops),
     memo: row.memo ?? "",
     createdAt: row.created_at,
+    approvalMode: row.approval_mode,
+    kind: row.kind,
+    recipientAddress: row.recipient_address,
+    approversWalletIds: row.approvers_wallet_ids ?? [],
   };
 }
 
@@ -72,7 +90,7 @@ export function usePendingSpendRequests(
       const { data } = await supabase
         .from("family_pending_requests")
         .select(
-          "id, family_wallet_id, member_wallet_id, envelope, amount_stroops, memo, status, created_at, wallets(contract_id)",
+          "id, family_wallet_id, member_wallet_id, envelope, amount_stroops, memo, status, created_at, approval_mode, kind, recipient_address, approvers_wallet_ids, wallets(contract_id)",
         )
         .eq("family_wallet_id", familyWalletId)
         .eq("status", "pending")
