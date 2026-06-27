@@ -176,39 +176,75 @@ export function stringVecScVal(strings: readonly string[]): xdr.ScVal {
   return xdr.ScVal.scvVec(strings.map((s) => xdr.ScVal.scvString(s)));
 }
 
+export interface SpendPolicyShape {
+  requireAllSigs: boolean;
+  dailyLimit: bigint | null;
+  /** Per-tx approval threshold in stroops; null = no per-tx gate. */
+  perTxThreshold: bigint | null;
+  protectedEnvelopes: ("Groceries" | "Tuition" | "Savings")[];
+}
+
 /**
  * Encode a SpendPolicy struct as an ScVal map. Field order matters — Soroban
  * sorts struct map entries alphabetically by key:
- *     daily_limit < protected_envelopes < require_all_sigs
+ *     daily_limit < per_tx_threshold < protected_envelopes < require_all_sigs
  */
-export function spendPolicyScVal({
-  requireAllSigs,
-  dailyLimit,
-  protectedEnvelopes,
-}: {
-  requireAllSigs: boolean;
-  dailyLimit: bigint | null;
-  protectedEnvelopes: ("Groceries" | "Tuition" | "Savings")[];
-}): xdr.ScVal {
-  const dailyLimitVal =
-    dailyLimit === null
-      ? xdr.ScVal.scvVoid()
-      : nativeToScVal(dailyLimit, { type: "i128" });
-
+export function spendPolicyScVal(policy: SpendPolicyShape): xdr.ScVal {
+  const optI128 = (v: bigint | null) =>
+    v === null ? xdr.ScVal.scvVoid() : nativeToScVal(v, { type: "i128" });
   return xdr.ScVal.scvMap([
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("daily_limit"),
-      val: dailyLimitVal,
+      val: optI128(policy.dailyLimit),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("per_tx_threshold"),
+      val: optI128(policy.perTxThreshold),
     }),
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("protected_envelopes"),
-      val: xdr.ScVal.scvVec(protectedEnvelopes.map(envelopeScVal)),
+      val: xdr.ScVal.scvVec(policy.protectedEnvelopes.map(envelopeScVal)),
     }),
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("require_all_sigs"),
-      val: xdr.ScVal.scvBool(requireAllSigs),
+      val: xdr.ScVal.scvBool(policy.requireAllSigs),
     }),
   ]);
+}
+
+/**
+ * One settings change to feed `apply_settings`. Mirrors the Rust enum
+ * `SettingsField`:
+ *   Percents(Vec<u32>) | Policy(SpendPolicy)
+ *
+ * The per-tx threshold lives inside the policy (`perTxThreshold`); to change
+ * it, ship a full Policy variant. "Whole-policy replacement" semantics match
+ * how `daily_limit` already works.
+ */
+export type SettingsField =
+  | { kind: "Percents"; percents: [number, number, number] }
+  | { kind: "Policy"; policy: SpendPolicyShape };
+
+/** Encode a single SettingsField variant as an ScVal. Soroban enum-with-data
+ *  serialises as `scvVec([symbol, payload])`. */
+export function settingsFieldScVal(field: SettingsField): xdr.ScVal {
+  switch (field.kind) {
+    case "Percents":
+      return xdr.ScVal.scvVec([
+        xdr.ScVal.scvSymbol("Percents"),
+        percentsScVal(field.percents),
+      ]);
+    case "Policy":
+      return xdr.ScVal.scvVec([
+        xdr.ScVal.scvSymbol("Policy"),
+        spendPolicyScVal(field.policy),
+      ]);
+  }
+}
+
+/** Single ScVal arg for `apply_settings(updates: Vec<SettingsField>)`. */
+export function settingsFieldsArg(fields: SettingsField[]): xdr.ScVal {
+  return xdr.ScVal.scvVec(fields.map(settingsFieldScVal));
 }
 
 /**

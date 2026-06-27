@@ -9,7 +9,7 @@ import {
   splitsEqual,
   toSplit,
 } from "@/components/sobre/SplitEditor";
-import { useSetEnvelopes } from "@/hooks/useSetEnvelopes";
+import { useApplySettings } from "@/hooks/useApplySettings";
 
 function ReadOnly({
   percents,
@@ -36,26 +36,28 @@ function ReadOnly({
   );
 }
 
+/**
+ * Admin saves an envelope-split change as a pending intent in Supabase
+ * (Pattern A). The on-chain commit happens later via the PendingSettingsPill
+ * "Commit now" button or by stacking with the next admin chain action.
+ */
 export function EnvelopeSplitForm({
   userAddress,
-  contractId,
+  familyWalletId,
   isAdmin,
   current,
   envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
-  contractId: string;
+  familyWalletId: string | null;
   isAdmin: boolean;
   current: number[];
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const [split, setSplit] = useState(() => toSplit(current));
-  const { setEnvelopes, pending, error } = useSetEnvelopes(
-    userAddress,
-    contractId,
-  );
+  const { stageIntent, pending, error } = useApplySettings(userAddress);
 
   // Hash by the underlying values so the upstream poll's identity churn
   // doesn't clobber an in-progress edit every 3s.
@@ -74,9 +76,9 @@ export function EnvelopeSplitForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || !dirty) return;
+    if (!valid || !dirty || !familyWalletId) return;
     try {
-      await setEnvelopes(split);
+      await stageIntent(familyWalletId, { percents: split });
       onSuccess();
     } catch {
       /* surfaced via hook error */
@@ -86,7 +88,8 @@ export function EnvelopeSplitForm({
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
-        Changes apply to future deposits. Existing balances stay put.
+        Changes apply to future deposits. Existing balances stay put. Saves
+        instantly; commit to chain via the pending pill at the top.
       </p>
       <SplitEditor
         value={split}
@@ -97,13 +100,17 @@ export function EnvelopeSplitForm({
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending || !valid || !dirty}
+          disabled={pending || !valid || !dirty || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{
             padding: "12px 18px",
             fontSize: 14,
-            opacity: pending || !valid || !dirty ? 0.5 : 1,
-            cursor: pending || !valid || !dirty ? "not-allowed" : "pointer",
+            opacity:
+              pending || !valid || !dirty || !familyWalletId ? 0.5 : 1,
+            cursor:
+              pending || !valid || !dirty || !familyWalletId
+                ? "not-allowed"
+                : "pointer",
           }}
         >
           {pending ? "Saving…" : "Save split"}

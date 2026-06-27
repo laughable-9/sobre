@@ -76,3 +76,27 @@ export async function requireFamilyMember(
   }
   return ctx;
 }
+
+/** Tighter form of `requireFamilyMember` that also gates on the admin role.
+ *  Use from routes that mutate family-scoped settings (e.g. /api/settings). */
+export async function requireFamilyAdmin(
+  familyWalletId: string,
+): Promise<FamilyMemberContext | NextResponse> {
+  const ctx = await requireWallet();
+  if (ctx instanceof NextResponse) return ctx;
+
+  const admin = getSupabaseAdmin();
+  const { data: membership } = await admin
+    .from("family_members")
+    .select("role")
+    .eq("family_wallet_id", familyWalletId)
+    .eq("wallet_id", ctx.memberId)
+    .maybeSingle();
+  if (!membership || (membership as { role: string }).role !== "admin") {
+    return NextResponse.json(
+      { error: "Only the admin of this family can perform this action." },
+      { status: 403 },
+    );
+  }
+  return ctx;
+}

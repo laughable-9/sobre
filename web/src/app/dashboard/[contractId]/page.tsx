@@ -8,6 +8,7 @@ import { AlertTriangle, ChevronLeft, Plus, UserPlus } from "lucide-react";
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
+import { PendingSettingsPill } from "@/components/PendingSettingsPill";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
@@ -73,6 +74,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   const walletState = useWalletState(address, contractId);
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
+  const familyWalletId = walletState.familyWalletId;
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -560,6 +562,13 @@ function Dashboard({ contractId }: { contractId: string }) {
           isAdmin={isAdmin}
           onSuccess={refreshAll}
         />
+        <PendingSettingsPill
+          userAddress={address}
+          familyWalletId={familyWalletId}
+          contractId={contractId}
+          isAdmin={isAdmin}
+          onCommitted={refresh}
+        />
         <div
           className="grid gap-5"
           style={{
@@ -571,7 +580,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Spending policy</h3>
             <PolicySettingsForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.policy}
               envelopeNames={state.envelope_names}
@@ -583,7 +592,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Envelope names</h3>
             <EnvelopeNamesForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.envelope_names}
               onSuccess={refresh}
@@ -594,7 +603,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Envelope split</h3>
             <EnvelopeSplitForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.percents}
               envelopeNames={state.envelope_names}
