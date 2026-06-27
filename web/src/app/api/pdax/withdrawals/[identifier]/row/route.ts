@@ -26,7 +26,7 @@ export async function GET(
   const { data: row } = await admin
     .from("pdax_withdrawals")
     .select(
-      "identifier, envelope, amount_usdc, amount_php, status, failure_reason, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number, family_wallet_id",
+      "identifier, envelope, amount_usdc, amount_php, status, failure_reason, beneficiary_bank_code, beneficiary_account_name, beneficiary_account_number, family_wallet_id, member_id",
     )
     .eq("identifier", identifier)
     .single();
@@ -44,12 +44,20 @@ export async function GET(
     beneficiary_account_name: string;
     beneficiary_account_number: string;
     family_wallet_id: string;
+    member_id: string;
   };
 
   // Either a member OR sub-account holder of this family. The modal hydrates
   // its row on resume regardless of source; both flows go through this route.
   const membership = await requireFamilyParticipant(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
+
+  // Family-scope auth admits peers; the row carries bank PII so also gate
+  // ownership. Without this any family participant could read another
+  // member's bank account by guessing the identifier.
+  if (r.member_id !== membership.memberId) {
+    return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
+  }
 
   return NextResponse.json({
     cashout: {

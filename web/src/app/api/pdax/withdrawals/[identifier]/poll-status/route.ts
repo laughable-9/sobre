@@ -86,6 +86,13 @@ export async function GET(
   const membership = await requireFamilyParticipant(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
 
+  // Family-scope auth admits peers; gate ownership too so a peer can't
+  // drive another participant's state machine (or trigger PDAX-side
+  // side-effects against rows they don't own).
+  if (r.member_id !== membership.memberId) {
+    return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
+  }
+
   if (r.status === "paid" || r.status === "failed") {
     return NextResponse.json({ ok: true, status: r.status, noChange: true });
   }

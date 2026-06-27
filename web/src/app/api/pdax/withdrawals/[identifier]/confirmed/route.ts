@@ -57,7 +57,7 @@ export async function POST(
   // check ran. Now: row lookup → membership check → atomic flip.
   const { data: existing } = await admin
     .from("pdax_withdrawals")
-    .select("family_wallet_id, status")
+    .select("family_wallet_id, status, member_id")
     .eq("identifier", identifier)
     .single();
   if (!existing) {
@@ -66,12 +66,24 @@ export async function POST(
       { status: 404 },
     );
   }
-  const ex = existing as { family_wallet_id: string; status: string };
+  const ex = existing as {
+    family_wallet_id: string;
+    status: string;
+    member_id: string;
+  };
   // Either a member OR the sub-account holder can confirm their own
   // cashout — family_wallet_id gates by family, and the row's member_id
   // (set at /fiat/withdraw insert time) is the on-chain spender either way.
   const membership = await requireFamilyParticipant(ex.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
+
+  // Family-scope auth admits peers; gate ownership too so a peer can't
+  // poison another member's pending cashout by flipping it to spent with
+  // attacker-supplied tx hashes (the legitimate owner's modal then sits in
+  // awaiting forever because no relay payment ever lands).
+  if (ex.member_id !== membership.memberId) {
+    return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
+  }
 
   // Now safe to mutate. Atomic claim still guards against double-fires:
   // a row past 'pending' returns 0 rows and we surface its current

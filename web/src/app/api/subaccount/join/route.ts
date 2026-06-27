@@ -170,7 +170,7 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: updateErr } = await admin
+  const { data: claimed, error: updateErr } = await admin
     .from("family_subaccounts")
     .update({
       wallet_id: ctx.memberId,
@@ -182,11 +182,37 @@ export async function POST(req: Request) {
       wallet_address: ctx.contractId,
     })
     .eq("id", r.id)
-    .is("wallet_id", null);
+    .is("wallet_id", null)
+    .select("id");
   if (updateErr) {
     return NextResponse.json(
       { error: `Claim failed: ${updateErr.message}` },
       { status: 500 },
+    );
+  }
+
+  // Concurrency guard: two parallel POSTs both pass the wallet_id-null
+  // check at lookup time, only one wins the atomic UPDATE. Without a
+  // 0-row signal the loser returns 200 with the WINNER's row id —
+  // legitimate-looking success that left wallet_id linked to the
+  // wrong wallet. Re-read to see who actually owns the row now.
+  if (!claimed?.length) {
+    const { data: now } = await admin
+      .from("family_subaccounts")
+      .select("wallet_id")
+      .eq("id", r.id)
+      .single();
+    const owner = (now as { wallet_id: string | null } | null)?.wallet_id;
+    if (owner === ctx.memberId) {
+      // We won an earlier race; idempotent success.
+      return NextResponse.json({
+        family_subaccount_id: r.id,
+        family_wallet_id: r.family_wallet_id,
+      });
+    }
+    return NextResponse.json(
+      { error: "This invite has already been claimed by another wallet." },
+      { status: 409 },
     );
   }
 

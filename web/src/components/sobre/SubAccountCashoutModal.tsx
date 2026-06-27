@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
@@ -143,12 +143,30 @@ export function SubAccountCashoutModal({
     phase === "awaiting",
   );
 
+  // Mirror onSuccess into a ref so the row-watcher effect doesn't need it
+  // in deps. Without this, an inline-arrow onSuccess in the parent (the
+  // typical pattern) re-creates the function every render, the effect
+  // re-runs after status='paid', and onSuccess (with its toast + refresh)
+  // fires multiple times.
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  // Guard against re-firing onSuccess if the row stays at 'paid' across
+  // re-renders (Supabase row identity changes, even when the value
+  // doesn't).
+  const successFiredRef = useRef(false);
+
   // Watch the row through the backend pipeline.
   useEffect(() => {
     if (!row) return;
     if (row.status === "paid") {
       setPhase("success");
-      onSuccess(row.amount_php ?? 0);
+      if (!successFiredRef.current) {
+        successFiredRef.current = true;
+        onSuccessRef.current(row.amount_php ?? 0);
+      }
     } else if (row.status === "failed") {
       setErrMsg(row.failure_reason ?? "Cashout failed.");
       setPhase("error");
@@ -160,7 +178,7 @@ export function SubAccountCashoutModal({
     ) {
       setPhase("awaiting");
     }
-  }, [row, onSuccess]);
+  }, [row]);
 
   // Use the live PDAX rate (when available) consistently for both the
   // balance display AND the cashout conversion. Mixing the two rates lets
@@ -254,8 +272,7 @@ export function SubAccountCashoutModal({
           <>
             <h2>Set up your bank</h2>
             <p className="sub">
-              We&apos;ll send your cashouts here. PDAX UAT supports Security
-              Bank and CTBC for now.
+              We&apos;ll send your cashouts here.
             </p>
             <form onSubmit={submitBank}>
               <div className="sobre-input-group">
@@ -430,7 +447,7 @@ export function SubAccountCashoutModal({
                 }}
               >
                 Cash out ₱
-                {validAmount ? parsedPhp.toLocaleString("en-PH") : "—"}
+                {validAmount ? parsedPhp.toLocaleString("en-PH") : "0"}
               </button>
             </div>
           </>
