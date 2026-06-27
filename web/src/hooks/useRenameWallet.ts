@@ -1,17 +1,23 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { xdr } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface UseRenameWalletResult {
-  renameWallet: (newName: string) => Promise<string>;
+  renameWallet: (newName: string) => Promise<void>;
   pending: boolean;
   error: string | null;
 }
 
-/** Admin-only. Renames the wallet (the string in the top bar both members see). */
+/**
+ * Admin-only. Renames the wallet (the string both members see in TopBar).
+ * Cosmetic — lives in Supabase only (family_wallets.display_name); never
+ * touches the chain, so renames are instant + free.
+ *
+ * RLS gates the write so even with a stolen anon key, only the admin can
+ * rename their own family.
+ */
 export function useRenameWallet(
   adminAddress: string | null,
   contractId: string | null,
@@ -20,19 +26,18 @@ export function useRenameWallet(
   const [error, setError] = useState<string | null>(null);
 
   const renameWallet = useCallback(
-    async (newName: string): Promise<string> => {
+    async (newName: string): Promise<void> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
-        const args = [xdr.ScVal.scvString(newName)];
-        const { hash } = await invokeWrite(
-          contractId,
-          "set_wallet_name",
-          args,
-        );
-        return hash;
+        const supabase = getSupabaseBrowserClient();
+        const { error: updateErr } = await supabase
+          .from("family_wallets")
+          .update({ display_name: newName })
+          .eq("contract_id", contractId);
+        if (updateErr) throw new Error(updateErr.message);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;

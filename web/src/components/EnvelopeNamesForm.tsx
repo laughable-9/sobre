@@ -30,27 +30,29 @@ function ReadOnly({ names }: { names: EnvelopeNames }) {
   );
 }
 
+/**
+ * Envelope display names live in Supabase only (family_envelope_names).
+ * Renaming is instant + free — no chain tx, no FaceID. The on-chain
+ * Envelope enum (Groceries/Tuition/Savings) keys balances regardless.
+ */
 export function EnvelopeNamesForm({
   userAddress,
-  contractId,
+  familyWalletId,
   isAdmin,
   current,
   onSuccess,
 }: {
   userAddress: string | null;
-  contractId: string;
+  familyWalletId: string | null;
   isAdmin: boolean;
   current: string[];
   onSuccess: () => void;
 }) {
   const [names, setNames] = useState<EnvelopeNames>(() => toEnvelopeNames(current));
-  const { setEnvelopeNames, pending, error } = useSetEnvelopeNames(
-    userAddress,
-    contractId,
-  );
+  const { setEnvelopeNames, pending, error } = useSetEnvelopeNames(userAddress);
 
-  // Re-sync from chain state on poll, but only when the underlying names
-  // actually change (so a 3s poll doesn't keep clobbering an in-progress edit).
+  // Re-sync from Supabase on every reload, but only when the underlying names
+  // actually change (so a poll doesn't keep clobbering an in-progress edit).
   const sig = useMemo(() => current.join("\n"), [current]);
   useEffect(() => {
     setNames(toEnvelopeNames(current));
@@ -68,14 +70,14 @@ export function EnvelopeNamesForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || !dirty) return;
+    if (!valid || !dirty || !familyWalletId) return;
     const trimmed = lockSavings([
       names[0].trim(),
       names[1].trim(),
       names[2].trim(),
     ]);
     try {
-      await setEnvelopeNames(trimmed);
+      await setEnvelopeNames(familyWalletId, trimmed);
       onSuccess();
     } catch {
       /* surfaced via hook error */
@@ -86,7 +88,7 @@ export function EnvelopeNamesForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
         Display only. Balances + pending requests stay attached to the same
-        envelope slots.
+        envelope slots. Saves instantly, no FaceID.
       </p>
       <EnvelopeNamesEditor
         value={names}
@@ -96,13 +98,17 @@ export function EnvelopeNamesForm({
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending || !valid || !dirty}
+          disabled={pending || !valid || !dirty || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{
             padding: "12px 18px",
             fontSize: 14,
-            opacity: pending || !valid || !dirty ? 0.5 : 1,
-            cursor: pending || !valid || !dirty ? "not-allowed" : "pointer",
+            opacity:
+              pending || !valid || !dirty || !familyWalletId ? 0.5 : 1,
+            cursor:
+              pending || !valid || !dirty || !familyWalletId
+                ? "not-allowed"
+                : "pointer",
           }}
         >
           {pending ? "Saving…" : "Save names"}

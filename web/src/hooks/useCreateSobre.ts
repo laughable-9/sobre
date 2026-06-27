@@ -1,10 +1,11 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Address, xdr } from "@stellar/stellar-sdk";
+import { Address } from "@stellar/stellar-sdk";
 
 import { FACTORY_CONTRACT_ID, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
-import { invokeWrite, percentsScVal, stringVecScVal } from "@/lib/contract";
+import { invokeWrite, percentsScVal } from "@/lib/contract";
+import { seedFamilyDisplay } from "@/lib/familyWallets";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface CreateSobreArgs {
@@ -24,9 +25,11 @@ export interface UseCreateSobreResult {
 /**
  * Calls SobreFactory.create_sobre to deploy + init a new per-family Sobre
  * instance in one transaction, then inserts the matching Supabase
- * `family_wallets` row. The row is what every off-chain feature
- * (PDAX deposits/withdrawals, admin display names) keys on; without it,
- * /api/pdax/* routes fail "Family wallet not found for this contract".
+ * `family_wallets` row plus seeds the cosmetic-state tables
+ * (`family_envelope_names`, admin's `family_members.name`/`.emoji`).
+ *
+ * Display fields are NOT passed on-chain; they live entirely in Supabase
+ * so a rename never costs a tx fee.
  *
  * Returns the address of the freshly-deployed SobreContract — pulled from
  * the tx's returnValue, which invokeWrite decodes during the inclusion
@@ -54,10 +57,6 @@ export function useCreateSobre(
           Address.fromString(userAddress).toScVal(),
           Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
           percentsScVal(percents),
-          stringVecScVal(envelopeNames),
-          xdr.ScVal.scvString(walletName),
-          xdr.ScVal.scvString(adminName),
-          xdr.ScVal.scvString(adminEmoji),
         ];
         const { returnValue } = await invokeWrite(
           FACTORY_CONTRACT_ID,
@@ -80,13 +79,16 @@ export function useCreateSobre(
           .eq("contract_id", userAddress)
           .single();
         if (walletRow) {
-          const { error: insertErr } = await supabase
+          const walletDbId = (walletRow as { id: string }).id;
+          const { data: familyRow, error: insertErr } = await supabase
             .from("family_wallets")
             .insert({
               contract_id: newContractId,
               display_name: walletName,
-              created_by: (walletRow as { id: string }).id,
-            });
+              created_by: walletDbId,
+            })
+            .select("id")
+            .single();
           if (insertErr) {
             // On-chain create already landed — we don't want to abort the
             // happy path on a Supabase glitch. Surface in the hook's error
@@ -94,6 +96,15 @@ export function useCreateSobre(
             setError(
               `Wallet deployed on chain but Supabase mirror failed: ${insertErr.message}`,
             );
+          } else if (familyRow) {
+            await seedFamilyDisplay({
+              supabase,
+              familyWalletId: (familyRow as { id: string }).id,
+              walletDbId,
+              adminName,
+              adminEmoji,
+              envelopeNames,
+            });
           }
         }
 

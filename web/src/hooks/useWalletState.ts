@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   BASE_FEE,
   Contract,
@@ -11,10 +11,13 @@ import {
 import { NETWORK, type EnvelopeName } from "@/lib/config";
 import { getServer, simulateSourceAccount } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
+import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 
 export interface SpendPolicy {
   require_all_sigs: boolean;
   daily_limit: bigint | null;
+  /** Per-tx approval threshold in stroops, or null for no gate. */
+  per_tx_threshold: bigint | null;
   protected_envelopes: EnvelopeName[];
 }
 
@@ -29,14 +32,18 @@ export interface PendingRequest {
 
 export interface Member {
   address: string;
+  /** From Supabase. Empty string before Supabase resolves. */
   name: string;
+  /** From Supabase. Empty string before Supabase resolves. */
   emoji: string;
 }
 
 export interface WalletState {
   admin: string;
   payment_token: string;
+  /** From Supabase (family_wallets.display_name). Empty until resolved. */
   wallet_name: string;
+  /** From Supabase (family_envelope_names). Falls back to canonical keys. */
   envelope_names: string[];
   percents: number[];
   members: Member[];
@@ -49,7 +56,19 @@ export interface UseWalletStateResult {
   state: WalletState | null;
   loading: boolean;
   error: string | null;
+  /** family_wallets.id (Supabase UUID). Convenience for callers that need it. */
+  familyWalletId: string | null;
   refresh: () => Promise<void>;
+}
+
+interface OnChainState {
+  admin: string;
+  payment_token: string;
+  percents: number[];
+  members: { address: string }[];
+  balances: bigint[];
+  policy: SpendPolicy;
+  pending: PendingRequest[];
 }
 
 /**
@@ -57,12 +76,16 @@ export interface UseWalletStateResult {
  * Short-circuits setState when the retval XDR is byte-identical to the last
  * one — keeps object references stable across no-op polls so downstream
  * useEffects (e.g. form re-sync in PolicySettingsForm) don't re-fire every 3s.
+ *
+ * Cosmetic display data (wallet name, envelope labels, member name/emoji)
+ * comes from Supabase via useFamilyDisplay; we merge it into the returned
+ * shape so consumers keep accessing `state.wallet_name` etc as before.
  */
 export function useWalletState(
   userAddress: string | null,
   contractId: string | null,
 ): UseWalletStateResult {
-  const [state, setState] = useState<WalletState | null>(null);
+  const [onChain, setOnChain] = useState<OnChainState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Bump on every fetch; only the latest call may setState. Guards against
@@ -77,6 +100,12 @@ export function useWalletState(
   // seconds after a `deposit()` lands. Tracking the high-water mark and
   // ignoring lower-ledger snapshots stops the regression.
   const lastLedgerRef = useRef<number>(0);
+
+  const display = useFamilyDisplay(contractId);
+  // Depend on the stable refresh fn, not the whole display object — that
+  // would churn every render and rebuild `refresh` (which TopBar et al.
+  // receive as a prop), forcing downstream re-renders.
+  const displayRefresh = display.refresh;
 
   const fetchState = useCallback(async () => {
     if (!userAddress || !contractId) return;
@@ -124,7 +153,7 @@ export function useWalletState(
       lastRetvalXdrRef.current = retvalXdr;
       lastLedgerRef.current = Math.max(lastLedgerRef.current, simLedger);
       const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
-      setState(normalizeWalletState(raw));
+      setOnChain(normalizeOnChainState(raw));
       setError(null);
     } catch (e) {
       if (gen !== generationRef.current) return;
@@ -139,7 +168,7 @@ export function useWalletState(
   useEffect(() => {
     lastRetvalXdrRef.current = null;
     lastLedgerRef.current = 0;
-    setState(null);
+    setOnChain(null);
     setError(null);
   }, [contractId]);
 
@@ -150,17 +179,52 @@ export function useWalletState(
     return () => clearInterval(interval);
   }, [userAddress, contractId, fetchState]);
 
-  return { state, loading, error, refresh: fetchState };
+  // Merge on-chain truth with Supabase-resident cosmetic state.
+  const state = useMemo<WalletState | null>(() => {
+    if (!onChain) return null;
+    const members: Member[] = onChain.members.map((m) => {
+      const d = display.membersByAddress.get(m.address);
+      return {
+        address: m.address,
+        name: d?.name ?? "",
+        emoji: d?.emoji ?? "",
+      };
+    });
+    return {
+      admin: onChain.admin,
+      payment_token: onChain.payment_token,
+      wallet_name: display.walletName,
+      envelope_names: display.envelopeNames,
+      percents: onChain.percents,
+      members,
+      balances: onChain.balances,
+      policy: onChain.policy,
+      pending: onChain.pending,
+    };
+  }, [onChain, display.walletName, display.envelopeNames, display.membersByAddress]);
+
+  const refresh = useCallback(async () => {
+    await fetchState();
+    await displayRefresh();
+  }, [fetchState, displayRefresh]);
+
+  return {
+    state,
+    loading,
+    error,
+    familyWalletId: display.familyWalletId,
+    refresh,
+  };
 }
 
-function normalizeWalletState(raw: Record<string, unknown>): WalletState {
+function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
   const rawPolicy = (raw.policy ?? {}) as Record<string, unknown>;
+  const optBigint = (v: unknown): bigint | null =>
+    v === undefined || v === null ? null : (v as bigint);
   const policy: SpendPolicy = {
     require_all_sigs: Boolean(rawPolicy.require_all_sigs),
-    daily_limit:
-      rawPolicy.daily_limit === undefined || rawPolicy.daily_limit === null
-        ? null
-        : (rawPolicy.daily_limit as bigint),
+    daily_limit: optBigint(rawPolicy.daily_limit),
+    per_tx_threshold: optBigint(rawPolicy.per_tx_threshold),
     protected_envelopes: Array.isArray(rawPolicy.protected_envelopes)
       ? (rawPolicy.protected_envelopes as unknown[]).map((e) =>
           envelopeNameFromScNative(e),
@@ -179,21 +243,15 @@ function normalizeWalletState(raw: Record<string, unknown>): WalletState {
       }))
     : [];
 
-  const members: Member[] = Array.isArray(raw.members)
+  const members: { address: string }[] = Array.isArray(raw.members)
     ? (raw.members as Record<string, unknown>[]).map((m) => ({
         address: String(m.address),
-        name: String(m.name ?? ""),
-        emoji: String(m.emoji ?? ""),
       }))
     : [];
 
   return {
     admin: String(raw.admin),
     payment_token: String(raw.payment_token),
-    wallet_name: String(raw.wallet_name ?? ""),
-    envelope_names: Array.isArray(raw.envelope_names)
-      ? (raw.envelope_names as unknown[]).map(String)
-      : [],
     percents: (raw.percents as number[]) ?? [],
     members,
     balances: (raw.balances as bigint[]) ?? [],

@@ -15,11 +15,13 @@ import {
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
- * Phase 5 family-wallet creation flow.
+ * Family-wallet creation flow.
  *
  *   1. Load the factory contract's spec from chain (one network round-trip).
- *   2. Build an AssembledTransaction for `create_sobre(admin, ...)` with the
- *      caller's smart wallet C-address as admin.
+ *   2. Build an AssembledTransaction for `create_sobre(admin, payment_token,
+ *      percents)` with the caller's smart wallet C-address as admin. Display
+ *      fields (wallet name, envelope names, admin display name/emoji) are NO
+ *      LONGER passed on-chain — they live in Supabase, written in step 6.
  *   3. Sign auth entries with the user's passkey via passkey-kit. The FaceID
  *      prompt fires inside this step.
  *   4. Re-simulate with the signed entries so the footprint covers the
@@ -29,9 +31,11 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  *      InvokeHostFunction op (the JS-side `op.auth` mutations don't survive
  *      `Transaction.toXDR()`), sign envelope, submit.
  *   6. Decode the new Sobre contract address from the simulation result and
- *      insert a `public.family_wallets` row. The `bootstrap_family_admin`
- *      trigger auto-inserts the matching `public.family_members` row with
- *      `role = 'admin'`.
+ *      insert a `public.family_wallets` row (carries the wallet display name).
+ *      The `bootstrap_family_admin` trigger auto-inserts the matching
+ *      `public.family_members` row with `role = 'admin'`. We then UPDATE that
+ *      row with the admin's display name + emoji, and seed the three
+ *      `family_envelope_names` rows with the chosen labels.
  *
  * Untyped indexed access on the Client is deliberate: `Client.from` returns a
  * generic Client and attaches the contract methods at runtime per the
@@ -61,10 +65,6 @@ interface CreateSobreInvocable {
     admin: string;
     payment_token: string;
     percents: number[];
-    envelope_names: string[];
-    wallet_name: string;
-    admin_name: string;
-    admin_emoji: string;
   }) => Promise<contract.AssembledTransaction<string>>;
 }
 
@@ -109,10 +109,6 @@ export async function createFamilyWallet(
       admin: args.myWalletContractId,
       payment_token: PAYMENT_TOKEN_SAC_ID,
       percents: [...args.percents],
-      envelope_names: [...args.envelopeNames],
-      wallet_name: args.walletName,
-      admin_name: args.adminName,
-      admin_emoji: args.adminEmoji,
     })) as ATWithSim<string>;
   } catch (err) {
     throw new Error(
@@ -193,11 +189,58 @@ export async function createFamilyWallet(
   if (insertErr) {
     throw new Error(`family_wallets insert failed: ${insertErr.message}`);
   }
+  const familyWalletId = row.id;
+
+  await seedFamilyDisplay({
+    supabase,
+    familyWalletId,
+    walletDbId: args.myWalletDbId,
+    adminName: args.adminName,
+    adminEmoji: args.adminEmoji,
+    envelopeNames: args.envelopeNames,
+  });
 
   return {
     familyContractId,
-    familyWalletId: row.id,
+    familyWalletId,
   };
+}
+
+/**
+ * Off-chain display seed for a freshly-created family wallet. Mirrors the
+ * post-`create_sobre` Supabase writes used by both `createFamilyWallet`
+ * (this file) and `useCreateSobre` (hook) so a future schema change lands
+ * in one place. The bootstrap_family_admin trigger has already inserted
+ * the admin's family_members row — we UPDATE it with display data and
+ * INSERT the three envelope-name rows.
+ */
+export async function seedFamilyDisplay({
+  supabase,
+  familyWalletId,
+  walletDbId,
+  adminName,
+  adminEmoji,
+  envelopeNames,
+}: {
+  supabase: ReturnType<typeof getSupabaseBrowserClient>;
+  familyWalletId: string;
+  walletDbId: string;
+  adminName: string;
+  adminEmoji: string;
+  envelopeNames: readonly [string, string, string];
+}): Promise<void> {
+  await supabase
+    .from("family_members")
+    .update({ name: adminName, emoji: adminEmoji })
+    .eq("family_wallet_id", familyWalletId)
+    .eq("wallet_id", walletDbId);
+
+  const [g, t, s] = envelopeNames;
+  await supabase.from("family_envelope_names").insert([
+    { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g },
+    { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t },
+    { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s },
+  ]);
 }
 
 /** "Kyle Pagunsan" → "The Pagunsan Family". Falls back to "Sobre Family"

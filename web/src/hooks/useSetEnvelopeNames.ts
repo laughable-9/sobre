@@ -2,34 +2,51 @@
 
 import { useCallback, useState } from "react";
 
-import { invokeWrite, stringVecScVal } from "@/lib/contract";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface UseSetEnvelopeNamesResult {
-  setEnvelopeNames: (names: [string, string, string]) => Promise<string>;
+  setEnvelopeNames: (
+    familyWalletId: string,
+    names: [string, string, string],
+  ) => Promise<void>;
   pending: boolean;
   error: string | null;
 }
 
+const KEYS = ["Groceries", "Tuition", "Savings"] as const;
+
+/**
+ * Admin-only. Renames the three envelope display labels in Supabase
+ * (family_envelope_names). Purely cosmetic — the on-chain Envelope enum
+ * (`Groceries | Tuition | Savings`) still indexes balances and policy.
+ * Renames are instant + free.
+ */
 export function useSetEnvelopeNames(
   adminAddress: string | null,
-  contractId: string | null,
 ): UseSetEnvelopeNamesResult {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const setEnvelopeNames = useCallback(
-    async (names: [string, string, string]): Promise<string> => {
+    async (
+      familyWalletId: string,
+      names: [string, string, string],
+    ): Promise<void> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
-      if (!contractId) throw new Error("No wallet selected.");
+      if (!familyWalletId) throw new Error("No family wallet id.");
       setPending(true);
       setError(null);
       try {
-        const { hash } = await invokeWrite(
-          contractId,
-          "set_envelope_names",
-          [stringVecScVal(names)],
-        );
-        return hash;
+        const supabase = getSupabaseBrowserClient();
+        const rows = names.map((display_name, i) => ({
+          family_wallet_id: familyWalletId,
+          envelope_key: KEYS[i],
+          display_name,
+        }));
+        const { error: upsertErr } = await supabase
+          .from("family_envelope_names")
+          .upsert(rows, { onConflict: "family_wallet_id,envelope_key" });
+        if (upsertErr) throw new Error(upsertErr.message);
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;
@@ -37,7 +54,7 @@ export function useSetEnvelopeNames(
         setPending(false);
       }
     },
-    [adminAddress, contractId],
+    [adminAddress],
   );
 
   return { setEnvelopeNames, pending, error };
