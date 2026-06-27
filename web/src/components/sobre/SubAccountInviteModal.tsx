@@ -71,7 +71,7 @@ export function SubAccountInviteModal({
         <h2>Open a supplementary account</h2>
         <p className="sub">
           For a family member who only needs their own spendable balance.
-          They get a stripped view of {walletName} — just their balance and
+          They get a stripped view of {walletName}. Just their balance and
           Cash out.
         </p>
 

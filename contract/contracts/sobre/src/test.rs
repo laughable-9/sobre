@@ -499,7 +499,7 @@ fn fund_subaccount_rejects_unknown_recipient() {
     f.client().fund_subaccount(
         &Envelope::Groceries,
         &nobody,
-        &(1 * STROOPS_PER_TOKEN),
+        &STROOPS_PER_TOKEN,
     );
 }
 
@@ -557,7 +557,7 @@ fn spend_from_subaccount_rejects_when_locked() {
     f.client().lock_subaccount(&kid);
     f.client().spend_from_subaccount(
         &kid,
-        &(1 * STROOPS_PER_TOKEN),
+        &STROOPS_PER_TOKEN,
         &String::from_str(&f.env, "denied"),
     );
 }
@@ -568,7 +568,7 @@ fn spend_from_subaccount_rejects_insufficient_balance() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client().spend_from_subaccount(
         &kid,
-        &(1 * STROOPS_PER_TOKEN),
+        &STROOPS_PER_TOKEN,
         &String::from_str(&f.env, "broke"),
     );
 }
@@ -580,7 +580,7 @@ fn spend_from_subaccount_rejects_non_subaccount() {
     let stranger = Address::generate(&f.env);
     f.client().spend_from_subaccount(
         &stranger,
-        &(1 * STROOPS_PER_TOKEN),
+        &STROOPS_PER_TOKEN,
         &String::from_str(&f.env, "outsider"),
     );
 }

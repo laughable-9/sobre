@@ -623,7 +623,7 @@ function SendSubAccountModal({
           >
             {pending
               ? "Sending…"
-              : `Send ₱${validAmount ? parsed.toLocaleString("en-PH") : "—"}`}
+              : `Send ₱${validAmount ? parsed.toLocaleString("en-PH") : "0"}`}
           </button>
         </div>
       </div>
