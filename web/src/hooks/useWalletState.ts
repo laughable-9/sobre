@@ -19,6 +19,10 @@ export interface Member {
   /** Supabase `wallets.id` — handy when a downstream mutation needs to
    *  reference the member's row without a fresh contract_id → id lookup. */
   walletDbId: string | null;
+  /** Family role from Supabase `family_members.role`. Defaults to
+   *  "recipient" when no display row exists yet so a freshly-joined member
+   *  doesn't accidentally count as an admin. */
+  role: "admin" | "recipient";
 }
 
 export interface SubAccount {
@@ -46,6 +50,13 @@ export interface WalletState {
   subaccounts: SubAccount[];
   /** Family policy (Supabase). Frontend gates spends against this. */
   policy: SpendPolicyShape;
+  /** Savings-envelope all-admins lock (Supabase). Routes Savings spends +
+   *  sub-account funds to a pending request when on AND the family has more
+   *  than one admin. */
+  savings_lock_all_admins: boolean;
+  /** Count of family_members with role='admin' for this family. Read live by
+   *  the relay route at release-time; surfaced here for UI gating. */
+  admin_count: number;
 }
 
 export interface UseWalletStateResult {
@@ -148,13 +159,17 @@ export function useWalletState(
 
   const state = useMemo<WalletState | null>(() => {
     if (!onChain) return null;
+    let adminCount = 0;
     const members: Member[] = onChain.members.map((m) => {
       const d = display.membersByAddress.get(m.address);
+      const role = d?.role ?? "recipient";
+      if (role === "admin") adminCount += 1;
       return {
         address: m.address,
         name: d?.name ?? "",
         emoji: d?.emoji ?? "",
         walletDbId: d?.walletDbId ?? null,
+        role,
       };
     });
     return {
@@ -167,6 +182,8 @@ export function useWalletState(
       balances: onChain.balances,
       subaccounts: onChain.subaccounts,
       policy: display.policy,
+      savings_lock_all_admins: display.savingsLockAllAdmins,
+      admin_count: adminCount,
     };
   }, [
     onChain,
@@ -174,6 +191,7 @@ export function useWalletState(
     display.envelopeNames,
     display.percents,
     display.policy,
+    display.savingsLockAllAdmins,
     display.membersByAddress,
   ]);
 

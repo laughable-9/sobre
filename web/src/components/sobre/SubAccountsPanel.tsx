@@ -11,6 +11,7 @@ import {
   UserPlus,
 } from "lucide-react";
 
+import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
 import { useFundSubaccount } from "@/hooks/useFundSubaccount";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import { useToggleSubaccountLock } from "@/hooks/useToggleSubaccountLock";
@@ -24,6 +25,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { routeSpend } from "@/lib/policy";
 import { backdropClose } from "@/lib/ui";
 
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
@@ -158,8 +160,8 @@ export function SubAccountsPanel({
       {sendTarget && sendTarget.chain && sendTarget.row.walletAddress ? (
         <SendSubAccountModal
           target={sendTarget}
-          balances={state.balances}
-          envelopeNames={state.envelope_names}
+          state={state}
+          familyWalletId={familyWalletId}
           userAddress={userAddress}
           contractId={contractId}
           onClose={() => setSendTarget(null)}
@@ -458,8 +460,8 @@ function SubCard({
 
 interface SendModalProps {
   target: MergedSub;
-  balances: bigint[];
-  envelopeNames: string[];
+  state: WalletState;
+  familyWalletId: string | null;
   userAddress: string;
   contractId: string;
   onClose: () => void;
@@ -469,17 +471,34 @@ interface SendModalProps {
 
 function SendSubAccountModal({
   target,
-  balances,
-  envelopeNames,
+  state,
+  familyWalletId,
   userAddress,
   contractId,
   onClose,
   onSuccess,
   onFlash,
 }: SendModalProps) {
+  const balances = state.balances;
+  const envelopeNames = state.envelope_names;
   const [envelope, setEnvelope] = useState<EnvelopeName>("Groceries");
   const [amount, setAmount] = useState<string>("500");
-  const { fund, pending, error } = useFundSubaccount(userAddress, contractId);
+  const { fund, pending: fundPending, error: fundError } = useFundSubaccount(
+    userAddress,
+    contractId,
+  );
+  // Admin's own wallet UUID. They are the originator of any pending
+  // request created here. Used to auto-record their approval at
+  // create-time so the 1-of-N count starts at 1.
+  const adminWalletDbId =
+    state.members.find((m) => m.address === userAddress)?.walletDbId ?? null;
+  const {
+    create: createPending,
+    pending: pendingPending,
+    error: pendingError,
+  } = useCreatePendingRequest(userAddress, adminWalletDbId);
+  const pending = fundPending || pendingPending;
+  const error = fundError ?? pendingError;
 
   const recipient = target.row.walletAddress!;
   const parsed = Number(amount);
@@ -491,18 +510,60 @@ function SendSubAccountModal({
 
   const ok = validAmount && parsed <= envelopeBalancePhp;
 
+  // Funding a sub-account FROM Savings IS a Savings withdrawal. Route the
+  // decision through the same spec the spend modal reads. Daily limits and
+  // per-tx threshold don't apply to admin-initiated sub-account top-ups, so
+  // we pass `dailySpent: 0`; the Savings-lock branch sits before the admin
+  // bypass in routeSpend specifically so admin-as-originator still routes
+  // to pending.
+  const stroopsRequested = validAmount
+    ? BigInt(Math.round((parsed / PHP_PER_USDC) * STROOPS_PER_USDC))
+    : 0n;
+  const verdict = routeSpend({
+    policy: state.policy,
+    caller: userAddress,
+    admin: state.admin,
+    envelope,
+    amountStroops: stroopsRequested,
+    dailySpentStroops: 0n,
+    envelopeBalanceStroops: balances[envelopeIndex] ?? 0n,
+    savingsLockAllAdmins: state.savings_lock_all_admins,
+    adminCount: state.admin_count,
+  });
+  const willGoPending = verdict.route === "pending";
+  // Same reason as in SpendModal: 0 admins means Supabase join hasn't
+  // resolved yet, so the verdict could mis-route. Disable submit until
+  // it does.
+  const familyNotReady = state.admin_count === 0;
+
   const handleSend = async () => {
-    if (!ok) return;
+    if (!ok || stroopsRequested <= 0n || familyNotReady) return;
     try {
-      const usdc = parsed / PHP_PER_USDC;
-      const stroops = BigInt(Math.round(usdc * STROOPS_PER_USDC));
-      await fund(envelope, recipient, stroops);
-      onFlash(
-        `Sent ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} to ${target.row.displayName}`,
-      );
+      if (willGoPending) {
+        if (!familyWalletId) {
+          throw new Error("Family record not loaded yet. Try again.");
+        }
+        await createPending({
+          familyWalletId,
+          envelope,
+          amountStroops: stroopsRequested,
+          memo: `Top up ${target.row.displayName}`,
+          approvalMode: verdict.approvalMode,
+          kind: "subaccount_fund",
+          recipientAddress: recipient,
+        });
+        onFlash(
+          `Requested ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} for ${target.row.displayName}. Waiting on the other admins.`,
+        );
+      } else {
+        await fund(envelope, recipient, stroopsRequested);
+        onFlash(
+          `Sent ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} to ${target.row.displayName}`,
+        );
+      }
       onSuccess();
     } catch {
-      // surfaced via the fund hook error state
+      // surfaced via the hook error states above
     }
   };
 
@@ -519,6 +580,23 @@ function SendSubAccountModal({
         <p className="sub">
           Money leaves an envelope and lands in their spendable balance.
         </p>
+
+        {willGoPending ? (
+          <div
+            className="text-xs"
+            style={{
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: "var(--surface-alt)",
+              border: "1px solid var(--border)",
+              color: "var(--text-2)",
+              marginBottom: 12,
+            }}
+          >
+            Savings is locked. This will create a top-up request that every
+            admin must approve.
+          </div>
+        ) : null}
 
         <div className="sobre-input-group">
           <label>Envelope</label>
@@ -617,13 +695,16 @@ function SendSubAccountModal({
           <button
             type="button"
             onClick={handleSend}
-            disabled={!ok || pending}
+            disabled={!ok || pending || familyNotReady}
             className="sobre-btn sobre-btn-primary"
-            style={{ opacity: !ok || pending ? 0.55 : 1 }}
+            style={{ opacity: !ok || pending || familyNotReady ? 0.55 : 1 }}
           >
-            {pending
-              ? "Sending…"
-              : `Send ₱${validAmount ? parsed.toLocaleString("en-PH") : "0"}`}
+            {(() => {
+              const verb = willGoPending ? "Request" : "Send";
+              if (familyNotReady) return "Loading family rules…";
+              if (pending) return `${verb}ing…`;
+              return `${verb} ₱${validAmount ? parsed.toLocaleString("en-PH") : "0"}`;
+            })()}
           </button>
         </div>
       </div>

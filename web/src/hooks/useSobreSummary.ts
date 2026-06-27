@@ -56,6 +56,7 @@ export function useSobreSummary(
               name: String(m.name ?? ""),
               emoji: String(m.emoji ?? ""),
               walletDbId: null,
+              role: "recipient",
             }))
           : [];
         const balances = (raw.balances as bigint[] | undefined) ?? [];

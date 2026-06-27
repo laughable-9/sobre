@@ -23,9 +23,11 @@ const ALWAYS_PROTECTED: readonly EnvelopeName[] = [SAVINGS_NAME];
 
 function PolicyReadOnly({
   current,
+  savingsLockAllAdmins,
   envelopeNames,
 }: {
   current: SpendPolicyShape;
+  savingsLockAllAdmins: boolean;
   envelopeNames: string[];
 }) {
   const protectedLabel =
@@ -47,6 +49,10 @@ function PolicyReadOnly({
       <Row
         label="Approval required above"
         value={formatPhpInt(current.perTxThreshold)}
+      />
+      <Row
+        label="Savings envelope locked"
+        value={savingsLockAllAdmins ? "Yes" : "No"}
       />
       <Row label="Envelopes requiring approval" value={protectedLabel} />
       <p className="text-xs pt-1" style={{ color: "var(--text-3)" }}>
@@ -91,6 +97,8 @@ export function PolicySettingsForm({
   familyWalletId,
   isAdmin,
   current,
+  savingsLockAllAdmins: currentSavingsLock,
+  adminCount,
   envelopeNames,
   onSuccess,
 }: {
@@ -98,6 +106,8 @@ export function PolicySettingsForm({
   familyWalletId: string | null;
   isAdmin: boolean;
   current: SpendPolicyShape;
+  savingsLockAllAdmins: boolean;
+  adminCount: number;
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
@@ -113,29 +123,34 @@ export function PolicySettingsForm({
       : stroopsToPhpString(current.perTxThreshold, "PHP"),
   );
   const [requireAllSigs, setRequireAllSigs] = useState(current.requireAllSigs);
+  const [savingsLock, setSavingsLock] = useState(currentSavingsLock);
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
     () => new Set(current.protectedEnvelopes),
   );
 
   const mutation = useCallback(
-    async (nextPolicy: SpendPolicyShape) => {
+    async (next: {
+      policy: SpendPolicyShape;
+      savingsLockAllAdmins: boolean;
+    }) => {
       if (!familyWalletId) throw new Error("No family wallet id.");
       const supabase = getSupabaseBrowserClient();
       const { data, error: updateErr } = await supabase
         .from("family_wallets")
         .update({
           policy_json: {
-            require_all_sigs: nextPolicy.requireAllSigs,
+            require_all_sigs: next.policy.requireAllSigs,
             daily_limit_stroops:
-              nextPolicy.dailyLimit === null
+              next.policy.dailyLimit === null
                 ? null
-                : nextPolicy.dailyLimit.toString(),
+                : next.policy.dailyLimit.toString(),
             per_tx_threshold_stroops:
-              nextPolicy.perTxThreshold === null
+              next.policy.perTxThreshold === null
                 ? null
-                : nextPolicy.perTxThreshold.toString(),
-            protected_envelopes: nextPolicy.protectedEnvelopes,
+                : next.policy.perTxThreshold.toString(),
+            protected_envelopes: next.policy.protectedEnvelopes,
           },
+          savings_lock_all_admins: next.savingsLockAllAdmins,
         })
         .eq("id", familyWalletId)
         .select("id")
@@ -157,8 +172,8 @@ export function PolicySettingsForm({
         ...current.protectedEnvelopes,
       ]
         .sort()
-        .join(",")}`,
-    [current],
+        .join(",")}|${currentSavingsLock}`,
+    [current, currentSavingsLock],
   );
 
   useEffect(() => {
@@ -174,6 +189,7 @@ export function PolicySettingsForm({
         : stroopsToPhpString(current.perTxThreshold, unit),
     );
     setProtectedSet(new Set(current.protectedEnvelopes));
+    setSavingsLock(currentSavingsLock);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policySig]);
 
@@ -186,7 +202,13 @@ export function PolicySettingsForm({
 
   if (!userAddress) return null;
   if (!isAdmin)
-    return <PolicyReadOnly current={current} envelopeNames={envelopeNames} />;
+    return (
+      <PolicyReadOnly
+        current={current}
+        savingsLockAllAdmins={currentSavingsLock}
+        envelopeNames={envelopeNames}
+      />
+    );
 
   const toggle = (e: EnvelopeName) => {
     if (requireAllSigs) return;
@@ -214,10 +236,13 @@ export function PolicySettingsForm({
     const perTxThreshold = inputToStroops(thresholdInput);
     try {
       await savePolicy({
-        requireAllSigs,
-        dailyLimit,
-        perTxThreshold,
-        protectedEnvelopes: Array.from(effectiveProtected),
+        policy: {
+          requireAllSigs,
+          dailyLimit,
+          perTxThreshold,
+          protectedEnvelopes: Array.from(effectiveProtected),
+        },
+        savingsLockAllAdmins: savingsLock,
       });
       onSuccess();
     } catch {
@@ -280,6 +305,35 @@ export function PolicySettingsForm({
           Admin spends always bypass.
         </p>
       </div>
+
+      <label
+        className={`flex items-start gap-2.5 ${
+          adminCount <= 1 ? "cursor-not-allowed" : "cursor-pointer"
+        }`}
+        style={adminCount <= 1 ? { opacity: 0.5 } : undefined}
+        title={
+          adminCount <= 1
+            ? "Add a second admin to activate the Savings lock."
+            : undefined
+        }
+      >
+        <input
+          type="checkbox"
+          checked={savingsLock}
+          onChange={(e) => setSavingsLock(e.target.checked)}
+          disabled={saving || adminCount <= 1}
+          className="w-4 h-4 mt-0.5 accent-[var(--sobre-primary)]"
+        />
+        <span className="flex flex-col gap-0.5">
+          <span style={{ color: "var(--text-1)" }}>
+            Lock the Savings envelope
+          </span>
+          <span className="text-xs" style={{ color: "var(--text-3)" }}>
+            Every admin must approve before money leaves Savings. Admins
+            included.
+          </span>
+        </span>
+      </label>
 
       <label className="flex items-center gap-2.5 cursor-pointer">
         <input

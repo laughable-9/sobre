@@ -579,6 +579,8 @@ function Dashboard({ contractId }: { contractId: string }) {
                 isAdmin={isAdmin}
                 pending={pendingRequests.pending}
                 members={state.members}
+                subaccounts={state.subaccounts}
+                adminCount={state.admin_count}
                 envelopeNames={state.envelope_names}
                 onSuccess={refreshAll}
               />
@@ -714,6 +716,8 @@ function Dashboard({ contractId }: { contractId: string }) {
               familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.policy}
+              savingsLockAllAdmins={state.savings_lock_all_admins}
+              adminCount={state.admin_count}
               envelopeNames={state.envelope_names}
               onSuccess={() => {
                 refresh();

@@ -90,7 +90,7 @@ export function SpendModal({
 
   // Canonical "where does this spend land" verdict lives in lib/policy.ts
   // so envelope card previews + future surfaces share the spec.
-  const route = routeSpend({
+  const verdict = routeSpend({
     policy: state.policy,
     caller: userAddress,
     admin: state.admin,
@@ -98,9 +98,13 @@ export function SpendModal({
     amountStroops: stroopsRequested,
     dailySpentStroops: dailySpent,
     envelopeBalanceStroops: balanceStroops,
+    savingsLockAllAdmins: state.savings_lock_all_admins,
+    adminCount: state.admin_count,
   });
-  const overspend = route === "overspend";
-  const willGoPending = route === "pending";
+  const overspend = verdict.route === "overspend";
+  const willGoPending = verdict.route === "pending";
+  const savingsLockTriggered =
+    willGoPending && verdict.approvalMode === "all_admins";
   // Surfaced in the warning bar so the user can see WHICH gate routed
   // their spend. routeSpend collapses these into one verdict; we still
   // pull the underlying fields to compose human-readable copy.
@@ -112,8 +116,14 @@ export function SpendModal({
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
+  // Every real family has at least one admin. A zero count means the
+  // Supabase membership join hasn't resolved yet on first paint; routing
+  // the spend during this window could mis-classify a Savings lock as
+  // "no lock, only one admin" and let it bypass the gate.
+  const familyNotReady = state.admin_count === 0;
+
   const handleSubmit = async () => {
-    if (php <= 0 || overspend) return;
+    if (php <= 0 || overspend || familyNotReady) return;
     try {
       if (willGoPending) {
         if (!familyWalletId) {
@@ -124,6 +134,7 @@ export function SpendModal({
           envelope,
           amountStroops: stroopsRequested,
           memo,
+          approvalMode: verdict.approvalMode,
         });
       } else {
         await spend(envelope, stroopsRequested, memo);
@@ -139,6 +150,21 @@ export function SpendModal({
   };
 
   const isSavings = envelope === "Savings";
+
+  // Compose the pending-route copy in one place so the JSX isn't four
+  // nested ternaries deep.
+  let pendingReason = "";
+  let pendingTail = "Admin reviews the request before the funds move.";
+  if (savingsLockTriggered) {
+    pendingReason = `${displayName} is locked. Every admin must approve before money leaves.`;
+    pendingTail = "It moves once every admin has signed off.";
+  } else if (requireAllSigs) {
+    pendingReason = "All non-admin spends need admin approval right now.";
+  } else if (envProtected) {
+    pendingReason = `${displayName} is admin-protected.`;
+  } else {
+    pendingReason = `Spending ${formatPhpInt(stroopsRequested)} would put you over today's ${formatPhpInt(dailyLimitStroops)} limit (already spent ${formatPhpLocale(dailySpent)} today), so this spend needs admin approval.`;
+  }
 
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
@@ -177,12 +203,7 @@ export function SpendModal({
             <AlertTriangle size={16} strokeWidth={2.2} />
             <div>
               <b>This will create a withdrawal request, not a direct spend.</b>{" "}
-              {requireAllSigs
-                ? "All non-admin spends need admin approval right now."
-                : envProtected
-                  ? `${displayName} is admin-protected.`
-                  : `Spending ${formatPhpInt(stroopsRequested)} would put you over today's ${formatPhpInt(dailyLimitStroops)} limit (already spent ${formatPhpLocale(dailySpent)} today), so this spend needs admin approval.`}{" "}
-              Admin reviews the request before the funds move.
+              {pendingReason} {pendingTail}
             </div>
           </div>
         ) : null}
@@ -331,18 +352,20 @@ export function SpendModal({
           <button
             className="sobre-btn sobre-btn-primary"
             onClick={() => void handleSubmit()}
-            disabled={!php || overspend || pending}
+            disabled={!php || overspend || pending || familyNotReady}
             style={
-              !php || overspend || pending
+              !php || overspend || pending || familyNotReady
                 ? { opacity: 0.5, cursor: "not-allowed" }
                 : {}
             }
           >
             {pending
               ? "Submitting…"
-              : willGoPending
-                ? "Request withdrawal"
-                : "Confirm spend"}
+              : familyNotReady
+                ? "Loading family rules…"
+                : willGoPending
+                  ? "Request withdrawal"
+                  : "Confirm spend"}
           </button>
         </div>
       </div>
