@@ -21,7 +21,12 @@ import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
 import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SpendModal } from "@/components/sobre/SpendModal";
-import { SummaryCard } from "@/components/sobre/SummaryCard";
+import { SubAccountsPanel } from "@/components/sobre/SubAccountsPanel";
+import { SubAccountView } from "@/components/sobre/SubAccountView";
+import {
+  SummaryCard,
+  type SubaccountSummary,
+} from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
 import type { Member } from "@/hooks/useWalletState";
 
@@ -30,6 +35,7 @@ import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { usePendingSpendRequests } from "@/hooks/usePendingSpendRequests";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
+import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
@@ -42,8 +48,9 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { PHP_PER_USDC } from "@/lib/config";
 
-type Tab = "envelopes" | "settings";
+type Tab = "envelopes" | "subaccounts" | "settings";
 const SETTINGS_HASH = "#settings";
+const SUBACCOUNTS_HASH = "#subaccounts";
 
 interface RouteParams {
   contractId: string;
@@ -76,6 +83,8 @@ function Dashboard({ contractId }: { contractId: string }) {
   const state = walletState.state;
   const familyWalletId = walletState.familyWalletId;
   const pendingRequests = usePendingSpendRequests(familyWalletId);
+  const subaccountsHook = useSubaccounts(familyWalletId);
+  const subRows = subaccountsHook.subaccounts;
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -88,6 +97,11 @@ function Dashboard({ contractId }: { contractId: string }) {
   const isAdmin = Boolean(state && address && state.admin === address);
   const isMember = Boolean(
     state && address && state.members.some((m) => m.address === address),
+  );
+  const isSubaccount = Boolean(
+    state &&
+      address &&
+      state.subaccounts.some((s) => s.address === address),
   );
 
   // Kicked-member cleanup: when state has loaded and confirms this address
@@ -110,11 +124,20 @@ function Dashboard({ contractId }: { contractId: string }) {
   // filter out the in-modal row from the PENDING bucket in the activity
   // feed so the same deposit doesn't render in two places at once.
   const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
-  const activeDeposits = useActiveDeposits(contractId);
+  // Sub-account holders aren't family_members; the active deposits/cashouts
+  // routes 403 their session every poll cycle. Pass null in that branch so
+  // the hooks idle (they already handle null gracefully) instead of
+  // spraying the console with rejected requests. Also gated on `state` —
+  // until walletState's first poll lands we can't yet tell whether the
+  // caller is a sub-account, and firing the hooks pre-emptively burns one
+  // round of 403s on every JR refresh.
+  const memberSideContractId =
+    state && !isSubaccount ? contractId : null;
+  const activeDeposits = useActiveDeposits(memberSideContractId);
   const [cashoutOpen, setCashoutOpen] = useState(false);
   const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
   const [activeCashoutId, setActiveCashoutId] = useState<string | null>(null);
-  const activeCashouts = useActiveCashouts(contractId, {
+  const activeCashouts = useActiveCashouts(memberSideContractId, {
     // Fires whenever a cashout the dashboard was tracking drops off the
     // active list because it hit `paid`. The modal's onSuccess only
     // fires while the modal is open; this covers the close-and-walk-
@@ -142,8 +165,11 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [tab, setTab] = useState<Tab>("envelopes");
   // Hash-sync the tab so refresh + back-button keep the user where they were.
   useEffect(() => {
-    const fromHash = (): Tab =>
-      window.location.hash === SETTINGS_HASH ? "settings" : "envelopes";
+    const fromHash = (): Tab => {
+      if (window.location.hash === SETTINGS_HASH) return "settings";
+      if (window.location.hash === SUBACCOUNTS_HASH) return "subaccounts";
+      return "envelopes";
+    };
     setTab(fromHash());
     const handler = () => setTab(fromHash());
     window.addEventListener("hashchange", handler);
@@ -152,12 +178,16 @@ function Dashboard({ contractId }: { contractId: string }) {
   const switchTab = (next: Tab) => {
     if (next === tab) return;
     setTab(next);
+    const hash =
+      next === "settings"
+        ? SETTINGS_HASH
+        : next === "subaccounts"
+          ? SUBACCOUNTS_HASH
+          : "";
     history.replaceState(
       null,
       "",
-      next === "settings"
-        ? SETTINGS_HASH
-        : window.location.pathname + window.location.search,
+      hash || window.location.pathname + window.location.search,
     );
   };
   const [celebration, setCelebration] = useState<
@@ -204,6 +234,24 @@ function Dashboard({ contractId }: { contractId: string }) {
     setTimeout(() => setHeroPulse(false), 1500);
     setTimeout(() => setEnvelopesPulsing(false), 1300);
   };
+
+  // Pre-merged sub-account display rows for the SummaryCard mini-list and
+  // any other read-only consumers. The dedicated tab's panel still merges
+  // its own (full Send / Lock / History context).
+  const subaccountSummary: SubaccountSummary[] = useMemo(() => {
+    if (!state) return [];
+    return subRows.map((row) => {
+      const chain = row.walletAddress
+        ? state.subaccounts.find((s) => s.address === row.walletAddress) ?? null
+        : null;
+      return {
+        displayName: row.displayName,
+        emoji: row.emoji,
+        locked: chain?.locked ?? false,
+        invitePending: row.invitePending,
+      };
+    });
+  }, [state, subRows]);
 
   const dailySpent = useMemo(() => {
     if (!address) return 0n;
@@ -358,6 +406,30 @@ function Dashboard({ contractId }: { contractId: string }) {
     );
   }
 
+  // ─── Sub-account view ─────────────────────────────────────────────────
+  // Stripped layout: no envelopes, no member list, no policy. Sub-account
+  // role + admin/member role are mutually exclusive on chain, so this
+  // branch fires only for kids whose wallet is in state.subaccounts.
+  if (isSubaccount) {
+    return (
+      <div className="sobre-app">
+        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
+        <SubAccountView
+          userAddress={address}
+          contractId={contractId}
+          state={state}
+          events={txFeed.events}
+          onFlash={flash}
+          onChange={refreshAll}
+        />
+        {heroPulse ? <HeroPulse /> : null}
+        {celebration ? (
+          <Celebration message={celebration.msg} kind={celebration.kind} />
+        ) : null}
+      </div>
+    );
+  }
+
   // ─── Connected but not a member of THIS Sobre ─────────────────────────
   if (!isMember) {
     return (
@@ -470,6 +542,14 @@ function Dashboard({ contractId }: { contractId: string }) {
         <button
           type="button"
           className="sobre-tab"
+          data-active={tab === "subaccounts" ? "true" : "false"}
+          onClick={() => switchTab("subaccounts")}
+        >
+          Supplementary
+        </button>
+        <button
+          type="button"
+          className="sobre-tab"
           data-active={tab === "settings" ? "true" : "false"}
           onClick={() => switchTab("settings")}
         >
@@ -487,6 +567,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           dailySpent={dailySpent}
           onKick={isAdmin ? handleKick : undefined}
           onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+          subaccounts={subaccountSummary}
+          onOpenSubaccounts={() => switchTab("subaccounts")}
         >
           {pendingRequests.pending.length > 0 ? (
             <div className="sobre-admin-section sobre-card-flat">
@@ -542,6 +624,13 @@ function Dashboard({ contractId }: { contractId: string }) {
           error={txFeed.error}
           newestTxHash={newestTxHash}
           members={state.members}
+          subaccounts={subRows
+            .filter((r) => r.walletAddress)
+            .map((r) => ({
+              address: r.walletAddress as string,
+              name: r.displayName,
+              emoji: r.emoji,
+            }))}
           envelopeNames={state.envelope_names}
           pendingDeposits={activeDeposits.deposits.filter(
             (d) => d.identifier !== activeDepositId,
@@ -584,6 +673,20 @@ function Dashboard({ contractId }: { contractId: string }) {
           }}
         />
       </div>
+      ) : null}
+
+      {tab === "subaccounts" ? (
+        <SubAccountsPanel
+          userAddress={address}
+          contractId={contractId}
+          familyWalletId={familyWalletId}
+          rows={subRows}
+          state={state}
+          events={txFeed.events}
+          isAdmin={isAdmin}
+          onFlash={flash}
+          onChange={refreshAll}
+        />
       ) : null}
 
       {tab === "settings" ? (

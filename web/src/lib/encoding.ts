@@ -41,6 +41,15 @@ export function buildInviteUrl(
   return `${APP_ORIGIN}/invite/${tokenBase64Url}?wallet=${contractId}`;
 }
 
+/** Lowercase hex string of an arbitrary byte array. Shared by the on-chain
+ *  invite mint (hex on family_subaccounts.invite_token_hash) and any
+ *  caller that needs to derive a stable id from a hash digest. */
+export function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (const b of bytes) out += b.toString(16).padStart(2, "0");
+  return out;
+}
+
 /** base64url → 32-byte plaintext invite token, or null on malformed input.
  *  The contract's `join_wallet` rejects with `InviteNotFound` if the wrong
  *  length lands on chain, but failing client-side first surfaces a clear

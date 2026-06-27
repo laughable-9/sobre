@@ -4,6 +4,7 @@ import {
   ArrowDownToLine,
   Check,
   Copy,
+  Lock,
   Plus,
   Timer,
   UserPlus,
@@ -16,6 +17,13 @@ import { PAYMENT_TOKEN_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
 import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
+
+export interface SubaccountSummary {
+  displayName: string;
+  emoji: string;
+  locked: boolean;
+  invitePending: boolean;
+}
 
 const MEMBER_PALETTES = [
   { bg: "#fbe7d2", fg: "#D67E28" }, // mango — first slot (admin)
@@ -30,6 +38,8 @@ export function SummaryCard({
   dailySpent,
   onKick,
   onInvite,
+  subaccounts,
+  onOpenSubaccounts,
   children,
 }: {
   state: WalletState;
@@ -48,6 +58,14 @@ export function SummaryCard({
   /** Admin-only; opens the InviteModal. Rendered as a slot in the members
    *  list when there's still room (members < 2). */
   onInvite?: () => void;
+  /** Pre-merged sub-account display rows (Supabase + on-chain). Empty when
+   *  the family has no sub-accounts. Rendered as a read-only mini-list
+   *  under Members; full management lives in the Sub-accounts tab. */
+  subaccounts: SubaccountSummary[];
+  /** Click-through to the Sub-accounts tab. Wired by the dashboard's
+   *  switchTab. Renders a "Manage" link in the sub-account section
+   *  header when provided. */
+  onOpenSubaccounts?: () => void;
   /** Optional extra cards stacked below the total-balance card in the same
    *  left column — used by the dashboard to surface pending approvals. */
   children?: React.ReactNode;
@@ -223,6 +241,63 @@ export function SummaryCard({
               );
             })}
           </div>
+
+          {subaccounts.length > 0 ? (
+            <div className="mt-4 pt-3" style={{ borderTop: "1px solid var(--border)" }}>
+              <div className="flex items-center justify-between">
+                <span className="sobre-label">
+                  Supplementary ({subaccounts.length})
+                </span>
+                {onOpenSubaccounts ? (
+                  <button
+                    type="button"
+                    onClick={onOpenSubaccounts}
+                    className="text-[11px] font-semibold uppercase tracking-wider"
+                    style={{ color: "var(--sobre-primary)" }}
+                  >
+                    Manage
+                  </button>
+                ) : null}
+              </div>
+              <div className="mt-3 space-y-1">
+                {subaccounts.map((s, i) => (
+                  <div key={i} className="sobre-member">
+                    <div
+                      className="av"
+                      style={{
+                        background: "var(--accent-soft)",
+                        color: "var(--sobre-accent)",
+                        fontSize: 18,
+                      }}
+                    >
+                      {s.emoji}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="name">{s.displayName}</div>
+                      {s.invitePending ? (
+                        <div
+                          className="role"
+                          style={{ color: "var(--text-3)" }}
+                        >
+                          Invite pending
+                        </div>
+                      ) : s.locked ? (
+                        <div
+                          className="role"
+                          style={{ color: "var(--sobre-danger)" }}
+                        >
+                          <span className="inline-flex items-center gap-1">
+                            <Lock size={11} strokeWidth={2.4} />
+                            Locked
+                          </span>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </div>
       </div>
       {children}

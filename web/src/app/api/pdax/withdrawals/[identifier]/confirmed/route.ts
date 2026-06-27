@@ -17,7 +17,7 @@
 
 import { NextResponse } from "next/server";
 
-import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { requireFamilyParticipant } from "@/lib/auth/familyMember";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -67,7 +67,10 @@ export async function POST(
     );
   }
   const ex = existing as { family_wallet_id: string; status: string };
-  const membership = await requireFamilyMember(ex.family_wallet_id);
+  // Either a member OR the sub-account holder can confirm their own
+  // cashout — family_wallet_id gates by family, and the row's member_id
+  // (set at /fiat/withdraw insert time) is the on-chain spender either way.
+  const membership = await requireFamilyParticipant(ex.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
 
   // Now safe to mutate. Atomic claim still guards against double-fires:

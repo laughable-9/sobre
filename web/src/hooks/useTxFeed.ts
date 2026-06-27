@@ -53,6 +53,27 @@ export type FeedEvent =
   | (FeedEventBase & {
       kind: "MemberRemoved";
       member: string;
+    })
+  | (FeedEventBase & {
+      kind: "SubAccountJoined";
+      subaccount: string;
+    })
+  | (FeedEventBase & {
+      kind: "SubAccountFunded";
+      recipient: string;
+      envelope: string;
+      amount: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "SubAccountSpent";
+      caller: string;
+      amount: bigint;
+      memo: string;
+    })
+  | (FeedEventBase & {
+      kind: "SubAccountLockChanged";
+      subaccount: string;
+      locked: boolean;
     });
 
 export interface UseTxFeedResult {
@@ -166,6 +187,35 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
             ...base,
             kind: "MemberRemoved",
             member: String(topics[1]),
+          });
+        } else if (kind === "sub_account_joined") {
+          parsed.push({
+            ...base,
+            kind: "SubAccountJoined",
+            subaccount: String(topics[1]),
+          });
+        } else if (kind === "sub_account_funded") {
+          parsed.push({
+            ...base,
+            kind: "SubAccountFunded",
+            recipient: String(topics[1]),
+            envelope: envelopeNameFromScNative(topics[2], "Groceries"),
+            amount: data.amount as bigint,
+          });
+        } else if (kind === "sub_account_spent") {
+          parsed.push({
+            ...base,
+            kind: "SubAccountSpent",
+            caller: String(topics[1]),
+            amount: data.amount as bigint,
+            memo: String(data.memo ?? ""),
+          });
+        } else if (kind === "sub_account_lock_changed") {
+          parsed.push({
+            ...base,
+            kind: "SubAccountLockChanged",
+            subaccount: String(topics[1]),
+            locked: Boolean(data.locked),
           });
         }
       }

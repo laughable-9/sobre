@@ -32,6 +32,11 @@ import {
  *  was a PDAX cashout rather than a regular merchant spend. */
 const SPEND_MEMO = "PDAX cashout";
 
+/** Memo for sub-account cashouts. Same role as SPEND_MEMO but recorded by
+ *  spend_from_subaccount; the SubAccountSpent event topic distinguishes it
+ *  from a regular envelope cashout in the activity feed. */
+const SUBACCOUNT_CASHOUT_MEMO = "Cash out";
+
 /** Details a caller passes in alongside the on-chain args so a half-
  *  completed cashout (spend tx landed, SAC transfer didn't) can be fully
  *  re-attempted from cashoutRecovery state — including hitting /confirmed
@@ -48,9 +53,22 @@ export interface CashoutLegArgs {
   accountNumber: string;
 }
 
+export interface SubaccountCashoutLegArgs {
+  amountStroops: bigint;
+  relayG: string;
+}
+
 export interface UseCashoutSignaturesResult {
   signAndForward: (
     args: CashoutLegArgs,
+  ) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
+  /** Sub-account variant: replaces step 1's `spend(envelope, …)` with
+   *  `spend_from_subaccount(caller, amount, memo)` and skips the recovery
+   *  snapshot (sub-account cashouts are demo-grade — full recovery is
+   *  deferred per docs/feature-backlog.md). Step 2 (SAC transfer to the
+   *  relay) is identical. */
+  signSubaccountAndForward: (
+    args: SubaccountCashoutLegArgs,
   ) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
   /** Just the SAC transfer leg — for resuming a cashout whose spend
    *  already landed on chain. Recovers from a localStorage snapshot OR
@@ -179,7 +197,63 @@ export function useCashoutSignatures(
     [userAddress, contractId],
   );
 
-  return { signAndForward, retryForward, pending, error, step };
+  const signSubaccountAndForward = useCallback(
+    async (
+      args: SubaccountCashoutLegArgs,
+    ): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
+      if (!userAddress) throw new Error("Wallet not connected.");
+      if (!contractId) throw new Error("No wallet selected.");
+      setPending(true);
+      setError(null);
+      try {
+        setStep("spending");
+        const spendArgs = [
+          Address.fromString(userAddress).toScVal(),
+          nativeToScVal(args.amountStroops, { type: "i128" }),
+          nativeToScVal(SUBACCOUNT_CASHOUT_MEMO, { type: "string" }),
+        ];
+        const spendResult = await invokeWrite(
+          contractId,
+          "spend_from_subaccount",
+          spendArgs,
+        );
+
+        setStep("forwarding");
+        const transferArgs = [
+          Address.fromString(userAddress).toScVal(),
+          Address.fromString(args.relayG).toScVal(),
+          nativeToScVal(args.amountStroops, { type: "i128" }),
+        ];
+        const forwardResult = await invokeWrite(
+          PAYMENT_TOKEN_SAC_ID,
+          "transfer",
+          transferArgs,
+        );
+
+        return {
+          spendTxHash: spendResult.hash,
+          forwardTxHash: forwardResult.hash,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setStep("idle");
+        setPending(false);
+      }
+    },
+    [userAddress, contractId],
+  );
+
+  return {
+    signAndForward,
+    signSubaccountAndForward,
+    retryForward,
+    pending,
+    error,
+    step,
+  };
 }
 
 export { clearCashoutRecovery };

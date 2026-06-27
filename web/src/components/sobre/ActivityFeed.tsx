@@ -10,6 +10,9 @@ import {
   Clock,
   Hourglass,
   Loader2,
+  Lock,
+  LockOpen,
+  Send,
   ShoppingBag,
   Trash2,
   UserMinus,
@@ -21,6 +24,7 @@ import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
+import { bankName } from "@/lib/banks";
 import { displayEnvelopeName, STROOPS_PER_TOKEN } from "@/lib/config";
 import {
   formatPhpLocale,
@@ -28,12 +32,6 @@ import {
   shortenAddress,
 } from "@/lib/format";
 
-/** Friendly bank labels for the two UAT-supported banks. Falls back to
- *  the raw bank code if a new one ever lands here. */
-const BANK_NAME: Record<string, string> = {
-  BASECPH: "Security Bank",
-  BACTBPH: "CTBC Bank",
-};
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
   const now = new Date();
@@ -63,6 +61,9 @@ interface ActivityFeedProps {
   newestTxHash: string | null;
   /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
   members: Member[];
+  /** Same shape as members but for sub-account holders, so SubAccount* events
+   *  render with the kid's display name + emoji instead of a raw C-address. */
+  subaccounts?: { address: string; name: string; emoji: string }[];
   envelopeNames: string[];
   /** Non-terminal deposit rows surfaced as "pending" affordances at the top
    *  of the feed. The Resume button reopens the deposit modal at whatever
@@ -100,6 +101,7 @@ export function ActivityFeed({
   error,
   newestTxHash,
   members,
+  subaccounts,
   envelopeNames,
   pendingDeposits,
   onResumeDeposit,
@@ -115,8 +117,11 @@ export function ActivityFeed({
     for (const m of members) {
       out.set(m.address, { name: m.name, emoji: m.emoji });
     }
+    for (const s of subaccounts ?? []) {
+      out.set(s.address, { name: s.name, emoji: s.emoji });
+    }
     return out;
-  }, [members]);
+  }, [members, subaccounts]);
 
   const labelFor = (addr: string): string => {
     const profile = nameByAddress.get(addr);
@@ -666,9 +671,7 @@ function ActivityRow({
                 }}
               >
                 <CheckCheck size={12} strokeWidth={2.5} />
-                Sent to{" "}
-                {BANK_NAME[completedCashout.beneficiary_bank_code] ??
-                  completedCashout.beneficiary_bank_code}{" "}
+                Sent to {bankName(completedCashout.beneficiary_bank_code)}{" "}
                 {maskAccountNumber(
                   completedCashout.beneficiary_account_number,
                 )}
@@ -755,6 +758,86 @@ function ActivityRow({
           <div className="body">
             <div className="who">
               <b>{labelFor(ev.member)}</b> was removed from the wallet
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "SubAccountFunded":
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <Send size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Sent{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              to <b>{labelFor(ev.recipient)}</b> from{" "}
+              {displayEnvelopeName(ev.envelope, envelopeNames)}
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "SubAccountSpent": {
+      // Sub-account cashout flows reuse this event with memo "Cash out" — the
+      // copy mirrors how Spend renders cashout-flavoured events.
+      const isCashout = ev.memo === "Cash out" || ev.memo === "PDAX cashout";
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <ArrowUpFromLine size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "spent"}{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>
+            </div>
+            {ev.memo && !isCashout ? (
+              <div className="where">&quot;{ev.memo}&quot;</div>
+            ) : null}
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    }
+    case "SubAccountJoined":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <UserPlus size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              <b>{labelFor(ev.subaccount)}</b> joined as a supplementary account
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "SubAccountLockChanged":
+      return wrap(
+        ev.locked ? "outflow" : "inflow",
+        <>
+          <div className="ic">
+            {ev.locked ? (
+              <Lock size={16} strokeWidth={2} />
+            ) : (
+              <LockOpen size={16} strokeWidth={2} />
+            )}
+          </div>
+          <div className="body">
+            <div className="who">
+              <b>{labelFor(ev.subaccount)}</b>{" "}
+              {ev.locked ? "was locked" : "was unlocked"}
             </div>
             <div className="meta">{time} · view tx ↗</div>
           </div>

@@ -36,7 +36,8 @@ export type WithdrawStatus =
 
 export interface PdaxWithdrawRow {
   identifier: string;
-  envelope: "Groceries" | "Tuition" | "Savings";
+  envelope: "Groceries" | "Tuition" | "Savings" | null;
+  subaccount_id: string | null;
   amount_usdc: number;
   amount_php: number | null;
   status: WithdrawStatus;
@@ -47,7 +48,10 @@ export interface PdaxWithdrawRow {
 }
 
 export interface InitiateArgs {
-  envelope: "Groceries" | "Tuition" | "Savings";
+  /** Pass exactly one of envelope (member cashout) or subaccountId
+   *  (sub-account cashout). Server validates XOR. */
+  envelope?: "Groceries" | "Tuition" | "Savings";
+  subaccountId?: string;
   amountToken: number;
   amountPhp: number;
   /** Optional explicit bank override. When omitted, the server falls back to
@@ -132,6 +136,7 @@ export function usePdaxWithdraw(
           body: JSON.stringify({
             contract_id: contractId,
             envelope: args.envelope,
+            subaccount_id: args.subaccountId,
             amount_token: args.amountToken,
             amount_php: args.amountPhp,
             bank_code: args.bankCode,
@@ -150,7 +155,8 @@ export function usePdaxWithdraw(
         identifierRef.current = json.identifier;
         setRow({
           identifier: json.identifier,
-          envelope: args.envelope,
+          envelope: args.envelope ?? null,
+          subaccount_id: args.subaccountId ?? null,
           amount_usdc: args.amountToken,
           amount_php: args.amountPhp,
           status: "pending",

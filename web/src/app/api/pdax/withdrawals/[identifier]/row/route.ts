@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 
-import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { requireFamilyParticipant } from "@/lib/auth/familyMember";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -35,7 +35,7 @@ export async function GET(
   }
   const r = row as {
     identifier: string;
-    envelope: "Groceries" | "Tuition" | "Savings";
+    envelope: "Groceries" | "Tuition" | "Savings" | null;
     amount_usdc: number;
     amount_php: number | null;
     status: string;
@@ -46,7 +46,9 @@ export async function GET(
     family_wallet_id: string;
   };
 
-  const membership = await requireFamilyMember(r.family_wallet_id);
+  // Either a member OR sub-account holder of this family. The modal hydrates
+  // its row on resume regardless of source; both flows go through this route.
+  const membership = await requireFamilyParticipant(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
 
   return NextResponse.json({

@@ -21,6 +21,12 @@ export interface Member {
   walletDbId: string | null;
 }
 
+export interface SubAccount {
+  address: string;
+  balance: bigint;
+  locked: boolean;
+}
+
 export interface WalletState {
   admin: string;
   payment_token: string;
@@ -34,6 +40,10 @@ export interface WalletState {
   members: Member[];
   /** On-chain envelope balances in stroops. */
   balances: bigint[];
+  /** On-chain sub-accounts. Empty when the contract predates the sub-account
+   *  upgrade — the field is missing from the returned struct in that case,
+   *  not present-as-empty. */
+  subaccounts: SubAccount[];
   /** Family policy (Supabase). Frontend gates spends against this. */
   policy: SpendPolicyShape;
 }
@@ -57,6 +67,7 @@ interface OnChainState {
   payment_token: string;
   members: { address: string }[];
   balances: bigint[];
+  subaccounts: SubAccount[];
 }
 
 /**
@@ -154,6 +165,7 @@ export function useWalletState(
       percents: display.percents,
       members,
       balances: onChain.balances,
+      subaccounts: onChain.subaccounts,
       policy: display.policy,
     };
   }, [
@@ -186,10 +198,20 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
         address: String(m.address),
       }))
     : [];
+  // `subaccounts` is missing from contracts deployed before the upgrade;
+  // treat as empty so the rest of the dashboard still renders.
+  const subaccounts: SubAccount[] = Array.isArray(raw.subaccounts)
+    ? (raw.subaccounts as Record<string, unknown>[]).map((s) => ({
+        address: String(s.address),
+        balance: typeof s.balance === "bigint" ? s.balance : BigInt(String(s.balance ?? 0)),
+        locked: Boolean(s.locked),
+      }))
+    : [];
   return {
     admin: String(raw.admin),
     payment_token: String(raw.payment_token),
     members,
     balances: (raw.balances as bigint[]) ?? [],
+    subaccounts,
   };
 }

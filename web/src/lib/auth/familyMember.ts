@@ -82,6 +82,39 @@ export async function requireFamilyMember(
   return ctx;
 }
 
+/** Wider form of `requireFamilyMember`: admits both members AND sub-account
+ *  holders of the given family. Use from routes that any participant can
+ *  legitimately invoke — e.g. the sub-account's own PDAX cashout. */
+export async function requireFamilyParticipant(
+  familyWalletId: string,
+): Promise<FamilyMemberContext | NextResponse> {
+  const ctx = await requireWallet();
+  if (ctx instanceof NextResponse) return ctx;
+
+  const admin = getSupabaseAdmin();
+  const [memberRes, subRes] = await Promise.all([
+    admin
+      .from("family_members")
+      .select("id")
+      .eq("family_wallet_id", familyWalletId)
+      .eq("wallet_id", ctx.memberId)
+      .maybeSingle(),
+    admin
+      .from("family_subaccounts")
+      .select("id")
+      .eq("family_wallet_id", familyWalletId)
+      .eq("wallet_id", ctx.memberId)
+      .maybeSingle(),
+  ]);
+  if (!memberRes.data && !subRes.data) {
+    return NextResponse.json(
+      { error: "Not a member or sub-account of this family wallet" },
+      { status: 403 },
+    );
+  }
+  return ctx;
+}
+
 /** Tighter form of `requireFamilyMember` that also gates on the admin role.
  *  Use from routes that mutate family-scoped settings (e.g. /api/settings). */
 export async function requireFamilyAdmin(

@@ -25,7 +25,7 @@
 
 import { NextResponse } from "next/server";
 
-import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { requireFamilyParticipant } from "@/lib/auth/familyMember";
 import { PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
 import { pdaxErrorToResponse } from "@/lib/pdax/client";
 import {
@@ -81,7 +81,9 @@ export async function GET(
   }
   const r = row as WithdrawRow;
 
-  const membership = await requireFamilyMember(r.family_wallet_id);
+  // Admit sub-account holders too — the row's owner polls this on every
+  // tick until paid/failed; it's their cashout to watch.
+  const membership = await requireFamilyParticipant(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
 
   if (r.status === "paid" || r.status === "failed") {
