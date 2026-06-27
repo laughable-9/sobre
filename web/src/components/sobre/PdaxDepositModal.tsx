@@ -16,7 +16,9 @@ import {
 } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
 
-const QUICK_PHP = [100, 500, 1000, 5000];
+// First pill is the PDAX cash-in minimum (₱200). Anything below is rejected
+// at the /trade/quote step — don't surface it as a one-tap option.
+const QUICK_PHP = [200, 500, 1000, 5000];
 
 /**
  * "Add money via PDAX" flow. Step machine driven by the `pdax_deposits`
