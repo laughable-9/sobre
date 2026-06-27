@@ -60,13 +60,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "500000000"
+                  "i128": "400000000"
                 },
                 {
-                  "i128": "300000000"
+                  "i128": "350000000"
                 },
                 {
-                  "i128": "200000000"
+                  "i128": "250000000"
                 }
               ]
             }
@@ -93,22 +93,6 @@
               "sub_invocations": []
             }
           ]
-        }
-      ]
-    ],
-    [],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "close_wallet",
-              "args": []
-            }
-          },
-          "sub_invocations": []
         }
       ]
     ],
@@ -213,26 +197,6 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "4837995959683129791"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
@@ -265,13 +229,13 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "0"
+                            "i128": "400000000"
                           },
                           {
-                            "i128": "0"
+                            "i128": "350000000"
                           },
                           {
-                            "i128": "0"
+                            "i128": "250000000"
                           }
                         ]
                       }
@@ -359,7 +323,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "10000000000"
+                      "i128": "9000000000"
                     }
                   },
                   {
@@ -411,7 +375,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "1000000000"
                     }
                   },
                   {

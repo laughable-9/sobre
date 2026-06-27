@@ -134,22 +134,18 @@ impl SobreFactory {
     /// factory's own address is supplied as the last constructor arg so the
     /// new instance knows where to ask for its current wasm hash on upgrade.
     ///
-    /// Display fields (wallet name, envelope names, admin display name +
-    /// emoji) are NOT taken here — they live in Supabase, written by the
-    /// frontend right after this returns the new contract address.
-    pub fn create_sobre(
-        env: Env,
-        admin: Address,
-        payment_token: Address,
-        percents: Vec<u32>,
-    ) -> Address {
+    /// Family rules (percent split, spend policy, threshold, display name,
+    /// envelope labels, member display data) are NOT taken here — they all
+    /// live in Supabase, written by the frontend right after this returns.
+    /// Admin can change any of them later with zero fees.
+    pub fn create_sobre(env: Env, admin: Address, payment_token: Address) -> Address {
         admin.require_auth();
 
         let wasm = load_wasm(&env);
         let salt = next_salt(&env);
         let factory = env.current_contract_address();
 
-        let constructor_args = (admin.clone(), payment_token, percents, factory);
+        let constructor_args = (admin.clone(), payment_token, factory);
 
         let new_contract = env
             .deployer()

@@ -251,28 +251,6 @@
                       "val": {
                         "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
                       }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "Percents"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "u32": 50
-                          },
-                          {
-                            "u32": 30
-                          },
-                          {
-                            "u32": 20
-                          }
-                        ]
-                      }
                     }
                   ]
                 }
