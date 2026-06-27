@@ -27,7 +27,7 @@ export function PendingRequestsPanel({
   pending: PendingSpendRequest[];
   members: Member[];
   subaccounts: SubAccount[];
-  /** Live admin count from useWalletState — single source of truth. */
+  /** Live admin count from useWalletState. Single source of truth. */
   adminCount: number;
   envelopeNames: string[];
   onSuccess: () => void;
@@ -55,7 +55,7 @@ export function PendingRequestsPanel({
 
   // Cross-reference the row's approvers (Supabase wallet UUIDs) with the
   // family's admin set so the count we show is "admins who've approved /
-  // total admins" — non-admin originators don't inflate the numerator.
+  // total admins". Non-admin originators don't inflate the numerator.
   const adminWalletIds = useMemo(() => {
     const ids = new Set<string>();
     for (const m of members) {
@@ -118,6 +118,16 @@ export function PendingRequestsPanel({
           const callerAlreadyApproved =
             adminWalletDbId !== null &&
             req.approversWalletIds.includes(adminWalletDbId);
+          // "Release" only makes sense when THIS admin's click is the
+          // deciding vote. For all_admins rows that means their click
+          // would push admin-approvers >= adminCount.
+          const callerIsAdmin =
+            adminWalletDbId !== null && adminWalletIds.has(adminWalletDbId);
+          const adminApproversAfterClick =
+            adminApprovers + (callerIsAdmin && !callerAlreadyApproved ? 1 : 0);
+          const threshold =
+            req.approvalMode === "all_admins" ? Math.max(adminCount, 1) : 1;
+          const callerWillReleaseNow = adminApproversAfterClick >= threshold;
           const approvalLabel =
             req.approvalMode === "all_admins"
               ? `Needs every admin (${adminApprovers}/${Math.max(adminCount, 1)})`
@@ -200,7 +210,7 @@ export function PendingRequestsPanel({
                       <Check size={13} strokeWidth={2.5} />
                       {approveInFlight
                         ? "Approving…"
-                        : callerAlreadyApproved
+                        : callerWillReleaseNow
                           ? "Release"
                           : "Approve"}
                     </button>

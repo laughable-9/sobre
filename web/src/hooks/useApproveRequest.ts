@@ -45,15 +45,27 @@ export function useApproveRequest(
 
       // Relay route records the admin's approval, re-counts against the
       // family's LIVE admin count, and decides whether the row can release.
-      // 200 → release now; 409 → approval recorded, still waiting.
-      const res = await fetch(`/api/spend-requests/${req.id}/release`, {
-        method: "POST",
-      });
-      const payload = (await res.json()) as
+      // 200 → row already claimed `releasing` server-side; we sign + flip
+      //       to `approved` (or revert to `pending` on chain failure).
+      // 409 → approval recorded, still waiting on more admins.
+      let res: Response;
+      try {
+        res = await fetch(`/api/spend-requests/${req.id}/release`, {
+          method: "POST",
+        });
+      } catch (e) {
+        throw new Error(
+          `Couldn't reach the approval service. Check your connection and try again. (${
+            e instanceof Error ? e.message : String(e)
+          })`,
+        );
+      }
+      let payload:
         | {
             error: string;
             adminApprovalCount?: number;
             adminCount?: number;
+            approvalMode?: "single_admin" | "all_admins";
           }
         | {
             id: string;
@@ -65,7 +77,15 @@ export function useApproveRequest(
             recipientAddress: string | null;
             adminApprovalCount: number;
             adminCount: number;
+            approvalMode: "single_admin" | "all_admins";
           };
+      try {
+        payload = await res.json();
+      } catch {
+        throw new Error(
+          `Approval service returned an unexpected response (HTTP ${res.status}). Refresh and try again.`,
+        );
+      }
 
       if (res.status === 409 && "error" in payload && payload.error === "more_admins_needed") {
         return {
@@ -80,36 +100,50 @@ export function useApproveRequest(
         throw new Error(msg);
       }
 
-      // Server-verified release payload — drive the chain call from it
-      // (NOT from the client-cached row) so a stale snapshot can't be
-      // re-signed if the underlying request has been mutated.
+      // Row is now `releasing` server-side. From here, every failure
+      // path MUST revert the row to `pending` so another admin can
+      // retry; otherwise the row is stuck and admins must intervene
+      // manually.
+      const supabase = getSupabaseBrowserClient();
+      const revertToPending = async () => {
+        await supabase
+          .from("family_pending_requests")
+          .update({ status: "pending" })
+          .eq("id", req.id)
+          .eq("status", "releasing");
+      };
+
       let hash: string;
-      if (payload.kind === "subaccount_fund") {
-        if (!payload.recipientAddress) {
-          throw new Error("Sub-account funding request is missing its recipient.");
+      try {
+        if (payload.kind === "subaccount_fund") {
+          if (!payload.recipientAddress) {
+            throw new Error("Sub-account funding request is missing its recipient.");
+          }
+          const args = [
+            envelopeScVal(payload.envelope),
+            Address.fromString(payload.recipientAddress).toScVal(),
+            nativeToScVal(BigInt(payload.amountStroops), { type: "i128" }),
+          ];
+          ({ hash } = await invokeWrite(contractId, "fund_subaccount", args));
+        } else {
+          const args = [
+            Address.fromString(payload.memberAddress).toScVal(),
+            envelopeScVal(payload.envelope),
+            nativeToScVal(BigInt(payload.amountStroops), { type: "i128" }),
+            nativeToScVal(payload.memo, { type: "string" }),
+          ];
+          ({ hash } = await invokeWrite(contractId, "spend_on_behalf", args));
         }
-        const args = [
-          envelopeScVal(payload.envelope),
-          Address.fromString(payload.recipientAddress).toScVal(),
-          nativeToScVal(BigInt(payload.amountStroops), { type: "i128" }),
-        ];
-        ({ hash } = await invokeWrite(contractId, "fund_subaccount", args));
-      } else {
-        const args = [
-          Address.fromString(payload.memberAddress).toScVal(),
-          envelopeScVal(payload.envelope),
-          nativeToScVal(BigInt(payload.amountStroops), { type: "i128" }),
-          nativeToScVal(payload.memo, { type: "string" }),
-        ];
-        ({ hash } = await invokeWrite(contractId, "spend_on_behalf", args));
+      } catch (chainErr) {
+        await revertToPending();
+        throw chainErr;
       }
 
-      // Mark resolved after the chain call lands so the panel doesn't blink
-      // off-then-on if the tx fails. CRITICAL: capture the update error.
-      // If this silently dropped, the realtime panel would keep showing
-      // "Approve" on a row whose money has already moved, and a second
-      // click would double-spend (the contract has no idempotency key).
-      const supabase = getSupabaseBrowserClient();
+      // Mark resolved after the chain call lands. Status moves from
+      // `releasing` to `approved`; if this update fails the row stays
+      // `releasing` (NOT `pending`) so we don't re-trigger the chain
+      // call on a successful spend. Surfaced to the admin so they
+      // know to refresh.
       const { error: updateErr } = await supabase
         .from("family_pending_requests")
         .update({

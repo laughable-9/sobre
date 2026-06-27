@@ -1,24 +1,31 @@
 /**
  * POST /api/spend-requests/[id]/release
  *
- * Server-side guard that runs before the admin's client signs
- * `spend_on_behalf` (or `fund_subaccount` for a sub-account top-up request)
- * to release a pending row. Two responsibilities:
+ * Server-side gate that the admin's client hits before signing
+ * spend_on_behalf (or fund_subaccount, for a sub-account top-up request).
+ * Three responsibilities, all delegated to the
+ * record_approval_and_maybe_claim_release RPC so the work happens under
+ * a single row lock:
  *
- *   1. Record the caller's approval. Appended to `approvers_wallet_ids`,
- *      idempotent — re-clicks don't double-count.
- *   2. Decide whether the row can release yet. For `single_admin` the first
- *      admin approval is enough. For `all_admins` (the Savings lock) we
- *      re-read the family's admin count LIVE from `family_members` and
- *      require approvals_by_admins >= admin_count. The live count means a
- *      newly-joined admin re-thresholds in-flight requests.
+ *   1. Verify caller is a current admin of the row's family.
+ *   2. Record the caller's approval idempotently (array_append, no
+ *      lost-update race).
+ *   3. Re-derive the effective approval mode (single_admin vs
+ *      all_admins) from family_wallets.savings_lock_all_admins +
+ *      envelope + LIVE admin count, ignoring the row's stored value.
+ *      Without this re-derive a member could tamper with the column at
+ *      INSERT and defeat the Savings lock.
+ *   4. If threshold met, atomically claim by flipping the row's status
+ *      from 'pending' to 'releasing'. Two admins clicking
+ *      simultaneously past the threshold cannot both win the claim, so
+ *      the contract's single-signature spend_on_behalf can't fire
+ *      twice. On chain failure the client reverts the row back to
+ *      'pending' (see useApproveRequest).
  *
- * The route does not sign or submit anything on chain — the smart-wallet
- * passkey is browser-side and the contract's auth requires the on-chain
- * admin to sign. We return a 200 verdict + the row payload so the client
- * can invoke the correct method (`spend_on_behalf` vs `fund_subaccount`).
- * A 409 means "approval recorded, still waiting on more admins" — not an
- * error; the panel just stays.
+ * The route does not sign or submit anything on chain. The smart-wallet
+ * passkey is browser-side. The 200 payload carries the row's envelope,
+ * amount, memo, kind, member, and recipient so the client signs from
+ * a server-verified snapshot rather than its cached row.
  */
 
 import { NextResponse } from "next/server";
@@ -28,19 +35,29 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
-type ReleasableRow = {
-  id: string;
-  family_wallet_id: string;
-  envelope: "Groceries" | "Tuition" | "Savings";
-  amount_stroops: string;
-  memo: string;
-  status: "pending" | "approved" | "denied";
-  approval_mode: "single_admin" | "all_admins";
-  kind: "member_spend" | "subaccount_fund";
-  recipient_address: string | null;
-  approvers_wallet_ids: string[] | null;
-  wallets: { contract_id: string } | { contract_id: string }[] | null;
-};
+type RpcOutcome =
+  | { outcome: "not_found" }
+  | { outcome: "already_resolved"; status: string }
+  | { outcome: "not_admin" }
+  | { outcome: "race_lost" }
+  | {
+      outcome: "more_admins_needed";
+      admin_approval_count: number;
+      admin_count: number;
+      approval_mode: "single_admin" | "all_admins";
+    }
+  | {
+      outcome: "release";
+      envelope: "Groceries" | "Tuition" | "Savings";
+      amount_stroops: string;
+      memo: string;
+      kind: "member_spend" | "subaccount_fund";
+      recipient_address: string | null;
+      member_wallet_id: string;
+      admin_approval_count: number;
+      admin_count: number;
+      approval_mode: "single_admin" | "all_admins";
+    };
 
 export async function POST(
   _req: Request,
@@ -53,107 +70,106 @@ export async function POST(
 
   const admin = getSupabaseAdmin();
 
-  // Read the row with the admin client first so we can identify the family
-  // it belongs to; the actual admin-membership check is delegated to
-  // `requireFamilyAdmin` below.
-  const { data: rowData, error: readErr } = await admin
+  // Pre-flight read just to identify the family for the auth check. The
+  // RPC re-locks under SELECT FOR UPDATE and re-validates everything, so
+  // a row change between this read and the RPC is harmless.
+  const { data: row, error: readErr } = await admin
     .from("family_pending_requests")
-    .select(
-      "id, family_wallet_id, envelope, amount_stroops, memo, status, approval_mode, kind, recipient_address, approvers_wallet_ids, wallets:member_wallet_id(contract_id)",
-    )
+    .select("family_wallet_id, member_wallet_id")
     .eq("id", id)
     .maybeSingle();
   if (readErr) {
     return NextResponse.json({ error: readErr.message }, { status: 500 });
   }
-  if (!rowData) {
+  if (!row) {
     return NextResponse.json({ error: "Request not found" }, { status: 404 });
   }
-  const row = rowData as ReleasableRow;
-  if (row.status !== "pending") {
-    return NextResponse.json(
-      { error: `Request is already ${row.status}.` },
-      { status: 409 },
-    );
-  }
 
-  // Single source of truth for "is signed-in caller an admin of this
-  // family": shared with every other admin-only mutating route.
-  const auth = await requireFamilyAdmin(row.family_wallet_id);
+  const auth = await requireFamilyAdmin(
+    (row as { family_wallet_id: string }).family_wallet_id,
+  );
   if (auth instanceof NextResponse) return auth;
 
-  // Append the caller's approval — idempotent. Using array_append + a
-  // re-read keeps duplicates out at the read layer; the relay re-counts
-  // distinct admin ids anyway.
-  const existing = row.approvers_wallet_ids ?? [];
-  const nextApprovers = existing.includes(auth.memberId)
-    ? existing
-    : [...existing, auth.memberId];
-  if (nextApprovers !== existing) {
-    const { error: updErr } = await admin
-      .from("family_pending_requests")
-      .update({ approvers_wallet_ids: nextApprovers })
-      .eq("id", id);
-    if (updErr) {
-      return NextResponse.json({ error: updErr.message }, { status: 500 });
-    }
-  }
-
-  // Count how many of the row's approvers are CURRENTLY admins of the
-  // family. Approvers who lose their admin role lose their approval; new
-  // admins haven't approved by default.
-  const { data: adminRows, error: adminErr } = await admin
-    .from("family_members")
-    .select("wallet_id")
-    .eq("family_wallet_id", row.family_wallet_id)
-    .eq("role", "admin");
-  if (adminErr) {
-    return NextResponse.json({ error: adminErr.message }, { status: 500 });
-  }
-  const adminIds = new Set(
-    (adminRows as { wallet_id: string }[] | null)?.map((r) => r.wallet_id) ??
-      [],
+  // RPC does the record-approval + count + claim-flip atomically. The
+  // approval is appended idempotently even when the outcome is
+  // more_admins_needed, so re-clicks don't double-count and admins can
+  // record approval ahead of others.
+  const { data: rpcData, error: rpcErr } = await admin.rpc(
+    "record_approval_and_maybe_claim_release",
+    { p_request_id: id, p_caller_wallet_id: auth.memberId },
   );
-  const adminCount = adminIds.size;
-  const adminApprovers = nextApprovers.filter((wid) => adminIds.has(wid));
-  const adminApprovalCount = adminApprovers.length;
+  if (rpcErr) {
+    return NextResponse.json({ error: rpcErr.message }, { status: 500 });
+  }
+  const result = rpcData as RpcOutcome;
 
-  // `all_admins` mode = Savings lock. Every current admin must have an
-  // approval recorded. Re-counted fresh so admin churn re-thresholds the
-  // row mid-flight.
-  if (row.approval_mode === "all_admins") {
-    if (adminApprovalCount < adminCount) {
+  // Wallet contract address for the originator. Looked up after the RPC
+  // claim succeeds so a client tampering with the row's member_wallet_id
+  // points at someone, but spend_on_behalf still resolves the address
+  // from this server-side join.
+  const lookupMember = async (walletId: string) => {
+    const { data } = await admin
+      .from("wallets")
+      .select("contract_id")
+      .eq("id", walletId)
+      .maybeSingle();
+    return (data as { contract_id: string } | null)?.contract_id ?? null;
+  };
+
+  switch (result.outcome) {
+    case "not_found":
+      return NextResponse.json({ error: "Request not found" }, { status: 404 });
+    case "not_admin":
+      return NextResponse.json(
+        { error: "Only family admins can release spend requests." },
+        { status: 403 },
+      );
+    case "already_resolved":
+      return NextResponse.json(
+        { error: `Request is already ${result.status}.` },
+        { status: 409 },
+      );
+    case "race_lost":
+      return NextResponse.json(
+        { error: "Another admin is releasing this request right now." },
+        { status: 409 },
+      );
+    case "more_admins_needed":
       return NextResponse.json(
         {
           error: "more_admins_needed",
-          adminApprovalCount,
-          adminCount,
+          adminApprovalCount: result.admin_approval_count,
+          adminCount: result.admin_count,
+          approvalMode: result.approval_mode,
         },
         { status: 409 },
       );
+    case "release": {
+      const memberAddress = await lookupMember(result.member_wallet_id);
+      if (!memberAddress) {
+        // Roll the claim back so the next admin can retry.
+        await admin
+          .from("family_pending_requests")
+          .update({ status: "pending" })
+          .eq("id", id)
+          .eq("status", "releasing");
+        return NextResponse.json(
+          { error: "Originator wallet record missing." },
+          { status: 500 },
+        );
+      }
+      return NextResponse.json({
+        id,
+        envelope: result.envelope,
+        amountStroops: result.amount_stroops,
+        memo: result.memo,
+        kind: result.kind,
+        memberAddress,
+        recipientAddress: result.recipient_address,
+        adminApprovalCount: result.admin_approval_count,
+        adminCount: result.admin_count,
+        approvalMode: result.approval_mode,
+      });
     }
   }
-
-  // Originator's address (for spend_on_behalf, the `member` arg). RLS-free
-  // join above guarantees this; defensive null check anyway.
-  const wallets = Array.isArray(row.wallets) ? row.wallets[0] : row.wallets;
-  const memberAddress = wallets?.contract_id ?? null;
-  if (!memberAddress) {
-    return NextResponse.json(
-      { error: "Originator wallet record missing." },
-      { status: 500 },
-    );
-  }
-
-  return NextResponse.json({
-    id: row.id,
-    envelope: row.envelope,
-    amountStroops: row.amount_stroops,
-    memo: row.memo,
-    kind: row.kind,
-    memberAddress,
-    recipientAddress: row.recipient_address,
-    adminApprovalCount,
-    adminCount,
-  });
 }

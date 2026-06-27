@@ -116,8 +116,14 @@ export function SpendModal({
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
+  // Every real family has at least one admin. A zero count means the
+  // Supabase membership join hasn't resolved yet on first paint; routing
+  // the spend during this window could mis-classify a Savings lock as
+  // "no lock, only one admin" and let it bypass the gate.
+  const familyNotReady = state.admin_count === 0;
+
   const handleSubmit = async () => {
-    if (php <= 0 || overspend) return;
+    if (php <= 0 || overspend || familyNotReady) return;
     try {
       if (willGoPending) {
         if (!familyWalletId) {
@@ -346,18 +352,20 @@ export function SpendModal({
           <button
             className="sobre-btn sobre-btn-primary"
             onClick={() => void handleSubmit()}
-            disabled={!php || overspend || pending}
+            disabled={!php || overspend || pending || familyNotReady}
             style={
-              !php || overspend || pending
+              !php || overspend || pending || familyNotReady
                 ? { opacity: 0.5, cursor: "not-allowed" }
                 : {}
             }
           >
             {pending
               ? "Submitting…"
-              : willGoPending
-                ? "Request withdrawal"
-                : "Confirm spend"}
+              : familyNotReady
+                ? "Loading family rules…"
+                : willGoPending
+                  ? "Request withdrawal"
+                  : "Confirm spend"}
           </button>
         </div>
       </div>

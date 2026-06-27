@@ -36,11 +36,11 @@ export interface UseCreatePendingRequestResult {
  * Member-side hook. Creates a family_pending_requests row when their spend
  * would exceed the family's Supabase-stored policy (require_all_sigs,
  * protected envelope, daily limit, per-tx threshold, or Savings lock). No
- * chain call — the row sits in Supabase until admin(s) approve or deny.
+ * chain call. The row sits in Supabase until admin(s) approve or deny.
  * RLS gates the insert to a member's own family + own wallet.
  *
  * The originator's wallet_id is auto-recorded in `approvers_wallet_ids` so
- * the count starts at 1 — meaningful when an admin originates an
+ * the count starts at 1. Meaningful when an admin originates an
  * all_admins-mode row (their own approval counts toward the N-of-N).
  *
  * Member's `wallets.id` is resolved once at the dashboard level and passed

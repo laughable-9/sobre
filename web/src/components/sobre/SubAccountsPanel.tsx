@@ -487,9 +487,9 @@ function SendSubAccountModal({
     userAddress,
     contractId,
   );
-  // Admin's own wallet UUID — they are the originator of any pending request
-  // created here. Used to auto-record their approval at create-time (so the
-  // 1-of-N count starts at 1).
+  // Admin's own wallet UUID. They are the originator of any pending
+  // request created here. Used to auto-record their approval at
+  // create-time so the 1-of-N count starts at 1.
   const adminWalletDbId =
     state.members.find((m) => m.address === userAddress)?.walletDbId ?? null;
   const {
@@ -510,7 +510,7 @@ function SendSubAccountModal({
 
   const ok = validAmount && parsed <= envelopeBalancePhp;
 
-  // Funding a sub-account FROM Savings IS a Savings withdrawal — route the
+  // Funding a sub-account FROM Savings IS a Savings withdrawal. Route the
   // decision through the same spec the spend modal reads. Daily limits and
   // per-tx threshold don't apply to admin-initiated sub-account top-ups, so
   // we pass `dailySpent: 0`; the Savings-lock branch sits before the admin
@@ -531,9 +531,13 @@ function SendSubAccountModal({
     adminCount: state.admin_count,
   });
   const willGoPending = verdict.route === "pending";
+  // Same reason as in SpendModal: 0 admins means Supabase join hasn't
+  // resolved yet, so the verdict could mis-route. Disable submit until
+  // it does.
+  const familyNotReady = state.admin_count === 0;
 
   const handleSend = async () => {
-    if (!ok || stroopsRequested <= 0n) return;
+    if (!ok || stroopsRequested <= 0n || familyNotReady) return;
     try {
       if (willGoPending) {
         if (!familyWalletId) {
@@ -691,12 +695,13 @@ function SendSubAccountModal({
           <button
             type="button"
             onClick={handleSend}
-            disabled={!ok || pending}
+            disabled={!ok || pending || familyNotReady}
             className="sobre-btn sobre-btn-primary"
-            style={{ opacity: !ok || pending ? 0.55 : 1 }}
+            style={{ opacity: !ok || pending || familyNotReady ? 0.55 : 1 }}
           >
             {(() => {
               const verb = willGoPending ? "Request" : "Send";
+              if (familyNotReady) return "Loading family rules…";
               if (pending) return `${verb}ing…`;
               return `${verb} ₱${validAmount ? parsed.toLocaleString("en-PH") : "0"}`;
             })()}

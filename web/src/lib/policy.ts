@@ -55,7 +55,7 @@ export interface RouteSpendInput {
 }
 
 export function routeSpend(input: RouteSpendInput): RouteSpendVerdict {
-  // Default approval mode is single_admin — the lock-on path is the only
+  // Default approval mode is single_admin. The lock-on path is the only
   // branch that overrides it. Keep this local so every return site reads
   // one line instead of restating it.
   const single = (route: SpendRoute): RouteSpendVerdict => ({
@@ -70,7 +70,7 @@ export function routeSpend(input: RouteSpendInput): RouteSpendVerdict {
 
   // Savings lock is checked BEFORE the admin-bypass. Unlike the threshold
   // gate (which trusts the admin), this lock is specifically designed to
-  // include admins — its job is "don't drain Savings unilaterally."
+  // include admins; its job is "don't drain Savings unilaterally."
   if (
     input.savingsLockAllAdmins &&
     input.adminCount > 1 &&
@@ -79,7 +79,7 @@ export function routeSpend(input: RouteSpendInput): RouteSpendVerdict {
     return { route: "pending", approvalMode: "all_admins" };
   }
 
-  // Admin bypasses every threshold gate — their spends are the trusted-OFW
+  // Admin bypasses every threshold gate. Their spends are the trusted-OFW
   // transactions the policy is designed to guard against, not block.
   if (input.caller === input.admin) return single("direct");
 
