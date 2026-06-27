@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Info, Lock } from "lucide-react";
 
 import { SAVINGS_NAME } from "@/components/sobre/EnvelopeNamesEditor";
-import type { SpendPolicy } from "@/hooks/useWalletState";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import type { SpendPolicyShape } from "@/lib/contract";
 import {
   ENVELOPE_LABELS,
   STROOPS_PER_USDC,
@@ -23,28 +24,28 @@ function PolicyReadOnly({
   current,
   envelopeNames,
 }: {
-  current: SpendPolicy;
+  current: SpendPolicyShape;
   envelopeNames: string[];
 }) {
   const protectedLabel =
-    current.protected_envelopes.length === 0
+    current.protectedEnvelopes.length === 0
       ? "none"
-      : current.protected_envelopes
+      : current.protectedEnvelopes
           .map((e) => displayEnvelopeName(e, envelopeNames))
           .join(", ");
   return (
     <div className="text-sm space-y-1.5">
       <Row
         label="Admin approval for every spend"
-        value={current.require_all_sigs ? "Yes" : "No"}
+        value={current.requireAllSigs ? "Yes" : "No"}
       />
       <Row
         label="Daily limit per member"
-        value={formatPhpInt(current.daily_limit)}
+        value={formatPhpInt(current.dailyLimit)}
       />
       <Row
         label="Approval required above"
-        value={formatPhpInt(current.per_tx_threshold)}
+        value={formatPhpInt(current.perTxThreshold)}
       />
       <Row label="Envelopes requiring approval" value={protectedLabel} />
       <p className="text-xs pt-1" style={{ color: "var(--text-3)" }}>
@@ -95,34 +96,64 @@ export function PolicySettingsForm({
   userAddress: string | null;
   familyWalletId: string | null;
   isAdmin: boolean;
-  current: SpendPolicy;
+  current: SpendPolicyShape;
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const [unit, setUnit] = useState<Unit>("PHP");
   const [limitInput, setLimitInput] = useState<string>(() =>
-    current.daily_limit === null
+    current.dailyLimit === null
       ? ""
-      : stroopsToPhpString(current.daily_limit, "PHP"),
+      : stroopsToPhpString(current.dailyLimit, "PHP"),
   );
   const [thresholdInput, setThresholdInput] = useState<string>(() =>
-    current.per_tx_threshold === null
+    current.perTxThreshold === null
       ? ""
-      : stroopsToPhpString(current.per_tx_threshold, "PHP"),
+      : stroopsToPhpString(current.perTxThreshold, "PHP"),
   );
-  const [requireAllSigs, setRequireAllSigs] = useState(
-    current.require_all_sigs,
-  );
+  const [requireAllSigs, setRequireAllSigs] = useState(current.requireAllSigs);
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
-    () => new Set(current.protected_envelopes),
+    () => new Set(current.protectedEnvelopes),
   );
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+
+  const mutation = useCallback(
+    async (nextPolicy: SpendPolicyShape) => {
+      if (!familyWalletId) throw new Error("No family wallet id.");
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({
+          policy_json: {
+            require_all_sigs: nextPolicy.requireAllSigs,
+            daily_limit_stroops:
+              nextPolicy.dailyLimit === null
+                ? null
+                : nextPolicy.dailyLimit.toString(),
+            per_tx_threshold_stroops:
+              nextPolicy.perTxThreshold === null
+                ? null
+                : nextPolicy.perTxThreshold.toString(),
+            protected_envelopes: nextPolicy.protectedEnvelopes,
+          },
+        })
+        .eq("id", familyWalletId)
+        .select("id")
+        .maybeSingle();
+      if (updateErr) throw new Error(updateErr.message);
+      if (!data) {
+        throw new Error("Couldn't save — only the family admin can change this.");
+      }
+    },
+    [familyWalletId],
+  );
+  const { run: savePolicy, pending: saving, error } = useSupabaseMutation(
+    mutation,
+  );
 
   const policySig = useMemo(
     () =>
-      `${current.require_all_sigs}|${current.daily_limit ?? "x"}|${current.per_tx_threshold ?? "x"}|${[
-        ...current.protected_envelopes,
+      `${current.requireAllSigs}|${current.dailyLimit ?? "x"}|${current.perTxThreshold ?? "x"}|${[
+        ...current.protectedEnvelopes,
       ]
         .sort()
         .join(",")}`,
@@ -130,18 +161,18 @@ export function PolicySettingsForm({
   );
 
   useEffect(() => {
-    setRequireAllSigs(current.require_all_sigs);
+    setRequireAllSigs(current.requireAllSigs);
     setLimitInput(
-      current.daily_limit === null
+      current.dailyLimit === null
         ? ""
-        : stroopsToPhpString(current.daily_limit, unit),
+        : stroopsToPhpString(current.dailyLimit, unit),
     );
     setThresholdInput(
-      current.per_tx_threshold === null
+      current.perTxThreshold === null
         ? ""
-        : stroopsToPhpString(current.per_tx_threshold, unit),
+        : stroopsToPhpString(current.perTxThreshold, unit),
     );
-    setProtectedSet(new Set(current.protected_envelopes));
+    setProtectedSet(new Set(current.protectedEnvelopes));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policySig]);
 
@@ -180,34 +211,16 @@ export function PolicySettingsForm({
     };
     const dailyLimit = inputToStroops(limitInput);
     const perTxThreshold = inputToStroops(thresholdInput);
-    setSaving(true);
-    setError(null);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: updateErr } = await supabase
-        .from("family_wallets")
-        .update({
-          policy_json: {
-            require_all_sigs: requireAllSigs,
-            daily_limit_stroops:
-              dailyLimit === null ? null : dailyLimit.toString(),
-            per_tx_threshold_stroops:
-              perTxThreshold === null ? null : perTxThreshold.toString(),
-            protected_envelopes: Array.from(effectiveProtected),
-          },
-        })
-        .eq("id", familyWalletId)
-        .select("id")
-        .maybeSingle();
-      if (updateErr) throw new Error(updateErr.message);
-      if (!data) {
-        throw new Error("Couldn't save — only the family admin can change this.");
-      }
+      await savePolicy({
+        requireAllSigs,
+        dailyLimit,
+        perTxThreshold,
+        protectedEnvelopes: Array.from(effectiveProtected),
+      });
       onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+    } catch {
+      // surfaced via hook error
     }
   };
 

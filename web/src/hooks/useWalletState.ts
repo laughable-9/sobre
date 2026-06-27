@@ -8,21 +8,17 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-import { NETWORK, type EnvelopeName } from "@/lib/config";
-import { getServer, simulateSourceAccount } from "@/lib/contract";
+import { NETWORK } from "@/lib/config";
+import { getServer, simulateSourceAccount, type SpendPolicyShape } from "@/lib/contract";
 import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
-
-export interface SpendPolicy {
-  require_all_sigs: boolean;
-  daily_limit: bigint | null;
-  per_tx_threshold: bigint | null;
-  protected_envelopes: EnvelopeName[];
-}
 
 export interface Member {
   address: string;
   name: string;
   emoji: string;
+  /** Supabase `wallets.id` — handy when a downstream mutation needs to
+   *  reference the member's row without a fresh contract_id → id lookup. */
+  walletDbId: string | null;
 }
 
 export interface WalletState {
@@ -32,14 +28,14 @@ export interface WalletState {
   wallet_name: string;
   /** Envelope display labels (Supabase). */
   envelope_names: string[];
-  /** Per-envelope split percentages (Supabase). */
-  percents: number[];
-  /** On-chain members. Joined with Supabase display data (name + emoji). */
+  /** Per-envelope split percentages (Supabase). Indexed [Groceries, Tuition, Savings]. */
+  percents: [number, number, number];
+  /** On-chain members. Joined with Supabase display data (name + emoji + walletDbId). */
   members: Member[];
   /** On-chain envelope balances in stroops. */
   balances: bigint[];
   /** Family policy (Supabase). Frontend gates spends against this. */
-  policy: SpendPolicy;
+  policy: SpendPolicyShape;
 }
 
 export interface UseWalletStateResult {
@@ -141,6 +137,7 @@ export function useWalletState(
         address: m.address,
         name: d?.name ?? "",
         emoji: d?.emoji ?? "",
+        walletDbId: d?.walletDbId ?? null,
       };
     });
     return {
@@ -151,12 +148,7 @@ export function useWalletState(
       percents: display.percents,
       members,
       balances: onChain.balances,
-      policy: {
-        require_all_sigs: display.policy.requireAllSigs,
-        daily_limit: display.policy.dailyLimit,
-        per_tx_threshold: display.policy.perTxThreshold,
-        protected_envelopes: display.policy.protectedEnvelopes,
-      },
+      policy: display.policy,
     };
   }, [
     onChain,

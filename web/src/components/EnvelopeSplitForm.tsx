@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { toEnvelopeNames } from "@/components/sobre/EnvelopeNamesEditor";
 import {
@@ -9,6 +9,7 @@ import {
   splitsEqual,
   toSplit,
 } from "@/components/sobre/SplitEditor";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function ReadOnly({
@@ -57,14 +58,33 @@ export function EnvelopeSplitForm({
   onSuccess: () => void;
 }) {
   const [split, setSplit] = useState(() => toSplit(current));
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const sig = useMemo(() => current.join(","), [current]);
   useEffect(() => {
     setSplit(toSplit(current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
+
+  const mutation = useCallback(
+    async (next: [number, number, number]) => {
+      if (!familyWalletId) throw new Error("No family wallet id.");
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({ percents: next })
+        .eq("id", familyWalletId)
+        .select("id")
+        .maybeSingle();
+      if (updateErr) throw new Error(updateErr.message);
+      if (!data) {
+        throw new Error("Couldn't save — only the family admin can change this.");
+      }
+    },
+    [familyWalletId],
+  );
+  const { run: saveSplit, pending: saving, error } = useSupabaseMutation(
+    mutation,
+  );
 
   if (!userAddress) return null;
   if (!isAdmin)
@@ -76,25 +96,11 @@ export function EnvelopeSplitForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !dirty || !familyWalletId) return;
-    setSaving(true);
-    setError(null);
     try {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: updateErr } = await supabase
-        .from("family_wallets")
-        .update({ percents: split })
-        .eq("id", familyWalletId)
-        .select("id")
-        .maybeSingle();
-      if (updateErr) throw new Error(updateErr.message);
-      if (!data) {
-        throw new Error("Couldn't save — only the family admin can change this.");
-      }
+      await saveSplit(split);
       onSuccess();
-    } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
-    } finally {
-      setSaving(false);
+    } catch {
+      // surfaced via hook error
     }
   };
 

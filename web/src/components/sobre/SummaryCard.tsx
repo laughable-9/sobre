@@ -127,7 +127,7 @@ export function SummaryCard({
         </button>
 
         <DailyLimitCard
-          dailyLimit={state.policy.daily_limit}
+          dailyLimit={state.policy.dailyLimit}
           dailySpent={dailySpent}
         />
 

@@ -3,8 +3,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { SpendPolicyShape } from "@/lib/contract";
-import type { EnvelopeName } from "@/lib/config";
+import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { firstJoined } from "@/lib/supabase/utils";
 
 export interface FamilyMemberDisplay {
   contractId: string;
@@ -29,9 +30,9 @@ export interface FamilyDisplayState {
 }
 
 const DEFAULT_NAMES: [string, string, string] = [
-  "Groceries",
-  "Tuition",
-  "Savings",
+  ENVELOPE_LABELS[0],
+  ENVELOPE_LABELS[1],
+  ENVELOPE_LABELS[2],
 ];
 const DEFAULT_PERCENTS: [number, number, number] = [50, 30, 20];
 const DEFAULT_POLICY: SpendPolicyShape = {
@@ -144,7 +145,7 @@ export function useFamilyDisplay(
         wallets: { contract_id: string } | { contract_id: string }[] | null;
       };
       for (const m of (members as MemberRow[] | null) ?? []) {
-        const wallets = Array.isArray(m.wallets) ? m.wallets[0] : m.wallets;
+        const wallets = firstJoined(m.wallets);
         if (!wallets?.contract_id) continue;
         map.set(wallets.contract_id, {
           contractId: wallets.contract_id,

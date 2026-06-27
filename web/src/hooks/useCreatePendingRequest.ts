@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import type { EnvelopeName } from "@/lib/config";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface UseCreatePendingRequestResult {
@@ -22,14 +23,15 @@ export interface UseCreatePendingRequestResult {
  * protected envelope, daily limit, or per-tx threshold). No chain call —
  * the row sits in Supabase until admin approves (→ spend_on_behalf) or
  * denies. RLS gates the insert to a member's own family + own wallet.
+ *
+ * Member's `wallets.id` is resolved once at the dashboard level and passed
+ * in; we don't re-query it per call.
  */
 export function useCreatePendingRequest(
   memberAddress: string | null,
+  memberWalletDbId: string | null,
 ): UseCreatePendingRequestResult {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const create = useCallback(
+  const mutation = useCallback(
     async (input: {
       familyWalletId: string;
       envelope: EnvelopeName;
@@ -37,38 +39,25 @@ export function useCreatePendingRequest(
       memo: string;
     }): Promise<void> => {
       if (!memberAddress) throw new Error("Wallet not connected.");
-      setPending(true);
-      setError(null);
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data: walletRow, error: walletErr } = await supabase
-          .from("wallets")
-          .select("id")
-          .eq("contract_id", memberAddress)
-          .single();
-        if (walletErr || !walletRow) {
-          throw new Error("Could not resolve your wallet record.");
-        }
-        const { error: insertErr } = await supabase
-          .from("family_pending_requests")
-          .insert({
-            family_wallet_id: input.familyWalletId,
-            member_wallet_id: (walletRow as { id: string }).id,
-            envelope: input.envelope,
-            amount_stroops: input.amountStroops.toString(),
-            memo: input.memo,
-            status: "pending",
-          });
-        if (insertErr) throw new Error(insertErr.message);
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        throw e;
-      } finally {
-        setPending(false);
+      if (!memberWalletDbId) {
+        throw new Error("Your member record hasn't loaded yet — try again in a moment.");
       }
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("family_pending_requests")
+        .insert({
+          family_wallet_id: input.familyWalletId,
+          member_wallet_id: memberWalletDbId,
+          envelope: input.envelope,
+          amount_stroops: input.amountStroops.toString(),
+          memo: input.memo,
+          status: "pending",
+        });
+      if (error) throw new Error(error.message);
     },
-    [memberAddress],
+    [memberAddress, memberWalletDbId],
   );
 
-  return { create, pending, error };
+  const { run, pending, error } = useSupabaseMutation(mutation);
+  return { create: run, pending, error };
 }

@@ -37,16 +37,21 @@ export function PendingRequestsPanel({
     };
   }, [members]);
 
+  // Admin's Supabase wallet id is already on the merged member list — pull it
+  // here once instead of re-querying inside every approve/deny.
+  const adminWalletDbId =
+    members.find((m) => m.address === userAddress)?.walletDbId ?? null;
+
   const {
     approve,
     pending: approveInFlight,
     error: approveError,
-  } = useApproveRequest(userAddress, contractId);
+  } = useApproveRequest(userAddress, contractId, adminWalletDbId);
   const {
     deny,
     pending: denyInFlight,
     error: denyError,
-  } = useDenyRequest(userAddress);
+  } = useDenyRequest(userAddress, adminWalletDbId);
 
   if (!userAddress) return null;
   if (pending.length === 0) {

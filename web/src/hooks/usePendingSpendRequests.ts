@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { EnvelopeName } from "@/lib/config";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { firstJoined } from "@/lib/supabase/utils";
 
 export interface PendingSpendRequest {
   id: string;
@@ -35,7 +36,7 @@ interface RawRow {
 }
 
 function normalize(row: RawRow): PendingSpendRequest | null {
-  const wallets = Array.isArray(row.wallets) ? row.wallets[0] : row.wallets;
+  const wallets = firstJoined(row.wallets);
   if (!wallets?.contract_id) return null;
   return {
     id: row.id,

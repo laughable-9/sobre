@@ -486,8 +486,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           {state.balances.map((bal, i) => {
             const envName = ENVELOPE_LABELS[i];
             const approvalRequired =
-              state.policy.require_all_sigs ||
-              state.policy.protected_envelopes.includes(envName);
+              state.policy.requireAllSigs ||
+              state.policy.protectedEnvelopes.includes(envName);
             return (
               <EnvelopeCard
                 key={i}
