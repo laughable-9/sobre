@@ -25,7 +25,7 @@
 
 import { NextResponse } from "next/server";
 
-import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { requireFamilyParticipant } from "@/lib/auth/familyMember";
 import { PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
 import { pdaxErrorToResponse } from "@/lib/pdax/client";
 import {
@@ -81,8 +81,17 @@ export async function GET(
   }
   const r = row as WithdrawRow;
 
-  const membership = await requireFamilyMember(r.family_wallet_id);
+  // Admit sub-account holders too — the row's owner polls this on every
+  // tick until paid/failed; it's their cashout to watch.
+  const membership = await requireFamilyParticipant(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
+
+  // Family-scope auth admits peers; gate ownership too so a peer can't
+  // drive another participant's state machine (or trigger PDAX-side
+  // side-effects against rows they don't own).
+  if (r.member_id !== membership.memberId) {
+    return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
+  }
 
   if (r.status === "paid" || r.status === "failed") {
     return NextResponse.json({ ok: true, status: r.status, noChange: true });

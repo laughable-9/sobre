@@ -62,6 +62,11 @@ export async function GET(req: Request) {
     )
     .eq("family_wallet_id", familyWalletId)
     .eq("member_id", memberId)
+    // Sub-account cashouts (envelope IS NULL) flow through their own
+    // dashboard view via the row-realtime subscription; they should never
+    // appear in the family-side active list, where their null envelope
+    // would break renderers that assume a non-null name.
+    .not("envelope", "is", null)
     .in("status", ["pending", "spent", "transferred", "converted", "processing"])
     .order("created_at", { ascending: false });
   if (error) {
@@ -101,6 +106,8 @@ export async function GET(req: Request) {
     )
     .eq("family_wallet_id", familyWalletId)
     .eq("member_id", memberId)
+    // Same isolation rationale as the active query above.
+    .not("envelope", "is", null)
     .in("status", ["paid", "failed"])
     .gte("created_at", recentCutoff)
     .order("created_at", { ascending: false });

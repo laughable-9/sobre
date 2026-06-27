@@ -2,7 +2,7 @@
 use super::*;
 use soroban_sdk::{
     testutils::{Address as _, Ledger as _},
-    token, vec, Bytes, BytesN, Env, String,
+    token, Bytes, BytesN, Env, String,
 };
 
 const STROOPS_PER_TOKEN: i128 = 10_000_000;
@@ -73,6 +73,24 @@ impl Fixture {
         let expires_at = self.env.ledger().sequence() + 1000;
         self.client().create_invite(&hash, &expires_at);
         token
+    }
+
+    /// Distinct byte pattern from `create_invite` so member + sub-account
+    /// invites can coexist in storage when both are minted in one test.
+    fn create_subaccount_invite_token(&self, marker: u8) -> BytesN<32> {
+        let token = BytesN::from_array(&self.env, &[marker; 32]);
+        let hash: BytesN<32> = self.env.crypto().sha256(&Bytes::from(token.clone())).into();
+        let expires_at = self.env.ledger().sequence() + 1000;
+        self.client().create_subaccount_invite(&hash, &expires_at);
+        token
+    }
+
+    fn funded_with_subaccount() -> (Self, Address) {
+        let f = Self::funded();
+        let kid = Address::generate(&f.env);
+        let token = f.create_subaccount_invite_token(0x21);
+        f.client().join_as_subaccount(&kid, &token);
+        (f, kid)
     }
 }
 
@@ -381,5 +399,251 @@ fn spend_on_behalf_rejects_insufficient_balance() {
         &Envelope::Groceries,
         &(60 * STROOPS_PER_TOKEN),
         &String::from_str(&f.env, "too much"),
+    );
+}
+
+// ─── Sub-account tests ─────────────────────────────────────────────────────
+
+#[test]
+fn join_as_subaccount_registers_with_zero_balance_unlocked() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    let state = f.client().get_state();
+    assert_eq!(state.subaccounts.len(), 1);
+    let sub = state.subaccounts.get(0).unwrap();
+    assert_eq!(sub.address, kid);
+    assert_eq!(sub.balance, 0);
+    assert!(!sub.locked);
+    // Sub-accounts don't bleed into the member list.
+    assert_eq!(state.members.len(), 1);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #17)")]
+fn join_as_subaccount_rejects_existing_member() {
+    let (f, member) = Fixture::funded_with_member();
+    let token = f.create_subaccount_invite_token(0x21);
+    f.client().join_as_subaccount(&member, &token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #17)")]
+fn join_as_subaccount_rejects_duplicate() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    let token = f.create_subaccount_invite_token(0x22);
+    f.client().join_as_subaccount(&kid, &token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn join_as_subaccount_rejects_member_invite_token() {
+    let f = Fixture::new();
+    // Mint a *member* invite then try to redeem via the sub-account path.
+    let member_token = f.create_invite();
+    let kid = Address::generate(&f.env);
+    f.client().join_as_subaccount(&kid, &member_token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #18)")]
+fn join_as_subaccount_rejects_when_at_max() {
+    let f = Fixture::funded();
+    for i in 0..4u8 {
+        let kid = Address::generate(&f.env);
+        let token = f.create_subaccount_invite_token(0x30 + i);
+        f.client().join_as_subaccount(&kid, &token);
+    }
+    let overflow = Address::generate(&f.env);
+    let token = f.create_subaccount_invite_token(0x40);
+    f.client().join_as_subaccount(&overflow, &token);
+}
+
+#[test]
+fn fund_subaccount_debits_envelope_and_credits_sub() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Tuition,
+        &kid,
+        &(8 * STROOPS_PER_TOKEN),
+    );
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(1).unwrap(), 22 * STROOPS_PER_TOKEN);
+    assert_eq!(state.subaccounts.get(0).unwrap().balance, 8 * STROOPS_PER_TOKEN);
+    // No token leaves the contract — fund is internal ledger only.
+    assert_eq!(f.token().balance(&kid), 0);
+}
+
+#[test]
+fn fund_subaccount_accumulates_across_envelopes() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &kid,
+        &(3 * STROOPS_PER_TOKEN),
+    );
+    f.client().fund_subaccount(
+        &Envelope::Tuition,
+        &kid,
+        &(4 * STROOPS_PER_TOKEN),
+    );
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 47 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(1).unwrap(), 26 * STROOPS_PER_TOKEN);
+    assert_eq!(state.subaccounts.get(0).unwrap().balance, 7 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn fund_subaccount_rejects_unknown_recipient() {
+    let f = Fixture::funded();
+    let nobody = Address::generate(&f.env);
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &nobody,
+        &STROOPS_PER_TOKEN,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn fund_subaccount_rejects_envelope_underflow() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Savings,
+        &kid,
+        &(21 * STROOPS_PER_TOKEN), // Savings holds 20
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn fund_subaccount_rejects_zero() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(&Envelope::Groceries, &kid, &0);
+}
+
+#[test]
+fn spend_from_subaccount_transfers_tokens_to_caller() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &kid,
+        &(10 * STROOPS_PER_TOKEN),
+    );
+    let kid_before = f.token().balance(&kid);
+    f.client().spend_from_subaccount(
+        &kid,
+        &(4 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "school baon"),
+    );
+    let state = f.client().get_state();
+    assert_eq!(state.subaccounts.get(0).unwrap().balance, 6 * STROOPS_PER_TOKEN);
+    assert_eq!(
+        f.token().balance(&kid),
+        kid_before + 4 * STROOPS_PER_TOKEN
+    );
+    // Envelope balances are untouched by a sub-account spend.
+    assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #16)")]
+fn spend_from_subaccount_rejects_when_locked() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &kid,
+        &(10 * STROOPS_PER_TOKEN),
+    );
+    f.client().lock_subaccount(&kid);
+    f.client().spend_from_subaccount(
+        &kid,
+        &STROOPS_PER_TOKEN,
+        &String::from_str(&f.env, "denied"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn spend_from_subaccount_rejects_insufficient_balance() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().spend_from_subaccount(
+        &kid,
+        &STROOPS_PER_TOKEN,
+        &String::from_str(&f.env, "broke"),
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn spend_from_subaccount_rejects_non_subaccount() {
+    let f = Fixture::funded();
+    let stranger = Address::generate(&f.env);
+    f.client().spend_from_subaccount(
+        &stranger,
+        &STROOPS_PER_TOKEN,
+        &String::from_str(&f.env, "outsider"),
+    );
+}
+
+#[test]
+fn lock_then_unlock_restores_spend() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &kid,
+        &(5 * STROOPS_PER_TOKEN),
+    );
+    f.client().lock_subaccount(&kid);
+    assert!(f.client().get_state().subaccounts.get(0).unwrap().locked);
+    f.client().unlock_subaccount(&kid);
+    assert!(!f.client().get_state().subaccounts.get(0).unwrap().locked);
+    f.client().spend_from_subaccount(
+        &kid,
+        &(2 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "ok now"),
+    );
+    assert_eq!(
+        f.client().get_state().subaccounts.get(0).unwrap().balance,
+        3 * STROOPS_PER_TOKEN,
+    );
+}
+
+#[test]
+fn lock_is_idempotent() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().lock_subaccount(&kid);
+    f.client().lock_subaccount(&kid); // no panic
+    assert!(f.client().get_state().subaccounts.get(0).unwrap().locked);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #15)")]
+fn lock_subaccount_rejects_unknown_address() {
+    let f = Fixture::funded();
+    let nobody = Address::generate(&f.env);
+    f.client().lock_subaccount(&nobody);
+}
+
+#[test]
+fn close_wallet_sweeps_subaccount_balances_to_admin() {
+    let (f, kid) = Fixture::funded_with_subaccount();
+    f.client().fund_subaccount(
+        &Envelope::Groceries,
+        &kid,
+        &(10 * STROOPS_PER_TOKEN),
+    );
+    let admin_before = f.token().balance(&f.admin);
+    f.client().close_wallet();
+    let state = f.client().get_state();
+    for b in state.balances.iter() {
+        assert_eq!(b, 0);
+    }
+    assert_eq!(state.subaccounts.get(0).unwrap().balance, 0);
+    assert_eq!(f.token().balance(&f.contract_id), 0);
+    // Admin recovers all 100 (envelopes) — the 10 lifted into the sub is
+    // included because it was deducted from Groceries when funding.
+    assert_eq!(
+        f.token().balance(&f.admin),
+        admin_before + 100 * STROOPS_PER_TOKEN,
     );
 }

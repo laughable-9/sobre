@@ -24,6 +24,7 @@ import {
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
+import { BANKS } from "@/lib/banks";
 import {
   ENVELOPE_LABELS,
   STROOPS_PER_TOKEN,
@@ -38,13 +39,6 @@ import { maskAccountNumber } from "@/lib/format";
 import { backdropClose } from "@/lib/ui";
 
 const QUICK_PHP = [100, 500, 1000, 5000];
-
-/** PDAX UAT supports these two banks for InstaPay payouts. Keep the list
- *  short and explicit — anything else will be rejected by /fiat/withdraw. */
-const BANKS = [
-  { code: "BASECPH", name: "Security Bank" },
-  { code: "BACTBPH", name: "CTBC Bank" },
-] as const;
 
 const ICONS: Record<EnvelopeName, React.ReactNode> = {
   Groceries: <ShoppingCart size={18} strokeWidth={2} />,

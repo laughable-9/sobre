@@ -1,0 +1,112 @@
+"use client";
+
+import { useCallback, useState } from "react";
+import { xdr } from "@stellar/stellar-sdk";
+
+import { getServer, invokeWrite } from "@/lib/contract";
+import {
+  base64UrlEncode,
+  buildInviteUrl,
+  bytesToHex,
+  sha256,
+} from "@/lib/encoding";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+import {
+  INVITE_TTL_LEDGERS,
+  type CreateInviteResult,
+} from "@/hooks/useCreateInvite";
+
+export interface UseCreateSubaccountInviteResult {
+  createInvite: (
+    displayName: string,
+    emoji: string,
+  ) => Promise<CreateInviteResult>;
+  pending: boolean;
+  error: string | null;
+}
+
+/**
+ * Admin-only. Spins up a new sub-account invite:
+ *
+ *   1. Generate 32 random bytes (the plaintext token).
+ *   2. Call `create_subaccount_invite(sha256(token), expires_at_ledger)` via
+ *      the admin's passkey — one FaceID prompt.
+ *   3. Insert a pending `family_subaccounts` row carrying the display name +
+ *      emoji + sha256 hex of the same token. wallet_id stays NULL until the
+ *      joiner redeems via /api/subaccount/join.
+ *   4. Build the share URL containing the plaintext token + contract ID.
+ *
+ * If step 3 fails after step 2 succeeds, the on-chain invite is still live
+ * for ~30 min — admin can retry. We surface a clear error noting that.
+ */
+export function useCreateSubaccountInvite(
+  contractId: string | null,
+  familyWalletId: string | null,
+): UseCreateSubaccountInviteResult {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const createInvite = useCallback(
+    async (
+      displayName: string,
+      emoji: string,
+    ): Promise<CreateInviteResult> => {
+      if (!contractId) throw new Error("No wallet selected.");
+      if (!familyWalletId) throw new Error("Family wallet record missing.");
+      const trimmed = displayName.trim();
+      if (!trimmed) throw new Error("Display name is required.");
+      if (!emoji) throw new Error("Pick an emoji.");
+      setPending(true);
+      setError(null);
+      try {
+        const token = crypto.getRandomValues(new Uint8Array(32));
+        const tokenHashBytes = await sha256(token);
+        const tokenHashHex = bytesToHex(tokenHashBytes);
+
+        const latest = await getServer().getLatestLedger();
+        const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+
+        const args = [
+          xdr.ScVal.scvBytes(Buffer.from(tokenHashBytes)),
+          xdr.ScVal.scvU32(expiresAtLedger),
+        ];
+        await invokeWrite(contractId, "create_subaccount_invite", args);
+
+        const supabase = getSupabaseBrowserClient();
+        const { error: insertErr } = await supabase
+          .from("family_subaccounts")
+          .insert({
+            family_wallet_id: familyWalletId,
+            display_name: trimmed,
+            emoji,
+            invite_token_hash: tokenHashHex,
+          });
+        if (insertErr) {
+          throw new Error(
+            `Invite minted on chain but couldn't save display data: ${insertErr.message}. The share link still works.`,
+          );
+        }
+
+        // Append the sub-account routing query param. The /invite/[token]
+        // page reads `?as=subaccount` and routes redemption through
+        // `join_as_subaccount` instead of `join_wallet`. One-line override
+        // beats a generic opts param on buildInviteUrl.
+        const baseUrl = buildInviteUrl(contractId, base64UrlEncode(token));
+        return {
+          url: `${baseUrl}&as=subaccount`,
+          expiresAtLedger,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setPending(false);
+      }
+    },
+    [contractId, familyWalletId],
+  );
+
+  return { createInvite, pending, error };
+}

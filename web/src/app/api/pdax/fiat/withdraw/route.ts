@@ -19,7 +19,10 @@
 
 import { NextResponse } from "next/server";
 
-import { requireFamilyMember } from "@/lib/auth/familyMember";
+import {
+  requireFamilyMember,
+  requireFamilyParticipant,
+} from "@/lib/auth/familyMember";
 import { PAYMENT_TOKEN } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxErrorToResponse, PdaxError } from "@/lib/pdax/client";
@@ -32,7 +35,13 @@ export const runtime = "nodejs";
 interface RequestBody {
   /** Family Sobre contract C-address. Symmetric with fiat/deposit. */
   contract_id: string;
-  envelope: "Groceries" | "Tuition" | "Savings";
+  /** Member cashout: which envelope to debit. Mutually exclusive with
+   *  subaccount_id; the route validates exactly one is set. */
+  envelope?: "Groceries" | "Tuition" | "Savings";
+  /** Sub-account cashout: family_subaccounts row id. The spend leg becomes
+   *  spend_from_subaccount instead of spend; envelope is left NULL on the
+   *  pdax_withdrawals row. */
+  subaccount_id?: string;
   /** Token amount the user is cashing out (XLM today). Computed in the modal
    *  from the PHP amount / live rate; we pass the token amount through so the
    *  on-chain spend() and the SAC transfer use the same integer stroops the
@@ -59,20 +68,25 @@ interface RequestBody {
 
 export async function POST(req: Request) {
   const body = (await req.json().catch(() => null)) as RequestBody | null;
+  // Source XOR: exactly one of envelope / subaccount_id.
+  const envelopeValid =
+    typeof body?.envelope === "string" &&
+    ["Groceries", "Tuition", "Savings"].includes(body.envelope);
+  const subaccountValid =
+    typeof body?.subaccount_id === "string" && body.subaccount_id.length > 0;
   if (
     !body ||
     typeof body.contract_id !== "string" ||
-    typeof body.envelope !== "string" ||
-    !["Groceries", "Tuition", "Savings"].includes(body.envelope) ||
     typeof body.amount_token !== "number" ||
     body.amount_token <= 0 ||
     typeof body.amount_php !== "number" ||
-    body.amount_php <= 0
+    body.amount_php <= 0 ||
+    (envelopeValid === subaccountValid)
   ) {
     return NextResponse.json(
       {
         error:
-          "Invalid body: expect { contract_id, envelope, amount_token > 0, amount_php > 0 }",
+          "Invalid body: expect { contract_id, amount_token>0, amount_php>0, and exactly one of envelope or subaccount_id }",
       },
       { status: 400 },
     );
@@ -92,9 +106,36 @@ export async function POST(req: Request) {
   }
   const familyWalletId = (familyRow as { id: string }).id;
 
-  const ctx = await requireFamilyMember(familyWalletId);
+  // Sub-account cashouts admit the sub-account holder. Member cashouts
+  // gate to family_members only — sub-accounts can't initiate a
+  // cashout against an envelope they don't own.
+  const ctx = subaccountValid
+    ? await requireFamilyParticipant(familyWalletId)
+    : await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
+
+  // When this is a sub-account cashout, verify the caller is actually the
+  // owner of that sub-account row. Without this any participant could pass
+  // somebody else's subaccount_id and cash out from their balance.
+  if (subaccountValid) {
+    const { data: subRow } = await admin
+      .from("family_subaccounts")
+      .select("id, wallet_id, family_wallet_id")
+      .eq("id", body.subaccount_id!)
+      .maybeSingle();
+    if (
+      !subRow ||
+      (subRow as { wallet_id: string | null }).wallet_id !== memberId ||
+      (subRow as { family_wallet_id: string }).family_wallet_id !==
+        familyWalletId
+    ) {
+      return NextResponse.json(
+        { error: "Not your sub-account" },
+        { status: 403 },
+      );
+    }
+  }
 
   // Resolve bank details: explicit body fields win; otherwise look up the
   // member's default registered bank. We refuse to insert the row if neither
@@ -162,7 +203,8 @@ export async function POST(req: Request) {
     identifier,
     family_wallet_id: familyWalletId,
     member_id: memberId,
-    envelope: body.envelope,
+    envelope: subaccountValid ? null : body.envelope,
+    subaccount_id: subaccountValid ? body.subaccount_id : null,
     amount_usdc: body.amount_token,
     amount_php: body.amount_php,
     beneficiary_bank_code: bankCode,

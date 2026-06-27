@@ -26,6 +26,12 @@ const MOCKUPS = [
     title: "Withdraw to a saved destination",
     body: "Money leaves the wallet to a bank account or e-wallet. Identity verified before it leaves.",
   },
+  {
+    href: "/mockup/sub-sobre",
+    eyebrow: "5 · Sub-accounts",
+    title: "Supplementary wallets for kids",
+    body: "Admin tops up Junior from any envelope. Junior only sees his own balance + spend history. Admin can lock him out at any time, like freezing a supplementary card.",
+  },
 ];
 
 export default function MockupIndex() {
