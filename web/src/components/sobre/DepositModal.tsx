@@ -65,7 +65,11 @@ export function DepositModal({
     if (!valid) return;
     const stroops = BigInt(Math.round(usdc * STROOPS_PER_USDC));
     try {
-      await deposit(stroops);
+      await deposit(stroops, [
+        state.percents[0] ?? 50,
+        state.percents[1] ?? 30,
+        state.percents[2] ?? 20,
+      ]);
       onSuccess({ usdc, stroops });
     } catch {
       // surfaces via the hook's error state

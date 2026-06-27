@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
 import { FACTORY_CONTRACT_ID, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
-import { invokeWrite, percentsScVal } from "@/lib/contract";
+import { invokeWrite } from "@/lib/contract";
 import { seedFamilyDisplay } from "@/lib/familyWallets";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -56,7 +56,6 @@ export function useCreateSobre(
         const args = [
           Address.fromString(userAddress).toScVal(),
           Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
-          percentsScVal(percents),
         ];
         const { returnValue } = await invokeWrite(
           FACTORY_CONTRACT_ID,
@@ -86,6 +85,7 @@ export function useCreateSobre(
               contract_id: newContractId,
               display_name: walletName,
               created_by: walletDbId,
+              percents,
             })
             .select("id")
             .single();

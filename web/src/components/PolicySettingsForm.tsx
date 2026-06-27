@@ -4,7 +4,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Info, Lock } from "lucide-react";
 
 import { SAVINGS_NAME } from "@/components/sobre/EnvelopeNamesEditor";
-import { useApplySettings } from "@/hooks/useApplySettings";
 import type { SpendPolicy } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
@@ -14,11 +13,10 @@ import {
 } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { formatPhpInt } from "@/lib/format";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Unit = "PHP" | "USDC";
 
-/** Savings is permanently admin-protected — its APY-bearing balance always
- *  needs admin approval to spend. */
 const ALWAYS_PROTECTED: readonly EnvelopeName[] = [SAVINGS_NAME];
 
 function PolicyReadOnly({
@@ -80,6 +78,12 @@ function convertInput(val: string, next: Unit): string {
     : (n * PHP_PER_USDC).toFixed(0);
 }
 
+/**
+ * Admin sets the family spending policy. Pure Supabase write — saves
+ * instantly with no FaceID and no fee. The frontend's spend flow reads
+ * this policy and either submits the spend directly or stages an
+ * approval request, depending on whether the policy triggers.
+ */
 export function PolicySettingsForm({
   userAddress,
   familyWalletId,
@@ -97,7 +101,9 @@ export function PolicySettingsForm({
 }) {
   const [unit, setUnit] = useState<Unit>("PHP");
   const [limitInput, setLimitInput] = useState<string>(() =>
-    current.daily_limit === null ? "" : stroopsToPhpString(current.daily_limit, "PHP"),
+    current.daily_limit === null
+      ? ""
+      : stroopsToPhpString(current.daily_limit, "PHP"),
   );
   const [thresholdInput, setThresholdInput] = useState<string>(() =>
     current.per_tx_threshold === null
@@ -110,7 +116,8 @@ export function PolicySettingsForm({
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
     () => new Set(current.protected_envelopes),
   );
-  const { stageIntent, pending, error } = useApplySettings(userAddress);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const policySig = useMemo(
     () =>
@@ -145,21 +152,19 @@ export function PolicySettingsForm({
     setUnit(next);
   };
 
-  // ─── Read-only branch ───────────────────────────────────────────────
   if (!userAddress) return null;
   if (!isAdmin)
     return <PolicyReadOnly current={current} envelopeNames={envelopeNames} />;
 
   const toggle = (e: EnvelopeName) => {
     if (requireAllSigs) return;
-    if (ALWAYS_PROTECTED.includes(e)) return; // Savings cannot be unprotected.
+    if (ALWAYS_PROTECTED.includes(e)) return;
     const next = new Set(protectedSet);
     if (next.has(e)) next.delete(e);
     else next.add(e);
     setProtectedSet(next);
   };
 
-  // Contract receives the expanded set so server state matches the UI.
   const effectiveProtected = requireAllSigs
     ? new Set<EnvelopeName>(ENVELOPE_LABELS)
     : new Set<EnvelopeName>([...protectedSet, ...ALWAYS_PROTECTED]);
@@ -175,18 +180,29 @@ export function PolicySettingsForm({
     };
     const dailyLimit = inputToStroops(limitInput);
     const perTxThreshold = inputToStroops(thresholdInput);
+    setSaving(true);
+    setError(null);
     try {
-      await stageIntent(familyWalletId, {
-        policy: {
-          requireAllSigs,
-          dailyLimit,
-          perTxThreshold,
-          protectedEnvelopes: Array.from(effectiveProtected),
-        },
-      });
+      const supabase = getSupabaseBrowserClient();
+      const { error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({
+          policy_json: {
+            require_all_sigs: requireAllSigs,
+            daily_limit_stroops:
+              dailyLimit === null ? null : dailyLimit.toString(),
+            per_tx_threshold_stroops:
+              perTxThreshold === null ? null : perTxThreshold.toString(),
+            protected_envelopes: Array.from(effectiveProtected),
+          },
+        })
+        .eq("id", familyWalletId);
+      if (updateErr) throw new Error(updateErr.message);
       onSuccess();
-    } catch {
-      // error on hook
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -204,14 +220,14 @@ export function PolicySettingsForm({
           >
             Daily limit per member
           </label>
-          <UnitToggle unit={unit} onChange={switchUnit} disabled={pending} />
+          <UnitToggle unit={unit} onChange={switchUnit} disabled={saving} />
         </div>
         <AmountInput
           id="daily-limit"
           unit={unit}
           value={limitInput}
           onChange={setLimitInput}
-          disabled={pending}
+          disabled={saving}
           placeholder="no limit"
           equivLabel={equivLabel}
         />
@@ -235,7 +251,7 @@ export function PolicySettingsForm({
           unit={unit}
           value={thresholdInput}
           onChange={setThresholdInput}
-          disabled={pending}
+          disabled={saving}
           placeholder="no threshold"
           equivLabel={tEquivLabel}
         />
@@ -251,7 +267,7 @@ export function PolicySettingsForm({
           type="checkbox"
           checked={requireAllSigs}
           onChange={(e) => setRequireAllSigs(e.target.checked)}
-          disabled={pending}
+          disabled={saving}
           className="w-4 h-4 accent-[var(--sobre-primary)]"
         />
         <span style={{ color: "var(--text-1)" }}>
@@ -274,7 +290,7 @@ export function PolicySettingsForm({
         ) : null}
         {ENVELOPE_LABELS.map((envelope) => {
           const alwaysOn = ALWAYS_PROTECTED.includes(envelope);
-          const disabled = pending || requireAllSigs || alwaysOn;
+          const disabled = saving || requireAllSigs || alwaysOn;
           return (
             <label
               key={envelope}
@@ -314,11 +330,11 @@ export function PolicySettingsForm({
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending || !familyWalletId}
+          disabled={saving || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{ padding: "12px 18px", fontSize: 14 }}
         >
-          {pending ? "Saving…" : "Save policy"}
+          {saving ? "Saving…" : "Save policy"}
         </button>
         {error ? (
           <span

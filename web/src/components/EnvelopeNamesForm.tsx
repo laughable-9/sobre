@@ -88,7 +88,7 @@ export function EnvelopeNamesForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
         Display only. Balances + pending requests stay attached to the same
-        envelope slots. Saves instantly, no FaceID.
+        envelope slots. Saves instantly.
       </p>
       <EnvelopeNamesEditor
         value={names}

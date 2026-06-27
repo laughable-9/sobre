@@ -259,7 +259,7 @@ export function ActivityFeed({
         !pendingDeposits?.length &&
         !pendingCashouts?.length ? (
           <p className="text-xs" style={{ color: "var(--text-3)" }}>
-            {loading ? "Loading events…" : "No on-chain events yet."}
+            {loading ? "Loading activity…" : "No activity yet."}
           </p>
         ) : null}
 

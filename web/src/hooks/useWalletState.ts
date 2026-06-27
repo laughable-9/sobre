@@ -10,53 +10,42 @@ import {
 
 import { NETWORK, type EnvelopeName } from "@/lib/config";
 import { getServer, simulateSourceAccount } from "@/lib/contract";
-import { envelopeNameFromScNative } from "@/lib/format";
 import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 
 export interface SpendPolicy {
   require_all_sigs: boolean;
   daily_limit: bigint | null;
-  /** Per-tx approval threshold in stroops, or null for no gate. */
   per_tx_threshold: bigint | null;
   protected_envelopes: EnvelopeName[];
 }
 
-export interface PendingRequest {
-  id: bigint;
-  caller: string;
-  envelope: EnvelopeName;
-  amount: bigint;
-  memo: string;
-  requested_at_ledger: number;
-}
-
 export interface Member {
   address: string;
-  /** From Supabase. Empty string before Supabase resolves. */
   name: string;
-  /** From Supabase. Empty string before Supabase resolves. */
   emoji: string;
 }
 
 export interface WalletState {
   admin: string;
   payment_token: string;
-  /** From Supabase (family_wallets.display_name). Empty until resolved. */
+  /** Wallet display name (Supabase). */
   wallet_name: string;
-  /** From Supabase (family_envelope_names). Falls back to canonical keys. */
+  /** Envelope display labels (Supabase). */
   envelope_names: string[];
+  /** Per-envelope split percentages (Supabase). */
   percents: number[];
+  /** On-chain members. Joined with Supabase display data (name + emoji). */
   members: Member[];
+  /** On-chain envelope balances in stroops. */
   balances: bigint[];
+  /** Family policy (Supabase). Frontend gates spends against this. */
   policy: SpendPolicy;
-  pending: PendingRequest[];
 }
 
 export interface UseWalletStateResult {
   state: WalletState | null;
   loading: boolean;
   error: string | null;
-  /** family_wallets.id (Supabase UUID). Convenience for callers that need it. */
   familyWalletId: string | null;
   refresh: () => Promise<void>;
 }
@@ -64,22 +53,15 @@ export interface UseWalletStateResult {
 interface OnChainState {
   admin: string;
   payment_token: string;
-  percents: number[];
   members: { address: string }[];
   balances: bigint[];
-  policy: SpendPolicy;
-  pending: PendingRequest[];
 }
 
 /**
- * Lifts the polling lifecycle to a single caller so the page opens one watch.
- * Short-circuits setState when the retval XDR is byte-identical to the last
- * one — keeps object references stable across no-op polls so downstream
- * useEffects (e.g. form re-sync in PolicySettingsForm) don't re-fire every 3s.
- *
- * Cosmetic display data (wallet name, envelope labels, member name/emoji)
- * comes from Supabase via useFamilyDisplay; we merge it into the returned
- * shape so consumers keep accessing `state.wallet_name` etc as before.
+ * Polls the contract's `get_state` for the on-chain truth (admin, members'
+ * addresses, balances) and joins it with the Supabase-resident display +
+ * family-rule state from useFamilyDisplay (wallet name, envelope labels,
+ * percents, policy, member name/emoji).
  */
 export function useWalletState(
   userAddress: string | null,
@@ -88,23 +70,11 @@ export function useWalletState(
   const [onChain, setOnChain] = useState<OnChainState | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Bump on every fetch; only the latest call may setState. Guards against
-  // address flipping mid-fetch.
   const generationRef = useRef(0);
   const lastRetvalXdrRef = useRef<string | null>(null);
-  // Highest `latestLedger` we've successfully applied. Soroban RPC's
-  // simulateTransaction includes the ledger the snapshot came from; when
-  // a fresh poll hits an under-replicated RPC node we sometimes see an
-  // OLDER snapshot than the one already on screen. Without this guard the
-  // dashboard flickers between pre- and post-deposit state for a few
-  // seconds after a `deposit()` lands. Tracking the high-water mark and
-  // ignoring lower-ledger snapshots stops the regression.
   const lastLedgerRef = useRef<number>(0);
 
   const display = useFamilyDisplay(contractId);
-  // Depend on the stable refresh fn, not the whole display object — that
-  // would churn every render and rebuild `refresh` (which TopBar et al.
-  // receive as a prop), forcing downstream re-renders.
   const displayRefresh = display.refresh;
 
   const fetchState = useCallback(async () => {
@@ -112,12 +82,6 @@ export function useWalletState(
     const gen = ++generationRef.current;
     const server = getServer();
 
-    // Only toggle loading on the first fetch — subsequent polls happen in the
-    // background and shouldn't flicker the UI. Same reasoning for `error`:
-    // we only set it on the catch path (which Object.is-skips a re-render when
-    // the message hasn't changed) and clear it strictly after a successful
-    // poll. Otherwise an uninitialized contract would flicker between the
-    // init form and the loading screen every 3s.
     const isInitialFetch = lastRetvalXdrRef.current === null;
     if (isInitialFetch) setLoading(true);
     try {
@@ -133,23 +97,15 @@ export function useWalletState(
 
       const sim = await server.simulateTransaction(tx);
       if (gen !== generationRef.current) return;
-      if ("error" in sim) {
-        throw new Error(`simulation failed: ${sim.error}`);
-      }
-      if (!sim.result?.retval) {
-        throw new Error("simulation returned no value");
-      }
-      // Reject snapshots from a ledger we've already moved past — see the
-      // lastLedgerRef comment above. The 0-ledger case is the first poll
-      // for a wallet (no high-water mark yet) and always wins.
+      if ("error" in sim) throw new Error(`simulation failed: ${sim.error}`);
+      if (!sim.result?.retval) throw new Error("simulation returned no value");
+
       const simLedger = Number(sim.latestLedger ?? 0);
-      if (simLedger > 0 && simLedger < lastLedgerRef.current) {
-        return;
-      }
+      if (simLedger > 0 && simLedger < lastLedgerRef.current) return;
+
       const retvalXdr = sim.result.retval.toXDR("base64");
-      if (retvalXdr === lastRetvalXdrRef.current) {
-        return; // no-op poll; keep references stable
-      }
+      if (retvalXdr === lastRetvalXdrRef.current) return;
+
       lastRetvalXdrRef.current = retvalXdr;
       lastLedgerRef.current = Math.max(lastLedgerRef.current, simLedger);
       const raw = scValToNative(sim.result.retval) as Record<string, unknown>;
@@ -163,8 +119,6 @@ export function useWalletState(
     }
   }, [userAddress, contractId]);
 
-  // Reset the dedupe cache when the contractId changes so navigating between
-  // Sobres always re-issues a fresh fetch.
   useEffect(() => {
     lastRetvalXdrRef.current = null;
     lastLedgerRef.current = 0;
@@ -179,7 +133,6 @@ export function useWalletState(
     return () => clearInterval(interval);
   }, [userAddress, contractId, fetchState]);
 
-  // Merge on-chain truth with Supabase-resident cosmetic state.
   const state = useMemo<WalletState | null>(() => {
     if (!onChain) return null;
     const members: Member[] = onChain.members.map((m) => {
@@ -195,13 +148,24 @@ export function useWalletState(
       payment_token: onChain.payment_token,
       wallet_name: display.walletName,
       envelope_names: display.envelopeNames,
-      percents: onChain.percents,
+      percents: display.percents,
       members,
       balances: onChain.balances,
-      policy: onChain.policy,
-      pending: onChain.pending,
+      policy: {
+        require_all_sigs: display.policy.requireAllSigs,
+        daily_limit: display.policy.dailyLimit,
+        per_tx_threshold: display.policy.perTxThreshold,
+        protected_envelopes: display.policy.protectedEnvelopes,
+      },
     };
-  }, [onChain, display.walletName, display.envelopeNames, display.membersByAddress]);
+  }, [
+    onChain,
+    display.walletName,
+    display.envelopeNames,
+    display.percents,
+    display.policy,
+    display.membersByAddress,
+  ]);
 
   const refresh = useCallback(async () => {
     await fetchState();
@@ -218,44 +182,15 @@ export function useWalletState(
 }
 
 function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
-  const rawPolicy = (raw.policy ?? {}) as Record<string, unknown>;
-  const optBigint = (v: unknown): bigint | null =>
-    v === undefined || v === null ? null : (v as bigint);
-  const policy: SpendPolicy = {
-    require_all_sigs: Boolean(rawPolicy.require_all_sigs),
-    daily_limit: optBigint(rawPolicy.daily_limit),
-    per_tx_threshold: optBigint(rawPolicy.per_tx_threshold),
-    protected_envelopes: Array.isArray(rawPolicy.protected_envelopes)
-      ? (rawPolicy.protected_envelopes as unknown[]).map((e) =>
-          envelopeNameFromScNative(e),
-        )
-      : [],
-  };
-
-  const pending: PendingRequest[] = Array.isArray(raw.pending)
-    ? (raw.pending as Record<string, unknown>[]).map((r) => ({
-        id: r.id as bigint,
-        caller: String(r.caller),
-        envelope: envelopeNameFromScNative(r.envelope),
-        amount: r.amount as bigint,
-        memo: String(r.memo ?? ""),
-        requested_at_ledger: Number(r.requested_at_ledger ?? 0),
-      }))
-    : [];
-
   const members: { address: string }[] = Array.isArray(raw.members)
     ? (raw.members as Record<string, unknown>[]).map((m) => ({
         address: String(m.address),
       }))
     : [];
-
   return {
     admin: String(raw.admin),
     payment_token: String(raw.payment_token),
-    percents: (raw.percents as number[]) ?? [],
     members,
     balances: (raw.balances as bigint[]) ?? [],
-    policy,
-    pending,
   };
 }

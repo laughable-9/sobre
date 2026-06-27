@@ -1,14 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
+import type { SpendPolicyShape } from "@/lib/contract";
+import type { EnvelopeName } from "@/lib/config";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface FamilyMemberDisplay {
-  /** Smart-wallet C-address. Matches the on-chain Member.address. */
   contractId: string;
-  /** Supabase public.wallets.id, exposed for components that need to write
-   *  back to the same row (own profile edit). */
   walletDbId: string;
   name: string;
   emoji: string;
@@ -16,15 +15,14 @@ export interface FamilyMemberDisplay {
 }
 
 export interface FamilyDisplayState {
-  /** family_wallets.id (the Supabase UUID). null while resolving. */
+  /** family_wallets.id (Supabase UUID). null while resolving. */
   familyWalletId: string | null;
-  /** family_wallets.display_name. */
   walletName: string;
-  /** Ordered [Groceries, Tuition, Savings] display labels. Falls back to
-   *  the canonical keys if a row is missing for any reason. */
   envelopeNames: [string, string, string];
-  /** Members keyed by their on-chain C-address so callers joining against
-   *  WalletState.members can lookup display by `members.address`. */
+  /** Per-envelope split percentages, indexed [Groceries, Tuition, Savings]. */
+  percents: [number, number, number];
+  /** Family-level spend policy. Defaults are "no gate, nobody protected". */
+  policy: SpendPolicyShape;
   membersByAddress: Map<string, FamilyMemberDisplay>;
   loading: boolean;
   refresh: () => Promise<void>;
@@ -35,16 +33,47 @@ const DEFAULT_NAMES: [string, string, string] = [
   "Tuition",
   "Savings",
 ];
+const DEFAULT_PERCENTS: [number, number, number] = [50, 30, 20];
+const DEFAULT_POLICY: SpendPolicyShape = {
+  requireAllSigs: false,
+  dailyLimit: null,
+  perTxThreshold: null,
+  protectedEnvelopes: [],
+};
+
+interface FamilyRow {
+  id: string;
+  display_name: string | null;
+  percents: number[] | null;
+  policy_json: {
+    require_all_sigs?: boolean;
+    daily_limit_stroops?: string | number | null;
+    per_tx_threshold_stroops?: string | number | null;
+    protected_envelopes?: EnvelopeName[];
+  } | null;
+}
+
+function normalizePolicy(raw: FamilyRow["policy_json"]): SpendPolicyShape {
+  if (!raw) return DEFAULT_POLICY;
+  const optBigint = (v: string | number | null | undefined) =>
+    v === null || v === undefined ? null : BigInt(v);
+  return {
+    requireAllSigs: Boolean(raw.require_all_sigs),
+    dailyLimit: optBigint(raw.daily_limit_stroops),
+    perTxThreshold: optBigint(raw.per_tx_threshold_stroops),
+    protectedEnvelopes: raw.protected_envelopes ?? [],
+  };
+}
+
+function normalizePercents(raw: number[] | null): [number, number, number] {
+  if (!raw || raw.length !== 3) return DEFAULT_PERCENTS;
+  return [raw[0]!, raw[1]!, raw[2]!];
+}
 
 /**
- * Subscribes to the Supabase-resident cosmetic state for a family wallet:
- * wallet display name, the three envelope display labels, and per-member
- * display name + emoji. The on-chain WalletState carries only addresses
- * and percentages; this hook covers everything UI-only.
- *
- * Realtime subscriptions on all three tables keep the UI in sync without
- * polling. Callers join against on-chain members by C-address via
- * `membersByAddress`.
+ * Family-level Supabase state — wallet name, envelope display labels, split
+ * percents, spend policy, and per-member display data (name/emoji/role).
+ * The dashboard joins this with on-chain truth in useWalletState.
  */
 export function useFamilyDisplay(
   contractId: string | null,
@@ -53,6 +82,9 @@ export function useFamilyDisplay(
   const [walletName, setWalletName] = useState<string>("");
   const [envelopeNames, setEnvelopeNames] =
     useState<[string, string, string]>(DEFAULT_NAMES);
+  const [percents, setPercents] =
+    useState<[number, number, number]>(DEFAULT_PERCENTS);
+  const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
   const [membersByAddress, setMembersByAddress] = useState<
     Map<string, FamilyMemberDisplay>
   >(new Map());
@@ -65,39 +97,41 @@ export function useFamilyDisplay(
     try {
       const { data: family } = await supabase
         .from("family_wallets")
-        .select("id, display_name")
+        .select("id, display_name, percents, policy_json")
         .eq("contract_id", contractId)
         .maybeSingle();
       if (!family) {
         setFamilyWalletId(null);
         setWalletName("");
         setEnvelopeNames(DEFAULT_NAMES);
+        setPercents(DEFAULT_PERCENTS);
+        setPolicy(DEFAULT_POLICY);
         setMembersByAddress(new Map());
         return;
       }
-      const fid = (family as { id: string }).id;
-      setFamilyWalletId(fid);
-      setWalletName((family as { display_name: string | null }).display_name ?? "");
+      const row = family as FamilyRow;
+      setFamilyWalletId(row.id);
+      setWalletName(row.display_name ?? "");
+      setPercents(normalizePercents(row.percents));
+      setPolicy(normalizePolicy(row.policy_json));
 
       const [{ data: names }, { data: members }] = await Promise.all([
         supabase
           .from("family_envelope_names")
           .select("envelope_key, display_name")
-          .eq("family_wallet_id", fid),
+          .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
-          .select(
-            "wallet_id, role, name, emoji, wallets(contract_id)",
-          )
-          .eq("family_wallet_id", fid),
+          .select("wallet_id, role, name, emoji, wallets(contract_id)")
+          .eq("family_wallet_id", row.id),
       ]);
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
-      for (const row of (names as Array<{ envelope_key: string; display_name: string }> | null) ??
+      for (const n of (names as Array<{ envelope_key: string; display_name: string }> | null) ??
         []) {
-        if (row.envelope_key === "Groceries") nextNames[0] = row.display_name;
-        else if (row.envelope_key === "Tuition") nextNames[1] = row.display_name;
-        else if (row.envelope_key === "Savings") nextNames[2] = row.display_name;
+        if (n.envelope_key === "Groceries") nextNames[0] = n.display_name;
+        else if (n.envelope_key === "Tuition") nextNames[1] = n.display_name;
+        else if (n.envelope_key === "Savings") nextNames[2] = n.display_name;
       }
       setEnvelopeNames(nextNames);
 
@@ -109,15 +143,15 @@ export function useFamilyDisplay(
         emoji: string | null;
         wallets: { contract_id: string } | { contract_id: string }[] | null;
       };
-      for (const row of (members as MemberRow[] | null) ?? []) {
-        const wallets = Array.isArray(row.wallets) ? row.wallets[0] : row.wallets;
+      for (const m of (members as MemberRow[] | null) ?? []) {
+        const wallets = Array.isArray(m.wallets) ? m.wallets[0] : m.wallets;
         if (!wallets?.contract_id) continue;
         map.set(wallets.contract_id, {
           contractId: wallets.contract_id,
-          walletDbId: row.wallet_id,
-          name: row.name ?? "",
-          emoji: row.emoji ?? "",
-          role: row.role,
+          walletDbId: m.wallet_id,
+          name: m.name ?? "",
+          emoji: m.emoji ?? "",
+          role: m.role,
         });
       }
       setMembersByAddress(map);
@@ -130,8 +164,6 @@ export function useFamilyDisplay(
     void fetchAll();
   }, [fetchAll]);
 
-  // Realtime: any change to the three tables, scoped to this family,
-  // re-fetches. Coarse but cheap since each table is tiny.
   useEffect(() => {
     if (!contractId || !familyWalletId) return;
     const supabase = getSupabaseBrowserClient();
@@ -173,12 +205,26 @@ export function useFamilyDisplay(
     };
   }, [contractId, familyWalletId, fetchAll]);
 
-  return {
-    familyWalletId,
-    walletName,
-    envelopeNames,
-    membersByAddress,
-    loading,
-    refresh: fetchAll,
-  };
+  return useMemo(
+    () => ({
+      familyWalletId,
+      walletName,
+      envelopeNames,
+      percents,
+      policy,
+      membersByAddress,
+      loading,
+      refresh: fetchAll,
+    }),
+    [
+      familyWalletId,
+      walletName,
+      envelopeNames,
+      percents,
+      policy,
+      membersByAddress,
+      loading,
+      fetchAll,
+    ],
+  );
 }

@@ -5,7 +5,8 @@ import { Check, Hourglass, X } from "lucide-react";
 
 import { useApproveRequest } from "@/hooks/useApproveRequest";
 import { useDenyRequest } from "@/hooks/useDenyRequest";
-import type { Member, PendingRequest } from "@/hooks/useWalletState";
+import type { PendingSpendRequest } from "@/hooks/usePendingSpendRequests";
+import type { Member } from "@/hooks/useWalletState";
 import { displayEnvelopeName } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
@@ -21,7 +22,7 @@ export function PendingRequestsPanel({
   userAddress: string | null;
   contractId: string;
   isAdmin: boolean;
-  pending: PendingRequest[];
+  pending: PendingSpendRequest[];
   members: Member[];
   envelopeNames: string[];
   onSuccess: () => void;
@@ -32,9 +33,10 @@ export function PendingRequestsPanel({
     return (addr: string): string => {
       const m = byAddress.get(addr);
       if (!m) return shortenAddress(addr);
-      return m.emoji ? `${m.emoji} ${m.name}` : m.name;
+      return m.emoji ? `${m.emoji} ${m.name}` : m.name || shortenAddress(addr);
     };
   }, [members]);
+
   const {
     approve,
     pending: approveInFlight,
@@ -44,15 +46,13 @@ export function PendingRequestsPanel({
     deny,
     pending: denyInFlight,
     error: denyError,
-  } = useDenyRequest(userAddress, contractId);
+  } = useDenyRequest(userAddress);
 
   if (!userAddress) return null;
-
   if (pending.length === 0) {
     return (
       <p className="text-xs" style={{ color: "var(--text-3)" }}>
-        No pending requests. Spends below the policy threshold execute
-        immediately.
+        No pending requests. Spends below the limits go through right away.
       </p>
     );
   }
@@ -60,17 +60,17 @@ export function PendingRequestsPanel({
   const inFlight = approveInFlight || denyInFlight;
   const showError = approveError ?? denyError;
 
-  const handleApprove = async (id: bigint) => {
+  const handleApprove = async (req: PendingSpendRequest) => {
     try {
-      await approve(id);
+      await approve(req);
       onSuccess();
     } catch {
       // surfaces below
     }
   };
-  const handleDeny = async (id: bigint) => {
+  const handleDeny = async (req: PendingSpendRequest) => {
     try {
-      await deny(id);
+      await deny(req);
       onSuccess();
     } catch {
       // surfaces below
@@ -82,7 +82,7 @@ export function PendingRequestsPanel({
       <ul className="space-y-3">
         {pending.map((req) => (
           <li
-            key={req.id.toString()}
+            key={req.id}
             className="rounded-[10px] border p-3.5 flex items-start gap-3"
             style={{
               background: "var(--surface-alt)",
@@ -103,16 +103,11 @@ export function PendingRequestsPanel({
             </div>
             <div className="flex-1 min-w-0 sobre-pending-request">
               <div className="text-[14px]">
-                <span
-                  className="font-mono text-[12px]"
-                  style={{ color: "var(--text-3)" }}
-                >
-                  #{req.id.toString()}
-                </span>{" "}
                 <span style={{ color: "var(--text-1)" }}>
-                  <b>{labelForCaller(req.caller)}</b> wants{" "}
-                  <b className="tabular">{formatPhpLocale(req.amount)}</b>{" "}
-                  from <b>{displayEnvelopeName(req.envelope, envelopeNames)}</b>
+                  <b>{labelForCaller(req.memberAddress)}</b> wants{" "}
+                  <b className="tabular">{formatPhpLocale(req.amountStroops)}</b>{" "}
+                  from{" "}
+                  <b>{displayEnvelopeName(req.envelope, envelopeNames)}</b>
                 </span>
               </div>
               {req.memo ? (
@@ -126,7 +121,7 @@ export function PendingRequestsPanel({
               {isAdmin ? (
                 <div className="sobre-pending-actions">
                   <button
-                    onClick={() => void handleApprove(req.id)}
+                    onClick={() => void handleApprove(req)}
                     disabled={inFlight}
                     className="sobre-btn justify-center"
                     style={{
@@ -139,7 +134,7 @@ export function PendingRequestsPanel({
                     {approveInFlight ? "Approving…" : "Approve"}
                   </button>
                   <button
-                    onClick={() => void handleDeny(req.id)}
+                    onClick={() => void handleDeny(req)}
                     disabled={inFlight}
                     className="sobre-btn sobre-btn-soft justify-center"
                     style={{ opacity: inFlight ? 0.5 : 1 }}

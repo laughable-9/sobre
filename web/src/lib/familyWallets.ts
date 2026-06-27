@@ -64,7 +64,6 @@ interface CreateSobreInvocable {
   create_sobre: (params: {
     admin: string;
     payment_token: string;
-    percents: number[];
   }) => Promise<contract.AssembledTransaction<string>>;
 }
 
@@ -108,7 +107,6 @@ export async function createFamilyWallet(
     assembledTx = (await invocable.create_sobre({
       admin: args.myWalletContractId,
       payment_token: PAYMENT_TOKEN_SAC_ID,
-      percents: [...args.percents],
     })) as ATWithSim<string>;
   } catch (err) {
     throw new Error(
@@ -182,6 +180,7 @@ export async function createFamilyWallet(
       contract_id: familyContractId,
       display_name: args.walletName,
       created_by: args.myWalletDbId,
+      percents: [...args.percents],
     })
     .select("id")
     .single();

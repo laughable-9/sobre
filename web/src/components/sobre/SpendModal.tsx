@@ -8,6 +8,7 @@ import {
   Sprout,
 } from "lucide-react";
 
+import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
 import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
@@ -31,6 +32,7 @@ export function SpendModal({
   userAddress,
   state,
   contractId,
+  familyWalletId,
   envelope,
   dailySpent,
   onClose,
@@ -39,14 +41,16 @@ export function SpendModal({
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** Required when willGoPending is true (we stage a Supabase request).
+   *  Null is OK if the spend never routes pending. */
+  familyWalletId: string | null;
   envelope: EnvelopeName;
-  /** Stroops the caller has already spent today. Used to predict daily-limit
-   *  routing the same way the contract does (daily_spent + amount > limit). */
+  /** Stroops the caller has already spent today. */
   dailySpent: bigint;
   onClose: () => void;
-  /** Called after the tx lands. `willGoPending` is the modal's prediction of
-   *  whether the contract routed the spend to a pending request (vs executed
-   *  immediately) — computed from the same policy_requires_approval rules. */
+  /** `willGoPending` true means the spend was staged for admin approval
+   *  (Supabase write only, no chain call). false means the spend executed
+   *  on chain and tokens are in the caller's wallet. */
   onSuccess: (info: {
     willGoPending: boolean;
     amount: bigint;
@@ -62,7 +66,17 @@ export function SpendModal({
   const [phpStr, setPhpStr] = useState("");
   const [memo, setMemo] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { spend, pending, error } = useSpend(userAddress, contractId);
+  const { spend, pending: spendPending, error: spendError } = useSpend(
+    userAddress,
+    contractId,
+  );
+  const {
+    create: createPending,
+    pending: pendingPending,
+    error: pendingError,
+  } = useCreatePendingRequest(userAddress);
+  const pending = spendPending || pendingPending;
+  const error = spendError ?? pendingError;
 
   const php = Number(phpStr) || 0;
   const usdc = php / PHP_PER_USDC;
@@ -101,14 +115,26 @@ export function SpendModal({
   const handleSubmit = async () => {
     if (php <= 0 || overspend) return;
     try {
-      await spend(envelope, stroopsRequested, memo);
+      if (willGoPending) {
+        if (!familyWalletId) {
+          throw new Error("Family record not loaded yet — try again.");
+        }
+        await createPending({
+          familyWalletId,
+          envelope,
+          amountStroops: stroopsRequested,
+          memo,
+        });
+      } else {
+        await spend(envelope, stroopsRequested, memo);
+      }
       onSuccess({
         willGoPending: Boolean(willGoPending),
         amount: stroopsRequested,
         envelope,
       });
     } catch {
-      // error already on hook
+      // error already surfaced via hook
     }
   };
 

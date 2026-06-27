@@ -9,7 +9,7 @@ import {
   splitsEqual,
   toSplit,
 } from "@/components/sobre/SplitEditor";
-import { useApplySettings } from "@/hooks/useApplySettings";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function ReadOnly({
   percents,
@@ -37,9 +37,9 @@ function ReadOnly({
 }
 
 /**
- * Admin saves an envelope-split change as a pending intent in Supabase
- * (Pattern A). The on-chain commit happens later via the PendingSettingsPill
- * "Commit now" button or by stacking with the next admin chain action.
+ * Admin sets the envelope split percentages. Pure Supabase write — saves
+ * instantly with no FaceID and no fee. Each future deposit reads the
+ * latest percentages and divides accordingly.
  */
 export function EnvelopeSplitForm({
   userAddress,
@@ -57,10 +57,9 @@ export function EnvelopeSplitForm({
   onSuccess: () => void;
 }) {
   const [split, setSplit] = useState(() => toSplit(current));
-  const { stageIntent, pending, error } = useApplySettings(userAddress);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  // Hash by the underlying values so the upstream poll's identity churn
-  // doesn't clobber an in-progress edit every 3s.
   const sig = useMemo(() => current.join(","), [current]);
   useEffect(() => {
     setSplit(toSplit(current));
@@ -77,11 +76,20 @@ export function EnvelopeSplitForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid || !dirty || !familyWalletId) return;
+    setSaving(true);
+    setError(null);
     try {
-      await stageIntent(familyWalletId, { percents: split });
+      const supabase = getSupabaseBrowserClient();
+      const { error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({ percents: split })
+        .eq("id", familyWalletId);
+      if (updateErr) throw new Error(updateErr.message);
       onSuccess();
-    } catch {
-      /* surfaced via hook error */
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -89,31 +97,31 @@ export function EnvelopeSplitForm({
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
         Changes apply to future deposits. Existing balances stay put. Saves
-        instantly; commit to chain via the pending pill at the top.
+        instantly.
       </p>
       <SplitEditor
         value={split}
         onChange={setSplit}
-        disabled={pending}
+        disabled={saving}
         labels={toEnvelopeNames(envelopeNames)}
       />
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending || !valid || !dirty || !familyWalletId}
+          disabled={saving || !valid || !dirty || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{
             padding: "12px 18px",
             fontSize: 14,
             opacity:
-              pending || !valid || !dirty || !familyWalletId ? 0.5 : 1,
+              saving || !valid || !dirty || !familyWalletId ? 0.5 : 1,
             cursor:
-              pending || !valid || !dirty || !familyWalletId
+              saving || !valid || !dirty || !familyWalletId
                 ? "not-allowed"
                 : "pointer",
           }}
         >
-          {pending ? "Saving…" : "Save split"}
+          {saving ? "Saving…" : "Save split"}
         </button>
         {error ? (
           <span
