@@ -33,11 +33,16 @@ export function useRenameWallet(
       setError(null);
       try {
         const supabase = getSupabaseBrowserClient();
-        const { error: updateErr } = await supabase
+        const { data, error: updateErr } = await supabase
           .from("family_wallets")
           .update({ display_name: newName })
-          .eq("contract_id", contractId);
+          .eq("contract_id", contractId)
+          .select("id")
+          .maybeSingle();
         if (updateErr) throw new Error(updateErr.message);
+        if (!data) {
+          throw new Error("Couldn't rename — only the family admin can change this.");
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;

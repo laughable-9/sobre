@@ -43,10 +43,14 @@ export function useSetEnvelopeNames(
           envelope_key: KEYS[i],
           display_name,
         }));
-        const { error: upsertErr } = await supabase
+        const { data, error: upsertErr } = await supabase
           .from("family_envelope_names")
-          .upsert(rows, { onConflict: "family_wallet_id,envelope_key" });
+          .upsert(rows, { onConflict: "family_wallet_id,envelope_key" })
+          .select("envelope_key");
         if (upsertErr) throw new Error(upsertErr.message);
+        if (!data || data.length === 0) {
+          throw new Error("Couldn't save — only the family admin can rename envelopes.");
+        }
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));
         throw e;

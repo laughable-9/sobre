@@ -404,7 +404,10 @@ function Dashboard({ contractId }: { contractId: string }) {
         walletState={state}
         contractId={contractId}
         isAdmin={isAdmin}
-        onRenamed={refresh}
+        onRenamed={() => {
+          refresh();
+          flash("Wallet name saved", "ok");
+        }}
       />
 
       <div
@@ -578,7 +581,10 @@ function Dashboard({ contractId }: { contractId: string }) {
               isAdmin={isAdmin}
               current={state.policy}
               envelopeNames={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Spending rules saved", "ok");
+              }}
             />
           </div>
 
@@ -589,7 +595,10 @@ function Dashboard({ contractId }: { contractId: string }) {
               familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Envelope names saved", "ok");
+              }}
             />
           </div>
 
@@ -601,7 +610,10 @@ function Dashboard({ contractId }: { contractId: string }) {
               isAdmin={isAdmin}
               current={state.percents}
               envelopeNames={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Split saved", "ok");
+              }}
             />
           </div>
 

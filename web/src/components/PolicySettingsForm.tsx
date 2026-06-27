@@ -184,7 +184,7 @@ export function PolicySettingsForm({
     setError(null);
     try {
       const supabase = getSupabaseBrowserClient();
-      const { error: updateErr } = await supabase
+      const { data, error: updateErr } = await supabase
         .from("family_wallets")
         .update({
           policy_json: {
@@ -196,8 +196,13 @@ export function PolicySettingsForm({
             protected_envelopes: Array.from(effectiveProtected),
           },
         })
-        .eq("id", familyWalletId);
+        .eq("id", familyWalletId)
+        .select("id")
+        .maybeSingle();
       if (updateErr) throw new Error(updateErr.message);
+      if (!data) {
+        throw new Error("Couldn't save — only the family admin can change this.");
+      }
       onSuccess();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
