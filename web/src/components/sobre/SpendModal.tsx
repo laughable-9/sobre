@@ -8,14 +8,18 @@ import {
   Sprout,
 } from "lucide-react";
 
+import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
 import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
+  PAYMENT_TOKEN_LABEL,
   STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { formatPhpInt, formatPhpLocale } from "@/lib/format";
+import { routeSpend } from "@/lib/policy";
 import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
 
@@ -31,6 +35,7 @@ export function SpendModal({
   userAddress,
   state,
   contractId,
+  familyWalletId,
   envelope,
   dailySpent,
   onClose,
@@ -39,14 +44,16 @@ export function SpendModal({
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** Required when willGoPending is true (we stage a Supabase request).
+   *  Null is OK if the spend never routes pending. */
+  familyWalletId: string | null;
   envelope: EnvelopeName;
-  /** Stroops the caller has already spent today. Used to predict daily-limit
-   *  routing the same way the contract does (daily_spent + amount > limit). */
+  /** Stroops the caller has already spent today. */
   dailySpent: bigint;
   onClose: () => void;
-  /** Called after the tx lands. `willGoPending` is the modal's prediction of
-   *  whether the contract routed the spend to a pending request (vs executed
-   *  immediately) — computed from the same policy_requires_approval rules. */
+  /** `willGoPending` true means the spend was staged for admin approval
+   *  (Supabase write only, no chain call). false means the spend executed
+   *  on chain and tokens are in the caller's wallet. */
   onSuccess: (info: {
     willGoPending: boolean;
     amount: bigint;
@@ -62,37 +69,44 @@ export function SpendModal({
   const [phpStr, setPhpStr] = useState("");
   const [memo, setMemo] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const { spend, pending, error } = useSpend(userAddress, contractId);
+  const memberWalletDbId =
+    state.members.find((m) => m.address === userAddress)?.walletDbId ?? null;
+
+  const { spend, pending: spendPending, error: spendError } = useSpend(
+    userAddress,
+    contractId,
+  );
+  const {
+    create: createPending,
+    pending: pendingPending,
+    error: pendingError,
+  } = useCreatePendingRequest(userAddress, memberWalletDbId);
+  const pending = spendPending || pendingPending;
+  const error = spendError ?? pendingError;
 
   const php = Number(phpStr) || 0;
   const usdc = php / PHP_PER_USDC;
   const stroopsRequested = BigInt(Math.round(usdc * STROOPS_PER_USDC));
-  const overspend = stroopsRequested > balanceStroops;
 
-  // Predict whether the contract will route this to a pending request,
-  // matching policy_requires_approval in lib.rs. Admin always bypasses, so
-  // their spends execute immediately regardless of policy.
-  const isAdmin = userAddress === state.admin;
-  const requireAllSigs = state.policy.require_all_sigs;
-  const envProtected = state.policy.protected_envelopes.includes(envelope);
-  const dailyLimitStroops = state.policy.daily_limit;
-  const wouldExceedDaily =
-    dailyLimitStroops !== null &&
-    dailySpent + stroopsRequested > dailyLimitStroops;
-  const willGoPending =
-    !isAdmin &&
-    php > 0 &&
-    !overspend &&
-    (requireAllSigs || envProtected || wouldExceedDaily);
-
-  const dailyLimitPhp =
-    dailyLimitStroops !== null
-      ? (Number(dailyLimitStroops) / STROOPS_PER_USDC) * PHP_PER_USDC
-      : 0;
-  const dailySpentPhp =
-    (Number(dailySpent) / STROOPS_PER_USDC) * PHP_PER_USDC;
-  const fmtPhpAmt = (n: number) =>
-    `₱${n.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+  // Canonical "where does this spend land" verdict lives in lib/policy.ts
+  // so envelope card previews + future surfaces share the spec.
+  const route = routeSpend({
+    policy: state.policy,
+    caller: userAddress,
+    admin: state.admin,
+    envelope,
+    amountStroops: stroopsRequested,
+    dailySpentStroops: dailySpent,
+    envelopeBalanceStroops: balanceStroops,
+  });
+  const overspend = route === "overspend";
+  const willGoPending = route === "pending";
+  // Surfaced in the warning bar so the user can see WHICH gate routed
+  // their spend. routeSpend collapses these into one verdict; we still
+  // pull the underlying fields to compose human-readable copy.
+  const requireAllSigs = state.policy.requireAllSigs;
+  const envProtected = state.policy.protectedEnvelopes.includes(envelope);
+  const dailyLimitStroops = state.policy.dailyLimit;
 
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
@@ -101,14 +115,26 @@ export function SpendModal({
   const handleSubmit = async () => {
     if (php <= 0 || overspend) return;
     try {
-      await spend(envelope, stroopsRequested, memo);
+      if (willGoPending) {
+        if (!familyWalletId) {
+          throw new Error("Family record not loaded yet. Try again.");
+        }
+        await createPending({
+          familyWalletId,
+          envelope,
+          amountStroops: stroopsRequested,
+          memo,
+        });
+      } else {
+        await spend(envelope, stroopsRequested, memo);
+      }
       onSuccess({
         willGoPending: Boolean(willGoPending),
         amount: stroopsRequested,
         envelope,
       });
     } catch {
-      // error already on hook
+      // error already surfaced via hook
     }
   };
 
@@ -143,7 +169,7 @@ export function SpendModal({
               maximumFractionDigits: 2,
             })}
           </b>{" "}
-          · <span className="tabular">{balanceUsdc.toFixed(4)} USDC</span>
+          · <span className="tabular">{balanceUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}</span>
         </p>
 
         {willGoPending ? (
@@ -155,7 +181,7 @@ export function SpendModal({
                 ? "All non-admin spends need admin approval right now."
                 : envProtected
                   ? `${displayName} is admin-protected.`
-                  : `Spending ${fmtPhpAmt(php)} would put you over today's ${fmtPhpAmt(dailyLimitPhp)} limit (already spent ${fmtPhpAmt(dailySpentPhp)} today), so this spend needs admin approval.`}{" "}
+                  : `Spending ${formatPhpInt(stroopsRequested)} would put you over today's ${formatPhpInt(dailyLimitStroops)} limit (already spent ${formatPhpLocale(dailySpent)} today), so this spend needs admin approval.`}{" "}
               Admin reviews the request before the funds move.
             </div>
           </div>
@@ -247,7 +273,7 @@ export function SpendModal({
                   }
                   title={
                     q > balancePhp
-                      ? `Not enough — ₱${balancePhp.toFixed(0)} available`
+                      ? `Not enough. ₱${balancePhp.toFixed(0)} available`
                       : undefined
                   }
                 >
@@ -261,7 +287,7 @@ export function SpendModal({
               className="mt-2 text-[12px]"
               style={{ color: "var(--text-3)" }}
             >
-              ≈ {usdc.toFixed(4)} USDC
+              ≈ {usdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}
             </div>
           ) : null}
         </div>

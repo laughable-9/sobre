@@ -57,3 +57,14 @@ export function formatPhpLocale(stroops: bigint): string {
     maximumFractionDigits: 2,
   })}`;
 }
+
+/** "₱1,234" — Filipino locale grouping, no decimals. Use for budget /
+ *  threshold / limit labels where cents would clutter the value. */
+export function formatPhpInt(stroops: bigint | null): string {
+  if (stroops === null) return "no limit";
+  const php = stroopsToUsdc(stroops) * PHP_PER_USDC;
+  return `₱${php.toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}

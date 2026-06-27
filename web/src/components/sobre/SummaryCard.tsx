@@ -12,7 +12,7 @@ import {
 import { useEffect, useState } from "react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { STROOPS_PER_USDC } from "@/lib/config";
+import { PAYMENT_TOKEN_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
 import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
@@ -92,7 +92,7 @@ export function SummaryCard({
           className="flex items-center gap-2 mt-3 text-[13px]"
           style={{ color: "var(--text-2)" }}
         >
-          <span className="tabular">{totalUsdc.toFixed(4)} USDC</span>
+          <span className="tabular">{totalUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}</span>
           <span
             className="w-[3px] h-[3px] rounded-full"
             style={{ background: "var(--text-3)" }}
@@ -127,7 +127,7 @@ export function SummaryCard({
         </button>
 
         <DailyLimitCard
-          dailyLimit={state.policy.daily_limit}
+          dailyLimit={state.policy.dailyLimit}
           dailySpent={dailySpent}
         />
 

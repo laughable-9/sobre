@@ -28,6 +28,7 @@ import type { Member } from "@/hooks/useWalletState";
 import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
+import { usePendingSpendRequests } from "@/hooks/usePendingSpendRequests";
 import { useRemoveMember } from "@/hooks/useRemoveMember";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
@@ -73,6 +74,8 @@ function Dashboard({ contractId }: { contractId: string }) {
   const walletState = useWalletState(address, contractId);
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
+  const familyWalletId = walletState.familyWalletId;
+  const pendingRequests = usePendingSpendRequests(familyWalletId);
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -401,7 +404,10 @@ function Dashboard({ contractId }: { contractId: string }) {
         walletState={state}
         contractId={contractId}
         isAdmin={isAdmin}
-        onRenamed={refresh}
+        onRenamed={() => {
+          refresh();
+          flash("Wallet name saved", "ok");
+        }}
       />
 
       <div
@@ -417,6 +423,37 @@ function Dashboard({ contractId }: { contractId: string }) {
           My Sobres
         </Link>
       </div>
+
+      {walletState.familyError ? (
+        // Family settings (split %, policy) failed to load — dashboard
+        // would otherwise render against DEFAULT_PERCENTS [50,30,20] and
+        // an open policy, which the next deposit/spend would route by.
+        // Surface the failure + force a manual refresh so we don't move
+        // money under stale state.
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-3"
+          style={{ maxWidth: 1320 }}
+        >
+          <div
+            className="rounded-md px-4 py-3 text-sm flex items-center gap-3"
+            style={{
+              background: "rgba(220,38,38,0.07)",
+              color: "var(--sobre-danger)",
+              border: "1px solid rgba(220,38,38,0.18)",
+            }}
+          >
+            <span className="flex-1">{walletState.familyError}</span>
+            <button
+              type="button"
+              onClick={refresh}
+              className="sobre-btn sobre-btn-soft"
+              style={{ fontSize: 12, padding: "6px 10px" }}
+            >
+              Retry
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <nav
         className="sobre-tabs mx-auto w-full px-4 sm:px-7 pt-4"
@@ -451,14 +488,14 @@ function Dashboard({ contractId }: { contractId: string }) {
           onKick={isAdmin ? handleKick : undefined}
           onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
         >
-          {state.pending.length > 0 ? (
+          {pendingRequests.pending.length > 0 ? (
             <div className="sobre-admin-section sobre-card-flat">
-              <h3>Pending approvals ({state.pending.length})</h3>
+              <h3>Pending approvals ({pendingRequests.pending.length})</h3>
               <PendingRequestsPanel
                 userAddress={address}
                 contractId={contractId}
                 isAdmin={isAdmin}
-                pending={state.pending}
+                pending={pendingRequests.pending}
                 members={state.members}
                 envelopeNames={state.envelope_names}
                 onSuccess={refreshAll}
@@ -480,8 +517,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           {state.balances.map((bal, i) => {
             const envName = ENVELOPE_LABELS[i];
             const approvalRequired =
-              state.policy.require_all_sigs ||
-              state.policy.protected_envelopes.includes(envName);
+              state.policy.requireAllSigs ||
+              state.policy.protectedEnvelopes.includes(envName);
             return (
               <EnvelopeCard
                 key={i}
@@ -571,11 +608,14 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Spending policy</h3>
             <PolicySettingsForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.policy}
               envelopeNames={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Spending rules saved", "ok");
+              }}
             />
           </div>
 
@@ -583,10 +623,13 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Envelope names</h3>
             <EnvelopeNamesForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Envelope names saved", "ok");
+              }}
             />
           </div>
 
@@ -594,11 +637,14 @@ function Dashboard({ contractId }: { contractId: string }) {
             <h3>Envelope split</h3>
             <EnvelopeSplitForm
               userAddress={address}
-              contractId={contractId}
+              familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.percents}
               envelopeNames={state.envelope_names}
-              onSuccess={refresh}
+              onSuccess={() => {
+                refresh();
+                flash("Split saved", "ok");
+              }}
             />
           </div>
 
@@ -782,6 +828,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           state={state}
           contractId={contractId}
+          familyWalletId={familyWalletId}
           envelope={spendOpen}
           dailySpent={dailySpent}
           onClose={() => setSpendOpen(null)}
@@ -815,7 +862,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClose={() => setCloseOpen(false)}
           onSuccess={() => {
             setCloseOpen(false);
-            flash("Wallet closed — funds swept back to your address", "ok");
+            flash("Wallet closed. Funds swept back to your address.", "ok");
             setClosed(true);
             refreshAll();
           }}

@@ -19,6 +19,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 export interface WalletContext {
   /** `public.wallets.id` for the signed-in user. */
   memberId: string;
+  /** Caller's smart-wallet C-address (`public.wallets.contract_id`). Surfaced
+   *  here so routes that compare the caller against on-chain state don't
+   *  need a second `wallets` SELECT after auth. */
+  contractId: string;
   /** Auth user's display name (Google `full_name` → email → "Sobre User"). */
   fullName: string;
 }
@@ -43,7 +47,7 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
   const admin = getSupabaseAdmin();
   const { data: wallet } = await admin
     .from("wallets")
-    .select("id")
+    .select("id, contract_id")
     .eq("auth_id", authId)
     .single();
   if (!wallet) {
@@ -52,7 +56,8 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
       { status: 404 },
     );
   }
-  return { memberId: (wallet as { id: string }).id, fullName };
+  const w = wallet as { id: string; contract_id: string };
+  return { memberId: w.id, contractId: w.contract_id, fullName };
 }
 
 export async function requireFamilyMember(
@@ -71,6 +76,30 @@ export async function requireFamilyMember(
   if (!membership) {
     return NextResponse.json(
       { error: "Not a member of this family wallet" },
+      { status: 403 },
+    );
+  }
+  return ctx;
+}
+
+/** Tighter form of `requireFamilyMember` that also gates on the admin role.
+ *  Use from routes that mutate family-scoped settings (e.g. /api/settings). */
+export async function requireFamilyAdmin(
+  familyWalletId: string,
+): Promise<FamilyMemberContext | NextResponse> {
+  const ctx = await requireWallet();
+  if (ctx instanceof NextResponse) return ctx;
+
+  const admin = getSupabaseAdmin();
+  const { data: membership } = await admin
+    .from("family_members")
+    .select("role")
+    .eq("family_wallet_id", familyWalletId)
+    .eq("wallet_id", ctx.memberId)
+    .maybeSingle();
+  if (!membership || (membership as { role: string }).role !== "admin") {
+    return NextResponse.json(
+      { error: "Only the admin of this family can perform this action." },
       { status: 403 },
     );
   }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { toEnvelopeNames } from "@/components/sobre/EnvelopeNamesEditor";
 import {
@@ -9,7 +9,8 @@ import {
   splitsEqual,
   toSplit,
 } from "@/components/sobre/SplitEditor";
-import { useSetEnvelopes } from "@/hooks/useSetEnvelopes";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 function ReadOnly({
   percents,
@@ -36,34 +37,54 @@ function ReadOnly({
   );
 }
 
+/**
+ * Admin sets the envelope split percentages. Pure Supabase write — saves
+ * instantly with no FaceID and no fee. Each future deposit reads the
+ * latest percentages and divides accordingly.
+ */
 export function EnvelopeSplitForm({
   userAddress,
-  contractId,
+  familyWalletId,
   isAdmin,
   current,
   envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
-  contractId: string;
+  familyWalletId: string | null;
   isAdmin: boolean;
   current: number[];
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const [split, setSplit] = useState(() => toSplit(current));
-  const { setEnvelopes, pending, error } = useSetEnvelopes(
-    userAddress,
-    contractId,
-  );
 
-  // Hash by the underlying values so the upstream poll's identity churn
-  // doesn't clobber an in-progress edit every 3s.
   const sig = useMemo(() => current.join(","), [current]);
   useEffect(() => {
     setSplit(toSplit(current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
+
+  const mutation = useCallback(
+    async (next: [number, number, number]) => {
+      if (!familyWalletId) throw new Error("No family wallet id.");
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({ percents: next })
+        .eq("id", familyWalletId)
+        .select("id")
+        .maybeSingle();
+      if (updateErr) throw new Error(updateErr.message);
+      if (!data) {
+        throw new Error("Couldn't save. Only the family admin can change this.");
+      }
+    },
+    [familyWalletId],
+  );
+  const { run: saveSplit, pending: saving, error } = useSupabaseMutation(
+    mutation,
+  );
 
   if (!userAddress) return null;
   if (!isAdmin)
@@ -74,39 +95,44 @@ export function EnvelopeSplitForm({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!valid || !dirty) return;
+    if (!valid || !dirty || !familyWalletId) return;
     try {
-      await setEnvelopes(split);
+      await saveSplit(split);
       onSuccess();
     } catch {
-      /* surfaced via hook error */
+      // surfaced via hook error
     }
   };
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4">
       <p className="text-xs -mt-1" style={{ color: "var(--text-3)" }}>
-        Changes apply to future deposits. Existing balances stay put.
+        Changes apply to future deposits. Existing balances stay put. Saves
+        instantly.
       </p>
       <SplitEditor
         value={split}
         onChange={setSplit}
-        disabled={pending}
+        disabled={saving}
         labels={toEnvelopeNames(envelopeNames)}
       />
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending || !valid || !dirty}
+          disabled={saving || !valid || !dirty || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{
             padding: "12px 18px",
             fontSize: 14,
-            opacity: pending || !valid || !dirty ? 0.5 : 1,
-            cursor: pending || !valid || !dirty ? "not-allowed" : "pointer",
+            opacity:
+              saving || !valid || !dirty || !familyWalletId ? 0.5 : 1,
+            cursor:
+              saving || !valid || !dirty || !familyWalletId
+                ? "not-allowed"
+                : "pointer",
           }}
         >
-          {pending ? "Saving…" : "Save split"}
+          {saving ? "Saving…" : "Save split"}
         </button>
         {error ? (
           <span

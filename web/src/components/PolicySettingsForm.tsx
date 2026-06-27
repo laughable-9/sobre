@@ -1,59 +1,52 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Info, Lock } from "lucide-react";
 
 import { SAVINGS_NAME } from "@/components/sobre/EnvelopeNamesEditor";
-import { useSetPolicy } from "@/hooks/useSetPolicy";
-import type { SpendPolicy } from "@/hooks/useWalletState";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import type { SpendPolicyShape } from "@/lib/contract";
 import {
   ENVELOPE_LABELS,
+  PAYMENT_TOKEN_LABEL,
   STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
+import { formatPhpInt } from "@/lib/format";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 type Unit = "PHP" | "USDC";
 
-/** Savings is permanently admin-protected — its APY-bearing balance always
- *  needs admin approval to spend. */
 const ALWAYS_PROTECTED: readonly EnvelopeName[] = [SAVINGS_NAME];
-
-function formatLimitLabel(stroops: bigint | null, unit: Unit): string {
-  if (stroops === null) return "no limit";
-  const usdc = Number(stroops) / STROOPS_PER_USDC;
-  if (unit === "PHP") {
-    return `₱${(usdc * PHP_PER_USDC).toLocaleString("en-PH", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    })}`;
-  }
-  return `${usdc.toFixed(4)} USDC`;
-}
 
 function PolicyReadOnly({
   current,
   envelopeNames,
 }: {
-  current: SpendPolicy;
+  current: SpendPolicyShape;
   envelopeNames: string[];
 }) {
   const protectedLabel =
-    current.protected_envelopes.length === 0
+    current.protectedEnvelopes.length === 0
       ? "none"
-      : current.protected_envelopes
+      : current.protectedEnvelopes
           .map((e) => displayEnvelopeName(e, envelopeNames))
           .join(", ");
   return (
     <div className="text-sm space-y-1.5">
       <Row
         label="Admin approval for every spend"
-        value={current.require_all_sigs ? "Yes" : "No"}
+        value={current.requireAllSigs ? "Yes" : "No"}
       />
       <Row
         label="Daily limit per member"
-        value={formatLimitLabel(current.daily_limit, "PHP")}
+        value={formatPhpInt(current.dailyLimit)}
+      />
+      <Row
+        label="Approval required above"
+        value={formatPhpInt(current.perTxThreshold)}
       />
       <Row label="Envelopes requiring approval" value={protectedLabel} />
       <p className="text-xs pt-1" style={{ color: "var(--text-3)" }}>
@@ -74,44 +67,94 @@ function Row({ label, value }: { label: string; value: string }) {
   );
 }
 
+function stroopsToPhpString(stroops: bigint, unit: Unit): string {
+  const usdc = Number(stroops) / STROOPS_PER_USDC;
+  return unit === "PHP" ? (usdc * PHP_PER_USDC).toFixed(0) : usdc.toString();
+}
+
+function convertInput(val: string, next: Unit): string {
+  const n = Number(val);
+  if (!Number.isFinite(n) || n <= 0) return val;
+  return next === "USDC"
+    ? (n / PHP_PER_USDC).toFixed(4)
+    : (n * PHP_PER_USDC).toFixed(0);
+}
+
+/**
+ * Admin sets the family spending policy. Pure Supabase write — saves
+ * instantly with no FaceID and no fee. The frontend's spend flow reads
+ * this policy and either submits the spend directly or stages an
+ * approval request, depending on whether the policy triggers.
+ */
 export function PolicySettingsForm({
   userAddress,
-  contractId,
+  familyWalletId,
   isAdmin,
   current,
   envelopeNames,
   onSuccess,
 }: {
   userAddress: string | null;
-  contractId: string;
+  familyWalletId: string | null;
   isAdmin: boolean;
-  current: SpendPolicy;
+  current: SpendPolicyShape;
   envelopeNames: string[];
   onSuccess: () => void;
 }) {
   const [unit, setUnit] = useState<Unit>("PHP");
-  // The amount input is kept in the currently selected unit so the value the
-  // user typed survives toggling between PHP and USDC (we convert under the
-  // hood when they flip the toggle).
   const [limitInput, setLimitInput] = useState<string>(() =>
-    current.daily_limit === null
+    current.dailyLimit === null
       ? ""
-      : ((Number(current.daily_limit) / STROOPS_PER_USDC) * PHP_PER_USDC).toFixed(
-          0,
-        ),
+      : stroopsToPhpString(current.dailyLimit, "PHP"),
   );
-  const [requireAllSigs, setRequireAllSigs] = useState(
-    current.require_all_sigs,
+  const [thresholdInput, setThresholdInput] = useState<string>(() =>
+    current.perTxThreshold === null
+      ? ""
+      : stroopsToPhpString(current.perTxThreshold, "PHP"),
   );
+  const [requireAllSigs, setRequireAllSigs] = useState(current.requireAllSigs);
   const [protectedSet, setProtectedSet] = useState<Set<EnvelopeName>>(
-    () => new Set(current.protected_envelopes),
+    () => new Set(current.protectedEnvelopes),
   );
-  const { setPolicy, pending, error } = useSetPolicy(userAddress, contractId);
+
+  const mutation = useCallback(
+    async (nextPolicy: SpendPolicyShape) => {
+      if (!familyWalletId) throw new Error("No family wallet id.");
+      const supabase = getSupabaseBrowserClient();
+      const { data, error: updateErr } = await supabase
+        .from("family_wallets")
+        .update({
+          policy_json: {
+            require_all_sigs: nextPolicy.requireAllSigs,
+            daily_limit_stroops:
+              nextPolicy.dailyLimit === null
+                ? null
+                : nextPolicy.dailyLimit.toString(),
+            per_tx_threshold_stroops:
+              nextPolicy.perTxThreshold === null
+                ? null
+                : nextPolicy.perTxThreshold.toString(),
+            protected_envelopes: nextPolicy.protectedEnvelopes,
+          },
+        })
+        .eq("id", familyWalletId)
+        .select("id")
+        .maybeSingle();
+      if (updateErr) throw new Error(updateErr.message);
+      if (!data) {
+        throw new Error("Couldn't save. Only the family admin can change this.");
+      }
+    },
+    [familyWalletId],
+  );
+  const { run: savePolicy, pending: saving, error } = useSupabaseMutation(
+    mutation,
+  );
 
   const policySig = useMemo(
     () =>
-      `${current.require_all_sigs}|${current.daily_limit ?? "x"}|${[
-        ...current.protected_envelopes,
+      `${current.requireAllSigs}|${current.dailyLimit ?? "x"}|${current.perTxThreshold ?? "x"}|${[
+        ...current.protectedEnvelopes,
       ]
         .sort()
         .join(",")}`,
@@ -119,75 +162,71 @@ export function PolicySettingsForm({
   );
 
   useEffect(() => {
-    setRequireAllSigs(current.require_all_sigs);
-    if (current.daily_limit === null) {
-      setLimitInput("");
-    } else {
-      const usdc = Number(current.daily_limit) / STROOPS_PER_USDC;
-      setLimitInput(unit === "PHP" ? (usdc * PHP_PER_USDC).toFixed(0) : usdc.toString());
-    }
-    setProtectedSet(new Set(current.protected_envelopes));
+    setRequireAllSigs(current.requireAllSigs);
+    setLimitInput(
+      current.dailyLimit === null
+        ? ""
+        : stroopsToPhpString(current.dailyLimit, unit),
+    );
+    setThresholdInput(
+      current.perTxThreshold === null
+        ? ""
+        : stroopsToPhpString(current.perTxThreshold, unit),
+    );
+    setProtectedSet(new Set(current.protectedEnvelopes));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [policySig]);
 
   const switchUnit = (next: Unit) => {
     if (next === unit) return;
-    const n = Number(limitInput);
-    if (Number.isFinite(n) && n > 0) {
-      if (next === "USDC") setLimitInput((n / PHP_PER_USDC).toFixed(4));
-      else setLimitInput((n * PHP_PER_USDC).toFixed(0));
-    }
+    setLimitInput(convertInput(limitInput, next));
+    setThresholdInput(convertInput(thresholdInput, next));
     setUnit(next);
   };
 
-  // ─── Read-only branch ───────────────────────────────────────────────
   if (!userAddress) return null;
   if (!isAdmin)
     return <PolicyReadOnly current={current} envelopeNames={envelopeNames} />;
 
   const toggle = (e: EnvelopeName) => {
     if (requireAllSigs) return;
-    if (ALWAYS_PROTECTED.includes(e)) return; // Savings cannot be unprotected.
+    if (ALWAYS_PROTECTED.includes(e)) return;
     const next = new Set(protectedSet);
     if (next.has(e)) next.delete(e);
     else next.add(e);
     setProtectedSet(next);
   };
 
-  // Contract receives the expanded set so server state matches the UI.
   const effectiveProtected = requireAllSigs
     ? new Set<EnvelopeName>(ENVELOPE_LABELS)
     : new Set<EnvelopeName>([...protectedSet, ...ALWAYS_PROTECTED]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const n = Number(limitInput);
-    const usdc = unit === "USDC" ? n : n / PHP_PER_USDC;
-    const dailyLimit =
-      limitInput.trim() === "" || !isFinite(n) || n <= 0
-        ? null
-        : BigInt(Math.round(usdc * STROOPS_PER_USDC));
+    if (!familyWalletId) return;
+    const inputToStroops = (val: string): bigint | null => {
+      const n = Number(val);
+      if (val.trim() === "" || !isFinite(n) || n <= 0) return null;
+      const usdc = unit === "USDC" ? n : n / PHP_PER_USDC;
+      return BigInt(Math.round(usdc * STROOPS_PER_USDC));
+    };
+    const dailyLimit = inputToStroops(limitInput);
+    const perTxThreshold = inputToStroops(thresholdInput);
     try {
-      await setPolicy({
+      await savePolicy({
         requireAllSigs,
         dailyLimit,
+        perTxThreshold,
         protectedEnvelopes: Array.from(effectiveProtected),
       });
       onSuccess();
     } catch {
-      // error on hook
+      // surfaced via hook error
     }
   };
 
-  const n = Number(limitInput);
-  const usdcEquiv = unit === "USDC" ? n : n / PHP_PER_USDC;
-  const phpEquiv = unit === "PHP" ? n : n * PHP_PER_USDC;
-  const equivLabel =
-    n > 0
-      ? unit === "PHP"
-        ? `≈ ${usdcEquiv.toFixed(4)} USDC`
-        : `≈ ₱${phpEquiv.toLocaleString("en-PH", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
-      : null;
+  const equivLabel = makeEquivLabel(limitInput, unit);
+  const tEquivLabel = makeEquivLabel(thresholdInput, unit);
 
   return (
     <form onSubmit={handleSubmit} className="space-y-4 text-sm">
@@ -200,33 +239,45 @@ export function PolicySettingsForm({
           >
             Daily limit per member
           </label>
-          <UnitToggle unit={unit} onChange={switchUnit} disabled={pending} />
+          <UnitToggle unit={unit} onChange={switchUnit} disabled={saving} />
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="sobre-input-wrap" style={{ width: 160 }}>
-            {unit === "PHP" ? <span className="prefix">₱</span> : null}
-            <input
-              id="daily-limit"
-              type="number"
-              step={unit === "USDC" ? "0.0001" : "1"}
-              min="0"
-              value={limitInput}
-              onChange={(e) => setLimitInput(e.target.value)}
-              className={`sobre-input ${unit === "PHP" ? "has-prefix" : ""}`}
-              placeholder="no limit"
-              disabled={pending}
-            />
-          </div>
-          {equivLabel ? (
-            <span className="text-xs" style={{ color: "var(--text-3)" }}>
-              {equivLabel}
-            </span>
-          ) : null}
-        </div>
+        <AmountInput
+          id="daily-limit"
+          unit={unit}
+          value={limitInput}
+          onChange={setLimitInput}
+          disabled={saving}
+          placeholder="no limit"
+          equivLabel={equivLabel}
+        />
         <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
           <Info size={12} strokeWidth={2} className="mt-0.5 shrink-0" />
           Limit applies to members. Your own spends as admin always execute
           immediately and don&apos;t count against the daily counter.
+        </p>
+      </div>
+
+      <div className="space-y-1.5">
+        <label
+          htmlFor="spend-threshold"
+          className="block font-medium"
+          style={{ color: "var(--text-1)" }}
+        >
+          Approval required above
+        </label>
+        <AmountInput
+          id="spend-threshold"
+          unit={unit}
+          value={thresholdInput}
+          onChange={setThresholdInput}
+          disabled={saving}
+          placeholder="no threshold"
+          equivLabel={tEquivLabel}
+        />
+        <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
+          <Info size={12} strokeWidth={2} className="mt-0.5 shrink-0" />
+          Single-transaction cap. Member spends above this need your approval.
+          Admin spends always bypass.
         </p>
       </div>
 
@@ -235,7 +286,7 @@ export function PolicySettingsForm({
           type="checkbox"
           checked={requireAllSigs}
           onChange={(e) => setRequireAllSigs(e.target.checked)}
-          disabled={pending}
+          disabled={saving}
           className="w-4 h-4 accent-[var(--sobre-primary)]"
         />
         <span style={{ color: "var(--text-1)" }}>
@@ -258,7 +309,7 @@ export function PolicySettingsForm({
         ) : null}
         {ENVELOPE_LABELS.map((envelope) => {
           const alwaysOn = ALWAYS_PROTECTED.includes(envelope);
-          const disabled = pending || requireAllSigs || alwaysOn;
+          const disabled = saving || requireAllSigs || alwaysOn;
           return (
             <label
               key={envelope}
@@ -267,7 +318,7 @@ export function PolicySettingsForm({
               }`}
               title={
                 alwaysOn
-                  ? "Savings is permanently protected — its APY-bearing balance always needs admin approval to spend."
+                  ? "Savings is permanently protected. Its APY-bearing balance always needs admin approval to spend."
                   : undefined
               }
             >
@@ -298,11 +349,11 @@ export function PolicySettingsForm({
       <div className="flex items-center gap-3 pt-1">
         <button
           type="submit"
-          disabled={pending}
+          disabled={saving || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
           style={{ padding: "12px 18px", fontSize: 14 }}
         >
-          {pending ? "Saving…" : "Save policy"}
+          {saving ? "Saving…" : "Save policy"}
         </button>
         {error ? (
           <span
@@ -314,6 +365,60 @@ export function PolicySettingsForm({
         ) : null}
       </div>
     </form>
+  );
+}
+
+function makeEquivLabel(input: string, unit: Unit): string | null {
+  const n = Number(input);
+  if (n <= 0) return null;
+  if (unit === "PHP") {
+    return `≈ ${(n / PHP_PER_USDC).toFixed(4)} ${PAYMENT_TOKEN_LABEL}`;
+  }
+  return `≈ ₱${(n * PHP_PER_USDC).toLocaleString("en-PH", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function AmountInput({
+  id,
+  unit,
+  value,
+  onChange,
+  disabled,
+  placeholder,
+  equivLabel,
+}: {
+  id: string;
+  unit: Unit;
+  value: string;
+  onChange: (v: string) => void;
+  disabled: boolean;
+  placeholder: string;
+  equivLabel: string | null;
+}) {
+  return (
+    <div className="flex items-center gap-3 flex-wrap">
+      <div className="sobre-input-wrap" style={{ width: 160 }}>
+        {unit === "PHP" ? <span className="prefix">₱</span> : null}
+        <input
+          id={id}
+          type="number"
+          step={unit === "USDC" ? "0.0001" : "1"}
+          min="0"
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          className={`sobre-input ${unit === "PHP" ? "has-prefix" : ""}`}
+          placeholder={placeholder}
+          disabled={disabled}
+        />
+      </div>
+      {equivLabel ? (
+        <span className="text-xs" style={{ color: "var(--text-3)" }}>
+          {equivLabel}
+        </span>
+      ) : null}
+    </div>
   );
 }
 
@@ -336,7 +441,7 @@ function UnitToggle({
           disabled={disabled}
           data-active={u === unit ? "true" : "false"}
         >
-          {u === "PHP" ? "₱ PHP" : "USDC"}
+          {u === "PHP" ? "₱ PHP" : PAYMENT_TOKEN_LABEL}
         </button>
       ))}
     </div>

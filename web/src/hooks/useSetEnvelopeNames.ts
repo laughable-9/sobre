@@ -1,44 +1,54 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
-import { invokeWrite, stringVecScVal } from "@/lib/contract";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import { ENVELOPE_LABELS } from "@/lib/config";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface UseSetEnvelopeNamesResult {
-  setEnvelopeNames: (names: [string, string, string]) => Promise<string>;
+  setEnvelopeNames: (
+    familyWalletId: string,
+    names: [string, string, string],
+  ) => Promise<void>;
   pending: boolean;
   error: string | null;
 }
 
+/**
+ * Admin-only. Renames the three envelope display labels in Supabase
+ * (family_envelope_names). Purely cosmetic — the canonical Envelope enum
+ * (`Groceries | Tuition | Savings`) still indexes balances and policy.
+ * Renames are instant + free.
+ */
 export function useSetEnvelopeNames(
   adminAddress: string | null,
-  contractId: string | null,
 ): UseSetEnvelopeNamesResult {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const setEnvelopeNames = useCallback(
-    async (names: [string, string, string]): Promise<string> => {
+  const mutation = useCallback(
+    async (
+      familyWalletId: string,
+      names: [string, string, string],
+    ): Promise<void> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
-      if (!contractId) throw new Error("No wallet selected.");
-      setPending(true);
-      setError(null);
-      try {
-        const { hash } = await invokeWrite(
-          contractId,
-          "set_envelope_names",
-          [stringVecScVal(names)],
-        );
-        return hash;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        throw e;
-      } finally {
-        setPending(false);
+      if (!familyWalletId) throw new Error("No family wallet id.");
+      const supabase = getSupabaseBrowserClient();
+      const rows = names.map((display_name, i) => ({
+        family_wallet_id: familyWalletId,
+        envelope_key: ENVELOPE_LABELS[i],
+        display_name,
+      }));
+      const { data, error } = await supabase
+        .from("family_envelope_names")
+        .upsert(rows, { onConflict: "family_wallet_id,envelope_key" })
+        .select("envelope_key");
+      if (error) throw new Error(error.message);
+      if (!data || data.length === 0) {
+        throw new Error("Couldn't save. Only the family admin can rename envelopes.");
       }
     },
-    [adminAddress, contractId],
+    [adminAddress],
   );
 
-  return { setEnvelopeNames, pending, error };
+  const { run, pending, error } = useSupabaseMutation(mutation);
+  return { setEnvelopeNames: run, pending, error };
 }

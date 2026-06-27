@@ -12,14 +12,15 @@ import {
   signTransaction,
   submitPasskeySigned,
 } from "@/lib/passkey";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /**
- * Phase 5 family-wallet creation flow.
+ * Family-wallet creation flow.
  *
  *   1. Load the factory contract's spec from chain (one network round-trip).
- *   2. Build an AssembledTransaction for `create_sobre(admin, ...)` with the
- *      caller's smart wallet C-address as admin.
+ *   2. Build an AssembledTransaction for `create_sobre(admin, payment_token,
+ *      percents)` with the caller's smart wallet C-address as admin. Display
+ *      fields (wallet name, envelope names, admin display name/emoji) are NO
+ *      LONGER passed on-chain — they live in Supabase, written in step 6.
  *   3. Sign auth entries with the user's passkey via passkey-kit. The FaceID
  *      prompt fires inside this step.
  *   4. Re-simulate with the signed entries so the footprint covers the
@@ -29,9 +30,11 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
  *      InvokeHostFunction op (the JS-side `op.auth` mutations don't survive
  *      `Transaction.toXDR()`), sign envelope, submit.
  *   6. Decode the new Sobre contract address from the simulation result and
- *      insert a `public.family_wallets` row. The `bootstrap_family_admin`
- *      trigger auto-inserts the matching `public.family_members` row with
- *      `role = 'admin'`.
+ *      insert a `public.family_wallets` row (carries the wallet display name).
+ *      The `bootstrap_family_admin` trigger auto-inserts the matching
+ *      `public.family_members` row with `role = 'admin'`. We then UPDATE that
+ *      row with the admin's display name + emoji, and seed the three
+ *      `family_envelope_names` rows with the chosen labels.
  *
  * Untyped indexed access on the Client is deliberate: `Client.from` returns a
  * generic Client and attaches the contract methods at runtime per the
@@ -60,11 +63,6 @@ interface CreateSobreInvocable {
   create_sobre: (params: {
     admin: string;
     payment_token: string;
-    percents: number[];
-    envelope_names: string[];
-    wallet_name: string;
-    admin_name: string;
-    admin_emoji: string;
   }) => Promise<contract.AssembledTransaction<string>>;
 }
 
@@ -80,7 +78,6 @@ type ATWithSim<T> = contract.AssembledTransaction<T> & {
 export async function createFamilyWallet(
   args: CreateFamilyArgs,
 ): Promise<CreateFamilyResult> {
-  const supabase = getSupabaseBrowserClient();
   const deployerAddress = getDeployerAddress();
 
   // Client.from fetches the factory's spec from chain. We pass the public
@@ -108,11 +105,6 @@ export async function createFamilyWallet(
     assembledTx = (await invocable.create_sobre({
       admin: args.myWalletContractId,
       payment_token: PAYMENT_TOKEN_SAC_ID,
-      percents: [...args.percents],
-      envelope_names: [...args.envelopeNames],
-      wallet_name: args.walletName,
-      admin_name: args.adminName,
-      admin_emoji: args.adminEmoji,
     })) as ATWithSim<string>;
   } catch (err) {
     throw new Error(
@@ -180,24 +172,57 @@ export async function createFamilyWallet(
     );
   }
 
-  const { data: row, error: insertErr } = await supabase
-    .from("family_wallets")
-    .insert({
-      contract_id: familyContractId,
-      display_name: args.walletName,
-      created_by: args.myWalletDbId,
-    })
-    .select("id")
-    .single();
+  // Mirror via the server-side route that verifies caller is the on-chain
+  // admin of the new contract (closes the "predict next salt + pre-insert"
+  // squat). Client-side INSERT on family_wallets is RLS-revoked.
+  const { familyWalletId } = await mirrorFamilyCreate({
+    contractId: familyContractId,
+    displayName: args.walletName,
+    percents: args.percents,
+    adminName: args.adminName,
+    adminEmoji: args.adminEmoji,
+    envelopeNames: args.envelopeNames,
+  });
 
-  if (insertErr) {
-    throw new Error(`family_wallets insert failed: ${insertErr.message}`);
+  return { familyContractId, familyWalletId };
+}
+
+/**
+ * POST a new family to /api/family/create. Shared by `useCreateSobre` and
+ * the cold-start `createFamilyWallet` flow so the request shape lives in
+ * one place (server-side validation in
+ * `web/src/app/api/family/create/route.ts` must agree with this body).
+ */
+export async function mirrorFamilyCreate(args: {
+  contractId: string;
+  displayName: string;
+  percents: readonly [number, number, number];
+  adminName: string;
+  adminEmoji: string;
+  envelopeNames: readonly [string, string, string];
+}): Promise<{ familyWalletId: string }> {
+  const res = await fetch("/api/family/create", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contract_id: args.contractId,
+      display_name: args.displayName,
+      percents: [...args.percents],
+      admin_name: args.adminName,
+      admin_emoji: args.adminEmoji,
+      envelope_names: [...args.envelopeNames],
+    }),
+  });
+  if (!res.ok) {
+    const j = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(
+      `Wallet deployed on chain but Supabase mirror failed: ${j.error ?? `${res.status}`}`,
+    );
   }
-
-  return {
-    familyContractId,
-    familyWalletId: row.id,
+  const { family_wallet_id } = (await res.json()) as {
+    family_wallet_id: string;
   };
+  return { familyWalletId: family_wallet_id };
 }
 
 /** "Kyle Pagunsan" → "The Pagunsan Family". Falls back to "Sobre Family"

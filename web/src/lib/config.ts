@@ -14,7 +14,7 @@
  * together to switch environments.
  */
 export const FACTORY_CONTRACT_ID =
-  "CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X";
+  "CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ";
 
 /**
  * USDC on Stellar — the SEP-41 SAC for Circle's testnet USDC.
@@ -63,6 +63,11 @@ export const PAYMENT_TOKEN = "XLM" as PaymentToken;
  *  `payment_token`. Drives `deposit` / `spend` / SAC `transfer`. */
 export const PAYMENT_TOKEN_SAC_ID: string =
   PAYMENT_TOKEN === "USDC" ? USDC_SAC_ID : XLM_SAC_ID;
+
+/** User-visible label for the payment token. Read this anywhere UI
+ *  copy needs to say "XLM" / "USDC" so a future token swap is a
+ *  one-line change in this file, not a 9-site sweep. */
+export const PAYMENT_TOKEN_LABEL: string = PAYMENT_TOKEN;
 
 /** Origin used in invite URLs the admin shares. Hardcoded to the deployed
  *  domain so a link generated from `localhost:3000` during local dev still

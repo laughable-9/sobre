@@ -6,7 +6,6 @@ import {
   BASE_FEE,
   Contract,
   TransactionBuilder,
-  nativeToScVal,
   rpc,
   scValToNative,
   xdr,
@@ -163,52 +162,12 @@ export function envelopeScVal(
   return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(variant)]);
 }
 
-/** Encode the envelope split as `Vec<u32>` for create_sobre + set_envelopes. */
-export function percentsScVal(
-  percents: [number, number, number],
-): xdr.ScVal {
-  return xdr.ScVal.scvVec(percents.map((p) => xdr.ScVal.scvU32(p)));
-}
-
-/** Encode a `Vec<String>` — used for envelope_names in create_sobre +
- *  set_envelope_names. Soroban contract-side String maps to scvString. */
-export function stringVecScVal(strings: readonly string[]): xdr.ScVal {
-  return xdr.ScVal.scvVec(strings.map((s) => xdr.ScVal.scvString(s)));
-}
-
-/**
- * Encode a SpendPolicy struct as an ScVal map. Field order matters — Soroban
- * sorts struct map entries alphabetically by key:
- *     daily_limit < protected_envelopes < require_all_sigs
- */
-export function spendPolicyScVal({
-  requireAllSigs,
-  dailyLimit,
-  protectedEnvelopes,
-}: {
+/** SpendPolicy is now a Supabase-resident concept; no contract-side encoder. */
+export interface SpendPolicyShape {
   requireAllSigs: boolean;
   dailyLimit: bigint | null;
+  perTxThreshold: bigint | null;
   protectedEnvelopes: ("Groceries" | "Tuition" | "Savings")[];
-}): xdr.ScVal {
-  const dailyLimitVal =
-    dailyLimit === null
-      ? xdr.ScVal.scvVoid()
-      : nativeToScVal(dailyLimit, { type: "i128" });
-
-  return xdr.ScVal.scvMap([
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("daily_limit"),
-      val: dailyLimitVal,
-    }),
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("protected_envelopes"),
-      val: xdr.ScVal.scvVec(protectedEnvelopes.map(envelopeScVal)),
-    }),
-    new xdr.ScMapEntry({
-      key: xdr.ScVal.scvSymbol("require_all_sigs"),
-      val: xdr.ScVal.scvBool(requireAllSigs),
-    }),
-  ]);
 }
 
 /**

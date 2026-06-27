@@ -380,7 +380,7 @@ export function PdaxDepositModal({
       const stroops = BigInt(
         Math.round(row.amount_usdc * STROOPS_PER_TOKEN),
       );
-      const txHash = await deposit(stroops);
+      const txHash = await deposit(stroops, state.percents);
       await markSplit(txHash);
       onSuccess({ usdc: row.amount_usdc, stroops });
     } catch {

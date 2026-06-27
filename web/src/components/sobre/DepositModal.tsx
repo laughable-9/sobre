@@ -6,6 +6,7 @@ import { useDeposit } from "@/hooks/useDeposit";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
+  PAYMENT_TOKEN_LABEL,
   STROOPS_PER_USDC,
   displayEnvelopeName,
 } from "@/lib/config";
@@ -65,7 +66,7 @@ export function DepositModal({
     if (!valid) return;
     const stroops = BigInt(Math.round(usdc * STROOPS_PER_USDC));
     try {
-      await deposit(stroops);
+      await deposit(stroops, state.percents);
       onSuccess({ usdc, stroops });
     } catch {
       // surfaces via the hook's error state
@@ -74,7 +75,7 @@ export function DepositModal({
 
   const quick = unit === "PHP" ? QUICK_PHP : QUICK_USDC;
   const fmtQuick = (q: number) =>
-    unit === "PHP" ? `₱${q.toLocaleString()}` : `${q} USDC`;
+    unit === "PHP" ? `₱${q.toLocaleString()}` : `${q} ${PAYMENT_TOKEN_LABEL}`;
 
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
@@ -112,8 +113,8 @@ export function DepositModal({
             style={{ color: "var(--text-3)" }}
           >
             {unit === "PHP"
-              ? `≈ ${usdc.toFixed(4)} USDC at ₱${PHP_PER_USDC}/USDC`
-              : `≈ ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at ₱${PHP_PER_USDC}/USDC`}
+              ? `≈ ${usdc.toFixed(4)} ${PAYMENT_TOKEN_LABEL} at ₱${PHP_PER_USDC}/${PAYMENT_TOKEN_LABEL}`
+              : `≈ ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} at ₱${PHP_PER_USDC}/${PAYMENT_TOKEN_LABEL}`}
           </div>
           <div className="sobre-quick-amts">
             {quick.map((q) => (
@@ -163,7 +164,7 @@ export function DepositModal({
                     +{" "}
                     {unit === "PHP"
                       ? `₱${portionPhp.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : `${portion.toFixed(4)} USDC`}
+                      : `${portion.toFixed(4)} ${PAYMENT_TOKEN_LABEL}`}
                   </span>
                 </div>
               );
@@ -224,7 +225,7 @@ function UnitToggle({
           disabled={disabled}
           data-active={u === unit ? "true" : "false"}
         >
-          {u === "PHP" ? "₱ PHP" : "USDC"}
+          {u === "PHP" ? "₱ PHP" : PAYMENT_TOKEN_LABEL}
         </button>
       ))}
     </div>

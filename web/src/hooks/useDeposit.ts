@@ -7,27 +7,27 @@ import { PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
 import { invokeWrite, simulateRead } from "@/lib/contract";
 
 export interface UseDepositResult {
-  deposit: (amountStroops: bigint) => Promise<string>;
+  /** `percents` is admin's latest split (Supabase-resident); the caller
+   *  passes it explicitly so we don't re-fetch from inside the hook. */
+  deposit: (
+    amountStroops: bigint,
+    percents: [number, number, number],
+  ) => Promise<string>;
   pending: boolean;
-  /** Tracks which sub-step is running so the modal can render specific
-   *  spinner copy ("Waiting for funds…" while the SAC balance catches up
-   *  vs. "Splitting across envelopes…" once we've actually fired the call). */
   step: "idle" | "checking_balance" | "depositing";
   error: string | null;
   lastHash: string | null;
 }
 
 /**
- * Wraps the deposit(from, amount) contract call. Uses the connected user's
- * address as the `from` argument; their passkey signature authorizes both
- * the outer Sobre call and the inner SAC `transfer` sub-call.
+ * Wraps `deposit_with_split(from, groceries, tuition, savings)`. The amounts
+ * are computed off-chain from the family's Supabase-stored split percentages
+ * so admin can change the split freely with zero chain fees — the next
+ * deposit just uses the latest percents passed in.
  *
  * Includes a balance pre-check loop because Soroban RPC sometimes serves a
  * slightly stale snapshot of the SAC balance entry for a few seconds after
- * the relay's SAC transfer lands. Without the pre-check, the deposit()
- * call lands on a node that still sees the pre-transfer balance and
- * traps with "balance is not sufficient to spend". Polling balance()
- * until it catches up costs little and removes the race entirely.
+ * the relay's SAC transfer lands.
  */
 export function useDeposit(
   userAddress: string | null,
@@ -41,9 +41,13 @@ export function useDeposit(
   const [lastHash, setLastHash] = useState<string | null>(null);
 
   const deposit = useCallback(
-    async (amountStroops: bigint): Promise<string> => {
+    async (
+      amountStroops: bigint,
+      percents: [number, number, number],
+    ): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
+      if (amountStroops <= 0n) throw new Error("Deposit amount must be positive.");
       setPending(true);
       setError(null);
       try {
@@ -51,11 +55,21 @@ export function useDeposit(
         await waitForSacBalance(userAddress, amountStroops);
 
         setStep("depositing");
+        const { groceries, tuition, savings } = splitAmount(
+          amountStroops,
+          percents,
+        );
         const args = [
           Address.fromString(userAddress).toScVal(),
-          nativeToScVal(amountStroops, { type: "i128" }),
+          nativeToScVal(groceries, { type: "i128" }),
+          nativeToScVal(tuition, { type: "i128" }),
+          nativeToScVal(savings, { type: "i128" }),
         ];
-        const { hash } = await invokeWrite(contractId, "deposit", args);
+        const { hash } = await invokeWrite(
+          contractId,
+          "deposit_with_split",
+          args,
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
@@ -73,9 +87,21 @@ export function useDeposit(
   return { deposit, pending, step, error, lastHash };
 }
 
-/** Poll the payment-token SAC's `balance(addr)` until it covers the amount
- *  we're about to deposit, or 30s pass. Each call is a cheap read-only
- *  simulation; we sleep 500ms between attempts. */
+/** Total = groceries + tuition + savings. Rounding remainder lands in
+ *  savings so the integer sum exactly matches `amountStroops`. */
+export function splitAmount(
+  amountStroops: bigint,
+  percents: [number, number, number],
+): { groceries: bigint; tuition: bigint; savings: bigint } {
+  if (percents[0] + percents[1] + percents[2] !== 100) {
+    throw new Error("Split percentages must sum to 100.");
+  }
+  const groceries = (amountStroops * BigInt(percents[0])) / 100n;
+  const tuition = (amountStroops * BigInt(percents[1])) / 100n;
+  const savings = amountStroops - groceries - tuition;
+  return { groceries, tuition, savings };
+}
+
 async function waitForSacBalance(
   userAddress: string,
   neededStroops: bigint,

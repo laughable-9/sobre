@@ -1,50 +1,43 @@
 "use client";
 
-import { useCallback, useState } from "react";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { useCallback } from "react";
 
-import { invokeWrite } from "@/lib/contract";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import type { PendingSpendRequest } from "@/hooks/usePendingSpendRequests";
 
 export interface UseDenyRequestResult {
-  deny: (requestId: bigint) => Promise<string>;
+  /** Marks the Supabase row as denied. No chain call, no fee. */
+  deny: (req: PendingSpendRequest) => Promise<void>;
   pending: boolean;
   error: string | null;
-  lastHash: string | null;
 }
 
-/** Drops the queued spend; no tokens move. */
 export function useDenyRequest(
   adminAddress: string | null,
-  contractId: string | null,
+  /** Admin's `wallets.id` (Supabase UUID). Stored on the resolved row so
+   *  the dashboard can later attribute "denied by Mommy" without joining
+   *  back through wallets. Pass null if unresolved; the row just records
+   *  no attribution. */
+  adminWalletDbId: string | null,
 ): UseDenyRequestResult {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [lastHash, setLastHash] = useState<string | null>(null);
-
-  const deny = useCallback(
-    async (requestId: bigint): Promise<string> => {
+  const mutation = useCallback(
+    async (req: PendingSpendRequest): Promise<void> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
-      if (!contractId) throw new Error("No wallet selected.");
-      setPending(true);
-      setError(null);
-      try {
-        const args = [nativeToScVal(requestId, { type: "u64" })];
-        const { hash } = await invokeWrite(
-          contractId,
-          "deny_request",
-          args,
-        );
-        setLastHash(hash);
-        return hash;
-      } catch (e) {
-        setError(e instanceof Error ? e.message : String(e));
-        throw e;
-      } finally {
-        setPending(false);
-      }
+      const supabase = getSupabaseBrowserClient();
+      const { error } = await supabase
+        .from("family_pending_requests")
+        .update({
+          status: "denied",
+          resolved_at: new Date().toISOString(),
+          resolved_by_wallet_id: adminWalletDbId,
+        })
+        .eq("id", req.id);
+      if (error) throw new Error(error.message);
     },
-    [adminAddress, contractId],
+    [adminAddress, adminWalletDbId],
   );
 
-  return { deny, pending, error, lastHash };
+  const { run, pending, error } = useSupabaseMutation(mutation);
+  return { deny: run, pending, error };
 }
