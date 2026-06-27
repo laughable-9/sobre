@@ -8,7 +8,6 @@ const ENVELOPE_COUNT: u32 = 3;
 const PERCENT_TOTAL: u32 = 100;
 const MAX_MEMBERS: u32 = 2;
 const SECONDS_PER_DAY: u64 = 86_400;
-const MAX_ENVELOPE_NAME_LEN: u32 = 24;
 
 // ─── Domain types ─────────────────────────────────────────────────────────
 
@@ -34,16 +33,14 @@ impl Envelope {
     }
 }
 
-/// Profile travels with the address everywhere we render a member — name
-/// shows in summary/activity/feed, emoji is the avatar. The frontend allows
-/// only a curated emoji set (mango, palm, flower, money, star, sun) so this
-/// stays a tiny string per row.
+/// On-chain a member is just an address. The display name + emoji are pure UI
+/// and live in Supabase, where renaming costs nothing and doesn't need a
+/// FaceID prompt. The contract only cares which addresses are authorized
+/// to spend.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Member {
     pub address: Address,
-    pub name: String,
-    pub emoji: String,
 }
 
 #[contracttype]
@@ -57,8 +54,6 @@ pub enum DataKey {
     NextRequestId,
     ActiveRequestIds,
     Request(u64),
-    WalletName,
-    EnvelopeNames,
     /// (caller, day_epoch) → cumulative spent that day. Day epoch is
     /// `ledger.timestamp() / SECONDS_PER_DAY`, so each new UTC day starts a
     /// fresh counter without explicit reset.
@@ -74,7 +69,7 @@ pub enum DataKey {
     Invite(BytesN<32>),
 }
 
-/// All three checks compose with OR — any one triggering routes the spend
+/// All four checks compose with OR — any one triggering routes the spend
 /// to admin approval. Default (no policy set) leaves all spends open.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -83,8 +78,25 @@ pub struct SpendPolicy {
     pub require_all_sigs: bool,
     /// Cap on cumulative daily spend per caller (in stroops). None = no cap.
     pub daily_limit: Option<i128>,
+    /// Per-transaction approval threshold in stroops. None = no per-tx gate.
+    /// Non-admin spends with amount > threshold route to pending_requests.
+    pub per_tx_threshold: Option<i128>,
     /// Envelopes a member can't spend from directly — admin must approve.
     pub protected_envelopes: Vec<Envelope>,
+}
+
+/// One settings change processed by `apply_settings`. Admin passes a
+/// `Vec<SettingsField>` so a single call can atomically apply multiple
+/// changes (e.g. new percents + new policy) under one signature.
+/// Modelled as a flat enum instead of an `Option<SpendPolicy>`-style
+/// struct because Soroban's `#[contracttype]` macro doesn't synthesize
+/// the `ScVal: From<T>` impl needed for `Option<UserDefinedType>` in
+/// client-facing arg positions.
+#[contracttype]
+#[derive(Clone, Debug)]
+pub enum SettingsField {
+    Percents(Vec<u32>),
+    Policy(SpendPolicy),
 }
 
 /// Created by `spend` when policy triggers; resolved by `approve_request`
@@ -100,14 +112,14 @@ pub struct PendingRequest {
     pub requested_at_ledger: u32,
 }
 
-/// Composite view returned to the frontend in one call.
+/// Composite view returned to the frontend in one call. Display fields
+/// (wallet_name, envelope_names, member display name/emoji) live in Supabase
+/// and are joined client-side — the contract returns only on-chain truth.
 #[contracttype]
 #[derive(Clone)]
 pub struct WalletState {
     pub admin: Address,
     pub payment_token: Address,
-    pub wallet_name: String,
-    pub envelope_names: Vec<String>,
     pub percents: Vec<u32>,
     pub members: Vec<Member>,
     pub balances: Vec<i128>,
@@ -185,8 +197,7 @@ pub struct InviteCreated {
 }
 
 /// Emitted when a non-admin redeems an invite token to join. Pairs with
-/// InviteCreated by the matching invite_hash topic. The joiner's profile +
-/// address are also captured by the MemberJoined event that fires alongside.
+/// InviteCreated by the matching invite_hash topic.
 #[contractevent]
 #[derive(Clone, Debug)]
 pub struct InviteRedeemed {
@@ -196,14 +207,14 @@ pub struct InviteRedeemed {
     pub member: Address,
 }
 
-/// Emitted when a non-admin self-joins via the invite-link flow.
+/// Emitted when a non-admin self-joins via the invite-link flow. The display
+/// name + emoji aren't on-chain anymore; the frontend writes those to
+/// Supabase immediately after this event lands.
 #[contractevent]
 #[derive(Clone, Debug)]
 pub struct MemberJoined {
     #[topic]
     pub member: Address,
-    pub name: String,
-    pub emoji: String,
 }
 
 /// Emitted when admin kicks a member.
@@ -214,18 +225,14 @@ pub struct MemberRemoved {
     pub member: Address,
 }
 
-/// Emitted when admin renames the wallet via `set_wallet_name`.
+/// Emitted by `apply_settings` per call. The bool fields let the dashboard
+/// reconcile its Supabase-mirrored "intended" state with what actually
+/// landed on-chain without re-reading the full WalletState.
 #[contractevent]
 #[derive(Clone, Debug)]
-pub struct WalletRenamed {
-    pub new_name: String,
-}
-
-/// Emitted when admin renames the envelopes via `set_envelope_names`.
-#[contractevent]
-#[derive(Clone, Debug)]
-pub struct EnvelopesRenamed {
-    pub names: Vec<String>,
+pub struct SettingsApplied {
+    pub updated_percents: bool,
+    pub updated_policy: bool,
 }
 
 /// Emitted when the admin opts this Sobre into a new wasm via `upgrade`.
@@ -262,7 +269,6 @@ pub enum Error {
     RequestNotFound = 9,
     MemberNotFound = 10,
     CannotRemoveAdmin = 11,
-    InvalidEnvelopeNames = 12,
     InviteNotFound = 13,
     InviteExpired = 14,
 }
@@ -279,18 +285,6 @@ fn validate_percents(env: &Env, percents: &Vec<u32>) {
     }
 }
 
-fn validate_envelope_names(env: &Env, names: &Vec<String>) {
-    if names.len() != ENVELOPE_COUNT {
-        panic_with_error!(env, Error::InvalidEnvelopeNames);
-    }
-    for n in names.iter() {
-        let len = n.len();
-        if len == 0 || len > MAX_ENVELOPE_NAME_LEN {
-            panic_with_error!(env, Error::InvalidEnvelopeNames);
-        }
-    }
-}
-
 /// Shared body for `init` and `__constructor`. Skips the `admin.require_auth()`
 /// check because both public callers (the auth-required `init` and the
 /// factory's `__constructor` whose admin auth is already verified upstream)
@@ -301,32 +295,21 @@ fn init_inner(
     admin: Address,
     payment_token: Address,
     percents: Vec<u32>,
-    envelope_names: Vec<String>,
-    wallet_name: String,
-    admin_name: String,
-    admin_emoji: String,
     factory: Address,
 ) {
     if env.storage().instance().has(&DataKey::Admin) {
         panic_with_error!(&env, Error::AlreadyInitialized);
     }
     validate_percents(&env, &percents);
-    validate_envelope_names(&env, &envelope_names);
 
     let inst = env.storage().instance();
     inst.set(&DataKey::Admin, &admin);
     inst.set(&DataKey::PaymentToken, &payment_token);
     inst.set(&DataKey::Percents, &percents);
-    inst.set(&DataKey::EnvelopeNames, &envelope_names);
     inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
-    inst.set(&DataKey::WalletName, &wallet_name);
     inst.set(&DataKey::Factory, &factory);
 
-    let admin_member = Member {
-        address: admin,
-        name: admin_name,
-        emoji: admin_emoji,
-    };
+    let admin_member = Member { address: admin };
     inst.set(&DataKey::Members, &vec![&env, admin_member]);
 }
 
@@ -366,6 +349,7 @@ fn empty_policy(env: &Env) -> SpendPolicy {
     SpendPolicy {
         require_all_sigs: false,
         daily_limit: None,
+        per_tx_threshold: None,
         protected_envelopes: Vec::new(env),
     }
 }
@@ -423,19 +407,18 @@ fn policy_requires_approval(
             return true;
         }
     }
+    if let Some(threshold) = policy.per_tx_threshold {
+        if amount > threshold {
+            return true;
+        }
+    }
     false
 }
 
 /// Pure execution path — assumes policy + member + amount checks already
 /// passed. Transfers tokens, updates the envelope balance, tracks daily
 /// spend, and emits the Spend event.
-fn execute_spend(
-    env: &Env,
-    caller: &Address,
-    envelope: Envelope,
-    amount: i128,
-    memo: &String,
-) {
+fn execute_spend(env: &Env, caller: &Address, envelope: Envelope, amount: i128, memo: &String) {
     let inst = env.storage().instance();
     let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
     let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
@@ -556,23 +539,9 @@ impl SobreContract {
         admin: Address,
         payment_token: Address,
         percents: Vec<u32>,
-        envelope_names: Vec<String>,
-        wallet_name: String,
-        admin_name: String,
-        admin_emoji: String,
         factory: Address,
     ) {
-        init_inner(
-            env,
-            admin,
-            payment_token,
-            percents,
-            envelope_names,
-            wallet_name,
-            admin_name,
-            admin_emoji,
-            factory,
-        );
+        init_inner(env, admin, payment_token, percents, factory);
     }
 
     /// One-time setup for manual (non-factory) deploys. Requires admin
@@ -590,24 +559,10 @@ impl SobreContract {
         admin: Address,
         payment_token: Address,
         percents: Vec<u32>,
-        envelope_names: Vec<String>,
-        wallet_name: String,
-        admin_name: String,
-        admin_emoji: String,
         factory: Address,
     ) {
         admin.require_auth();
-        init_inner(
-            env,
-            admin,
-            payment_token,
-            percents,
-            envelope_names,
-            wallet_name,
-            admin_name,
-            admin_emoji,
-            factory,
-        );
+        init_inner(env, admin, payment_token, percents, factory);
     }
 
     /// Admin-only. Persists a single-use invite token that the admin's client
@@ -641,22 +596,16 @@ impl SobreContract {
     /// `create_invite`. The entry is deleted on redemption so each token is
     /// single-use; the 2-member cap is the demo's safety net even though
     /// the invite gate already enforces it.
-    pub fn join_wallet(
-        env: Env,
-        caller: Address,
-        name: String,
-        emoji: String,
-        invite_token: BytesN<32>,
-    ) {
+    ///
+    /// Display name + emoji are NOT taken here. The frontend writes those
+    /// to Supabase immediately after the MemberJoined event lands.
+    pub fn join_wallet(env: Env, caller: Address, invite_token: BytesN<32>) {
         caller.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
             panic_with_error!(&env, Error::NotInitialized);
         }
 
-        let token_hash: BytesN<32> = env
-            .crypto()
-            .sha256(&Bytes::from(invite_token))
-            .into();
+        let token_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(invite_token)).into();
         let invite_key = DataKey::Invite(token_hash.clone());
         let expires_at_ledger: u32 = env
             .storage()
@@ -678,8 +627,6 @@ impl SobreContract {
         }
         members.push_back(Member {
             address: caller.clone(),
-            name: name.clone(),
-            emoji: emoji.clone(),
         });
         inst.set(&DataKey::Members, &members);
 
@@ -687,8 +634,6 @@ impl SobreContract {
 
         MemberJoined {
             member: caller.clone(),
-            name,
-            emoji,
         }
         .publish(&env);
         InviteRedeemed {
@@ -716,17 +661,6 @@ impl SobreContract {
         inst.set(&DataKey::Members, &members);
 
         MemberRemoved { member }.publish(&env);
-    }
-
-    /// Admin-only. Renames the wallet (the "Pagunsan Family" string at the
-    /// top of both dashboards).
-    pub fn set_wallet_name(env: Env, new_name: String) {
-        require_admin_auth(&env);
-        env.storage().instance().set(&DataKey::WalletName, &new_name);
-        WalletRenamed {
-            new_name: new_name.clone(),
-        }
-        .publish(&env);
     }
 
     /// Admin-only. Sweeps every envelope balance back to admin in a single
@@ -783,31 +717,47 @@ impl SobreContract {
         WalletUpgraded { new_wasm }.publish(&env);
     }
 
-    /// Admin-only. Overwrite the envelope percentage split. Only affects how
-    /// FUTURE deposits are distributed — existing balances are untouched.
-    pub fn set_envelopes(env: Env, percents: Vec<u32>) {
+    /// Admin-only. The single mutator for all on-chain settings (percents,
+    /// policy bundle, per-tx threshold). Caller passes a `Vec<SettingsField>`;
+    /// each variant applies one change. Variants are applied in order, so a
+    /// later `SetThreshold` overrides an earlier one in the same call. An
+    /// empty Vec is a safe no-op.
+    ///
+    /// In normal operation, admin pre-signs the auth entry for this call
+    /// off-chain (one FaceID, zero chain tx). The signed entry sits in
+    /// Supabase until the next deposit/spend bundles it as a second op,
+    /// committing the settings change for free.
+    pub fn apply_settings(env: Env, updates: Vec<SettingsField>) {
         require_admin_auth(&env);
-        validate_percents(&env, &percents);
-        env.storage().instance().set(&DataKey::Percents, &percents);
-    }
+        let inst = env.storage().instance();
 
-    /// Admin-only. Rename the three envelopes. Purely cosmetic — the on-chain
-    /// `Envelope::Groceries|Tuition|Savings` enum still indexes balances and
-    /// policies, so existing pending requests + balances stay valid.
-    pub fn set_envelope_names(env: Env, names: Vec<String>) {
-        require_admin_auth(&env);
-        validate_envelope_names(&env, &names);
-        env.storage()
-            .instance()
-            .set(&DataKey::EnvelopeNames, &names);
-        EnvelopesRenamed { names }.publish(&env);
-    }
+        let mut updated_percents = false;
+        let mut updated_policy = false;
 
-    /// Admin-only. Replace the entire spending policy in one call. Any spend
-    /// that lands AFTER this updates against the new policy immediately.
-    pub fn set_policy(env: Env, policy: SpendPolicy) {
-        require_admin_auth(&env);
-        env.storage().instance().set(&DataKey::Policy, &policy);
+        for update in updates.iter() {
+            match update {
+                SettingsField::Percents(p) => {
+                    validate_percents(&env, &p);
+                    inst.set(&DataKey::Percents, &p);
+                    updated_percents = true;
+                }
+                SettingsField::Policy(policy) => {
+                    if let Some(t) = policy.per_tx_threshold {
+                        if t < 0 {
+                            panic_with_error!(&env, Error::InvalidAmount);
+                        }
+                    }
+                    inst.set(&DataKey::Policy, &policy);
+                    updated_policy = true;
+                }
+            }
+        }
+
+        SettingsApplied {
+            updated_percents,
+            updated_policy,
+        }
+        .publish(&env);
     }
 
     pub fn deposit(env: Env, from: Address, amount: i128) {
@@ -886,7 +836,9 @@ impl SobreContract {
             .get(&DataKey::Request(request_id))
             .unwrap_or_else(|| panic_with_error!(&env, Error::RequestNotFound));
 
-        env.storage().persistent().remove(&DataKey::Request(request_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Request(request_id));
         remove_active_id(&env, request_id);
 
         execute_spend(&env, &req.caller, req.envelope, req.amount, &req.memo);
@@ -905,23 +857,23 @@ impl SobreContract {
         {
             panic_with_error!(&env, Error::RequestNotFound);
         }
-        env.storage().persistent().remove(&DataKey::Request(request_id));
+        env.storage()
+            .persistent()
+            .remove(&DataKey::Request(request_id));
         remove_active_id(&env, request_id);
 
         RequestDenied { request_id }.publish(&env);
     }
 
-    /// Polled by both dashboards every 2-3s. Returns admin, payment token,
-    /// wallet name, envelope split + balances, profiled members, the active
-    /// SpendPolicy, and the list of pending requests — in one call.
+    /// Polled by both dashboards every 2-3s. Returns only on-chain state;
+    /// display fields (wallet name, envelope names, member display) are
+    /// joined from Supabase client-side.
     pub fn get_state(env: Env) -> WalletState {
         let inst = env.storage().instance();
         let admin: Address = inst
             .get(&DataKey::Admin)
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
-        let wallet_name: String = inst.get(&DataKey::WalletName).unwrap();
-        let envelope_names: Vec<String> = inst.get(&DataKey::EnvelopeNames).unwrap();
         let percents: Vec<u32> = inst.get(&DataKey::Percents).unwrap();
         let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
@@ -931,8 +883,6 @@ impl SobreContract {
         WalletState {
             admin,
             payment_token,
-            wallet_name,
-            envelope_names,
             percents,
             members,
             balances,

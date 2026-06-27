@@ -8,22 +8,6 @@ use soroban_sdk::{
 /// SEP-41 tokens on Stellar use 7 decimals. 1 token = 10_000_000 stroops.
 const STROOPS_PER_TOKEN: i128 = 10_000_000;
 
-const WALLET_NAME: &str = "Pagunsan Family";
-const ADMIN_NAME: &str = "Kuya Jun";
-const ADMIN_EMOJI: &str = "🥭";
-const ENV_GROCERIES: &str = "Groceries";
-const ENV_TUITION: &str = "Tuition";
-const ENV_SAVINGS: &str = "Savings";
-
-fn default_envelope_names(env: &Env) -> Vec<String> {
-    vec![
-        env,
-        String::from_str(env, ENV_GROCERIES),
-        String::from_str(env, ENV_TUITION),
-        String::from_str(env, ENV_SAVINGS),
-    ]
-}
-
 /// All tests start from "initialized wallet with admin + default 50/30/20
 /// split + a real SEP-41 payment token alice can mint and deposit." The
 /// token is a real Stellar Asset Contract registered in the test env so
@@ -46,10 +30,6 @@ impl Fixture {
 
         let admin = Address::generate(&env);
         let percents = vec![&env, 50u32, 30u32, 20u32];
-        let envelope_names = default_envelope_names(&env);
-        let wallet_name = String::from_str(&env, WALLET_NAME);
-        let admin_name = String::from_str(&env, ADMIN_NAME);
-        let admin_emoji = String::from_str(&env, ADMIN_EMOJI);
         // Standalone tests don't go through the factory, so we mint a
         // throwaway address to satisfy the Factory constructor arg. Tests
         // that exercise upgrade() install a real factory via the factory
@@ -59,16 +39,7 @@ impl Fixture {
         // deploying + initializing the contract in one step.
         let contract_id = env.register(
             SobreContract,
-            (
-                admin.clone(),
-                payment_token.clone(),
-                percents,
-                envelope_names,
-                wallet_name,
-                admin_name,
-                admin_emoji,
-                factory,
-            ),
+            (admin.clone(), payment_token.clone(), percents, factory),
         );
         Self {
             env,
@@ -106,12 +77,7 @@ impl Fixture {
         let f = Self::funded();
         let member = Address::generate(&f.env);
         let token = f.create_invite();
-        f.client().join_wallet(
-            &member,
-            &String::from_str(&f.env, "Maria"),
-            &String::from_str(&f.env, "🌺"),
-            &token,
-        );
+        f.client().join_wallet(&member, &token);
         (f, member)
     }
 
@@ -121,11 +87,7 @@ impl Fixture {
     /// from the returned plaintext.
     fn create_invite(&self) -> BytesN<32> {
         let token = BytesN::from_array(&self.env, &[7u8; 32]);
-        let hash: BytesN<32> = self
-            .env
-            .crypto()
-            .sha256(&Bytes::from(token.clone()))
-            .into();
+        let hash: BytesN<32> = self.env.crypto().sha256(&Bytes::from(token.clone())).into();
         let expires_at = self.env.ledger().sequence() + 1000;
         self.client().create_invite(&hash, &expires_at);
         token
@@ -135,6 +97,7 @@ impl Fixture {
         SpendPolicy {
             require_all_sigs: false,
             daily_limit: None,
+            per_tx_threshold: None,
             protected_envelopes: Vec::new(&self.env),
         }
     }
@@ -143,97 +106,34 @@ impl Fixture {
 // ─── init ─────────────────────────────────────────────────────────────────
 
 #[test]
-fn init_seeds_wallet_name_and_admin_profile() {
+fn init_seeds_admin_member_only() {
     let f = Fixture::new();
     let state = f.client().get_state();
 
     assert_eq!(state.admin, f.admin);
     assert_eq!(state.payment_token, f.payment_token);
-    assert_eq!(state.wallet_name, String::from_str(&f.env, WALLET_NAME));
-    assert_eq!(state.envelope_names, default_envelope_names(&f.env));
     assert_eq!(state.percents, vec![&f.env, 50u32, 30u32, 20u32]);
     assert_eq!(state.members.len(), 1);
     let admin_member = state.members.get(0).unwrap();
     assert_eq!(admin_member.address, f.admin);
-    assert_eq!(admin_member.name, String::from_str(&f.env, ADMIN_NAME));
-    assert_eq!(admin_member.emoji, String::from_str(&f.env, ADMIN_EMOJI));
     assert_eq!(state.balances.len(), 3);
-}
-
-// ─── set_envelope_names ───────────────────────────────────────────────────
-
-#[test]
-fn set_envelope_names_updates_state() {
-    let f = Fixture::new();
-    let updated = vec![
-        &f.env,
-        String::from_str(&f.env, "Rent"),
-        String::from_str(&f.env, "School"),
-        String::from_str(&f.env, "Vacation"),
-    ];
-
-    f.client().set_envelope_names(&updated);
-
-    assert_eq!(f.client().get_state().envelope_names, updated);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #12)")]
-fn set_envelope_names_rejects_wrong_count() {
-    let f = Fixture::new();
-    f.client().set_envelope_names(&vec![
-        &f.env,
-        String::from_str(&f.env, "Only"),
-        String::from_str(&f.env, "Two"),
-    ]);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #12)")]
-fn set_envelope_names_rejects_empty_name() {
-    let f = Fixture::new();
-    f.client().set_envelope_names(&vec![
-        &f.env,
-        String::from_str(&f.env, "Rent"),
-        String::from_str(&f.env, ""),
-        String::from_str(&f.env, "Savings"),
-    ]);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #12)")]
-fn set_envelope_names_rejects_too_long() {
-    let f = Fixture::new();
-    // 25 chars — exceeds MAX_ENVELOPE_NAME_LEN (24).
-    f.client().set_envelope_names(&vec![
-        &f.env,
-        String::from_str(&f.env, "A"),
-        String::from_str(&f.env, "B"),
-        String::from_str(&f.env, "ThisLabelIsWayWayTooLongXX"),
-    ]);
+    assert!(state.policy.per_tx_threshold.is_none());
 }
 
 // ─── join_wallet + create_invite ──────────────────────────────────────────
 
 #[test]
-fn join_wallet_appends_profiled_member() {
+fn join_wallet_appends_member_address() {
     let f = Fixture::new();
     let maria = Address::generate(&f.env);
     let token = f.create_invite();
 
-    f.client().join_wallet(
-        &maria,
-        &String::from_str(&f.env, "Maria"),
-        &String::from_str(&f.env, "🌺"),
-        &token,
-    );
+    f.client().join_wallet(&maria, &token);
 
     let state = f.client().get_state();
     assert_eq!(state.members.len(), 2);
     let m = state.members.get(1).unwrap();
     assert_eq!(m.address, maria);
-    assert_eq!(m.name, String::from_str(&f.env, "Maria"));
-    assert_eq!(m.emoji, String::from_str(&f.env, "🌺"));
 }
 
 #[test]
@@ -242,12 +142,7 @@ fn join_wallet_rejects_duplicate() {
     let f = Fixture::new();
     let token = f.create_invite();
     // Admin already a member; trying to join again is a duplicate.
-    f.client().join_wallet(
-        &f.admin,
-        &String::from_str(&f.env, "Admin again"),
-        &String::from_str(&f.env, "🥭"),
-        &token,
-    );
+    f.client().join_wallet(&f.admin, &token);
 }
 
 #[test]
@@ -256,12 +151,7 @@ fn join_wallet_rejects_when_at_max() {
     let f = Fixture::new();
     let m1 = Address::generate(&f.env);
     let t1 = f.create_invite();
-    f.client().join_wallet(
-        &m1,
-        &String::from_str(&f.env, "Maria"),
-        &String::from_str(&f.env, "🌺"),
-        &t1,
-    );
+    f.client().join_wallet(&m1, &t1);
     // Second invite uses a different plaintext (the fixture helper would
     // reuse the same one, but join_wallet deletes it after the first
     // redemption so we mint a fresh one with a distinct byte pattern).
@@ -274,12 +164,7 @@ fn join_wallet_rejects_when_at_max() {
     f.client()
         .create_invite(&t2_hash, &(f.env.ledger().sequence() + 1000));
     let m2 = Address::generate(&f.env);
-    f.client().join_wallet(
-        &m2,
-        &String::from_str(&f.env, "Pedro"),
-        &String::from_str(&f.env, "🌴"),
-        &t2_plain,
-    );
+    f.client().join_wallet(&m2, &t2_plain);
 }
 
 #[test]
@@ -288,12 +173,7 @@ fn join_wallet_rejects_unknown_token() {
     let f = Fixture::new();
     let bogus = BytesN::from_array(&f.env, &[0xAAu8; 32]);
     let maria = Address::generate(&f.env);
-    f.client().join_wallet(
-        &maria,
-        &String::from_str(&f.env, "Maria"),
-        &String::from_str(&f.env, "🌺"),
-        &bogus,
-    );
+    f.client().join_wallet(&maria, &bogus);
 }
 
 #[test]
@@ -306,12 +186,7 @@ fn join_wallet_rejects_expired_token() {
     // offset.
     f.env.ledger().with_mut(|l| l.sequence_number += 2000);
     let maria = Address::generate(&f.env);
-    f.client().join_wallet(
-        &maria,
-        &String::from_str(&f.env, "Maria"),
-        &String::from_str(&f.env, "🌺"),
-        &token,
-    );
+    f.client().join_wallet(&maria, &token);
 }
 
 #[test]
@@ -320,20 +195,10 @@ fn join_wallet_rejects_replayed_token() {
     let f = Fixture::new();
     let token = f.create_invite();
     let maria = Address::generate(&f.env);
-    f.client().join_wallet(
-        &maria,
-        &String::from_str(&f.env, "Maria"),
-        &String::from_str(&f.env, "🌺"),
-        &token,
-    );
+    f.client().join_wallet(&maria, &token);
     // Same token, fresh attempt — should be gone from storage.
     let pedro = Address::generate(&f.env);
-    f.client().join_wallet(
-        &pedro,
-        &String::from_str(&f.env, "Pedro"),
-        &String::from_str(&f.env, "🌴"),
-        &token,
-    );
+    f.client().join_wallet(&pedro, &token);
 }
 
 #[test]
@@ -341,11 +206,7 @@ fn join_wallet_rejects_replayed_token() {
 fn create_invite_rejects_past_expiry() {
     let f = Fixture::new();
     let token = BytesN::from_array(&f.env, &[3u8; 32]);
-    let hash: BytesN<32> = f
-        .env
-        .crypto()
-        .sha256(&Bytes::from(token))
-        .into();
+    let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token)).into();
     // expires_at <= current ledger sequence — must reject upfront so an
     // already-stale token never lands in storage.
     f.client().create_invite(&hash, &f.env.ledger().sequence());
@@ -379,16 +240,7 @@ fn remove_member_rejects_unknown_address() {
     f.client().remove_member(&nobody);
 }
 
-// ─── set_wallet_name + close_wallet ───────────────────────────────────────
-
-#[test]
-fn set_wallet_name_updates_state() {
-    let f = Fixture::new();
-    f.client()
-        .set_wallet_name(&String::from_str(&f.env, "Santos Family"));
-    let state = f.client().get_state();
-    assert_eq!(state.wallet_name, String::from_str(&f.env, "Santos Family"));
-}
+// ─── close_wallet ─────────────────────────────────────────────────────────
 
 #[test]
 fn close_wallet_sweeps_all_envelopes_to_admin() {
@@ -418,24 +270,154 @@ fn close_wallet_with_empty_balances_no_ops_cleanly() {
     assert_eq!(state.balances.get(0).unwrap(), 0);
 }
 
-// ─── set_envelopes / deposit ──────────────────────────────────────────────
+// ─── apply_settings: percents ────────────────────────────────────────────
 
 #[test]
-fn set_envelopes_updates_split() {
+fn apply_settings_updates_percents() {
     let f = Fixture::new();
     let updated = vec![&f.env, 60u32, 25u32, 15u32];
 
-    f.client().set_envelopes(&updated);
+    f.client()
+        .apply_settings(&vec![&f.env, SettingsField::Percents(updated.clone())]);
 
     assert_eq!(f.client().get_state().percents, updated);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #3)")]
-fn set_envelopes_rejects_bad_sum() {
+fn apply_settings_rejects_bad_percents_sum() {
     let f = Fixture::new();
-    f.client().set_envelopes(&vec![&f.env, 50u32, 30u32, 30u32]);
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Percents(vec![&f.env, 50u32, 30u32, 30u32]),
+    ]);
 }
+
+// ─── apply_settings: policy ──────────────────────────────────────────────
+
+#[test]
+fn apply_settings_updates_policy() {
+    let f = Fixture::funded();
+    let policy = SpendPolicy {
+        daily_limit: Some(5 * STROOPS_PER_TOKEN),
+        protected_envelopes: vec![&f.env, Envelope::Tuition],
+        ..f.empty_policy()
+    };
+
+    f.client()
+        .apply_settings(&vec![&f.env, SettingsField::Policy(policy)]);
+
+    let state = f.client().get_state();
+    assert_eq!(state.policy.daily_limit, Some(5 * STROOPS_PER_TOKEN));
+    assert!(state.policy.protected_envelopes.contains(Envelope::Tuition));
+}
+
+// ─── apply_settings: threshold (folded into SpendPolicy) ─────────────────
+
+#[test]
+fn apply_settings_sets_threshold() {
+    let f = Fixture::new();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(10 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+
+    assert_eq!(
+        f.client().get_state().policy.per_tx_threshold,
+        Some(10 * STROOPS_PER_TOKEN)
+    );
+}
+
+#[test]
+fn apply_settings_clears_threshold() {
+    let f = Fixture::new();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(10 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+    assert_eq!(
+        f.client().get_state().policy.per_tx_threshold,
+        Some(10 * STROOPS_PER_TOKEN)
+    );
+
+    f.client()
+        .apply_settings(&vec![&f.env, SettingsField::Policy(f.empty_policy())]);
+    assert!(f.client().get_state().policy.per_tx_threshold.is_none());
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn apply_settings_rejects_negative_threshold() {
+    let f = Fixture::new();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(-1),
+            ..f.empty_policy()
+        }),
+    ]);
+}
+
+// ─── apply_settings: multi-field + idempotency ───────────────────────────
+
+#[test]
+fn apply_settings_updates_all_fields_atomically() {
+    let f = Fixture::new();
+    let percents = vec![&f.env, 40u32, 40u32, 20u32];
+    let policy = SpendPolicy {
+        require_all_sigs: true,
+        daily_limit: None,
+        per_tx_threshold: Some(50 * STROOPS_PER_TOKEN),
+        protected_envelopes: vec![&f.env, Envelope::Savings],
+    };
+
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Percents(percents.clone()),
+        SettingsField::Policy(policy),
+    ]);
+
+    let state = f.client().get_state();
+    assert_eq!(state.percents, percents);
+    assert!(state.policy.require_all_sigs);
+    assert_eq!(
+        state.policy.per_tx_threshold,
+        Some(50 * STROOPS_PER_TOKEN)
+    );
+}
+
+#[test]
+fn apply_settings_with_empty_vec_is_safe_noop() {
+    let f = Fixture::new();
+    let before = f.client().get_state();
+    f.client().apply_settings(&Vec::new(&f.env));
+    let after = f.client().get_state();
+    assert_eq!(before.percents, after.percents);
+    assert_eq!(before.policy.per_tx_threshold, after.policy.per_tx_threshold);
+}
+
+#[test]
+fn apply_settings_is_idempotent_for_same_values() {
+    let f = Fixture::new();
+    let updates = vec![
+        &f.env,
+        SettingsField::Percents(vec![&f.env, 50u32, 30u32, 20u32]),
+    ];
+    f.client().apply_settings(&updates);
+    f.client().apply_settings(&updates);
+    assert_eq!(
+        f.client().get_state().percents,
+        vec![&f.env, 50u32, 30u32, 20u32]
+    );
+}
+
+// ─── deposit ──────────────────────────────────────────────────────────────
 
 #[test]
 fn deposit_splits_per_percents() {
@@ -595,32 +577,21 @@ fn default_policy_is_open_and_no_pending() {
     let state = f.client().get_state();
     assert!(!state.policy.require_all_sigs);
     assert!(state.policy.daily_limit.is_none());
+    assert!(state.policy.per_tx_threshold.is_none());
     assert_eq!(state.policy.protected_envelopes.len(), 0);
     assert_eq!(state.pending.len(), 0);
 }
 
 #[test]
-fn set_policy_persists() {
-    let f = Fixture::funded();
-    let policy = SpendPolicy {
-        require_all_sigs: false,
-        daily_limit: Some(5 * STROOPS_PER_TOKEN),
-        protected_envelopes: vec![&f.env, Envelope::Tuition],
-    };
-    f.client().set_policy(&policy);
-
-    let state = f.client().get_state();
-    assert_eq!(state.policy.daily_limit, Some(5 * STROOPS_PER_TOKEN));
-    assert!(state.policy.protected_envelopes.contains(Envelope::Tuition));
-}
-
-#[test]
 fn spend_routes_to_pending_when_require_all_sigs() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        require_all_sigs: true,
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            require_all_sigs: true,
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &member,
@@ -640,10 +611,13 @@ fn spend_routes_to_pending_when_require_all_sigs() {
 #[test]
 fn spend_routes_to_pending_when_envelope_protected() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        protected_envelopes: vec![&f.env, Envelope::Tuition],
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            protected_envelopes: vec![&f.env, Envelope::Tuition],
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &member,
@@ -668,10 +642,13 @@ fn spend_routes_to_pending_when_envelope_protected() {
 #[test]
 fn spend_routes_to_pending_when_daily_limit_exceeded() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        daily_limit: Some(5 * STROOPS_PER_TOKEN),
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            daily_limit: Some(5 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &member,
@@ -692,13 +669,122 @@ fn spend_routes_to_pending_when_daily_limit_exceeded() {
     assert_eq!(state.pending.get(0).unwrap().amount, 3 * STROOPS_PER_TOKEN);
 }
 
+// ─── spend threshold ─────────────────────────────────────────────────────
+
+#[test]
+fn spend_at_or_below_threshold_executes_immediately() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(10 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+
+    f.client().spend(
+        &member,
+        &Envelope::Groceries,
+        &(10 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "exactly at threshold"),
+    );
+
+    let state = f.client().get_state();
+    assert_eq!(state.pending.len(), 0);
+    assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn spend_above_threshold_routes_to_pending() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(10 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+
+    f.client().spend(
+        &member,
+        &Envelope::Groceries,
+        &(15 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "over threshold"),
+    );
+
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 50 * STROOPS_PER_TOKEN);
+    assert_eq!(state.pending.len(), 1);
+    assert_eq!(
+        state.pending.get(0).unwrap().amount,
+        15 * STROOPS_PER_TOKEN
+    );
+}
+
+#[test]
+fn admin_spend_bypasses_threshold() {
+    let f = Fixture::funded();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(5 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+
+    // Admin spends well over the threshold; should execute immediately.
+    f.client().spend(
+        &f.admin,
+        &Envelope::Groceries,
+        &(20 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "admin big"),
+    );
+
+    let state = f.client().get_state();
+    assert_eq!(state.pending.len(), 0);
+    assert_eq!(state.balances.get(0).unwrap(), 30 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn cleared_threshold_no_longer_gates_spends() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            per_tx_threshold: Some(5 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
+    // Setting per_tx_threshold to None (via replacing with empty_policy)
+    // removes the gate.
+    f.client()
+        .apply_settings(&vec![&f.env, SettingsField::Policy(f.empty_policy())]);
+
+    // Even way over the previous threshold, spend should execute now.
+    f.client().spend(
+        &member,
+        &Envelope::Groceries,
+        &(20 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "no threshold anymore"),
+    );
+
+    let state = f.client().get_state();
+    assert_eq!(state.pending.len(), 0);
+    assert_eq!(state.balances.get(0).unwrap(), 30 * STROOPS_PER_TOKEN);
+}
+
+// ─── approve/deny ────────────────────────────────────────────────────────
+
 #[test]
 fn approve_request_executes_transfer() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        require_all_sigs: true,
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            require_all_sigs: true,
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &member,
@@ -726,10 +812,13 @@ fn approve_request_executes_transfer() {
 #[test]
 fn deny_request_drops_without_transfer() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        require_all_sigs: true,
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            require_all_sigs: true,
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &member,
@@ -768,10 +857,13 @@ fn deny_request_with_unknown_id_fails() {
 #[test]
 fn admin_spend_bypasses_require_all_sigs() {
     let f = Fixture::funded();
-    f.client().set_policy(&SpendPolicy {
-        require_all_sigs: true,
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            require_all_sigs: true,
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &f.admin,
@@ -788,10 +880,13 @@ fn admin_spend_bypasses_require_all_sigs() {
 #[test]
 fn admin_spend_bypasses_protected_envelope() {
     let f = Fixture::funded();
-    f.client().set_policy(&SpendPolicy {
-        protected_envelopes: vec![&f.env, Envelope::Tuition],
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            protected_envelopes: vec![&f.env, Envelope::Tuition],
+            ..f.empty_policy()
+        }),
+    ]);
 
     f.client().spend(
         &f.admin,
@@ -808,10 +903,13 @@ fn admin_spend_bypasses_protected_envelope() {
 #[test]
 fn admin_spend_bypasses_daily_limit_and_does_not_count_toward_member() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().set_policy(&SpendPolicy {
-        daily_limit: Some(5 * STROOPS_PER_TOKEN),
-        ..f.empty_policy()
-    });
+    f.client().apply_settings(&vec![
+        &f.env,
+        SettingsField::Policy(SpendPolicy {
+            daily_limit: Some(5 * STROOPS_PER_TOKEN),
+            ..f.empty_policy()
+        }),
+    ]);
 
     // Admin spends 20 — far over the daily limit — and it executes immediately
     // AND does not increment the daily counter for anyone.

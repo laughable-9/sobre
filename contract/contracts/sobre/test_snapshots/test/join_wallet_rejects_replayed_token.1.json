@@ -60,12 +60,6 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "string": "Maria"
-                },
-                {
-                  "string": "\\xf0\\x9f\\x8c\\xba"
-                },
-                {
                   "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                 }
               ]
@@ -201,28 +195,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "EnvelopeNames"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "string": "Groceries"
-                          },
-                          {
-                            "string": "Tuition"
-                          },
-                          {
-                            "string": "Savings"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Factory"
                           }
                         ]
@@ -250,22 +222,6 @@
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                                 }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\xa5\\xad"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Kuya Jun"
-                                }
                               }
                             ]
                           },
@@ -277,22 +233,6 @@
                                 },
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\x8c\\xba"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Maria"
                                 }
                               }
                             ]
@@ -332,18 +272,6 @@
                             "u32": 20
                           }
                         ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "WalletName"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "string": "Pagunsan Family"
                       }
                     }
                   ]

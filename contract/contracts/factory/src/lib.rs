@@ -1,7 +1,7 @@
 #![no_std]
 use soroban_sdk::{
-    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error,
-    Address, BytesN, Env, String, Vec,
+    contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, Address,
+    BytesN, Env, Vec,
 };
 
 // ─── Domain types ─────────────────────────────────────────────────────────
@@ -35,7 +35,6 @@ pub struct SobreCreated {
     pub admin: Address,
     #[topic]
     pub contract: Address,
-    pub wallet_name: String,
 }
 
 /// Emitted when the admin swaps the SobreContract wasm hash that future
@@ -134,15 +133,15 @@ impl SobreFactory {
     /// caller as admin. Returns the freshly deployed contract address. The
     /// factory's own address is supplied as the last constructor arg so the
     /// new instance knows where to ask for its current wasm hash on upgrade.
+    ///
+    /// Display fields (wallet name, envelope names, admin display name +
+    /// emoji) are NOT taken here — they live in Supabase, written by the
+    /// frontend right after this returns the new contract address.
     pub fn create_sobre(
         env: Env,
         admin: Address,
         payment_token: Address,
         percents: Vec<u32>,
-        envelope_names: Vec<String>,
-        wallet_name: String,
-        admin_name: String,
-        admin_emoji: String,
     ) -> Address {
         admin.require_auth();
 
@@ -150,16 +149,7 @@ impl SobreFactory {
         let salt = next_salt(&env);
         let factory = env.current_contract_address();
 
-        let constructor_args = (
-            admin.clone(),
-            payment_token,
-            percents,
-            envelope_names,
-            wallet_name.clone(),
-            admin_name,
-            admin_emoji,
-            factory,
-        );
+        let constructor_args = (admin.clone(), payment_token, percents, factory);
 
         let new_contract = env
             .deployer()
@@ -171,7 +161,6 @@ impl SobreFactory {
         SobreCreated {
             admin,
             contract: new_contract.clone(),
-            wallet_name,
         }
         .publish(&env);
 

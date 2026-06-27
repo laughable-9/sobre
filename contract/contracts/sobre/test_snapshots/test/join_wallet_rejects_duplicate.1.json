@@ -200,28 +200,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "EnvelopeNames"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "string": "Groceries"
-                          },
-                          {
-                            "string": "Tuition"
-                          },
-                          {
-                            "string": "Savings"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Factory"
                           }
                         ]
@@ -248,22 +226,6 @@
                                 },
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\xa5\\xad"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Kuya Jun"
                                 }
                               }
                             ]
@@ -303,18 +265,6 @@
                             "u32": 20
                           }
                         ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "WalletName"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "string": "Pagunsan Family"
                       }
                     }
                   ]

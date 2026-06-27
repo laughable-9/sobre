@@ -125,12 +125,6 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "string": "Maria"
-                },
-                {
-                  "string": "\\xf0\\x9f\\x8c\\xba"
-                },
-                {
                   "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
                 }
               ]
@@ -147,31 +141,48 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "set_policy",
+              "function_name": "apply_settings",
               "args": [
                 {
-                  "map": [
+                  "vec": [
                     {
-                      "key": {
-                        "symbol": "daily_limit"
-                      },
-                      "val": "void"
-                    },
-                    {
-                      "key": {
-                        "symbol": "protected_envelopes"
-                      },
-                      "val": {
-                        "vec": []
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "require_all_sigs"
-                      },
-                      "val": {
-                        "bool": true
-                      }
+                      "vec": [
+                        {
+                          "symbol": "Policy"
+                        },
+                        {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "daily_limit"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "per_tx_threshold"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "protected_envelopes"
+                              },
+                              "val": {
+                                "vec": []
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "require_all_sigs"
+                              },
+                              "val": {
+                                "bool": true
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -496,28 +507,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "EnvelopeNames"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "string": "Groceries"
-                          },
-                          {
-                            "string": "Tuition"
-                          },
-                          {
-                            "string": "Savings"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Factory"
                           }
                         ]
@@ -545,22 +534,6 @@
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                                 }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\xa5\\xad"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Kuya Jun"
-                                }
                               }
                             ]
                           },
@@ -572,22 +545,6 @@
                                 },
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\x8c\\xba"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Maria"
                                 }
                               }
                             ]
@@ -659,6 +616,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "per_tx_threshold"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "protected_envelopes"
                             },
                             "val": {
@@ -674,18 +637,6 @@
                             }
                           }
                         ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "WalletName"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "string": "Pagunsan Family"
                       }
                     }
                   ]

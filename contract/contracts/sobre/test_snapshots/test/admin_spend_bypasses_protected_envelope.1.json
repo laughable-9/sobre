@@ -97,39 +97,56 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "set_policy",
+              "function_name": "apply_settings",
               "args": [
                 {
-                  "map": [
+                  "vec": [
                     {
-                      "key": {
-                        "symbol": "daily_limit"
-                      },
-                      "val": "void"
-                    },
-                    {
-                      "key": {
-                        "symbol": "protected_envelopes"
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "vec": [
-                              {
-                                "symbol": "Tuition"
+                      "vec": [
+                        {
+                          "symbol": "Policy"
+                        },
+                        {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "daily_limit"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "per_tx_threshold"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "protected_envelopes"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "vec": [
+                                      {
+                                        "symbol": "Tuition"
+                                      }
+                                    ]
+                                  }
+                                ]
                               }
-                            ]
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "symbol": "require_all_sigs"
-                      },
-                      "val": {
-                        "bool": false
-                      }
+                            },
+                            {
+                              "key": {
+                                "symbol": "require_all_sigs"
+                              },
+                              "val": {
+                                "bool": false
+                              }
+                            }
+                          ]
+                        }
+                      ]
                     }
                   ]
                 }
@@ -358,28 +375,6 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "EnvelopeNames"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "string": "Groceries"
-                          },
-                          {
-                            "string": "Tuition"
-                          },
-                          {
-                            "string": "Savings"
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
                             "symbol": "Factory"
                           }
                         ]
@@ -406,22 +401,6 @@
                                 },
                                 "val": {
                                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "emoji"
-                                },
-                                "val": {
-                                  "string": "\\xf0\\x9f\\xa5\\xad"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "name"
-                                },
-                                "val": {
-                                  "string": "Kuya Jun"
                                 }
                               }
                             ]
@@ -481,6 +460,12 @@
                           },
                           {
                             "key": {
+                              "symbol": "per_tx_threshold"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
                               "symbol": "protected_envelopes"
                             },
                             "val": {
@@ -504,18 +489,6 @@
                             }
                           }
                         ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "WalletName"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "string": "Pagunsan Family"
                       }
                     }
                   ]

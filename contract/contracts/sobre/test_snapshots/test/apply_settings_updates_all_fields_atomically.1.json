@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 6,
+    "address": 5,
     "nonce": 0,
     "mux_id": 0
   },
@@ -25,6 +25,95 @@
       ]
     ],
     [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "function_name": "apply_settings",
+              "args": [
+                {
+                  "vec": [
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Percents"
+                        },
+                        {
+                          "vec": [
+                            {
+                              "u32": 40
+                            },
+                            {
+                              "u32": 40
+                            },
+                            {
+                              "u32": 20
+                            }
+                          ]
+                        }
+                      ]
+                    },
+                    {
+                      "vec": [
+                        {
+                          "symbol": "Policy"
+                        },
+                        {
+                          "map": [
+                            {
+                              "key": {
+                                "symbol": "daily_limit"
+                              },
+                              "val": "void"
+                            },
+                            {
+                              "key": {
+                                "symbol": "per_tx_threshold"
+                              },
+                              "val": {
+                                "i128": "500000000"
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "protected_envelopes"
+                              },
+                              "val": {
+                                "vec": [
+                                  {
+                                    "vec": [
+                                      {
+                                        "symbol": "Savings"
+                                      }
+                                    ]
+                                  }
+                                ]
+                              }
+                            },
+                            {
+                              "key": {
+                                "symbol": "require_all_sigs"
+                              },
+                              "val": {
+                                "bool": true
+                              }
+                            }
+                          ]
+                        }
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
     []
   ],
   "ledger": {
@@ -68,6 +157,26 @@
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "801925984706572462"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "5541220902715666415"
                 }
               },
               "durability": "temporary",
@@ -187,13 +296,64 @@
                       "val": {
                         "vec": [
                           {
-                            "u32": 50
+                            "u32": 40
                           },
                           {
-                            "u32": 30
+                            "u32": 40
                           },
                           {
                             "u32": 20
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Policy"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "daily_limit"
+                            },
+                            "val": "void"
+                          },
+                          {
+                            "key": {
+                              "symbol": "per_tx_threshold"
+                            },
+                            "val": {
+                              "i128": "500000000"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "protected_envelopes"
+                            },
+                            "val": {
+                              "vec": [
+                                {
+                                  "vec": [
+                                    {
+                                      "symbol": "Savings"
+                                    }
+                                  ]
+                                }
+                              ]
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "require_all_sigs"
+                            },
+                            "val": {
+                              "bool": true
+                            }
                           }
                         ]
                       }

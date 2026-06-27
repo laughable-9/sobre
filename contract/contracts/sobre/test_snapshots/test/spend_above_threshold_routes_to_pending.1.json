@@ -162,22 +162,16 @@
                               "key": {
                                 "symbol": "per_tx_threshold"
                               },
-                              "val": "void"
+                              "val": {
+                                "i128": "100000000"
+                              }
                             },
                             {
                               "key": {
                                 "symbol": "protected_envelopes"
                               },
                               "val": {
-                                "vec": [
-                                  {
-                                    "vec": [
-                                      {
-                                        "symbol": "Tuition"
-                                      }
-                                    ]
-                                  }
-                                ]
+                                "vec": []
                               }
                             },
                             {
@@ -221,42 +215,10 @@
                   ]
                 },
                 {
-                  "i128": "50000000"
+                  "i128": "150000000"
                 },
                 {
-                  "string": "open"
-                }
-              ]
-            }
-          },
-          "sub_invocations": []
-        }
-      ]
-    ],
-    [
-      [
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
-        {
-          "function": {
-            "contract_fn": {
-              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "spend",
-              "args": [
-                {
-                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                },
-                {
-                  "vec": [
-                    {
-                      "symbol": "Tuition"
-                    }
-                  ]
-                },
-                {
-                  "i128": "50000000"
-                },
-                {
-                  "string": "needs approval"
+                  "string": "over threshold"
                 }
               ]
             }
@@ -408,36 +370,6 @@
               "key": {
                 "vec": [
                   {
-                    "symbol": "DailySpent"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                  },
-                  {
-                    "u64": "0"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "50000000"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 4095
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "key": {
-                "vec": [
-                  {
                     "symbol": "Request"
                   },
                   {
@@ -453,7 +385,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "50000000"
+                      "i128": "150000000"
                     }
                   },
                   {
@@ -471,7 +403,7 @@
                     "val": {
                       "vec": [
                         {
-                          "symbol": "Tuition"
+                          "symbol": "Groceries"
                         }
                       ]
                     }
@@ -489,7 +421,7 @@
                       "symbol": "memo"
                     },
                     "val": {
-                      "string": "needs approval"
+                      "string": "over threshold"
                     }
                   },
                   {
@@ -562,7 +494,7 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "450000000"
+                            "i128": "500000000"
                           },
                           {
                             "i128": "300000000"
@@ -688,22 +620,16 @@
                             "key": {
                               "symbol": "per_tx_threshold"
                             },
-                            "val": "void"
+                            "val": {
+                              "i128": "100000000"
+                            }
                           },
                           {
                             "key": {
                               "symbol": "protected_envelopes"
                             },
                             "val": {
-                              "vec": [
-                                {
-                                  "vec": [
-                                    {
-                                      "symbol": "Tuition"
-                                    }
-                                  ]
-                                }
-                              ]
+                              "vec": []
                             }
                           },
                           {
@@ -736,26 +662,6 @@
               "key": {
                 "ledger_key_nonce": {
                   "nonce": "2032731177588607455"
-                }
-              },
-              "durability": "temporary",
-              "val": "void"
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 6311999
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4",
-              "key": {
-                "ledger_key_nonce": {
-                  "nonce": "6277191135259896685"
                 }
               },
               "durability": "temporary",
@@ -863,59 +769,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "950000000"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "authorized"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "clawback"
-                    },
-                    "val": {
-                      "bool": false
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 518400
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Balance"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "50000000"
+                      "i128": "1000000000"
                     }
                   },
                   {
