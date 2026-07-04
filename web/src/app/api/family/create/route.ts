@@ -23,6 +23,15 @@ import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
 
+/** Household types offered in onboarding. Kept in sync with the DB CHECK
+ *  constraint on family_wallets.household_type and the onboarding UI. */
+const HOUSEHOLD_TYPES = ["family-at-home", "both-abroad", "scratch"] as const;
+type HouseholdType = (typeof HOUSEHOLD_TYPES)[number];
+
+/** Sanity ceiling for a monthly budget bound, in whole PHP. Guards against a
+ *  fat-fingered / hostile value; the split preview never needs more. */
+const MAX_BUDGET_PHP = 100_000_000;
+
 interface PostBody {
   contract_id: string;
   display_name: string;
@@ -30,6 +39,22 @@ interface PostBody {
   admin_name: string;
   admin_emoji: string;
   envelope_names: [string, string, string];
+  // Onboarding metadata — off-chain only, all optional (columns are nullable).
+  household_type?: HouseholdType | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+}
+
+/** A budget bound is valid when omitted/null, or a finite non-negative integer
+ *  within the ceiling. Never trust the client — mirrors the DB CHECKs. */
+function isValidBudgetBound(v: unknown): v is number | null | undefined {
+  if (v === undefined || v === null) return true;
+  return (
+    typeof v === "number" &&
+    Number.isInteger(v) &&
+    v >= 0 &&
+    v <= MAX_BUDGET_PHP
+  );
 }
 
 function isValidBody(b: unknown): b is PostBody {
@@ -54,6 +79,24 @@ function isValidBody(b: unknown): b is PostBody {
     !Array.isArray(o.envelope_names) ||
     o.envelope_names.length !== 3 ||
     o.envelope_names.some((n) => typeof n !== "string")
+  ) {
+    return false;
+  }
+  // Onboarding metadata (all optional). Validate shape when present.
+  if (
+    o.household_type !== undefined &&
+    o.household_type !== null &&
+    !HOUSEHOLD_TYPES.includes(o.household_type as HouseholdType)
+  ) {
+    return false;
+  }
+  if (!isValidBudgetBound(o.budget_min) || !isValidBudgetBound(o.budget_max)) {
+    return false;
+  }
+  if (
+    typeof o.budget_min === "number" &&
+    typeof o.budget_max === "number" &&
+    o.budget_min > o.budget_max
   ) {
     return false;
   }
@@ -120,6 +163,11 @@ export async function POST(req: Request) {
       display_name: body.display_name,
       created_by: ctx.memberId,
       percents: body.percents,
+      // Onboarding metadata — off-chain, nullable. `?? null` so an absent
+      // field lands as SQL NULL rather than `undefined`.
+      household_type: body.household_type ?? null,
+      budget_min: body.budget_min ?? null,
+      budget_max: body.budget_max ?? null,
     })
     .select("id")
     .single();

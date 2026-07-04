@@ -6,53 +6,167 @@ import { Check, Clock, Copy, Link2, Send } from "lucide-react";
 import { INVITE_TTL_MINUTES, useCreateInvite } from "@/hooks/useCreateInvite";
 import { backdropClose } from "@/lib/ui";
 
+/** A member the admin intended to invite (collected during onboarding). Role
+ *  is a cosmetic label — the contract only knows a single admin + flat
+ *  members, so this doesn't grant on-chain powers. */
+export interface InviteSuggestion {
+  name: string;
+  email: string;
+  role: string;
+}
+
 export function InviteModal({
   walletName,
   contractId,
+  suggestions = [],
   onClose,
 }: {
   walletName: string;
   contractId: string;
+  /** Optional pre-filled members from onboarding. Each gets its own on-demand
+   *  link so the admin mints one invite (one passkey prompt) at a time. */
+  suggestions?: InviteSuggestion[];
   onClose: () => void;
 }) {
-  const [url, setUrl] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+  // Links generated for named suggestions, keyed by row index.
+  const [links, setLinks] = useState<Record<number, string>>({});
+  // A single "generic" link (no specific member), for the manual path.
+  const [genericUrl, setGenericUrl] = useState<string | null>(null);
+  const [copied, setCopied] = useState<string | null>(null);
+  const [activeIdx, setActiveIdx] = useState<number | null>(null);
   const { createInvite, pending, error } = useCreateInvite(contractId);
 
-  const generate = async () => {
+  const copy = async (value: string, tag: string) => {
     try {
-      const result = await createInvite();
-      setUrl(result.url);
-      setCopied(false);
-    } catch {
-      // surfaces via the hook's error state
-    }
-  };
-
-  const copy = async (current: string) => {
-    try {
-      await navigator.clipboard.writeText(current);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
+      await navigator.clipboard.writeText(value);
+      setCopied(tag);
+      setTimeout(() => setCopied((c) => (c === tag ? null : c)), 1500);
     } catch {
       // clipboard refused; ignore
     }
   };
 
+  const generateFor = async (idx: number) => {
+    setActiveIdx(idx);
+    try {
+      const result = await createInvite();
+      setLinks((prev) => ({ ...prev, [idx]: result.url }));
+    } catch {
+      // surfaces via the hook's error state
+    } finally {
+      setActiveIdx(null);
+    }
+  };
+
+  const generateGeneric = async () => {
+    setActiveIdx(-1);
+    try {
+      const result = await createInvite();
+      setGenericUrl(result.url);
+    } catch {
+      // surfaces via the hook's error state
+    } finally {
+      setActiveIdx(null);
+    }
+  };
+
+  const hasSuggestions = suggestions.length > 0;
+
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
       <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
-        <h2>Invite a family member</h2>
+        <h2>Invite {hasSuggestions ? "your members" : "a family member"}</h2>
         <p className="sub">
-          Generate a one-time link to add a member to {walletName}. The link
-          works for one person, expires in {INVITE_TTL_MINUTES} minutes, and
-          can&apos;t be reused.
+          {hasSuggestions
+            ? `Generate a one-time link for each person you added to ${walletName}. Each link works for one person and expires in ${INVITE_TTL_MINUTES} minutes.`
+            : `Generate a one-time link to add a member to ${walletName}. The link works for one person, expires in ${INVITE_TTL_MINUTES} minutes, and can't be reused.`}
         </p>
 
-        {url ? (
+        {hasSuggestions ? (
+          <div className="mb-4 space-y-2">
+            {suggestions.map((s, i) => {
+              const url = links[i];
+              const isBusy = pending && activeIdx === i;
+              return (
+                <div
+                  key={`${s.name}-${i}`}
+                  className="rounded-[10px] p-3"
+                  style={{
+                    background: "var(--surface-alt)",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="truncate text-[14px] font-semibold"
+                        style={{ color: "var(--text-1)" }}
+                      >
+                        {s.name}
+                      </div>
+                      <div
+                        className="truncate text-[12px]"
+                        style={{ color: "var(--text-2)" }}
+                      >
+                        {roleLabel(s.role)}
+                        {s.email ? ` · ${s.email}` : ""}
+                      </div>
+                    </div>
+                    {url ? (
+                      <button
+                        type="button"
+                        className="sobre-btn sobre-btn-soft"
+                        style={{ padding: "7px 12px", fontSize: 13 }}
+                        onClick={() => void copy(url, `s-${i}`)}
+                      >
+                        {copied === `s-${i}` ? (
+                          <>
+                            <Check size={13} strokeWidth={2.5} />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy size={13} strokeWidth={2} />
+                            Copy
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="sobre-btn sobre-btn-primary"
+                        style={{
+                          padding: "7px 12px",
+                          fontSize: 13,
+                          opacity: pending ? 0.6 : 1,
+                        }}
+                        disabled={pending}
+                        onClick={() => void generateFor(i)}
+                      >
+                        <Send size={13} strokeWidth={2} />
+                        {isBusy ? "Creating…" : "Get link"}
+                      </button>
+                    )}
+                  </div>
+                  {url ? (
+                    <code
+                      className="mt-2 block break-all text-[11px]"
+                      style={{ color: "var(--text-2)" }}
+                    >
+                      {url}
+                    </code>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : null}
+
+        {/* Manual / generic link path — always available. */}
+        {genericUrl ? (
           <>
             <div
-              className="rounded-[10px] p-3 flex items-center gap-3 mb-3"
+              className="mb-3 flex items-center gap-3 rounded-[10px] p-3"
               style={{
                 background: "var(--surface-alt)",
                 border: "1.5px dashed var(--border-strong)",
@@ -64,32 +178,29 @@ export function InviteModal({
                 style={{ color: "var(--sobre-accent)", flexShrink: 0 }}
               />
               <code
-                className="text-[12px] break-all flex-1"
+                className="flex-1 break-all text-[12px]"
                 style={{ color: "var(--text-1)" }}
               >
-                {url}
+                {genericUrl}
               </code>
             </div>
             <div
-              className="flex items-center gap-1.5 text-[12px] mb-4"
+              className="mb-4 flex items-center gap-1.5 text-[12px]"
               style={{ color: "var(--text-2)" }}
             >
               <Clock size={13} strokeWidth={2} />
               Expires in {INVITE_TTL_MINUTES} minutes.
             </div>
           </>
-        ) : (
-          <p
-            className="text-[13px] mb-4"
-            style={{ color: "var(--text-3)" }}
-          >
+        ) : !hasSuggestions ? (
+          <p className="mb-4 text-[13px]" style={{ color: "var(--text-3)" }}>
             You&apos;ll be asked to confirm with your passkey.
           </p>
-        )}
+        ) : null}
 
         {error ? (
           <p
-            className="text-xs break-all mb-3"
+            className="mb-3 break-all text-xs"
             style={{ color: "var(--sobre-danger)" }}
           >
             {error}
@@ -100,12 +211,12 @@ export function InviteModal({
           <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
             Done
           </button>
-          {url ? (
+          {genericUrl ? (
             <button
               className="sobre-btn sobre-btn-primary"
-              onClick={() => void copy(url)}
+              onClick={() => void copy(genericUrl, "generic")}
             >
-              {copied ? (
+              {copied === "generic" ? (
                 <>
                   <Check size={14} strokeWidth={2.5} />
                   Copied!
@@ -120,16 +231,24 @@ export function InviteModal({
           ) : (
             <button
               className="sobre-btn sobre-btn-primary"
-              onClick={() => void generate()}
+              onClick={() => void generateGeneric()}
               disabled={pending}
               style={{ opacity: pending ? 0.6 : 1 }}
             >
               <Send size={14} strokeWidth={2} />
-              {pending ? "Generating…" : "Generate invite link"}
+              {pending && activeIdx === -1
+                ? "Generating…"
+                : hasSuggestions
+                  ? "Generic link"
+                  : "Generate invite link"}
             </button>
           )}
         </div>
       </div>
     </div>
   );
+}
+
+function roleLabel(role: string): string {
+  return role === "admin" ? "Admin" : "Recipient";
 }

@@ -158,6 +158,46 @@ function Dashboard({ contractId }: { contractId: string }) {
   });
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Member drafts collected during onboarding, handed off via sessionStorage
+  // and ?invite=1. Pre-fill the invite modal so the admin can mint each link
+  // on demand (one passkey prompt per link — see docs/onboarding-plan.md).
+  const [inviteSuggestions, setInviteSuggestions] = useState<
+    { name: string; email: string; role: string }[]
+  >([]);
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("invite") !== "1") return;
+    const key = `sobre.onboarding.invites.${contractId}`;
+    try {
+      const raw = sessionStorage.getItem(key);
+      if (raw) {
+        const parsed = JSON.parse(raw) as unknown;
+        if (Array.isArray(parsed)) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect -- one-time onboarding handoff read from sessionStorage
+          setInviteSuggestions(
+            parsed
+              .filter(
+                (m): m is { name: string; email?: string; role?: string } =>
+                  !!m && typeof (m as { name?: unknown }).name === "string",
+              )
+              .map((m) => ({
+                name: m.name,
+                email: typeof m.email === "string" ? m.email : "",
+                role: typeof m.role === "string" ? m.role : "recipient",
+              })),
+          );
+        }
+      }
+      sessionStorage.removeItem(key);
+    } catch {
+      // storage unavailable / bad JSON — just open the empty invite modal
+    }
+    setInviteOpen(true);
+    // Drop the query param so a refresh doesn't re-open the modal.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("invite");
+    window.history.replaceState({}, "", url.toString());
+  }, [contractId]);
   const [closeOpen, setCloseOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
@@ -947,6 +987,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <InviteModal
           walletName={state.wallet_name}
           contractId={contractId}
+          suggestions={inviteSuggestions}
           onClose={() => setInviteOpen(false)}
         />
       ) : null}

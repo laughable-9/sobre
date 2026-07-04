@@ -52,6 +52,11 @@ export interface CreateFamilyArgs {
   walletName: string;
   adminName: string;
   adminEmoji: string;
+  /** Onboarding metadata — off-chain, optional. Omitted by the dashboard
+   *  create path; supplied by the creator onboarding flow. */
+  householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
 }
 
 export interface CreateFamilyResult {
@@ -182,6 +187,9 @@ export async function createFamilyWallet(
     adminName: args.adminName,
     adminEmoji: args.adminEmoji,
     envelopeNames: args.envelopeNames,
+    householdType: args.householdType ?? null,
+    budgetMin: args.budgetMin ?? null,
+    budgetMax: args.budgetMax ?? null,
   });
 
   return { familyContractId, familyWalletId };
@@ -200,6 +208,11 @@ export async function mirrorFamilyCreate(args: {
   adminName: string;
   adminEmoji: string;
   envelopeNames: readonly [string, string, string];
+  /** Onboarding metadata — off-chain, all optional. Validated + stored by the
+   *  route; omit for the non-onboarding (dashboard) create path. */
+  householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
 }): Promise<{ familyWalletId: string }> {
   const res = await fetch("/api/family/create", {
     method: "POST",
@@ -211,6 +224,13 @@ export async function mirrorFamilyCreate(args: {
       admin_name: args.adminName,
       admin_emoji: args.adminEmoji,
       envelope_names: [...args.envelopeNames],
+      // Only include when provided so the route sees `undefined` (→ NULL) not
+      // a spurious value on the dashboard create path.
+      ...(args.householdType != null
+        ? { household_type: args.householdType }
+        : {}),
+      ...(args.budgetMin != null ? { budget_min: args.budgetMin } : {}),
+      ...(args.budgetMax != null ? { budget_max: args.budgetMax } : {}),
     }),
   });
   if (!res.ok) {
