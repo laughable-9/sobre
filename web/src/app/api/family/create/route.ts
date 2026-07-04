@@ -45,16 +45,18 @@ interface PostBody {
   budget_max?: number | null;
 }
 
-/** A budget bound is valid when omitted/null, or a finite non-negative integer
- *  within the ceiling. Never trust the client — mirrors the DB CHECKs. */
+/** A budget bound is valid when omitted/null, or a finite non-negative number
+ *  within the ceiling with at most 2 decimal places (PHP centavos). Never
+ *  trust the client — mirrors the DB numeric(12,2) + CHECKs. */
 function isValidBudgetBound(v: unknown): v is number | null | undefined {
   if (v === undefined || v === null) return true;
-  return (
-    typeof v === "number" &&
-    Number.isInteger(v) &&
-    v >= 0 &&
-    v <= MAX_BUDGET_PHP
-  );
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > MAX_BUDGET_PHP) {
+    return false;
+  }
+  // At most 2 decimal places. Compare against the rounded-to-centavos value
+  // (epsilon guards float representation error, e.g. 15000.1 * 100).
+  const centavos = Math.round(v * 100);
+  return Math.abs(v * 100 - centavos) < 1e-6;
 }
 
 function isValidBody(b: unknown): b is PostBody {

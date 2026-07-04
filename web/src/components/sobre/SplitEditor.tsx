@@ -41,7 +41,10 @@ export function SplitEditor({
   const ok = sum === 100;
 
   const setAt = (i: number, n: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(n)));
+    // Empty field / non-numeric input yields NaN — coerce to 0 so it can't
+    // slip past the clamp and poison the sum. Integers only, 0..100.
+    const safe = Number.isFinite(n) ? n : 0;
+    const clamped = Math.max(0, Math.min(100, Math.round(safe)));
     const next: Split = [value[0], value[1], value[2]];
     next[i] = clamped;
     onChange(next);

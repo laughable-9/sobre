@@ -11,11 +11,13 @@
 --   percents (NOT NULL), policy_json (NOT NULL), savings_lock_all_admins (NOT NULL)
 -- None of the new column names collided.
 
+-- Budget bounds are numeric(12,2): PHP with centavos, up to 10 integer digits
+-- (ceiling well above the app's 100M guard) and 2 decimal places.
 alter table public.family_wallets
   add column if not exists household_type text
     check (household_type in ('family-at-home', 'both-abroad', 'scratch')),
-  add column if not exists budget_min integer check (budget_min >= 0),
-  add column if not exists budget_max integer check (budget_max >= 0);
+  add column if not exists budget_min numeric(12, 2) check (budget_min >= 0),
+  add column if not exists budget_max numeric(12, 2) check (budget_max >= 0);
 
 -- Range sanity: if both bounds are present, min <= max. Nullable-friendly.
 -- Guarded so re-running the script doesn't error on the existing constraint.

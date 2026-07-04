@@ -81,14 +81,51 @@ interface MemberDraft {
   role: MemberRole;
 }
 
-/** Preset monthly-budget bands (whole PHP). The midpoint drives the split
- *  preview; the min/max persist as budget_min/budget_max. */
-const BUDGET_BANDS: { label: string; min: number; max: number }[] = [
-  { label: "Under ₱15,000", min: 0, max: 15_000 },
-  { label: "₱15,000 – ₱30,000", min: 15_000, max: 30_000 },
-  { label: "₱30,000 – ₱60,000", min: 30_000, max: 60_000 },
-  { label: "Over ₱60,000", min: 60_000, max: 120_000 },
+/** Ceiling for a monthly budget bound, whole PHP. Mirrors the server guard
+ *  (MAX_BUDGET_PHP in the create route) and the DB numeric(12,2) column. */
+const MAX_BUDGET_PHP = 100_000_000;
+
+/** Quick-fill suggestions for the min/max fields (whole PHP). */
+const BUDGET_PRESETS: { label: string; min: number; max: number }[] = [
+  { label: "Under ₱15k", min: 0, max: 15_000 },
+  { label: "₱15k–30k", min: 15_000, max: 30_000 },
+  { label: "₱30k–60k", min: 30_000, max: 60_000 },
 ];
+
+/** Parse a user-typed money string into a non-negative PHP number with at most
+ *  2 decimals, or null if blank/invalid. Strips grouping commas + peso sign;
+ *  keeps one decimal point; clamps to the ceiling. Never returns NaN. */
+function parseMoney(raw: string): number | null {
+  // Keep digits and a single dot; drop ₱, spaces, commas, and stray signs.
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  if (cleaned === "" || cleaned === ".") return null;
+  // Collapse multiple dots to the first one.
+  const firstDot = cleaned.indexOf(".");
+  const normalized =
+    firstDot === -1
+      ? cleaned
+      : cleaned.slice(0, firstDot + 1) +
+        cleaned.slice(firstDot + 1).replace(/\./g, "");
+  const n = Number(normalized);
+  if (!Number.isFinite(n) || n < 0) return null;
+  // Round to centavos and clamp to the ceiling.
+  const centavos = Math.round(Math.min(n, MAX_BUDGET_PHP) * 100);
+  return centavos / 100;
+}
+
+/** Sanitize a money field's raw keystrokes for display: digits, one dot, at
+ *  most 2 fractional digits. Lets the user type freely but blocks junk. */
+function sanitizeMoneyInput(raw: string): string {
+  let s = raw.replace(/[^\d.]/g, "");
+  const firstDot = s.indexOf(".");
+  if (firstDot !== -1) {
+    s =
+      s.slice(0, firstDot + 1) + s.slice(firstDot + 1).replace(/\./g, "");
+    const [whole, frac] = s.split(".");
+    s = whole + "." + (frac ?? "").slice(0, 2);
+  }
+  return s;
+}
 
 const newId = () =>
   typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -112,7 +149,10 @@ export default function OnboardingFlow() {
   // Onboarding config
   const [householdType, setHouseholdType] =
     useState<HouseholdType>("family-at-home");
-  const [budgetBand, setBudgetBand] = useState(1); // index into BUDGET_BANDS
+  // Monthly budget range as raw input strings (sanitized on change); parsed to
+  // numbers at the edges. Empty is allowed — budget is optional metadata.
+  const [budgetMinInput, setBudgetMinInput] = useState("");
+  const [budgetMaxInput, setBudgetMaxInput] = useState("");
   const [members, setMembers] = useState<MemberDraft[]>([]);
   const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
     DEFAULT_ENVELOPE_NAMES,
@@ -136,8 +176,18 @@ export default function OnboardingFlow() {
   const walletName = walletNameInput ?? defaultWalletName;
   const setWalletName = (v: string) => setWalletNameInput(v);
 
-  const band = BUDGET_BANDS[budgetBand];
-  const previewDeposit = Math.round((band.min + band.max) / 2) || band.max;
+  // Parsed budget bounds (null when blank/invalid) + validity for the step.
+  const budgetMin = parseMoney(budgetMinInput);
+  const budgetMax = parseMoney(budgetMaxInput);
+  const budgetRangeInvalid =
+    budgetMin !== null && budgetMax !== null && budgetMin > budgetMax;
+  const budgetValid = !budgetRangeInvalid;
+  // Preview deposit for the split step: midpoint of the range, else whichever
+  // bound is set, else a sensible default so the preview isn't blank.
+  const previewDeposit =
+    budgetMin !== null && budgetMax !== null
+      ? Math.round((budgetMin + budgetMax) / 2)
+      : (budgetMax ?? budgetMin ?? 30_000);
 
   const next = () => setStep((s) => Math.min(TOTAL, s + 1));
   const back = () => setStep((s) => Math.max(1, s - 1));
@@ -203,6 +253,11 @@ export default function OnboardingFlow() {
       setSetupStatus("error");
       return;
     }
+    if (budgetRangeInvalid) {
+      setSetupError("Budget minimum can't be greater than the maximum.");
+      setSetupStatus("error");
+      return;
+    }
 
     setSetupError(null);
     setSetupStatus("creating");
@@ -219,8 +274,8 @@ export default function OnboardingFlow() {
         adminName,
         adminEmoji: "🌴",
         householdType,
-        budgetMin: band.min,
-        budgetMax: band.max,
+        budgetMin,
+        budgetMax,
       });
       // Members are invited on demand from the dashboard — carry the drafts
       // over so the invite panel can pre-fill names/roles. sessionStorage keeps
@@ -333,7 +388,7 @@ export default function OnboardingFlow() {
         total={TOTAL}
         onBack={back}
         cta={
-          <PrimaryCta onClick={next}>
+          <PrimaryCta onClick={budgetValid ? next : () => undefined}>
             Continue
             <ArrowRight size={16} strokeWidth={2.5} />
           </PrimaryCta>
@@ -342,17 +397,50 @@ export default function OnboardingFlow() {
         <Question>Roughly how much do you send each month?</Question>
         <p className="mb-4 text-[13px]" style={{ color: "var(--text-2)" }}>
           Just an estimate — it sets the preview amounts on the next steps. You
-          can change it anytime.
+          can change it anytime. Leave blank to skip.
         </p>
-        {BUDGET_BANDS.map((b, i) => (
-          <ChoiceCard
-            key={b.label}
-            title={b.label}
-            sub={i === budgetBand ? "Selected" : "Tap to choose"}
-            selected={i === budgetBand}
-            onClick={() => setBudgetBand(i)}
+
+        <div className="flex gap-3">
+          <MoneyField
+            label="Minimum"
+            value={budgetMinInput}
+            onChange={setBudgetMinInput}
           />
-        ))}
+          <MoneyField
+            label="Maximum"
+            value={budgetMaxInput}
+            onChange={setBudgetMaxInput}
+          />
+        </div>
+
+        {budgetRangeInvalid ? (
+          <p className="mt-2 text-[12px]" style={{ color: "var(--sobre-danger)" }}>
+            Minimum can’t be greater than maximum.
+          </p>
+        ) : null}
+
+        <div className="mt-4 flex flex-wrap gap-1.5">
+          {BUDGET_PRESETS.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              onClick={() => {
+                setBudgetMinInput(String(p.min));
+                setBudgetMaxInput(String(p.max));
+              }}
+              className="text-[11px] font-medium"
+              style={{
+                padding: "6px 11px",
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                color: "var(--text-2)",
+                background: "var(--surface)",
+              }}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
       </MobileScreen>
     );
   }
@@ -534,10 +622,7 @@ export default function OnboardingFlow() {
       <div className="mt-4">
         <SummaryRow label="Admin" value={adminName} />
         <SummaryRow label="Household" value={householdLabel(householdType)} />
-        <SummaryRow
-          label="Budget"
-          value={`₱${band.min.toLocaleString()} – ₱${band.max.toLocaleString()}`}
-        />
+        <SummaryRow label="Budget" value={budgetSummary(budgetMin, budgetMax)} muted={budgetMin === null && budgetMax === null} />
         <SummaryRow
           label="Envelopes"
           value={envelopeNames.join(", ")}
@@ -555,6 +640,83 @@ export default function OnboardingFlow() {
 }
 
 /* ─────────────────────────── helpers ─────────────────────────────── */
+
+/** Format a PHP amount with thousands separators and centavos only when
+ *  present (₱15,000 or ₱15,000.50). */
+function formatMoney(n: number): string {
+  const hasCentavos = Math.round(n * 100) % 100 !== 0;
+  return `₱${n.toLocaleString("en-PH", {
+    minimumFractionDigits: hasCentavos ? 2 : 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function budgetSummary(min: number | null, max: number | null): string {
+  if (min === null && max === null) return "Not set";
+  if (min !== null && max !== null) return `${formatMoney(min)} – ${formatMoney(max)}`;
+  if (max !== null) return `Up to ${formatMoney(max)}`;
+  return `From ${formatMoney(min as number)}`;
+}
+
+/** Money input: peso-prefixed, decimal-aware, sanitized on every keystroke so
+ *  only digits + one dot + 2 fractional places can be entered. inputMode
+ *  "decimal" brings up the numeric keypad on mobile. */
+function MoneyField({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+}) {
+  return (
+    <label className="flex-1">
+      <div
+        className="mb-1.5 text-[11px] uppercase tracking-wider"
+        style={{ color: "var(--text-3)", fontWeight: 600 }}
+      >
+        {label}
+      </div>
+      <div
+        className="flex items-stretch overflow-hidden"
+        style={{
+          border: "1.5px solid var(--border)",
+          borderRadius: 10,
+          background: "var(--surface)",
+        }}
+      >
+        <div
+          className="grid place-items-center text-[14px]"
+          style={{
+            color: "var(--text-3)",
+            padding: "0 10px",
+            background: "var(--surface-alt)",
+          }}
+        >
+          ₱
+        </div>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={value}
+          onChange={(e) => onChange(sanitizeMoneyInput(e.target.value))}
+          placeholder="0.00"
+          maxLength={14}
+          className="tabular flex-1 text-right text-[15px] font-semibold"
+          style={{
+            background: "transparent",
+            border: "none",
+            outline: "none",
+            padding: "10px 12px",
+            color: "var(--text-1)",
+            width: "100%",
+          }}
+        />
+      </div>
+    </label>
+  );
+}
 
 function householdLabel(t: HouseholdType): string {
   return t === "family-at-home"
