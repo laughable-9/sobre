@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
+import { ChevronLeft, ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
 
 import { InitForm } from "@/components/sobre/InitForm";
 import { JoinByLinkForm } from "@/components/sobre/JoinByLinkForm";
@@ -124,37 +124,63 @@ export default function MySobresPage() {
     return (
       <div className="sobre-app">
         <TopBar wallet={wallet} />
-        <main className="flex-1 grid place-items-center px-6">
-          <div className="text-center max-w-md">
-            <Image
-              src="/sobre-logo2.svg"
-              alt=""
-              width={56}
-              height={56}
-              priority
-              className="mx-auto"
-            />
-            <h1 className="font-serif text-[36px] font-semibold mt-5 mb-3">
-              Open a new Sobre
-            </h1>
-            <p className="text-[16px] mb-6" style={{ color: "var(--text-2)" }}>
-              Give your new Sobre a name. You become the admin and can
-              invite one family member after it opens.
-            </p>
-            <InitForm
-              userAddress={address}
-              onSuccess={(newContractId) => {
-                router.push(`/dashboard/${newContractId}`);
-              }}
-            />
+        <main className="flex-1 flex flex-col items-center px-4 py-6 sm:py-10">
+          <div className="w-full max-w-md">
             <button
               type="button"
               onClick={() => setMode("list")}
-              className="mt-6 text-[13px]"
+              className="inline-flex items-center gap-1.5 text-[13px] mb-4"
               style={{ color: "var(--text-2)" }}
             >
-              ← Back to My Sobres
+              <ChevronLeft size={15} strokeWidth={2.4} />
+              My Sobres
             </button>
+
+            <div
+              className="rounded-[16px] p-6 sm:p-8"
+              style={{
+                background: "var(--surface)",
+                border: "1px solid var(--border)",
+                boxShadow: "var(--shadow-md)",
+              }}
+            >
+              <div className="text-center">
+                <div
+                  className="mx-auto grid place-items-center"
+                  style={{
+                    width: 56,
+                    height: 56,
+                    borderRadius: 16,
+                    background: "var(--surface-alt)",
+                  }}
+                >
+                  <Image
+                    src="/sobre-logo2.svg"
+                    alt=""
+                    width={34}
+                    height={34}
+                    priority
+                  />
+                </div>
+                <h1 className="font-serif text-[26px] sm:text-[30px] font-semibold mt-4 mb-2">
+                  Open a new Sobre
+                </h1>
+                <p
+                  className="text-[14px] sm:text-[15px] leading-relaxed"
+                  style={{ color: "var(--text-2)" }}
+                >
+                  Give your new Sobre a name. You become the admin and can
+                  invite one family member after it opens.
+                </p>
+              </div>
+
+              <InitForm
+                userAddress={address}
+                onSuccess={(newContractId) => {
+                  router.push(`/dashboard/${newContractId}`);
+                }}
+              />
+            </div>
           </div>
         </main>
       </div>

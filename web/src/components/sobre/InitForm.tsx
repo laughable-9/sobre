@@ -69,8 +69,7 @@ export function InitForm({
   return (
     <form
       onSubmit={handleSubmit}
-      className="text-left space-y-4 mt-6"
-      style={{ maxWidth: 360, margin: "24px auto 0" }}
+      className="text-left space-y-4 mt-6 w-full"
     >
       {profile ? (
         <div
