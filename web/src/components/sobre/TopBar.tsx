@@ -8,6 +8,7 @@ import { Check, Pencil, X } from "lucide-react";
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { useRenameWallet } from "@/hooks/useRenameWallet";
 import type { WalletState } from "@/hooks/useWalletState";
+import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 
 export function TopBar({
@@ -16,6 +17,7 @@ export function TopBar({
   contractId,
   isAdmin,
   onRenamed,
+  showCurrency,
 }: {
   wallet: WalletConnectionState;
   /** When present, render the wallet name pill + admin rename affordance. */
@@ -24,6 +26,9 @@ export function TopBar({
   contractId?: string;
   isAdmin?: boolean;
   onRenamed?: () => void;
+  /** Show the global PHP|USD toggle (dashboard views). Needs a CurrencyProvider
+   *  ancestor. */
+  showCurrency?: boolean;
 }) {
   const { status, address, error, connect } = wallet;
   const busy = status === "checking" || status === "creating";
@@ -58,7 +63,10 @@ export function TopBar({
 
         <div className="flex items-center gap-3 justify-end">
           {address ? (
-            <WalletMenu wallet={wallet} />
+            <>
+              {showCurrency ? <CurrencyToggle /> : null}
+              <WalletMenu wallet={wallet} />
+            </>
           ) : (
             <button
               type="button"

@@ -36,6 +36,7 @@ export function EnvelopeCard({
   events,
   members,
   envelopeNames,
+  currency = "PHP",
 }: {
   index: number;
   balanceStroops: bigint;
@@ -49,13 +50,17 @@ export function EnvelopeCard({
   /** Used to render the actor's name on the last-activity blurb. */
   members: Member[];
   envelopeNames: string[];
+  /** Display currency for the balance. PHP is home currency; USD is the
+   *  option. The other currency shows as a smaller sub-line. */
+  currency?: "PHP" | "USD";
 }) {
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
-  const usdc = Number(balanceStroops) / STROOPS_PER_USDC;
-  const php = usdc * PHP_PER_USDC;
+  const usd = Number(balanceStroops) / STROOPS_PER_USDC;
+  const php = usd * PHP_PER_USDC;
   const isSavings = slot === "Savings";
   const isEmpty = balanceStroops === 0n;
+  const showUsd = currency === "USD";
 
   const { spentThisMonthStroops, lastActivity } = useEnvelopeStats(
     events,
@@ -103,13 +108,13 @@ export function EnvelopeCard({
 
       <div className="sobre-env-amount">
         <AnimatedNumber
-          value={php}
+          value={showUsd ? usd : php}
           format={(n) => {
             const whole = Math.floor(n).toLocaleString("en-PH");
             const cents = Math.abs(n).toFixed(2).split(".")[1];
             return (
               <>
-                ₱ {whole}
+                {showUsd ? "$" : "₱"} {whole}
                 <span style={{ fontSize: 24, color: "var(--text-2)" }}>
                   .{cents}
                 </span>
@@ -119,7 +124,18 @@ export function EnvelopeCard({
         />
       </div>
 
-      <div className="sobre-env-usdc tabular">{usdc.toFixed(4)} USDC</div>
+      {/* Secondary line: the currency you're NOT viewing, for reference. */}
+      <div className="sobre-env-usdc tabular">
+        {showUsd
+          ? `≈ ₱ ${php.toLocaleString("en-PH", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`
+          : `≈ $ ${usd.toLocaleString("en-PH", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`}
+      </div>
 
       <div className="sobre-env-meta">
         <div className="sobre-env-row">

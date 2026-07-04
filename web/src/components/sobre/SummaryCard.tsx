@@ -16,6 +16,7 @@ import type { WalletState } from "@/hooks/useWalletState";
 import { PAYMENT_TOKEN_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { shortenAddress } from "@/lib/format";
 import { PHP_PER_USDC } from "@/lib/config";
+import { useCurrency } from "@/lib/currency";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 export interface SubaccountSummary {
@@ -72,9 +73,12 @@ export function SummaryCard({
 }) {
   const isAdmin = address === state.admin;
   const canInvite = isAdmin && state.members.length < 2;
+  const { currency } = useCurrency();
   const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
   const totalUsdc = Number(totalStroops) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
+  const showUsd = currency === "USD";
+  const totalDisplay = showUsd ? totalUsdc : totalPhp;
   const [copiedAddr, setCopiedAddr] = useState<string | null>(null);
 
   const copyAddr = async (addr: string) => {
@@ -93,13 +97,13 @@ export function SummaryCard({
         <span className="sobre-label">Total balance</span>
         <div className="sobre-total">
           <AnimatedNumber
-            value={totalPhp}
+            value={totalDisplay}
             format={(n) => {
               const whole = Math.floor(n).toLocaleString("en-PH");
               const cents = Math.abs(n).toFixed(2).split(".")[1];
               return (
                 <>
-                  ₱ {whole}
+                  {showUsd ? "$" : "₱"} {whole}
                   <span className="cents">.{cents}</span>
                 </>
               );

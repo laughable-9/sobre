@@ -16,6 +16,9 @@ import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
+import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
+import { HouseholdSummary } from "@/components/sobre/HouseholdSummary";
+import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
 import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
 import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
@@ -59,9 +62,11 @@ interface RouteParams {
 export default function DashboardPage(props: { params: Promise<RouteParams> }) {
   const { contractId } = use(props.params);
   return (
-    <Suspense fallback={<DashboardLoading />}>
-      <Dashboard contractId={contractId} />
-    </Suspense>
+    <CurrencyProvider>
+      <Suspense fallback={<DashboardLoading />}>
+        <Dashboard contractId={contractId} />
+      </Suspense>
+    </CurrencyProvider>
   );
 }
 
@@ -202,6 +207,8 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
   const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
+  // Display currency is app-wide via CurrencyContext (toggle lives in TopBar).
+  const { currency } = useCurrency();
   const [tab, setTab] = useState<Tab>("envelopes");
   // Hash-sync the tab so refresh + back-button keep the user where they were.
   useEffect(() => {
@@ -516,6 +523,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         walletState={state}
         contractId={contractId}
         isAdmin={isAdmin}
+        showCurrency
         onRenamed={() => {
           refresh();
           flash("Wallet name saved", "ok");
@@ -629,13 +637,15 @@ function Dashboard({ contractId }: { contractId: string }) {
         </SummaryCard>
 
         <div className="sobre-envs">
-          <header className="flex items-end justify-between mb-5">
-            <div>
-              <h2>Envelopes</h2>
-              <p className="sub">
-                Money split automatically the moment a remittance lands.
-              </p>
-            </div>
+          <HouseholdSummary
+            events={txFeed.events}
+            familyWalletId={familyWalletId}
+          />
+          <header className="mb-5">
+            <h2>Envelopes</h2>
+            <p className="sub">
+              Money split automatically the moment a remittance lands.
+            </p>
           </header>
 
           {state.balances.map((bal, i) => {
@@ -655,15 +665,19 @@ function Dashboard({ contractId }: { contractId: string }) {
                 events={txFeed.events}
                 members={state.members}
                 envelopeNames={state.envelope_names}
+                currency={currency}
               />
             );
           })}
         </div>
 
-        <ActivityFeed
-          events={txFeed.events}
-          loading={txFeed.loading}
-          error={txFeed.error}
+        <div className="sobre-dash-aside">
+          <ExpenseQuickAdd familyWalletId={familyWalletId} />
+
+          <ActivityFeed
+            events={txFeed.events}
+            loading={txFeed.loading}
+            error={txFeed.error}
           newestTxHash={newestTxHash}
           members={state.members}
           subaccounts={subRows
@@ -713,7 +727,8 @@ function Dashboard({ contractId }: { contractId: string }) {
               return { ok: false };
             }
           }}
-        />
+          />
+        </div>
       </div>
       ) : null}
 
