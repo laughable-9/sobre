@@ -1862,6 +1862,18 @@ body { overflow-x: clip; min-width: 320px; }
   --input: var(--sobre-border);
   --ring: var(--sobre-primary);
 }
+/* Unified card chrome: every card in the v2 column shares the same radius,
+   shadow, and padding; vertical rhythm comes ONLY from the column's 16px gap
+   (no per-card margins). */
+.sobre-v2 .sobre-hsummary,
+.sobre-v2 .sobre-summary-card {
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 20px;
+  margin-bottom: 0;
+}
+.sobre-v2 .sobre-summary { gap: 16px; }
+
 /* Unified micro-labels (board style: mono tracked caps — like the board's
    own "SECTION 04 — COLOR SYSTEM" labels). Covers the hero label, THIS
    MONTH, RECENT ACTIVITY, and MEMBERS so they all read as one system. */
@@ -1953,7 +1965,7 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-v2-actions {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 10px;
+  gap: 12px;
 }
 .sobre-v2-action {
   display: flex; flex-direction: column; align-items: center; gap: 8px;
@@ -1961,7 +1973,7 @@ body { overflow-x: clip; min-width: 320px; }
   min-width: 0;
   background: var(--sobre-surface);
   border: 1px solid var(--sobre-border);
-  border-radius: 14px;
+  border-radius: 16px;
   box-shadow: var(--sobre-shadow-sm);
   cursor: pointer;
   transition: transform 120ms ease, box-shadow 120ms ease;
