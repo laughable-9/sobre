@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
+import { SiteHeader } from "@/components/sobre/SiteHeader";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Reveal } from "@/components/sobre/Reveal";
 import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
@@ -226,19 +227,9 @@ function Nav() {
   );
 
   return (
-    <header className="sobre-nav">
-      <div className="sobre-container sobre-nav-inner">
-        <Link href="#top" className="sobre-brand">
-          <Image
-            src="/sobre-logo2.svg"
-            alt=""
-            width={32}
-            height={32}
-            priority
-          />
-          <span className="sobre-brand-name">Sobre</span>
-        </Link>
-        <nav className="sobre-nav-links">
+    <SiteHeader
+      right={
+        <>
           <a href="#how" className="sobre-nav-link-text">
             How it works
           </a>
@@ -249,9 +240,9 @@ function Nav() {
           <Link href="/dashboard" className="sobre-btn-nav">
             Open Sobre
           </Link>
-        </nav>
-      </div>
-    </header>
+        </>
+      }
+    />
   );
 }
 

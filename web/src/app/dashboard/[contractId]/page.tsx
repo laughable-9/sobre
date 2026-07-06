@@ -2,8 +2,7 @@
 
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import Link from "next/link";
-import { AlertTriangle, ChevronLeft, Plus, UserPlus } from "lucide-react";
+import { AlertTriangle, Plus, UserPlus } from "lucide-react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -11,6 +10,7 @@ import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
+import { BackLink } from "@/components/sobre/BackLink";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
@@ -390,14 +390,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               The admin closed this wallet and swept all funds back. It can&apos;t
               be reopened.
             </p>
-            <Link
-              href="/dashboard"
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "10px 16px", fontSize: 13 }}
-            >
-              <ChevronLeft size={14} />
-              My Sobres
-            </Link>
+            <BackLink href="/dashboard" />
           </div>
         </main>
       </div>
@@ -433,13 +426,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 The contract at this address hasn&apos;t been initialized. Ask
                 the admin to share their invite link, or open your own Sobre.
               </p>
-              <Link
-                href="/dashboard"
-                className="sobre-btn sobre-btn-soft mt-4"
-                style={{ padding: "10px 16px", fontSize: 13 }}
-              >
-                Back to My Sobres
-              </Link>
+              <BackLink href="/dashboard" className="mt-4" />
             </div>
           </main>
         </div>
@@ -501,14 +488,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               The admin needs to share their invite link with you before you
               can join.
             </p>
-            <Link
-              href="/dashboard"
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "10px 16px", fontSize: 13 }}
-            >
-              <ChevronLeft size={14} />
-              My Sobres
-            </Link>
+            <BackLink href="/dashboard" />
           </div>
         </main>
       </div>
@@ -534,14 +514,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         className="mx-auto w-full px-4 sm:px-7 pt-5"
         style={{ maxWidth: 1320 }}
       >
-        <Link
-          href="/dashboard"
-          className="inline-flex items-center gap-1.5 text-[13px]"
-          style={{ color: "var(--text-2)" }}
-        >
-          <ChevronLeft size={14} />
-          My Sobres
-        </Link>
+        <BackLink href="/dashboard" />
       </div>
 
       {walletState.familyError ? (

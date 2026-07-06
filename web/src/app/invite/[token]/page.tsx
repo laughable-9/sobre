@@ -1,10 +1,9 @@
 "use client";
 
 import { Suspense, use, useEffect, useState } from "react";
-import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { ChevronLeft } from "lucide-react";
 
+import { BackLink } from "@/components/sobre/BackLink";
 import { JoinForm } from "@/components/sobre/JoinForm";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SubaccountJoinForm } from "@/components/sobre/SubaccountJoinForm";
@@ -89,14 +88,7 @@ function Landing({ token }: { token: string }) {
               The URL is missing the wallet or token. Ask the admin to send a
               fresh invite.
             </p>
-            <Link
-              href="/dashboard"
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "10px 16px", fontSize: 13 }}
-            >
-              <ChevronLeft size={14} />
-              My Sobres
-            </Link>
+            <BackLink href="/dashboard" />
           </div>
         </main>
       </div>

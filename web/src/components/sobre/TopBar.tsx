@@ -1,14 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
-import Link from "next/link";
 import { Check, Pencil, X } from "lucide-react";
 
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { useRenameWallet } from "@/hooks/useRenameWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
+import { SiteHeader } from "@/components/sobre/SiteHeader";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 
 export function TopBar({
@@ -34,22 +33,9 @@ export function TopBar({
   const busy = status === "checking" || status === "creating";
 
   return (
-    <header className="sobre-topbar">
-      <div className="sobre-topbar-inner">
-        <div className="flex items-center gap-3">
-          <Link href="/" className="flex items-center gap-2.5">
-            <Image
-              src="/sobre-logo2.svg"
-              alt="Sobre"
-              width={28}
-              height={28}
-              priority
-            />
-            <span className="font-serif text-[19px] font-semibold">Sobre</span>
-          </Link>
-        </div>
-
-        {walletState && contractId ? (
+    <SiteHeader
+      center={
+        walletState && contractId ? (
           <WalletNamePill
             walletName={walletState.wallet_name}
             adminAddress={address}
@@ -57,37 +43,34 @@ export function TopBar({
             canRename={Boolean(isAdmin)}
             onRenamed={onRenamed}
           />
+        ) : undefined
+      }
+      right={
+        address ? (
+          <>
+            {showCurrency ? <CurrencyToggle /> : null}
+            <WalletMenu wallet={wallet} />
+          </>
         ) : (
-          <div />
-        )}
-
-        <div className="flex items-center gap-3 justify-end">
-          {address ? (
-            <>
-              {showCurrency ? <CurrencyToggle /> : null}
-              <WalletMenu wallet={wallet} />
-            </>
-          ) : (
-            <button
-              type="button"
-              onClick={() => void connect()}
-              className="sobre-btn-nav sobre-btn-nav-soft"
-              disabled={busy}
-            >
-              {status === "checking"
-                ? "Checking…"
-                : status === "creating"
-                  ? "Setting up…"
-                  : "Continue with Google"}
-            </button>
-          )}
-        </div>
-      </div>
-
+          <button
+            type="button"
+            onClick={() => void connect()}
+            className="sobre-btn-nav sobre-btn-nav-soft"
+            disabled={busy}
+          >
+            {status === "checking"
+              ? "Checking…"
+              : status === "creating"
+                ? "Setting up…"
+                : "Continue with Google"}
+          </button>
+        )
+      }
+    >
       {error ? (
         <p className="text-xs text-destructive text-center pb-2">{error}</p>
       ) : null}
-    </header>
+    </SiteHeader>
   );
 }
 

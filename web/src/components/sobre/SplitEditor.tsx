@@ -1,5 +1,7 @@
 "use client";
 
+import { Check } from "lucide-react";
+
 import { ENVELOPE_LABELS } from "@/lib/config";
 
 export type Split = [number, number, number];
@@ -52,13 +54,27 @@ export function SplitEditor({
 
   return (
     <div className="space-y-2.5">
-      <div
-        className="flex justify-end tabular text-[12px] font-semibold whitespace-nowrap"
-        style={{
-          color: ok ? "var(--sobre-accent)" : "var(--sobre-danger)",
-        }}
-      >
-        Total {sum}% {ok ? "✓" : "(needs 100%)"}
+      <div className="flex justify-end">
+        <span
+          className="inline-flex items-center gap-1.5 tabular text-[12px] font-semibold whitespace-nowrap"
+          style={{
+            padding: "4px 10px",
+            borderRadius: 999,
+            background: ok ? "var(--accent-soft)" : "#fbe2dd",
+            color: ok ? "var(--sobre-accent)" : "var(--sobre-danger)",
+          }}
+        >
+          {ok ? (
+            <>
+              <Check size={12} strokeWidth={2.5} />
+              Fully allocated
+            </>
+          ) : sum < 100 ? (
+            `${100 - sum}% left to assign`
+          ) : (
+            `${sum - 100}% over`
+          )}
+        </span>
       </div>
 
       {(labels ?? ENVELOPE_LABELS).map((label, i) => (

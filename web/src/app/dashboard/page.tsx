@@ -4,7 +4,9 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronLeft, ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
+import { ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
+
+import { BackLink } from "@/components/sobre/BackLink";
 
 import { InitForm } from "@/components/sobre/InitForm";
 import { JoinByLinkForm } from "@/components/sobre/JoinByLinkForm";
@@ -126,15 +128,7 @@ export default function MySobresPage() {
         <TopBar wallet={wallet} />
         <main className="flex-1 flex flex-col items-center px-4 py-6 sm:py-10">
           <div className="w-full max-w-md">
-            <button
-              type="button"
-              onClick={() => setMode("list")}
-              className="inline-flex items-center gap-1.5 text-[13px] mb-4"
-              style={{ color: "var(--text-2)" }}
-            >
-              <ChevronLeft size={15} strokeWidth={2.4} />
-              My Sobres
-            </button>
+            <BackLink onClick={() => setMode("list")} className="mb-4" />
 
             <div
               className="rounded-[16px] p-6 sm:p-8"

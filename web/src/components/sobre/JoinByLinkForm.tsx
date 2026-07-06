@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
+
+import { BackLink } from "@/components/sobre/BackLink";
 
 /** Stellar contract addresses are 56 chars, base32, starting with C. */
 const CONTRACT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
@@ -72,15 +74,7 @@ export function JoinByLinkForm({
   return (
     <main className="flex-1 grid place-items-center px-6 py-12">
       <div className="w-full" style={{ maxWidth: 480 }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-[13px] mb-6"
-          style={{ color: "var(--text-2)" }}
-        >
-          <ArrowLeft size={14} />
-          Back
-        </button>
+        <BackLink onClick={onBack} className="mb-6" />
 
         <h1
           className="font-serif"
