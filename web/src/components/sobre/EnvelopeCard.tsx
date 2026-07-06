@@ -16,7 +16,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
-import { formatPhpLocale, shortenAddress } from "@/lib/format";
+import { formatPhpLocale, relativeTime, shortenAddress } from "@/lib/format";
 import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
@@ -202,17 +202,4 @@ function useEnvelopeStats(
   const lastActivity = `Last: ${who} spent ${phpFmt} · ${when}`;
 
   return { spentThisMonthStroops: spent, lastActivity };
-}
-
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const secs = Math.max(0, Math.floor((now - then) / 1000));
-  if (secs < 60) return "just now";
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }

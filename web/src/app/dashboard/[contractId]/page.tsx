@@ -2,7 +2,7 @@
 
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AlertTriangle, Plus, UserPlus } from "lucide-react";
+import { AlertTriangle, Pencil, Plus, UserPlus } from "lucide-react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -11,12 +11,20 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
+import { BalanceHero } from "@/components/sobre/BalanceHero";
+import {
+  EnvelopeSplitCard,
+  HomeSignalsPlaceholder,
+} from "@/components/sobre/EnvelopeSplitCard";
+import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
+import { QuickActions } from "@/components/sobre/QuickActions";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
 import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
+import { backdropClose } from "@/lib/ui";
 import { HouseholdSummary } from "@/components/sobre/HouseholdSummary";
 import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
@@ -51,9 +59,11 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { PHP_PER_USDC } from "@/lib/config";
 
-type Tab = "envelopes" | "subaccounts" | "settings";
+type Tab = "home" | "envelopes" | "activity" | "subaccounts" | "settings";
 const SETTINGS_HASH = "#settings";
 const SUBACCOUNTS_HASH = "#subaccounts";
+const ENVELOPES_HASH = "#envelopes";
+const ACTIVITY_HASH = "#activity";
 
 interface RouteParams {
   contractId: string;
@@ -72,7 +82,7 @@ export default function DashboardPage(props: { params: Promise<RouteParams> }) {
 
 function DashboardLoading() {
   return (
-    <div className="sobre-app">
+    <div className="sobre-app sobre-v2">
       <main className="flex-1 grid place-items-center px-6">
         <p style={{ color: "var(--text-2)" }}>Loading…</p>
       </main>
@@ -163,6 +173,10 @@ function Dashboard({ contractId }: { contractId: string }) {
   });
   const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // "Log expense" quick-action tile → the off-chain note field in a modal.
+  const [logExpenseOpen, setLogExpenseOpen] = useState(false);
+  // Pencil on the balance hero → rename dialog (admin only).
+  const [renameOpen, setRenameOpen] = useState(false);
   // Member drafts collected during onboarding, handed off via sessionStorage
   // and ?invite=1. Pre-fill the invite modal so the admin can mint each link
   // on demand (one passkey prompt per link — see docs/onboarding-plan.md).
@@ -209,13 +223,15 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
   // Display currency is app-wide via CurrencyContext (toggle lives in TopBar).
   const { currency } = useCurrency();
-  const [tab, setTab] = useState<Tab>("envelopes");
+  const [tab, setTab] = useState<Tab>("home");
   // Hash-sync the tab so refresh + back-button keep the user where they were.
   useEffect(() => {
     const fromHash = (): Tab => {
       if (window.location.hash === SETTINGS_HASH) return "settings";
       if (window.location.hash === SUBACCOUNTS_HASH) return "subaccounts";
-      return "envelopes";
+      if (window.location.hash === ENVELOPES_HASH) return "envelopes";
+      if (window.location.hash === ACTIVITY_HASH) return "activity";
+      return "home";
     };
     setTab(fromHash());
     const handler = () => setTab(fromHash());
@@ -230,7 +246,11 @@ function Dashboard({ contractId }: { contractId: string }) {
         ? SETTINGS_HASH
         : next === "subaccounts"
           ? SUBACCOUNTS_HASH
-          : "";
+          : next === "envelopes"
+            ? ENVELOPES_HASH
+            : next === "activity"
+              ? ACTIVITY_HASH
+              : "";
     history.replaceState(
       null,
       "",
@@ -369,7 +389,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   // refuses to render the live UI and shows a closed-state screen instead.
   if (closed) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
@@ -400,7 +420,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   // ─── Phase 1: not signed in / wallet bootstrapping ────────────────────
   if (!address) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
           <SignInPanel wallet={wallet} title="Sign in to open this Sobre" />
@@ -415,7 +435,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       walletState.error?.includes("Error(Contract, #2)") ?? false;
     if (isUninitialized) {
       return (
-        <div className="sobre-app">
+        <div className="sobre-app sobre-v2">
           <TopBar wallet={wallet} />
           <main className="flex-1 grid place-items-center px-6">
             <div className="text-center max-w-md">
@@ -433,7 +453,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       );
     }
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <DashboardSkeleton />
       </div>
@@ -446,7 +466,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   // branch fires only for kids whose wallet is in state.subaccounts.
   if (isSubaccount) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} walletState={state} contractId={contractId} />
         <SubAccountView
           userAddress={address}
@@ -467,7 +487,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   // ─── Connected but not a member of THIS Sobre ─────────────────────────
   if (!isMember) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} walletState={state} contractId={contractId} />
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
@@ -497,24 +517,22 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   // ─── Full dashboard ───────────────────────────────────────────────────
   return (
-    <div className="sobre-app">
-      <TopBar
-        wallet={wallet}
-        walletState={state}
-        contractId={contractId}
-        isAdmin={isAdmin}
-        showCurrency
-        onRenamed={() => {
-          refresh();
-          flash("Wallet name saved", "ok");
-        }}
-      />
+    <div className="sobre-app sobre-v2">
+      {/* No walletState/contractId here: the wallet name (and its rename)
+          moved onto the balance hero, so the TopBar pill would duplicate. */}
+      <TopBar wallet={wallet} showCurrency />
 
+      {/* One back affordance per screen: the immediate parent. Wallet view
+          backs out to My Sobres; Supplementary/Settings back to the wallet. */}
       <div
         className="mx-auto w-full px-4 sm:px-7 pt-5"
         style={{ maxWidth: 1320 }}
       >
-        <BackLink href="/dashboard" />
+        {tab === "home" ? (
+          <BackLink href="/dashboard" />
+        ) : (
+          <BackLink onClick={() => switchTab("home")} label="Wallet" />
+        )}
       </div>
 
       {walletState.familyError ? (
@@ -548,105 +566,96 @@ function Dashboard({ contractId }: { contractId: string }) {
         </div>
       ) : null}
 
-      <nav
-        className="sobre-tabs mx-auto w-full px-4 sm:px-7 pt-4"
-        style={{ maxWidth: 1320 }}
+      {tab === "home" ? (
+      <div
+        className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+        style={{ maxWidth: 640 }}
       >
-        <button
-          type="button"
-          className="sobre-tab"
-          data-active={tab === "envelopes" ? "true" : "false"}
-          onClick={() => switchTab("envelopes")}
-        >
-          Envelopes
-        </button>
-        <button
-          type="button"
-          className="sobre-tab"
-          data-active={tab === "subaccounts" ? "true" : "false"}
-          onClick={() => switchTab("subaccounts")}
-        >
-          Supplementary
-        </button>
-        <button
-          type="button"
-          className="sobre-tab"
-          data-active={tab === "settings" ? "true" : "false"}
-          onClick={() => switchTab("settings")}
-        >
-          Settings
-        </button>
-      </nav>
+        <div className="sobre-wallet-col">
+          <div className="sobre-v2-title">
+            <h1 className="txt">{state.wallet_name || "Family Wallet"}</h1>
+            {isAdmin ? (
+              <button
+                type="button"
+                className="wedit"
+                onClick={() => setRenameOpen(true)}
+                aria-label="Rename wallet"
+                title="Rename wallet"
+              >
+                <Pencil size={14} strokeWidth={2.2} />
+              </button>
+            ) : null}
+          </div>
 
-      {tab === "envelopes" ? (
-      <div className="sobre-dash has-bottom-bar">
-        <SummaryCard
-          state={state}
-          address={address}
-          onDeposit={() => setDepositOpen(true)}
-          onCashout={() => setCashoutOpen(true)}
-          dailySpent={dailySpent}
-          onKick={isAdmin ? handleKick : undefined}
-          onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
-          subaccounts={subaccountSummary}
-          onOpenSubaccounts={() => switchTab("subaccounts")}
-        >
-          {pendingRequests.pending.length > 0 ? (
-            <div className="sobre-admin-section sobre-card-flat">
-              <h3>Pending approvals ({pendingRequests.pending.length})</h3>
-              <PendingRequestsPanel
-                userAddress={address}
-                contractId={contractId}
-                isAdmin={isAdmin}
-                pending={pendingRequests.pending}
-                members={state.members}
-                subaccounts={state.subaccounts}
-                adminCount={state.admin_count}
-                envelopeNames={state.envelope_names}
-                onSuccess={refreshAll}
-              />
-            </div>
-          ) : null}
-        </SummaryCard>
+          <BalanceHero state={state}>
+            <EnvelopeSplitCard
+              state={state}
+              onOpen={() => switchTab("envelopes")}
+            />
+          </BalanceHero>
 
-        <div className="sobre-envs">
+          <QuickActions
+            onDeposit={() => setDepositOpen(true)}
+            onCashout={() => setCashoutOpen(true)}
+            cashoutDisabled={
+              state.balances.reduce((acc, b) => acc + b, 0n) === 0n
+            }
+            onLogExpense={() => setLogExpenseOpen(true)}
+            onEnvelopes={() => switchTab("envelopes")}
+            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+            onSubaccounts={() => switchTab("subaccounts")}
+            onSettings={() => switchTab("settings")}
+          />
+
           <HouseholdSummary
             events={txFeed.events}
             familyWalletId={familyWalletId}
-          />
-          <header className="mb-5">
-            <h2>Envelopes</h2>
-            <p className="sub">
-              Money split automatically the moment a remittance lands.
-            </p>
-          </header>
+            onSeeAllActivity={() => switchTab("activity")}
+          >
+            {/* PLACEHOLDER: board Section-07 signal pills — static sample
+                copy inside Recent activity, not wired to real data yet. See
+                HomeSignalsPlaceholder's header for the wire-up plan. */}
+            <HomeSignalsPlaceholder />
+          </HouseholdSummary>
 
-          {state.balances.map((bal, i) => {
-            const envName = ENVELOPE_LABELS[i];
-            const approvalRequired =
-              state.policy.requireAllSigs ||
-              state.policy.protectedEnvelopes.includes(envName);
-            return (
-              <EnvelopeCard
-                key={i}
-                index={i}
-                balanceStroops={bal}
-                percent={state.percents[i] ?? 0}
-                pulsing={envelopesPulsing}
-                onSpend={() => setSpendOpen(envName)}
-                approvalRequired={approvalRequired}
-                events={txFeed.events}
-                members={state.members}
-                envelopeNames={state.envelope_names}
-                currency={currency}
-              />
-            );
-          })}
+          <SummaryCard
+            state={state}
+            address={address}
+            onDeposit={() => setDepositOpen(true)}
+            onCashout={() => setCashoutOpen(true)}
+            dailySpent={dailySpent}
+            onKick={isAdmin ? handleKick : undefined}
+            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
+            subaccounts={subaccountSummary}
+            onOpenSubaccounts={() => switchTab("subaccounts")}
+            hideBalance
+          >
+            {pendingRequests.pending.length > 0 ? (
+              <div className="sobre-admin-section sobre-card-flat">
+                <h3>Pending approvals ({pendingRequests.pending.length})</h3>
+                <PendingRequestsPanel
+                  userAddress={address}
+                  contractId={contractId}
+                  isAdmin={isAdmin}
+                  pending={pendingRequests.pending}
+                  members={state.members}
+                  subaccounts={state.subaccounts}
+                  adminCount={state.admin_count}
+                  envelopeNames={state.envelope_names}
+                  onSuccess={refreshAll}
+                />
+              </div>
+            ) : null}
+          </SummaryCard>
         </div>
+      </div>
+      ) : null}
 
-        <div className="sobre-dash-aside">
-          <ExpenseQuickAdd familyWalletId={familyWalletId} />
-
+      {tab === "activity" ? (
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+          style={{ maxWidth: 760 }}
+        >
           <ActivityFeed
             events={txFeed.events}
             loading={txFeed.loading}
@@ -702,7 +711,44 @@ function Dashboard({ contractId }: { contractId: string }) {
           }}
           />
         </div>
-      </div>
+      ) : null}
+
+      {tab === "envelopes" ? (
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+          style={{ maxWidth: 760 }}
+        >
+          <div className="sobre-envs">
+            <header className="mb-5">
+              <h2>Envelopes</h2>
+              <p className="sub">
+                Money split automatically the moment a remittance lands.
+              </p>
+            </header>
+
+            {state.balances.map((bal, i) => {
+              const envName = ENVELOPE_LABELS[i];
+              const approvalRequired =
+                state.policy.requireAllSigs ||
+                state.policy.protectedEnvelopes.includes(envName);
+              return (
+                <EnvelopeCard
+                  key={i}
+                  index={i}
+                  balanceStroops={bal}
+                  percent={state.percents[i] ?? 0}
+                  pulsing={envelopesPulsing}
+                  onSpend={() => setSpendOpen(envName)}
+                  approvalRequired={approvalRequired}
+                  events={txFeed.events}
+                  members={state.members}
+                  envelopeNames={state.envelope_names}
+                  currency={currency}
+                />
+              );
+            })}
+          </div>
+        </div>
       ) : null}
 
       {tab === "subaccounts" ? (
@@ -978,6 +1024,43 @@ function Dashboard({ contractId }: { contractId: string }) {
           suggestions={inviteSuggestions}
           onClose={() => setInviteOpen(false)}
         />
+      ) : null}
+
+      {renameOpen ? (
+        <RenameWalletModal
+          currentName={state.wallet_name}
+          adminAddress={address}
+          contractId={contractId}
+          onClose={() => setRenameOpen(false)}
+          onRenamed={() => {
+            refresh();
+            flash("Wallet name saved", "ok");
+          }}
+        />
+      ) : null}
+
+      {logExpenseOpen ? (
+        <div
+          className="sobre-modal-bg"
+          onMouseDown={backdropClose(() => setLogExpenseOpen(false))}
+        >
+          <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+            <h2>Log an expense</h2>
+            <p className="sub">
+              A note for the household — saved instantly, undo within 10
+              seconds. No money moves.
+            </p>
+            <ExpenseQuickAdd familyWalletId={familyWalletId} />
+            <div className="sobre-modal-actions">
+              <button
+                className="sobre-btn sobre-btn-soft"
+                onClick={() => setLogExpenseOpen(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
       ) : null}
 
       {removeTarget ? (

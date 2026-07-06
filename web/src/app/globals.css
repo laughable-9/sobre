@@ -239,29 +239,6 @@
   grid-template-columns: 280px minmax(0, 1fr) 340px;
   gap: 24px;
 }
-/* Right column: the expense quick-add sits above the activity feed. As one
-   grid child it keeps the 3-col layout intact (else it bumps ActivityFeed to
-   a new row). align-self:start stops the column stretching to the full grid
-   row height, so the activity box only grows to its content. */
-.sobre-dash-aside {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-  min-width: 0;
-  align-self: start;
-  position: sticky;
-  top: 100px;
-}
-/* The wrapper owns the sticky pin. Inside it the activity panel spans the full
-   column width (align-self:stretch) but only grows to its content height — the
-   list scrolls if it exceeds the cap. */
-.sobre-dash-aside .sobre-activity {
-  position: static;
-  top: auto;
-  align-self: stretch;   /* full width, matching the expense field above */
-  width: 100%;
-}
-
 /* Household summary — "This month" card, full-width above the envelope cards. */
 .sobre-hsummary {
   background: var(--surface);
@@ -592,32 +569,6 @@
 }
 .sobre-unit-toggle button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.sobre-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-}
-.sobre-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: 0;
-  padding: 10px 14px 12px;
-  margin-bottom: -1px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-3);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color .15s ease, border-color .15s ease;
-}
-.sobre-tab:hover { color: var(--text-1); }
-.sobre-tab[data-active="true"] {
-  color: var(--text-1);
-  border-bottom-color: var(--sobre-primary);
-}
 
 .sobre-quick-amts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sobre-quick-amts button {
@@ -1478,7 +1429,6 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-btn-nav,
   .sobre-iconbtn,
   .sobre-faq-q,
-  .sobre-tab,
   .sobre-quick-amts button { min-height: 44px; }
 }
 
@@ -1838,4 +1788,343 @@ body { overflow-x: clip; min-width: 320px; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ═══ v2 design system — dashboard-scoped (green board) ═══════════════════
+   Everything below only applies inside `.sobre-v2`. The rest of the app keeps
+   the cream/mango theme until the team promotes this to :root. Palette hexes
+   come from the brand board (Section 04): Green 600/700/500/50, Ink 900/700,
+   Page BG, semantic Success/Info/Warning/Error. */
+.sobre-v2 {
+  /* Board hexes only. Neutrals stay NEUTRAL — no sage/green-washed grays
+     (that soft look reads as Tarsi, which we're deliberately not). Green
+     shows up flat and vivid (600/700 + Green-50 tint); everything else is
+     ink on white. */
+  --sobre-bg: #FFFFFF;             /* full white page (was board's #FAFAF7) */
+  --sobre-surface: #FFFFFF;
+  --sobre-surface-alt: #F4F4F2;    /* neutral muted surface */
+  --sobre-primary: #22A45C;        /* Green 600 */
+  --sobre-primary-hover: #0F6B3A;  /* Green 700 */
+  --sobre-primary-bright: #3BC176; /* Green 500 — bright bar accents */
+  --sobre-accent: #0F6B3A;         /* trust green (dark, AA on tints) */
+  --sobre-accent-soft: #E8F5EE;    /* Green 50 */
+  --sobre-text-1: #0F1A14;         /* Ink 900 */
+  --sobre-text-2: #3D4A42;         /* Ink 700 */
+  --sobre-text-3: #9C9C97;         /* neutral gray, not sage */
+  --sobre-success: #1A8F52;
+  --sobre-info: #2D6CA8;
+  --sobre-warning: #C68A2E;
+  --sobre-danger: #C4443B;
+  --sobre-cream: #F5E6C8;          /* board Cream accent */
+  --sobre-danger-soft: #F9E4E2;    /* soft tint behind danger copy */
+  --sobre-border: #E9E9E6;         /* neutral */
+  --sobre-border-strong: #D6D6D1;
+  --sobre-shadow-sm: 0 2px 8px rgba(15, 26, 20, 0.05), 0 1px 2px rgba(15, 26, 20, 0.06);
+  --sobre-shadow-md: 0 8px 24px rgba(15, 26, 20, 0.09);
+  /* Type ramp: display headings go Manrope (was Fraunces serif). */
+  --serif: var(--font-manrope), var(--font-sans), system-ui, sans-serif;
+  --font-serif: var(--font-manrope);
+  background: var(--sobre-bg);
+
+  /* Re-declare every alias that maps onto --sobre-* tokens. Custom properties
+     compute at the element they're DECLARED on — the :root aliases baked in
+     the cream values, so without these the toggle/topbar/text would keep the
+     old theme inside v2 (that bug shipped once; don't remove these). */
+  --bg: var(--sobre-bg);
+  --surface: var(--sobre-surface);
+  --surface-alt: var(--sobre-surface-alt);
+  --primary-hover: var(--sobre-primary-hover);
+  --primary-text: var(--sobre-primary-text);
+  --accent-soft: var(--sobre-accent-soft);
+  --text-1: var(--sobre-text-1);
+  --text-2: var(--sobre-text-2);
+  --text-3: var(--sobre-text-3);
+  --border-strong: var(--sobre-border-strong);
+  --shadow-sm: var(--sobre-shadow-sm);
+  --shadow-md: var(--sobre-shadow-md);
+  /* shadcn tokens used by ui/ primitives + modals inside the dashboard. */
+  --background: var(--sobre-bg);
+  --foreground: var(--sobre-text-1);
+  --card: var(--sobre-surface);
+  --card-foreground: var(--sobre-text-1);
+  --popover: var(--sobre-surface);
+  --popover-foreground: var(--sobre-text-1);
+  --primary: var(--sobre-primary);
+  --primary-foreground: var(--sobre-primary-text);
+  --secondary: var(--sobre-surface-alt);
+  --secondary-foreground: var(--sobre-text-1);
+  --muted: var(--sobre-surface-alt);
+  --muted-foreground: var(--sobre-text-2);
+  --accent: var(--sobre-accent-soft);
+  --accent-foreground: var(--sobre-accent);
+  --destructive: var(--sobre-danger);
+  --border: var(--sobre-border);
+  --input: var(--sobre-border);
+  --ring: var(--sobre-primary);
+}
+/* Unified micro-labels (board style: mono tracked caps — like the board's
+   own "SECTION 04 — COLOR SYSTEM" labels). Covers the hero label, THIS
+   MONTH, RECENT ACTIVITY, and MEMBERS so they all read as one system. */
+.sobre-v2 .sobre-label,
+.sobre-v2 .sobre-hsummary-head,
+.sobre-v2 .sobre-hsummary-activity-head,
+.sobre-v2 .sobre-v2-hero .label {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Amounts read in Geist Mono per the board's numeric style. .tabular already
+   marks every balance/amount surface, so one rule covers them all. */
+.sobre-v2 .tabular,
+.sobre-v2 .sobre-total,
+.sobre-v2 .sobre-env-amount {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/* v2 wallet column — the centered native-app stack on the dashboard home. */
+.sobre-wallet-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+/* The wallet column owns its own summary/envelope spacing. */
+.sobre-wallet-col .sobre-envs { display: block; }
+
+/* Balance hero — the wallet's headline card. FLAT Green 600 (the board is
+   flat color blocks — a soft gradient banner reads as Tarsi). */
+.sobre-v2-hero {
+  background: var(--sobre-primary);
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 8px 20px rgba(15, 107, 58, 0.22);
+  padding: 22px 22px 20px;
+  color: #fff;
+}
+/* Wallet-name page title — sits ABOVE the balance card, big ink wordmark
+   (Manrope 700, same family as the brand). Ellipsis guards long names so the
+   row never wraps or pushes the pencil off-screen. */
+.sobre-v2-title {
+  display: flex; align-items: center; gap: 10px;
+  margin: 2px 2px 2px;
+  min-width: 0;
+}
+.sobre-v2-title .txt {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: clamp(28px, 6.5vw, 38px);
+  font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
+  color: var(--sobre-text-1);
+  margin: 0; min-width: 0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-v2-title .wedit {
+  width: 34px; height: 34px; border-radius: 999px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 1px solid var(--sobre-border); cursor: pointer;
+  background: var(--sobre-surface);
+  color: var(--sobre-text-2);
+  transition: background 120ms ease;
+}
+.sobre-v2-title .wedit:hover { background: var(--sobre-surface-alt); }
+.sobre-v2-hero .label { color: rgba(255, 255, 255, 0.85); }
+.sobre-v2-hero .amount {
+  /* Board Section 07: the hero figure is Manrope display 700–800. Geist Mono
+     is reserved for running numerals (sub-lines, tables), not this number. */
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  margin-top: 4px;
+  font-size: clamp(36px, 7vw, 46px);
+  font-weight: 800; line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.sobre-v2-hero .amount .cents { font-size: 0.55em; color: rgba(255, 255, 255, 0.75); }
+.sobre-v2-hero .sub {
+  margin-top: 8px; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: rgba(255, 255, 255, 0.85);
+}
+
+/* Quick actions — native-wallet tile grid: fixed rows of 4 (wraps 4+3 with
+   all seven tiles) so every tile is the same width; long labels wrap to a
+   second line instead of stretching their tile. */
+.sobre-v2-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+.sobre-v2-action {
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 14px 6px 12px;
+  min-width: 0;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  box-shadow: var(--sobre-shadow-sm);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.sobre-v2-action:hover { transform: translateY(-1px); box-shadow: var(--sobre-shadow-md); }
+.sobre-v2-action:active { transform: translateY(0); }
+.sobre-v2-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.sobre-v2-action .chip {
+  width: 44px; height: 44px; border-radius: 13px;
+  display: grid; place-items: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary-hover);
+}
+.sobre-v2-action .name {
+  /* Same unified mono tracked-caps treatment as the section micro-labels. */
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 10.5px; font-weight: 500; color: var(--sobre-text-2);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  text-align: center; line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 380px) {
+  .sobre-v2-actions { gap: 8px; }
+  .sobre-v2-action .chip { width: 40px; height: 40px; }
+  .sobre-v2-action .name { font-size: 11px; }
+}
+
+/* Mini activity feed embedded in the This-month card: 3 latest rows + a
+   see-all button that opens the full activity view. */
+.sobre-hsummary-activity {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sobre-border);
+}
+.sobre-hsummary-activity-head {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3); margin-bottom: 8px;
+}
+.sobre-hsummary-activity-empty { font-size: 13px; color: var(--sobre-text-3); }
+.sobre-hsummary-activity-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 7px 0;
+}
+.sobre-hsummary-activity-row .ic {
+  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--sobre-surface-alt); color: var(--sobre-text-2);
+}
+.sobre-hsummary-activity-row .ic.in {
+  background: var(--sobre-accent-soft); color: var(--sobre-success);
+}
+.sobre-hsummary-activity-row .ic.out {
+  background: var(--sobre-surface-alt); color: var(--sobre-text-1);
+}
+.sobre-hsummary-activity-row .what {
+  flex: 1; min-width: 0; font-size: 13px; color: var(--sobre-text-1);
+  font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-hsummary-activity-row .when {
+  font-size: 12px; color: var(--sobre-text-3); flex-shrink: 0;
+}
+.sobre-hsummary-seeall {
+  margin-top: 10px;
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 10px;
+  background: var(--sobre-surface);
+  font-size: 13px; font-weight: 600; color: var(--sobre-primary-hover);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-hsummary-seeall:hover { background: var(--sobre-accent-soft); }
+
+/* Envelope split card (board Section 07): compact rows — icon chip, name,
+   amount, thin per-envelope progress bar. Rows tap through to the full
+   envelopes view. */
+.sobre-v2-split {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 8px;
+}
+.sobre-v2-split-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--sobre-accent-soft);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+.sobre-v2-split-row + .sobre-v2-split-row { margin-top: 8px; }
+.sobre-v2-split-row:hover { filter: brightness(0.98); }
+.sobre-v2-split-row .top {
+  display: flex; align-items: center; gap: 10px;
+}
+.sobre-v2-split-row .chip {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--sobre-surface);
+  color: var(--sobre-primary-hover);
+}
+.sobre-v2-split-row .name {
+  flex: 1; min-width: 0;
+  font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-v2-split-row .amt {
+  font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
+  flex-shrink: 0;
+}
+.sobre-v2-split-row .track {
+  /* display:block is load-bearing — .track is a <span> inside the row
+     button, and an inline span ignores height, which silently hides the
+     progress bar entirely. */
+  display: block;
+  margin-top: 9px; height: 6px; border-radius: 999px;
+  background: rgba(15, 26, 20, 0.07);
+  overflow: hidden;
+}
+.sobre-v2-split-row .top { min-width: 0; }
+.sobre-v2-split-row .fill { height: 100%; border-radius: 999px; }
+
+/* ── PLACEHOLDER styles: notification pills + rail meta (board Section 07).
+   The pills render static sample copy until they're wired to real signals —
+   see <HomeSignalsPlaceholder>. Safe to restyle/remove with that component. */
+.sobre-v2-pill-note {
+  display: flex; align-items: center; gap: 9px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 13px;
+}
+.sobre-v2-pill-note + .sobre-v2-pill-note { margin-top: 8px; }
+.sobre-v2-pill-note .dot {
+  width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0;
+}
+.sobre-v2-pill-note b { font-weight: 600; }
+.sobre-v2-pill-note .when {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 12px; color: var(--sobre-text-3);
+}
+
+/* Split rows nested INSIDE the green balance hero (board Section 07 puts the
+   split in the balance card): drop the outer card chrome and flip rows to
+   white so they read on the green. */
+.sobre-v2-hero .sobre-v2-split {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 18px;
+}
+.sobre-v2-hero .sobre-v2-split-row {
+  background: var(--sobre-surface);
+  box-shadow: 0 1px 3px rgba(15, 26, 20, 0.10);
+}
+.sobre-v2-hero .sobre-v2-split-row:hover { filter: none; transform: translateY(-1px); }
+.sobre-v2-hero .sobre-v2-split-row { transition: transform 120ms ease; }
+.sobre-v2-hero .sobre-v2-split-row .chip {
+  background: var(--sobre-accent-soft);
 }

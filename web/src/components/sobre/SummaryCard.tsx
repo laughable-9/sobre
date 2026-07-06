@@ -27,8 +27,10 @@ export interface SubaccountSummary {
 }
 
 const MEMBER_PALETTES = [
-  { bg: "#fbe7d2", fg: "#D67E28" }, // mango — first slot (admin)
-  { bg: "#E8F0EA", fg: "#2E6B4C" }, // green — second slot
+  // Token-driven so avatars follow the active theme (green inside .sobre-v2,
+  // palm green on the legacy cream theme).
+  { bg: "var(--sobre-accent-soft)", fg: "var(--sobre-accent)" }, // first slot (admin)
+  { bg: "#F5E6C8", fg: "#8A6B2E" }, // board cream accent — second slot
 ] as const;
 
 export function SummaryCard({
@@ -41,6 +43,7 @@ export function SummaryCard({
   onInvite,
   subaccounts,
   onOpenSubaccounts,
+  hideBalance,
   children,
 }: {
   state: WalletState;
@@ -67,6 +70,11 @@ export function SummaryCard({
    *  switchTab. Renders a "Manage" link in the sub-account section
    *  header when provided. */
   onOpenSubaccounts?: () => void;
+  /** v2 dashboard: the balance + deposit/cashout CTAs render in the
+   *  BalanceHero/QuickActions instead, so this card shows only the household
+   *  sections (daily limit, members, sub-accounts). Nothing is removed —
+   *  the same handlers drive the new surfaces. Default false. */
+  hideBalance?: boolean;
   /** Optional extra cards stacked below the total-balance card in the same
    *  left column — used by the dashboard to surface pending approvals. */
   children?: React.ReactNode;
@@ -94,59 +102,63 @@ export function SummaryCard({
   return (
     <aside className="sobre-summary">
       <div className="sobre-summary-card">
-        <span className="sobre-label">Total balance</span>
-        <div className="sobre-total">
-          <AnimatedNumber
-            value={totalDisplay}
-            format={(n) => {
-              const whole = Math.floor(n).toLocaleString("en-PH");
-              const cents = Math.abs(n).toFixed(2).split(".")[1];
-              return (
-                <>
-                  {showUsd ? "$" : "₱"} {whole}
-                  <span className="cents">.{cents}</span>
-                </>
-              );
-            }}
-          />
-        </div>
-        <div
-          className="flex items-center gap-2 mt-3 text-[13px]"
-          style={{ color: "var(--text-2)" }}
-        >
-          <span className="tabular">{totalUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}</span>
-          <span
-            className="w-[3px] h-[3px] rounded-full"
-            style={{ background: "var(--text-3)" }}
-          />
-          <span>{state.balances.length} envelopes</span>
-        </div>
+        {hideBalance ? null : (
+          <>
+            <span className="sobre-label">Total balance</span>
+            <div className="sobre-total">
+              <AnimatedNumber
+                value={totalDisplay}
+                format={(n) => {
+                  const whole = Math.floor(n).toLocaleString("en-PH");
+                  const cents = Math.abs(n).toFixed(2).split(".")[1];
+                  return (
+                    <>
+                      {showUsd ? "$" : "₱"} {whole}
+                      <span className="cents">.{cents}</span>
+                    </>
+                  );
+                }}
+              />
+            </div>
+            <div
+              className="flex items-center gap-2 mt-3 text-[13px]"
+              style={{ color: "var(--text-2)" }}
+            >
+              <span className="tabular">{totalUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}</span>
+              <span
+                className="w-[3px] h-[3px] rounded-full"
+                style={{ background: "var(--text-3)" }}
+              />
+              <span>{state.balances.length} envelopes</span>
+            </div>
 
-        <button
-          type="button"
-          onClick={onDeposit}
-          className="sobre-btn sobre-btn-primary mt-4 w-full justify-center"
-          style={{ padding: "12px 18px", fontSize: 14 }}
-        >
-          <Plus size={16} strokeWidth={2} />
-          Add a remittance
-        </button>
+            <button
+              type="button"
+              onClick={onDeposit}
+              className="sobre-btn sobre-btn-primary mt-4 w-full justify-center"
+              style={{ padding: "12px 18px", fontSize: 14 }}
+            >
+              <Plus size={16} strokeWidth={2} />
+              Add a remittance
+            </button>
 
-        <button
-          type="button"
-          onClick={onCashout}
-          disabled={totalStroops === 0n}
-          className="sobre-btn sobre-btn-soft mt-2 w-full justify-center"
-          style={{
-            padding: "12px 18px",
-            fontSize: 14,
-            opacity: totalStroops === 0n ? 0.5 : 1,
-            cursor: totalStroops === 0n ? "not-allowed" : "pointer",
-          }}
-        >
-          <ArrowDownToLine size={16} strokeWidth={2} />
-          Cash out to bank
-        </button>
+            <button
+              type="button"
+              onClick={onCashout}
+              disabled={totalStroops === 0n}
+              className="sobre-btn sobre-btn-soft mt-2 w-full justify-center"
+              style={{
+                padding: "12px 18px",
+                fontSize: 14,
+                opacity: totalStroops === 0n ? 0.5 : 1,
+                cursor: totalStroops === 0n ? "not-allowed" : "pointer",
+              }}
+            >
+              <ArrowDownToLine size={16} strokeWidth={2} />
+              Cash out to bank
+            </button>
+          </>
+        )}
 
         <DailyLimitCard
           dailyLimit={state.policy.dailyLimit}

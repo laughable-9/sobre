@@ -1,12 +1,20 @@
 "use client";
 
 import { useMemo } from "react";
-import { ArrowDownToLine, ListChecks, Target } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpRight,
+  ChevronRight,
+  ListChecks,
+  Target,
+  Users,
+} from "lucide-react";
 
 import { useExpenseLog } from "@/hooks/useExpenseLog";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
+import { formatPhpLocale, relativeTime } from "@/lib/format";
 
 /**
  * Household summary — this month's money at a glance:
@@ -21,9 +29,16 @@ import { useCurrency } from "@/lib/currency";
 export function HouseholdSummary({
   events,
   familyWalletId,
+  onSeeAllActivity,
+  children,
 }: {
   events: FeedEvent[];
   familyWalletId: string | null;
+  /** Opens the full activity view. The card embeds only the 3 latest. */
+  onSeeAllActivity?: () => void;
+  /** Rendered inside the Recent-activity section, between the rows and the
+   *  see-all button (currently the board's placeholder signal pills). */
+  children?: React.ReactNode;
 }) {
   const { logs } = useExpenseLog(familyWalletId);
   const { currency } = useCurrency();
@@ -123,6 +138,115 @@ export function HouseholdSummary({
           </div>
         </div>
       </div>
+
+      <div className="sobre-hsummary-activity">
+        <div className="sobre-hsummary-activity-head">Recent activity</div>
+        {events.length === 0 ? (
+          <div className="sobre-hsummary-activity-empty">No activity yet.</div>
+        ) : (
+          events.slice(0, 3).map((ev) => {
+            const d = describeEvent(ev);
+            return (
+              <div
+                key={`${ev.txHash}-${ev.kind}`}
+                className="sobre-hsummary-activity-row"
+              >
+                <span className={`ic ${d.tone}`}>{d.icon}</span>
+                <span className="what">{d.text}</span>
+                <span className="when">{relativeTime(ev.ledgerClosedAt)}</span>
+              </div>
+            );
+          })
+        )}
+        {children ? <div className="mt-3">{children}</div> : null}
+        {onSeeAllActivity ? (
+          <button
+            type="button"
+            className="sobre-hsummary-seeall"
+            onClick={onSeeAllActivity}
+          >
+            See all activity
+            <ChevronRight size={14} strokeWidth={2.2} />
+          </button>
+        ) : null}
+      </div>
     </section>
   );
+}
+
+/** Compact one-line description for the mini feed. The full ActivityFeed view
+ *  keeps the rich rendering; this is just the 3-row teaser on the card. */
+function describeEvent(ev: FeedEvent): {
+  icon: React.ReactNode;
+  text: string;
+  tone: "in" | "out" | "meta";
+} {
+  switch (ev.kind) {
+    case "Deposit":
+      return {
+        icon: <ArrowDownToLine size={13} strokeWidth={2.2} />,
+        text: `Received ${formatPhpLocale(ev.amount)}`,
+        tone: "in",
+      };
+    case "Spend":
+      return {
+        icon: <ArrowUpRight size={13} strokeWidth={2.2} />,
+        text: `Spent ${formatPhpLocale(ev.amount)}`,
+        tone: "out",
+      };
+    case "SubAccountFunded":
+      return {
+        icon: <ArrowUpRight size={13} strokeWidth={2.2} />,
+        text: `Sent ${formatPhpLocale(ev.amount)} to supplementary`,
+        tone: "out",
+      };
+    case "SubAccountSpent":
+      return {
+        icon: <ArrowUpRight size={13} strokeWidth={2.2} />,
+        text: `Supplementary spent ${formatPhpLocale(ev.amount)}`,
+        tone: "out",
+      };
+    case "RequestCreated":
+      return {
+        icon: <ArrowUpRight size={13} strokeWidth={2.2} />,
+        text: `Approval requested · ${formatPhpLocale(ev.amount)}`,
+        tone: "meta",
+      };
+    case "RequestApproved":
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: "Request approved",
+        tone: "meta",
+      };
+    case "RequestDenied":
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: "Request denied",
+        tone: "meta",
+      };
+    case "MemberJoined":
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: "A member joined",
+        tone: "meta",
+      };
+    case "MemberRemoved":
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: "A member was removed",
+        tone: "meta",
+      };
+    case "SubAccountJoined":
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: "Supplementary account joined",
+        tone: "meta",
+      };
+    default:
+      return {
+        icon: <Users size={13} strokeWidth={2.2} />,
+        text: ev.kind,
+        tone: "meta",
+      };
+  }
 }
