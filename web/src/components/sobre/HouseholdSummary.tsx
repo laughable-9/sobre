@@ -2,13 +2,13 @@
 
 import { useMemo } from "react";
 import {
-  ArrowLineDown,
-  ArrowUpRight,
-  CaretRight,
-  EnvelopeSimple,
-  ListChecks,
-  Target,
-  UsersThree,
+  ArrowLineDownIcon,
+  ArrowUpRightIcon,
+  CaretRightIcon,
+  EnvelopeSimpleIcon,
+  ListChecksIcon,
+  TargetIcon,
+  UsersThreeIcon,
 } from "@phosphor-icons/react";
 
 import { useExpenseLog } from "@/hooks/useExpenseLog";
@@ -92,7 +92,7 @@ export function HouseholdSummary({
       <div className="sobre-hsummary-grid">
         <div className="sobre-hsummary-stat">
           <span className="sobre-hsummary-ic">
-            <ArrowLineDown weight="fill" size={15} />
+            <ArrowLineDownIcon weight="fill" size={15} />
           </span>
           <div className="sobre-hsummary-body">
             <div className="sobre-hsummary-label">Deposited</div>
@@ -102,7 +102,7 @@ export function HouseholdSummary({
 
         <div className="sobre-hsummary-stat">
           <span className="sobre-hsummary-ic">
-            <ListChecks weight="fill" size={15} />
+            <ListChecksIcon weight="fill" size={15} />
           </span>
           <div className="sobre-hsummary-body">
             <div className="sobre-hsummary-label">Logged</div>
@@ -118,7 +118,7 @@ export function HouseholdSummary({
 
         <div className="sobre-hsummary-stat">
           <span className="sobre-hsummary-ic accent">
-            <Target weight="fill" size={15} />
+            <TargetIcon weight="fill" size={15} />
           </span>
           <div className="sobre-hsummary-body">
             <div className="sobre-hsummary-label">Spending tracked</div>
@@ -145,7 +145,7 @@ export function HouseholdSummary({
         {events.length === 0 ? (
           <div className="sobre-hsummary-activity-empty">
             <span className="ic" aria-hidden>
-              <EnvelopeSimple weight="fill" size={15} />
+              <EnvelopeSimpleIcon weight="fill" size={15} />
             </span>
             Your family&apos;s story starts with the first deposit.
           </div>
@@ -172,7 +172,7 @@ export function HouseholdSummary({
             onClick={onSeeAllActivity}
           >
             See all activity
-            <CaretRight weight="bold" size={14} />
+            <CaretRightIcon weight="bold" size={14} />
           </button>
         ) : null}
       </div>
@@ -190,67 +190,67 @@ function describeEvent(ev: FeedEvent): {
   switch (ev.kind) {
     case "Deposit":
       return {
-        icon: <ArrowLineDown weight="fill" size={13} />,
+        icon: <ArrowLineDownIcon weight="fill" size={13} />,
         text: `Received ${formatPhpLocale(ev.amount)}`,
         tone: "in",
       };
     case "Spend":
       return {
-        icon: <ArrowUpRight weight="fill" size={13} />,
+        icon: <ArrowUpRightIcon weight="fill" size={13} />,
         text: `Spent ${formatPhpLocale(ev.amount)}`,
         tone: "out",
       };
     case "SubAccountFunded":
       return {
-        icon: <ArrowUpRight weight="fill" size={13} />,
+        icon: <ArrowUpRightIcon weight="fill" size={13} />,
         text: `Sent ${formatPhpLocale(ev.amount)} to supplementary`,
         tone: "out",
       };
     case "SubAccountSpent":
       return {
-        icon: <ArrowUpRight weight="fill" size={13} />,
+        icon: <ArrowUpRightIcon weight="fill" size={13} />,
         text: `Supplementary spent ${formatPhpLocale(ev.amount)}`,
         tone: "out",
       };
     case "RequestCreated":
       return {
-        icon: <ArrowUpRight weight="fill" size={13} />,
+        icon: <ArrowUpRightIcon weight="fill" size={13} />,
         text: `Approval requested · ${formatPhpLocale(ev.amount)}`,
         tone: "meta",
       };
     case "RequestApproved":
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: "Request approved",
         tone: "meta",
       };
     case "RequestDenied":
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: "Request denied",
         tone: "meta",
       };
     case "MemberJoined":
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: "A member joined",
         tone: "meta",
       };
     case "MemberRemoved":
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: "A member was removed",
         tone: "meta",
       };
     case "SubAccountJoined":
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: "Supplementary account joined",
         tone: "meta",
       };
     default:
       return {
-        icon: <UsersThree weight="fill" size={13} />,
+        icon: <UsersThreeIcon weight="fill" size={13} />,
         text: ev.kind,
         tone: "meta",
       };

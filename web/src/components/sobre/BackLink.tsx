@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import {
-  CaretLeft,
+  CaretLeftIcon,
 } from "@phosphor-icons/react";
 
 /**
@@ -24,7 +24,7 @@ export function BackLink({
 }) {
   const inner = (
     <>
-      <CaretLeft weight="bold" size={16} />
+      <CaretLeftIcon weight="bold" size={16} />
       {label}
     </>
   );

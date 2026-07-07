@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  GraduationCap,
-  Lock,
-  Plant,
-  ShoppingCart,
-  TrendUp,
+  GraduationCapIcon,
+  LockIcon,
+  PlantIcon,
+  ShoppingCartIcon,
+  TrendUpIcon,
 } from "@phosphor-icons/react";
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
@@ -21,9 +21,9 @@ import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
-  Groceries: <ShoppingCart weight="fill" size={20} />,
-  Tuition: <GraduationCap weight="fill" size={20} />,
-  Savings: <Plant weight="fill" size={20} />,
+  Groceries: <ShoppingCartIcon weight="fill" size={20} />,
+  Tuition: <GraduationCapIcon weight="fill" size={20} />,
+  Savings: <PlantIcon weight="fill" size={20} />,
 };
 
 export function EnvelopeCard({
@@ -92,13 +92,13 @@ export function EnvelopeCard({
               }}
               title="Spends from this envelope need admin approval"
             >
-              <Lock weight="fill" size={11} />
+              <LockIcon weight="fill" size={11} />
               Approval required
             </span>
           ) : null}
           {isSavings ? (
             <span className="sobre-pill sobre-pill-soft-green">
-              <TrendUp weight="fill" size={12} />
+              <TrendUpIcon weight="fill" size={12} />
               4.5% APY
             </span>
           ) : null}

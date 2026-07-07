@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  EnvelopeSimple,
+  EnvelopeSimpleIcon,
 } from "@phosphor-icons/react";
 
 import type { WalletState } from "@/hooks/useWalletState";
@@ -14,8 +14,9 @@ import {
 import { useCurrency } from "@/lib/currency";
 
 /** Per-row bar colors from the brand board (Section 07): Green 600 / 700 /
- *  500 cycling down the list, exactly like the UI preview. */
-const BAR_COLORS = [
+ *  500 cycling down the list, exactly like the UI preview. Shared with the
+ *  envelopes view's SplitLegendBar so segments match rows everywhere. */
+export const BAR_COLORS = [
   "var(--sobre-primary)",
   "var(--sobre-primary-hover)",
   "var(--sobre-primary-bright)",
@@ -57,7 +58,7 @@ export function EnvelopeSplitCard({
           >
             <span className="top">
               <span className="chip">
-                <EnvelopeSimple weight="fill" size={15} />
+                <EnvelopeSimpleIcon weight="fill" size={15} />
               </span>
               <span className="name">{name}</span>
               <span className="amt tabular">

@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  ArrowLineDown,
-  Check,
-  Copy,
-  Lock,
-  Plus,
-  Timer,
-  UserPlus,
-  X,
+  ArrowLineDownIcon,
+  CheckIcon,
+  CopyIcon,
+  LockIcon,
+  PlusIcon,
+  TimerIcon,
+  UserPlusIcon,
+  XIcon,
 } from "@phosphor-icons/react";
 import { useEffect, useState } from "react";
 
@@ -138,7 +138,7 @@ export function SummaryCard({
               className="sobre-btn sobre-btn-primary mt-4 w-full justify-center"
               style={{ padding: "12px 18px", fontSize: 14 }}
             >
-              <Plus weight="bold" size={16} />
+              <PlusIcon weight="bold" size={16} />
               Add a remittance
             </button>
 
@@ -154,7 +154,7 @@ export function SummaryCard({
                 cursor: totalStroops === 0n ? "not-allowed" : "pointer",
               }}
             >
-              <ArrowLineDown weight="fill" size={16} />
+              <ArrowLineDownIcon weight="fill" size={16} />
               Cash out to bank
             </button>
           </>
@@ -177,7 +177,7 @@ export function SummaryCard({
                 className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
                 style={{ color: "var(--sobre-primary)" }}
               >
-                <UserPlus weight="fill" size={11} />
+                <UserPlusIcon weight="fill" size={11} />
                 Invite
               </button>
             ) : null}
@@ -234,9 +234,9 @@ export function SummaryCard({
                     }
                   >
                     {copiedAddr === m.address ? (
-                      <Check weight="bold" size={13} />
+                      <CheckIcon weight="bold" size={13} />
                     ) : (
-                      <Copy weight="bold" size={13} />
+                      <CopyIcon weight="bold" size={13} />
                     )}
                   </button>
                   {isAdmin && !memberIsAdmin && onKick ? (
@@ -250,7 +250,7 @@ export function SummaryCard({
                       }}
                       title="Remove member"
                     >
-                      <X weight="bold" size={14} />
+                      <XIcon weight="bold" size={14} />
                     </button>
                   ) : null}
                 </div>
@@ -303,7 +303,7 @@ export function SummaryCard({
                           style={{ color: "var(--sobre-danger)" }}
                         >
                           <span className="inline-flex items-center gap-1">
-                            <Lock weight="fill" size={11} />
+                            <LockIcon weight="fill" size={11} />
                             Locked
                           </span>
                         </div>
@@ -347,7 +347,7 @@ function DailyLimitCard({
         style={{ borderColor: "var(--border)", color: "var(--text-2)" }}
       >
         <div className="flex items-center gap-2">
-          <Timer weight="fill" size={14} style={{ color: "var(--text-3)" }} />
+          <TimerIcon weight="fill" size={14} style={{ color: "var(--text-3)" }} />
           <span>No daily spend limit set</span>
         </div>
       </div>
@@ -400,7 +400,7 @@ function DailyLimitCard({
           className="text-[11px] tabular inline-flex items-center gap-1 whitespace-nowrap"
           style={{ color: "var(--text-3)" }}
         >
-          <Timer weight="fill" size={11} />
+          <TimerIcon weight="fill" size={11} />
           Resets in {hours}h {minutes}m
         </span>
       </div>

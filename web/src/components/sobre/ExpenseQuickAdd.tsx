@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  ArrowUUpLeft,
-  Check,
-  Plus,
+  ArrowUUpLeftIcon,
+  CheckIcon,
+  PlusIcon,
 } from "@phosphor-icons/react";
 
 import { useExpenseLog, type ExpenseLog } from "@/hooks/useExpenseLog";
@@ -110,7 +110,7 @@ export function ExpenseQuickAdd({
                 : "pointer",
           }}
         >
-          <Plus weight="bold" size={16} />
+          <PlusIcon weight="bold" size={16} />
           {saving ? "Saving…" : "Log"}
         </button>
       </form>
@@ -133,7 +133,7 @@ export function ExpenseQuickAdd({
             className="flex min-w-0 items-center gap-2 text-[13px]"
             style={{ color: "var(--sobre-accent)" }}
           >
-            <Check weight="bold" size={15} className="flex-shrink-0" />
+            <CheckIcon weight="bold" size={15} className="flex-shrink-0" />
             <span className="truncate">
               Saved “{undoable.note}”
             </span>
@@ -144,7 +144,7 @@ export function ExpenseQuickAdd({
             className="tabular flex flex-shrink-0 items-center gap-1.5 text-[13px] font-semibold"
             style={{ color: "var(--text-1)" }}
           >
-            <ArrowUUpLeft weight="bold" size={14} />
+            <ArrowUUpLeftIcon weight="bold" size={14} />
             Undo ({secondsLeft})
           </button>
         </div>

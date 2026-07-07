@@ -2079,6 +2079,45 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-v2-action .name { font-size: 11px; }
 }
 
+/* Split legend bar (envelopes view): one stacked track of the deposit split
+   + swatch legend. Segment colors = BAR_COLORS (home split card). */
+.sobre-v2-splitbar {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.sobre-v2-splitbar .head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin-bottom: 10px;
+}
+.sobre-v2-splitbar .track {
+  display: flex; height: 22px; border-radius: 8px; overflow: hidden;
+  background: var(--sobre-surface-alt);
+}
+.sobre-v2-splitbar .seg {
+  display: grid; place-items: center; height: 100%;
+  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
+}
+.sobre-v2-splitbar .seg b {
+  color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+}
+.sobre-v2-splitbar .seg + .seg { margin-left: 2px; }
+.sobre-v2-splitbar .legend {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px;
+}
+.sobre-v2-splitbar .item {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--sobre-text-2);
+}
+.sobre-v2-splitbar .item b { color: var(--sobre-text-1); font-weight: 600; }
+.sobre-v2-splitbar .swatch {
+  width: 10px; height: 10px; border-radius: 4px; flex-shrink: 0;
+}
+
 /* Mini activity feed embedded in the This-month card: 3 latest rows + a
    see-all button that opens the full activity view. */
 .sobre-hsummary-activity {

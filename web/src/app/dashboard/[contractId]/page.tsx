@@ -3,10 +3,10 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
-  PencilSimple,
-  Plus,
-  UserPlus,
-  Warning,
+  PencilSimpleIcon,
+  PlusIcon,
+  UserPlusIcon,
+  WarningIcon,
 } from "@phosphor-icons/react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
@@ -24,6 +24,7 @@ import {
 } from "@/components/sobre/EnvelopeSplitCard";
 import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
 import { Reveal } from "@/components/sobre/Reveal";
+import { SplitLegendBar } from "@/components/sobre/SplitLegendBar";
 import { QuickActions } from "@/components/sobre/QuickActions";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
@@ -590,7 +591,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                   aria-label="Rename wallet"
                   title="Rename wallet"
                 >
-                  <PencilSimple weight="bold" size={14} />
+                  <PencilSimpleIcon weight="bold" size={14} />
                 </button>
               ) : null}
             </div>
@@ -736,6 +737,8 @@ function Dashboard({ contractId }: { contractId: string }) {
               </p>
             </header>
 
+            <SplitLegendBar state={state} />
+
             {state.balances.map((bal, i) => {
               const envName = ENVELOPE_LABELS[i];
               const approvalRequired =
@@ -848,7 +851,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 className="inline-flex items-center gap-2"
                 style={{ color: "var(--sobre-danger)" }}
               >
-                <Warning weight="fill" size={14} />
+                <WarningIcon weight="fill" size={14} />
                 Close this Sobre
               </h3>
               <p
@@ -884,7 +887,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 className="sobre-btn sobre-btn-soft"
                 style={{ justifyContent: "center", minHeight: 48 }}
               >
-                <UserPlus weight="fill" size={18} />
+                <UserPlusIcon weight="fill" size={18} />
                 Invite
               </button>
             ) : null}
@@ -893,7 +896,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               onClick={() => setDepositOpen(true)}
               className="sobre-bottom-cta"
             >
-              <Plus weight="bold" size={18} />
+              <PlusIcon weight="bold" size={18} />
               Add money
             </button>
           </div>

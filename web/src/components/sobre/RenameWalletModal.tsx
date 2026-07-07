@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Check,
+  CheckIcon,
 } from "@phosphor-icons/react";
 
 import { useRenameWallet } from "@/hooks/useRenameWallet";
@@ -113,7 +113,7 @@ export function RenameWalletModal({
             disabled={!valid || pending}
             style={{ opacity: !valid || pending ? 0.6 : 1 }}
           >
-            <Check weight="bold" size={14} />
+            <CheckIcon weight="bold" size={14} />
             {pending ? "Saving…" : "Save name"}
           </button>
         </div>
