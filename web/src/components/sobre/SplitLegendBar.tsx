@@ -18,7 +18,7 @@ export function SplitLegendBar({ state }: { state: WalletState }) {
 
   return (
     <div className="sobre-v2-splitbar" aria-label="Deposit split">
-      <div className="head">How every ₱100 splits</div>
+      <div className="head">How every deposit splits</div>
       <div className="track" role="img" aria-hidden>
         {rows.map((r) =>
           r.pct > 0 ? (
@@ -26,10 +26,7 @@ export function SplitLegendBar({ state }: { state: WalletState }) {
               key={r.name}
               className="seg"
               style={{ width: `${r.pct}%`, background: r.color }}
-            >
-              {/* % rides the segment itself when there's room */}
-              {r.pct >= 12 ? <b className="tabular">{r.pct}%</b> : null}
-            </span>
+            />
           ) : null,
         )}
       </div>
@@ -38,7 +35,7 @@ export function SplitLegendBar({ state }: { state: WalletState }) {
           <span key={r.name} className="item">
             <span className="swatch" style={{ background: r.color }} />
             {r.name}
-            <b className="tabular">₱{r.pct}</b>
+            <b className="tabular">{r.pct}%</b>
           </span>
         ))}
       </div>

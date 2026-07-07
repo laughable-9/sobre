@@ -3,6 +3,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
+  GearSixIcon,
   PencilSimpleIcon,
   PlusIcon,
   UserPlusIcon,
@@ -531,13 +532,30 @@ function Dashboard({ contractId }: { contractId: string }) {
       <TopBar wallet={wallet} />
 
       {/* One back affordance per screen: the immediate parent. Wallet view
-          backs out to My Sobres; Supplementary/Settings back to the wallet. */}
+          backs out to My Sobres; Supplementary/Settings back to the wallet.
+          On "home", the currency toggle + settings gear share this row too
+          (moved up from the wallet-title row so they don't crowd a long
+          wallet name there). */}
       <div
-        className="mx-auto w-full px-4 sm:px-7 pt-5"
+        className="mx-auto w-full px-4 sm:px-7 pt-5 pb-4 flex items-center justify-between gap-3"
         style={{ maxWidth: 1320 }}
       >
         {tab === "home" ? (
-          <BackLink href="/dashboard" />
+          <>
+            <BackLink href="/dashboard" />
+            <div className="flex items-center gap-2">
+              <CurrencyToggle />
+              <button
+                type="button"
+                className="wedit"
+                onClick={() => switchTab("settings")}
+                aria-label="Settings"
+                title="Settings"
+              >
+                <GearSixIcon weight="bold" size={16} />
+              </button>
+            </div>
+          </>
         ) : (
           <BackLink onClick={() => switchTab("home")} label="Wallet" />
         )}
@@ -595,7 +613,6 @@ function Dashboard({ contractId }: { contractId: string }) {
                 </button>
               ) : null}
             </div>
-            <CurrencyToggle />
           </div>
 
           <BalanceHero state={state}>
@@ -615,7 +632,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             onEnvelopes={() => switchTab("envelopes")}
             onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
             onSubaccounts={() => switchTab("subaccounts")}
-            onSettings={() => switchTab("settings")}
           />
 
           <HouseholdSummary

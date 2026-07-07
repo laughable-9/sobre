@@ -202,10 +202,28 @@
 @media (max-width: 760px) {
   .sobre-topbar-inner {
     grid-template-columns: auto 1fr;
+    grid-template-rows: auto;
     padding: 0 16px;
     gap: 12px;
   }
-  .sobre-topbar-inner > .sobre-wallet-pill { display: none; }
+  /* The middle `center` slot (SiteHeader's `{center ?? <div />}`) is always
+     a 3rd grid item even when unused here — hiding just .sobre-wallet-pill
+     left its empty placeholder <div> occupying an implicit grid row, which
+     padded out the topbar's height. display:none it outright by position
+     so only brand + nav remain in the 2-column grid. */
+  .sobre-topbar-inner > *:nth-child(2) { display: none; }
+  /* Force explicit placement so brand + nav always share row 1 regardless
+     of DOM order — min-width: 0 additionally lets nav shrink instead of
+     overflowing at its content's natural width. */
+  .sobre-topbar-inner > nav.sobre-nav-links {
+    grid-row: 1;
+    grid-column: 2;
+    min-width: 0;
+  }
+  .sobre-topbar-inner > .sobre-brand {
+    grid-row: 1;
+    grid-column: 1;
+  }
 }
 .sobre-wallet-pill {
   display: inline-flex; align-items: center;
@@ -222,6 +240,10 @@
   background: var(--surface);
   border: 1px solid var(--border);
   display: grid; place-items: center; color: var(--text-1);
+  flex-shrink: 0;
+  padding: 0;
+  box-sizing: border-box;
+  aspect-ratio: 1;
 }
 .sobre-iconbtn:hover { background: var(--surface-alt); }
 .sobre-avatar-lg {
@@ -290,6 +312,13 @@
 @media (max-width: 520px) {
   .sobre-hsummary-grid { grid-template-columns: 1fr; gap: 14px; }
   .sobre-hsummary-stat:last-child { grid-column: auto; }
+  /* Single column reads as a stacked list rather than a grid — a hairline
+     divider between rows (skipping the first) makes the boundaries
+     explicit instead of relying on gap alone. */
+  .sobre-hsummary-stat:not(:first-child) {
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+  }
 }
 
 @media (max-width: 1100px) { .sobre-dash { grid-template-columns: 1fr; } }
@@ -325,7 +354,12 @@
 }
 .sobre-total .cents { font-size: 22px; }
 
-.sobre-members { margin-top: 22px; border-top: 1px solid var(--border); padding-top: 18px; }
+.sobre-members { margin-top: 22px; }
+/* Zero the gap when Members is the card's first section — happens on the
+   v2 dashboard where SummaryCard renders with hideBalance (the balance/CTA
+   block that this margin used to separate from is gone), which otherwise
+   stacked with the card's own padding into a big empty gap up top. */
+.sobre-summary-card > .sobre-members:first-child { margin-top: 0; }
 .sobre-member { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
 .sobre-member .av {
   width: 32px; height: 32px; border-radius: 50%;
@@ -861,8 +895,28 @@
 .sobre-wallet-menu-pill .addr {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 120px;
+}
+@media (max-width: 380px) {
+  .sobre-wallet-menu-pill .addr { max-width: 80px; }
 }
 .sobre-wallet-menu-pill .chev { color: var(--text-3); }
+
+/* v2: brand wordmark green + Manrope; pill/backlink text Manrope on ink-900. */
+.sobre-v2 .sobre-brand-name {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-weight: 800;
+  color: var(--sobre-primary);
+  text-transform: lowercase;
+}
+.sobre-v2 .sobre-wallet-menu-pill .addr,
+.sobre-v2 .sobre-backlink {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  color: var(--sobre-text-1);
+}
 
 .sobre-wallet-menu-panel {
   position: absolute;
@@ -1428,9 +1482,14 @@ body { overflow-x: clip; min-width: 320px; }
 @media (pointer: coarse) {
   .sobre-btn,
   .sobre-btn-nav,
-  .sobre-iconbtn,
   .sobre-faq-q,
   .sobre-quick-amts button { min-height: 44px; }
+  /* .sobre-iconbtn deliberately excluded: it's circular (equal width/height,
+     often set inline per usage, e.g. the compact 28px member-row copy
+     button) — min-height alone without a matching min-width skewed it into
+     an ellipse on coarse-pointer devices, and bumping it to 44px would blow
+     up that tight row instead. aspect-ratio in the base rule keeps it
+     square at whatever size each usage sets. */
 }
 
 /* ─── Frosted sticky bars ───────────────────────────────────────────────
@@ -1990,6 +2049,9 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-v2-title .left {
   display: flex; align-items: center; gap: 10px; min-width: 0;
 }
+.sobre-v2-title .right {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+}
 .sobre-v2-title .txt {
   font-family: var(--font-manrope), var(--font-sans), sans-serif;
   font-size: clamp(28px, 6.5vw, 38px);
@@ -1998,7 +2060,9 @@ body { overflow-x: clip; min-width: 320px; }
   margin: 0; min-width: 0;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.sobre-v2-title .wedit {
+/* Standalone circular icon-button — was scoped to .sobre-v2-title only, but
+   is now also used in the back-link row (settings gear next to My Sobres). */
+.wedit {
   width: 34px; height: 34px; border-radius: 999px; flex-shrink: 0;
   display: grid; place-items: center;
   border: 1px solid var(--sobre-border); cursor: pointer;
@@ -2006,7 +2070,7 @@ body { overflow-x: clip; min-width: 320px; }
   color: var(--sobre-text-2);
   transition: background 120ms ease;
 }
-.sobre-v2-title .wedit:hover { background: var(--sobre-surface-alt); }
+.wedit:hover { background: var(--sobre-surface-alt); }
 .sobre-v2-hero .label { color: rgba(255, 255, 255, 0.85); }
 .sobre-v2-hero .amount {
   /* Board Section 07: the hero figure is Manrope display 700–800. Geist Mono
@@ -2025,58 +2089,72 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 13px; color: rgba(255, 255, 255, 0.85);
 }
 
-/* Quick actions — native-wallet tiles. Wrapping flex (not grid) so an
-   incomplete last row centers under the full one; every tile keeps the same
-   width via flex-basis. Long labels wrap instead of stretching a tile. */
+/* Quick actions — lives inside a sobre-hsummary card shell (see
+   QuickActions.tsx); tiles themselves carry no border/fill, just the
+   card's shadow/radius/background behind them. Aligned into a real
+   3-column table (fixed equal column width) so icons/labels line up row
+   over row. Wrapping flex with a fixed flex-basis (not content-sized) lets
+   an incomplete last row center as a group under the full rows above
+   instead of hugging the left edge or auto-sizing per label — the failure
+   mode of the previous width:max-content attempt. 3 columns (not 4) so
+   "SUPPLEMENTARY" fits on one line at readable size. */
 .sobre-v2-actions {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: 12px;
+  gap: 4px;
+  margin-top: 14px;
 }
 .sobre-v2-action {
-  flex: 0 1 calc(25% - 9px);
-  display: flex; flex-direction: column; align-items: center; gap: 6px;
-  padding: 12px 6px 11px;
+  flex: 0 0 auto;
+  /* calc() accounts for the container's gap: a flex-wrap row's `gap` sits
+     ON TOP OF each item's percentage width — 3 × 33.333% + 2 × 4px gap
+     already exceeds 100%, which silently forced every row down to 2 tiles
+     regardless of this being a 3-column design. */
+  width: calc(33.333% - 4px);
+  max-width: 128px;
   min-width: 0;
-  /* Whole tile rides Green 50 with a dark-green icon — one hue, no chip box
-     (a multicolor chip cycle was tried and rejected as too busy). */
-  background: var(--sobre-accent-soft);
-  border: 1px solid transparent;
-  border-radius: 16px;
-  box-shadow: var(--sobre-shadow-sm);
-  cursor: pointer;
-  transition: transform 120ms ease, box-shadow 120ms ease;
-}
-.sobre-v2-action:hover { transform: translateY(-1px); box-shadow: var(--sobre-shadow-md); }
-.sobre-v2-action:active { transform: scale(0.97); }
-.sobre-v2-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
-.sobre-v2-action .chip {
-  width: 44px; height: 44px; border-radius: 13px;
-  display: grid; place-items: center;
+  box-sizing: border-box;
+  display: flex; flex-direction: column; align-items: center; gap: 8px;
+  padding: 10px 6px 9px;
   background: transparent;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-v2-action:hover { background: var(--sobre-accent-soft); }
+.sobre-v2-action:active { background: var(--sobre-accent-soft); }
+.sobre-v2-action:disabled { opacity: 0.45; cursor: not-allowed; background: transparent; }
+.sobre-v2-action .chip {
+  width: 44px; height: 44px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--sobre-accent-soft);
   color: var(--sobre-primary-hover);
-  transition: transform 120ms ease;
+  transition: background 120ms ease, color 120ms ease;
 }
 @media (hover: hover) {
-  .sobre-v2-action:hover .chip { transform: scale(1.07); }
+  .sobre-v2-action:hover .chip { background: var(--sobre-surface); color: var(--sobre-primary); }
+  .sobre-v2-action:hover .name { color: var(--sobre-primary); }
 }
-.sobre-v2-action:disabled {
-  background: var(--sobre-surface-alt);
-}
-.sobre-v2-action:disabled .chip { color: var(--sobre-text-3); }
+.sobre-v2-action:disabled .chip { background: var(--sobre-surface-alt); color: var(--sobre-text-3); }
 .sobre-v2-action .name {
-  /* Same unified Inter bold tracked-caps treatment as the micro-labels. */
+  /* Same unified Inter bold tracked-caps treatment as the micro-labels.
+     Allowed to wrap (was nowrap) — forcing one line kept the tile's
+     min-content width pinned to "SUPPLEMENTARY"'s full length, which
+     defeated the 33.333% column width and collapsed the row to 2-per-row
+     with wasted space either side. */
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 11px; font-weight: 700; color: var(--sobre-primary-hover);
   letter-spacing: 0.06em; text-transform: uppercase;
   text-align: center; line-height: 1.3;
-  overflow-wrap: anywhere;
+  transition: color 120ms ease;
 }
 @media (max-width: 380px) {
-  .sobre-v2-actions { gap: 8px; }
+  .sobre-v2-actions { gap: 6px 2px; }
+  .sobre-v2-action { padding: 8px 6px; }
   .sobre-v2-action .chip { width: 40px; height: 40px; }
-  .sobre-v2-action .name { font-size: 11px; }
+  .sobre-v2-action .name { font-size: 10px; letter-spacing: 0.04em; }
 }
 
 /* Split legend bar (envelopes view): one stacked track of the deposit split
@@ -2084,38 +2162,41 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-v2-splitbar {
   background: var(--sobre-surface);
   border: 1px solid var(--sobre-border);
-  border-radius: 16px;
-  box-shadow: var(--sobre-shadow-sm);
-  padding: 16px 18px;
+  border-radius: 18px;
+  box-shadow: var(--sobre-shadow-md);
+  padding: 20px 22px;
   margin-bottom: 16px;
 }
 .sobre-v2-splitbar .head {
   font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--sobre-text-3);
-  margin-bottom: 10px;
+  margin-bottom: 14px;
 }
 .sobre-v2-splitbar .track {
-  display: flex; height: 22px; border-radius: 8px; overflow: hidden;
+  display: flex; height: 16px; border-radius: 999px; overflow: hidden;
   background: var(--sobre-surface-alt);
+  /* Subtle inset shadow gives the track physical depth instead of a flat
+     fill — reads closer to Stripe/Wise-style balance bars. */
+  box-shadow: inset 0 1px 2px rgba(15, 26, 20, 0.08);
 }
 .sobre-v2-splitbar .seg {
   display: grid; place-items: center; height: 100%;
-  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
-}
-.sobre-v2-splitbar .seg b {
-  color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+  animation: sobre-bar-grow 0.35s ease-out backwards;
 }
 .sobre-v2-splitbar .seg + .seg { margin-left: 2px; }
 .sobre-v2-splitbar .legend {
-  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px;
+  display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 16px;
 }
+/* Plain text, no chip/pill background — a rounded-badge legend read as a
+   generic templated-dashboard cliché. Just swatch + name + bold % as a
+   quiet caption under the bar, like a chart legend, not a UI widget. */
 .sobre-v2-splitbar .item {
   display: inline-flex; align-items: center; gap: 7px;
-  font-size: 13px; color: var(--sobre-text-2);
+  font-size: 13px; font-weight: 500; color: var(--sobre-text-2);
 }
-.sobre-v2-splitbar .item b { color: var(--sobre-text-1); font-weight: 600; }
+.sobre-v2-splitbar .item b { color: var(--sobre-text-1); font-weight: 700; margin-left: 2px; }
 .sobre-v2-splitbar .swatch {
-  width: 10px; height: 10px; border-radius: 4px; flex-shrink: 0;
+  width: 8px; height: 8px; border-radius: 999px; flex-shrink: 0;
 }
 
 /* Mini activity feed embedded in the This-month card: 3 latest rows + a
@@ -2163,14 +2244,14 @@ body { overflow-x: clip; min-width: 320px; }
   width: 100%;
   display: inline-flex; align-items: center; justify-content: center; gap: 4px;
   padding: 10px 14px;
-  border: 1px solid var(--sobre-border);
+  border: 1px solid transparent;
   border-radius: 10px;
-  background: var(--sobre-surface);
-  font-size: 13px; font-weight: 600; color: var(--sobre-primary-hover);
+  background: var(--sobre-primary);
+  font-size: 13px; font-weight: 600; color: #fff;
   cursor: pointer;
   transition: background 120ms ease;
 }
-.sobre-hsummary-seeall:hover { background: var(--sobre-accent-soft); }
+.sobre-hsummary-seeall:hover { background: var(--sobre-primary-hover); }
 
 /* Envelope split card (board Section 07): compact rows — icon chip, name,
    amount, thin per-envelope progress bar. Rows tap through to the full
@@ -2238,9 +2319,9 @@ body { overflow-x: clip; min-width: 320px; }
   border-radius: 12px;
   padding: 11px 14px;
   font-size: 13px;
-  /* One hue: every signal rides Green 50 — no colored dots/backgrounds per
-     severity (rejected as too colorful). Severity reads from the copy. */
-  background: var(--sobre-accent-soft);
+  /* One hue: every signal rides a neutral grey — no colored dots/backgrounds
+     per severity (rejected as too colorful). Severity reads from the copy. */
+  background: var(--sobre-surface-alt);
   color: var(--sobre-text-1);
 }
 .sobre-v2-pill-note + .sobre-v2-pill-note { margin-top: 8px; }

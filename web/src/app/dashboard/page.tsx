@@ -63,7 +63,7 @@ export default function MySobresPage() {
   // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
           {wallet.status === "signed-out" ? (
@@ -110,7 +110,7 @@ export default function MySobresPage() {
   // pre-fills name + emoji for every Sobre the user later opens or joins.
   if (hasProfile === false) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <ProfileSetupScreen
           address={address}
@@ -124,7 +124,7 @@ export default function MySobresPage() {
   // ─── "Open a new Sobre" branch ──────────────────────────────────────
   if (mode === "new") {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 flex flex-col items-center px-4 py-6 sm:py-10">
           <div className="w-full max-w-md">
@@ -184,7 +184,7 @@ export default function MySobresPage() {
   // ─── "Join via link" branch ──────────────────────────────────────────
   if (mode === "join") {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <JoinByLinkForm
           onValid={(id) => {
@@ -207,7 +207,7 @@ export default function MySobresPage() {
   const allRows = [...adminRows, ...memberRows];
 
   return (
-    <div className="sobre-app">
+    <div className="sobre-app sobre-v2">
       <TopBar wallet={wallet} />
       <main
         className="flex-1 mx-auto w-full px-7 py-12"

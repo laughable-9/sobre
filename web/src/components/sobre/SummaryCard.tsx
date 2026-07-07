@@ -160,11 +160,6 @@ export function SummaryCard({
           </>
         )}
 
-        <DailyLimitCard
-          dailyLimit={state.policy.dailyLimit}
-          dailySpent={dailySpent}
-        />
-
         <div className="sobre-members">
           <div className="flex items-center justify-between">
             <span className="sobre-label">
@@ -175,7 +170,19 @@ export function SummaryCard({
                 type="button"
                 onClick={onInvite}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--sobre-primary)" }}
+                style={{
+                  color: "#fff",
+                  background: "var(--sobre-primary)",
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  transition: "background 120ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--primary-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--sobre-primary)";
+                }}
               >
                 <UserPlusIcon weight="fill" size={11} />
                 Invite
@@ -315,6 +322,11 @@ export function SummaryCard({
             </div>
           ) : null}
         </div>
+
+        <DailyLimitCard
+          dailyLimit={state.policy.dailyLimit}
+          dailySpent={dailySpent}
+        />
       </div>
       {children}
     </aside>
