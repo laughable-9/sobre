@@ -1909,16 +1909,16 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2 .sobre-summary { gap: 16px; }
 
-/* Unified micro-labels (board style: mono tracked caps — like the board's
-   own "SECTION 04 — COLOR SYSTEM" labels). Covers the hero label, THIS
-   MONTH, RECENT ACTIVITY, and MEMBERS so they all read as one system. */
+/* Unified micro-labels: Inter, BOLD, tracked caps — one treatment for the
+   hero label, THIS MONTH, RECENT ACTIVITY, and MEMBERS. (Mono caps were
+   tried and swapped out; Geist Mono is reserved for numerals.) */
 .sobre-v2 .sobre-label,
 .sobre-v2 .sobre-hsummary-head,
 .sobre-v2 .sobre-hsummary-activity-head,
 .sobre-v2 .sobre-v2-hero .label {
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -2061,9 +2061,9 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2-action:disabled .chip { color: var(--sobre-text-3); }
 .sobre-v2-action .name {
-  /* Same unified mono tracked-caps treatment as the section micro-labels. */
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px; font-weight: 500; color: var(--sobre-primary-hover);
+  /* Same unified Inter bold tracked-caps treatment as the micro-labels. */
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; color: var(--sobre-primary-hover);
   letter-spacing: 0.06em; text-transform: uppercase;
   text-align: center; line-height: 1.3;
   overflow-wrap: anywhere;

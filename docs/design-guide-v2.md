@@ -96,7 +96,7 @@ Board Section 05. Three families, three jobs — loaded via `next/font/google` i
 |---|---|---|---|
 | Display | **Manrope** | 600–800 | Headings, the hero balance figure, the wallet-name page title |
 | Body / UI | **Inter** | 400–600 | All running text, buttons, form labels |
-| Numeric + micro-labels | **Geist Mono** | 400–600 | Running numerals (sub-lines, envelope amounts, stats) AND every uppercase micro-label |
+| Numeric | **Geist Mono** | 400–600 | Running numerals only (sub-lines, envelope amounts, stats) |
 
 ### How the heading swap works
 
@@ -104,13 +104,13 @@ Inside `.sobre-v2`, `--serif` and `--font-serif` are overridden to Manrope. Ever
 
 ### The micro-label system
 
-The board writes its own section labels ("SECTION 04 — COLOR SYSTEM") in mono tracked caps. v2 unifies every section micro-label on that treatment via one rule in `globals.css`:
+Every section micro-label shares one treatment via one rule in `globals.css`:
 
 ```
-Geist Mono · 11px · weight 500 · letter-spacing 0.08em · uppercase
+Inter · 11px · weight 700 (bold) · letter-spacing 0.08em · uppercase
 ```
 
-Covers: the hero's `TOTAL BALANCE` label, `THIS MONTH`, `RECENT ACTIVITY`, `MEMBERS (1/2)`, and the quick-action tile names (tiles use 10.5px / 0.06em). Add any new section label to the shared selector list — don't restyle one-off.
+Covers: the hero's `TOTAL BALANCE` label, `THIS MONTH`, `RECENT ACTIVITY`, `MEMBERS (1/2)`, and the quick-action tile names (tiles use 0.06em tracking). Mono caps were tried here and swapped out — **Geist Mono is reserved for numerals**. Add any new section label to the shared selector list — don't restyle one-off.
 
 ### Where Manrope vs Geist Mono for numbers
 
