@@ -2022,17 +2022,19 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 13px; color: rgba(255, 255, 255, 0.85);
 }
 
-/* Quick actions — native-wallet tile grid: fixed rows of 4 (wraps 4+3 with
-   all seven tiles) so every tile is the same width; long labels wrap to a
-   second line instead of stretching their tile. */
+/* Quick actions — native-wallet tiles. Wrapping flex (not grid) so an
+   incomplete last row centers under the full one; every tile keeps the same
+   width via flex-basis. Long labels wrap instead of stretching a tile. */
 .sobre-v2-actions {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
   gap: 12px;
 }
 .sobre-v2-action {
-  display: flex; flex-direction: column; align-items: center; gap: 8px;
-  padding: 14px 6px 12px;
+  flex: 0 1 calc(25% - 9px);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 6px 11px;
   min-width: 0;
   /* Whole tile rides Green 50 with a dark-green icon — one hue, no chip box
      (a multicolor chip cycle was tried and rejected as too busy). */
