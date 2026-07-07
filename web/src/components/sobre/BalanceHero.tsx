@@ -31,7 +31,18 @@ export function BalanceHero({
 
   return (
     <section className="sobre-v2-hero" aria-label="Total balance">
-      <div className="label">Total balance</div>
+      <div className="head">
+        <div className="label">Total balance</div>
+        {/* Real-time-sync signature: both members see the same state live.
+            Dot reuses the sobre-live-pulse keyframes (see design guides). */}
+        <span
+          className="live"
+          title="Live — every member sees the same balances in real time"
+        >
+          <span className="dot" aria-hidden />
+          LIVE
+        </span>
+      </div>
       {/* Display number is Manrope (board Section 07) — NOT the Geist Mono
           used for running numerals; the .tabular mono override must not
           apply here, so no .tabular class. */}

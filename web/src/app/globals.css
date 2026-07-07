@@ -278,6 +278,7 @@
 .sobre-hsummary-track-fill {
   height: 100%; border-radius: 999px; background: var(--sobre-accent);
   transition: width 300ms ease;
+  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.35s backwards;
 }
 .sobre-hsummary-sub { font-size: 11px; color: var(--text-3); margin-top: 5px; }
 
@@ -1658,6 +1659,8 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(2) { transition-delay: .12s; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(3) { transition-delay: .20s; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(4) { transition-delay: .28s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(5) { transition-delay: .36s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(6) { transition-delay: .44s; }
 
 /* Brand mark gives a tiny wave on hover — adds warmth without being loud. */
 @media (hover: hover) {
@@ -1696,6 +1699,13 @@ body { overflow-x: clip; min-width: 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sobre-reveal[data-stagger].is-visible .sobre-stat-num { animation: none; }
+  .sobre-v2-action, .sobre-v2-action .chip, .sobre-v2-split-row,
+  .sobre-v2-split-row .fill, .sobre-hsummary-track-fill,
+  .sobre-v2-hero .live .dot {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1817,6 +1827,7 @@ body { overflow-x: clip; min-width: 320px; }
   --sobre-danger: #C4443B;
   --sobre-cream: #F5E6C8;          /* board Cream accent */
   --sobre-danger-soft: #F9E4E2;    /* soft tint behind danger copy */
+  --sobre-info-soft: #E8F0F8;      /* soft tint derived from board Info */
   --sobre-border: #E9E9E6;         /* neutral */
   --sobre-border-strong: #D6D6D1;
   --sobre-shadow-sm: 0 2px 8px rgba(15, 26, 20, 0.05), 0 1px 2px rgba(15, 26, 20, 0.06);
@@ -1907,14 +1918,42 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-wallet-col .sobre-envs { display: block; }
 
 /* Balance hero — the wallet's headline card. FLAT Green 600 (the board is
-   flat color blocks — a soft gradient banner reads as Tarsi). */
+   flat color blocks — a soft gradient banner reads as Tarsi). The ::before
+   motif is flat Green-700 geometry at low opacity — decorative only. */
 .sobre-v2-hero {
+  position: relative;
+  overflow: hidden;
   background: var(--sobre-primary);
   border: none;
   border-radius: 16px;
   box-shadow: 0 8px 20px rgba(15, 107, 58, 0.22);
   padding: 22px 22px 20px;
   color: #fff;
+}
+.sobre-v2-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 106% -18%, rgba(15, 107, 58, 0.35) 0 118px, transparent 119px),
+    radial-gradient(circle at 106% -18%, rgba(15, 107, 58, 0.22) 0 168px, transparent 169px);
+}
+.sobre-v2-hero > * { position: relative; }
+.sobre-v2-hero .head {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+}
+/* LIVE badge — the real-time-sync signature. Dot reuses sobre-live-pulse. */
+.sobre-v2-hero .live {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
+  color: rgba(255, 255, 255, 0.85);
+}
+.sobre-v2-hero .live .dot {
+  width: 6px; height: 6px; border-radius: 999px;
+  background: #fff;
+  animation: sobre-live-pulse 1.6s ease-in-out infinite;
 }
 /* Wallet-name page title — sits ABOVE the balance card, big ink wordmark
    (Manrope 700, same family as the brand). Ellipsis guards long names so the
@@ -1979,13 +2018,28 @@ body { overflow-x: clip; min-width: 320px; }
   transition: transform 120ms ease, box-shadow 120ms ease;
 }
 .sobre-v2-action:hover { transform: translateY(-1px); box-shadow: var(--sobre-shadow-md); }
-.sobre-v2-action:active { transform: translateY(0); }
+.sobre-v2-action:active { transform: scale(0.97); }
 .sobre-v2-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
 .sobre-v2-action .chip {
   width: 44px; height: 44px; border-radius: 13px;
   display: grid; place-items: center;
   background: var(--sobre-accent-soft);
   color: var(--sobre-primary-hover);
+  transition: transform 120ms ease;
+}
+@media (hover: hover) {
+  .sobre-v2-action:hover .chip { transform: scale(1.07); }
+}
+/* Tile chips cycle three tokenized tints (green / cream / info) so the grid
+   reads lively, GCash-style, without leaving the board palette. */
+.sobre-v2-actions .sobre-v2-action:nth-child(3n + 2) .chip {
+  background: var(--sobre-cream); color: var(--sobre-warning);
+}
+.sobre-v2-actions .sobre-v2-action:nth-child(3n) .chip {
+  background: var(--sobre-info-soft); color: var(--sobre-info);
+}
+.sobre-v2-action:disabled .chip {
+  background: var(--sobre-surface-alt); color: var(--sobre-text-3);
 }
 .sobre-v2-action .name {
   /* Same unified mono tracked-caps treatment as the section micro-labels. */
@@ -2012,7 +2066,16 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
   text-transform: uppercase; color: var(--sobre-text-3); margin-bottom: 8px;
 }
-.sobre-hsummary-activity-empty { font-size: 13px; color: var(--sobre-text-3); }
+.sobre-hsummary-activity-empty {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0 4px;
+  font-size: 13px; color: var(--sobre-text-2);
+}
+.sobre-hsummary-activity-empty .ic {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--sobre-accent-soft); color: var(--sobre-primary-hover);
+}
 .sobre-hsummary-activity-row {
   display: flex; align-items: center; gap: 10px;
   padding: 7px 0;
@@ -2072,6 +2135,7 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2-split-row + .sobre-v2-split-row { margin-top: 8px; }
 .sobre-v2-split-row:hover { filter: brightness(0.98); }
+.sobre-v2-split-row:active { transform: scale(0.985); }
 .sobre-v2-split-row .top {
   display: flex; align-items: center; gap: 10px;
 }
@@ -2100,7 +2164,11 @@ body { overflow-x: clip; min-width: 320px; }
   overflow: hidden;
 }
 .sobre-v2-split-row .top { min-width: 0; }
-.sobre-v2-split-row .fill { height: 100%; border-radius: 999px; }
+.sobre-v2-split-row .fill {
+  height: 100%; border-radius: 999px;
+  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.25s backwards;
+}
+@keyframes sobre-bar-grow { from { width: 0; } }
 
 /* ── PLACEHOLDER styles: notification pills + rail meta (board Section 07).
    The pills render static sample copy until they're wired to real signals —

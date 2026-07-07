@@ -6,6 +6,7 @@ import {
   ArrowUpRight,
   ChevronRight,
   ListChecks,
+  Mail,
   Target,
   Users,
 } from "lucide-react";
@@ -142,7 +143,12 @@ export function HouseholdSummary({
       <div className="sobre-hsummary-activity">
         <div className="sobre-hsummary-activity-head">Recent activity</div>
         {events.length === 0 ? (
-          <div className="sobre-hsummary-activity-empty">No activity yet.</div>
+          <div className="sobre-hsummary-activity-empty">
+            <span className="ic" aria-hidden>
+              <Mail size={15} strokeWidth={2} />
+            </span>
+            Your family&apos;s story starts with the first deposit.
+          </div>
         ) : (
           events.slice(0, 3).map((ev) => {
             const d = describeEvent(ev);

@@ -17,6 +17,7 @@ import {
   HomeSignalsPlaceholder,
 } from "@/components/sobre/EnvelopeSplitCard";
 import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
+import { Reveal } from "@/components/sobre/Reveal";
 import { QuickActions } from "@/components/sobre/QuickActions";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
@@ -571,7 +572,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
         style={{ maxWidth: 640 }}
       >
-        <div className="sobre-wallet-col">
+        <Reveal as="div" data-stagger className="sobre-wallet-col">
           <div className="sobre-v2-title">
             <h1 className="txt">{state.wallet_name || "Family Wallet"}</h1>
             {isAdmin ? (
@@ -647,7 +648,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               </div>
             ) : null}
           </SummaryCard>
-        </div>
+        </Reveal>
       </div>
       ) : null}
 
