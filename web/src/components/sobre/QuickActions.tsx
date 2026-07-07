@@ -43,7 +43,7 @@ export function QuickActions({
     <div className="sobre-v2-actions" role="group" aria-label="Quick actions">
       <button type="button" className="sobre-v2-action" onClick={onDeposit}>
         <span className="chip">
-          <ArrowLineDown weight="fill" size={19} />
+          <ArrowLineDown weight="fill" size={28} />
         </span>
         <span className="name">Add money</span>
       </button>
@@ -55,21 +55,21 @@ export function QuickActions({
         disabled={cashoutDisabled}
       >
         <span className="chip">
-          <ArrowLineUp weight="fill" size={19} />
+          <ArrowLineUp weight="fill" size={28} />
         </span>
         <span className="name">Cash out</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onLogExpense}>
         <span className="chip">
-          <PencilSimpleLine weight="fill" size={19} />
+          <PencilSimpleLine weight="fill" size={28} />
         </span>
         <span className="name">Log expense</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onEnvelopes}>
         <span className="chip">
-          <EnvelopeSimple weight="fill" size={19} />
+          <EnvelopeSimple weight="fill" size={28} />
         </span>
         <span className="name">Envelopes</span>
       </button>
@@ -77,7 +77,7 @@ export function QuickActions({
       {onInvite ? (
         <button type="button" className="sobre-v2-action" onClick={onInvite}>
           <span className="chip">
-            <UserPlus weight="fill" size={19} />
+            <UserPlus weight="fill" size={28} />
           </span>
           <span className="name">Invite</span>
         </button>
@@ -85,14 +85,14 @@ export function QuickActions({
 
       <button type="button" className="sobre-v2-action" onClick={onSubaccounts}>
         <span className="chip">
-          <UsersThree weight="fill" size={19} />
+          <UsersThree weight="fill" size={28} />
         </span>
         <span className="name">Supplementary</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onSettings}>
         <span className="chip">
-          <GearSix weight="fill" size={19} />
+          <GearSix weight="fill" size={28} />
         </span>
         <span className="name">Settings</span>
       </button>

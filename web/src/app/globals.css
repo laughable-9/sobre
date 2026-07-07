@@ -1950,7 +1950,7 @@ body { overflow-x: clip; min-width: 320px; }
   background: var(--sobre-primary);
   border: none;
   border-radius: 16px;
-  box-shadow: 0 8px 20px rgba(15, 107, 58, 0.22);
+  box-shadow: 0 4px 12px rgba(15, 107, 58, 0.12);
   padding: 22px 22px 20px;
   color: #fff;
 }
@@ -1983,9 +1983,12 @@ body { overflow-x: clip; min-width: 320px; }
    (Manrope 700, same family as the brand). Ellipsis guards long names so the
    row never wraps or pushes the pencil off-screen. */
 .sobre-v2-title {
-  display: flex; align-items: center; gap: 10px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
   margin: 2px 2px 2px;
   min-width: 0;
+}
+.sobre-v2-title .left {
+  display: flex; align-items: center; gap: 10px; min-width: 0;
 }
 .sobre-v2-title .txt {
   font-family: var(--font-manrope), var(--font-sans), sans-serif;

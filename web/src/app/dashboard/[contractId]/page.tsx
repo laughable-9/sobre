@@ -16,6 +16,7 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
+import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
 import {
   EnvelopeSplitCard,
@@ -524,9 +525,9 @@ function Dashboard({ contractId }: { contractId: string }) {
   // ─── Full dashboard ───────────────────────────────────────────────────
   return (
     <div className="sobre-app sobre-v2">
-      {/* No walletState/contractId here: the wallet name (and its rename)
-          moved onto the balance hero, so the TopBar pill would duplicate. */}
-      <TopBar wallet={wallet} showCurrency />
+      {/* No walletState/contractId (name lives on the page title) and no
+          showCurrency (the PHP|USD toggle sits on the title row instead). */}
+      <TopBar wallet={wallet} />
 
       {/* One back affordance per screen: the immediate parent. Wallet view
           backs out to My Sobres; Supplementary/Settings back to the wallet. */}
@@ -579,18 +580,21 @@ function Dashboard({ contractId }: { contractId: string }) {
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
           <div className="sobre-v2-title">
-            <h1 className="txt">{state.wallet_name || "Family Wallet"}</h1>
-            {isAdmin ? (
-              <button
-                type="button"
-                className="wedit"
-                onClick={() => setRenameOpen(true)}
-                aria-label="Rename wallet"
-                title="Rename wallet"
-              >
-                <PencilSimple weight="bold" size={14} />
-              </button>
-            ) : null}
+            <div className="left">
+              <h1 className="txt">{state.wallet_name || "Family Wallet"}</h1>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="wedit"
+                  onClick={() => setRenameOpen(true)}
+                  aria-label="Rename wallet"
+                  title="Rename wallet"
+                >
+                  <PencilSimple weight="bold" size={14} />
+                </button>
+              ) : null}
+            </div>
+            <CurrencyToggle />
           </div>
 
           <BalanceHero state={state}>
