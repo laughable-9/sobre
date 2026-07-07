@@ -87,8 +87,8 @@ export function EnvelopeCard({
             <span
               className="sobre-pill"
               style={{
-                background: "#fdf3d8",
-                color: "#b88b1c",
+                background: "var(--sobre-cream)",
+                color: "var(--sobre-warning)",
               }}
               title="Spends from this envelope need admin approval"
             >

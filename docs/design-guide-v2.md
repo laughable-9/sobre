@@ -84,6 +84,8 @@ Therefore the `.sobre-v2` block **re-declares every alias** after the token over
 
 **Promoting v2 app-wide** (when the team signs off): move the `.sobre-v2` token values onto `:root`, delete the re-declarations, and remove the `sobre-v2` class from the dashboard. The aliases then pick the new values up everywhere automatically.
 
+**The residue neutralizer:** several v1 rules predate the token system and hardcode warm hexes (`.sobre-btn-soft:hover`, `.sobre-member .badge`, `.sobre-activity-item` tints, `.sobre-warning-bar`). A dedicated `.sobre-v2` override block corrects each one — if a mango/cream flash appears inside v2, the culprit is another pre-token hex; add it to that block (or better, tokenize the base rule).
+
 ---
 
 ## Typography
@@ -200,13 +202,13 @@ Flat Green-600 card (never a gradient — Tarsi guard), 16px radius, green glow 
 Board Section 07's split rows. One row per envelope: white row (on green), 30px Green-50 chip with the envelope icon, name, right-aligned mono amount (currency-aware), and a 6px share bar whose width = the envelope's split percent. Bar colors cycle `Green 600 → 700 → 500`. Rows are buttons → envelopes view.
 > The bar track `<span>` carries `display:block` in CSS with a "load-bearing" comment — inline spans ignore height and the bars vanish. Don't remove it.
 
-Also exports **`HomeSignalsPlaceholder`** — the three notification pills (`split fired` green / `needs 2nd approval` cream / `over budget` danger-soft). **Static sample copy**, marked PLACEHOLDER in a header comment with the wire-up plan (Deposit event / `pendingRequests` / spend-vs-split). Remove or wire before launch.
+Also exports **`HomeSignalsPlaceholder`** — the three notification pills. **One hue by design:** every pill rides Green 50 with ink text, no per-severity colors or dot prefixes (both were tried and rejected as too colorful — severity reads from the copy). **Static sample copy**, marked PLACEHOLDER in a header comment with the wire-up plan (Deposit event / `pendingRequests` / spend-vs-split). Remove or wire before launch.
 
 ### `QuickActions`
-Fixed `repeat(4, minmax(0,1fr))` grid (wraps 4+3 — never auto-fit; long labels wrap two lines instead of stretching their tile). Tile: white card, 44px **Green-50 chip** with a Phosphor `weight="fill"` icon in Green 700, mono-caps name — chips stay green across the grid (a multicolor cycle was tried and rejected as too busy; semantic colors are reserved for the signal pills). Disabled tiles fall back to the neutral chip. Hover: `-1px` lift + `shadow-md` + chip `scale(1.07)`; press: `scale(0.97)`. Invite renders only for admins; Cash out disables at zero balance.
+Fixed `repeat(4, minmax(0,1fr))` grid (wraps 4+3 — never auto-fit; long labels wrap two lines instead of stretching their tile). Tile: **the whole card rides Green 50** with a Phosphor `weight="fill"` icon in Green 700 and a Green-700 mono-caps name — no inner chip box, no border (a white-card-with-chip version and a multicolor chip cycle were both tried and rejected). Disabled tiles go neutral (`surface-alt` + `text-3`). Hover: `-1px` lift + `shadow-md` + chip `scale(1.07)`; press: `scale(0.97)`. Invite renders only for admins; Cash out disables at zero balance.
 
 ### `HouseholdSummary` ("This month" card)
-Three stats (Deposited — currency-aware; Logged notes; Spending tracked % with a Success-green progress bar), then `RECENT ACTIVITY`: the **3 latest** feed events as compact rows (26px tone-tinted icon chip, one-line description, `relativeTime` stamp), a `children` slot (the placeholder pills live here), and a full-width "See all activity ›" button. Event copy comes from a local `describeEvent` switch — extend it when new `FeedEvent` kinds appear. The empty state is warm, not bare: an envelope chip + "Your family's story starts with the first deposit."
+Three stats (Deposited — currency-aware; Logged notes; Spending tracked % with a Success-green progress bar), then `RECENT ACTIVITY`: the **3 latest** feed events as compact **Green-50 rows** (bare Green-700 icon — no chip box or tone tints, one-line description, `relativeTime` stamp), a `children` slot (the placeholder pills live here), and a full-width "See all activity ›" button. Event copy comes from a local `describeEvent` switch — extend it when new `FeedEvent` kinds appear. The empty state is warm, not bare: an envelope chip + "Your family's story starts with the first deposit."
 
 ### `RenameWalletModal`
 Opened by the pencil next to the wallet-name title (admin only). Input with **40-char hard cap + live counter** (danger color at the limit), Enter saves / Esc closes, Cancel + "Save name" finalize. Drives the existing `useRenameWallet` hook. The display title also ellipsizes as a second guard.

@@ -1872,6 +1872,31 @@ body { overflow-x: clip; min-width: 320px; }
   --input: var(--sobre-border);
   --ring: var(--sobre-primary);
 }
+/* v1 residue neutralizer: these v1 rules hardcode warm hexes (they predate
+   tokens), so the scope must correct them explicitly — hovers, badges,
+   activity tints, and the warning bar all go board-palette inside v2. */
+.sobre-v2 .sobre-btn-soft:hover { background: var(--sobre-border); }
+.sobre-v2 .sobre-member .badge {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-v2 .sobre-activity-item.new { background: var(--sobre-accent-soft); }
+.sobre-v2 .sobre-activity-item.outflow .ic {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity-item.pending .ic {
+  background: var(--sobre-cream);
+  color: var(--sobre-warning);
+}
+.sobre-v2 .sobre-warning-bar {
+  background: var(--sobre-cream);
+  border-color: rgba(198, 138, 46, 0.35);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-warning-bar svg { color: var(--sobre-warning); }
+.sobre-v2 .sobre-warning-bar b { color: var(--sobre-text-1); }
+
 /* Unified card chrome: every card in the v2 column shares the same radius,
    shadow, and padding; vertical rhythm comes ONLY from the column's 16px gap
    (no per-card margins). */
@@ -2009,8 +2034,10 @@ body { overflow-x: clip; min-width: 320px; }
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   padding: 14px 6px 12px;
   min-width: 0;
-  background: var(--sobre-surface);
-  border: 1px solid var(--sobre-border);
+  /* Whole tile rides Green 50 with a dark-green icon — one hue, no chip box
+     (a multicolor chip cycle was tried and rejected as too busy). */
+  background: var(--sobre-accent-soft);
+  border: 1px solid transparent;
   border-radius: 16px;
   box-shadow: var(--sobre-shadow-sm);
   cursor: pointer;
@@ -2022,23 +2049,21 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-v2-action .chip {
   width: 44px; height: 44px; border-radius: 13px;
   display: grid; place-items: center;
-  background: var(--sobre-accent-soft);
+  background: transparent;
   color: var(--sobre-primary-hover);
   transition: transform 120ms ease;
 }
 @media (hover: hover) {
   .sobre-v2-action:hover .chip { transform: scale(1.07); }
 }
-/* Chips stay green across the board (Green-50 / Green-700) — semantic colors
-   are reserved for surfaces that MEAN something (signal pills, badges); a
-   multicolor tile grid read as too busy against the board's restraint. */
-.sobre-v2-action:disabled .chip {
-  background: var(--sobre-surface-alt); color: var(--sobre-text-3);
+.sobre-v2-action:disabled {
+  background: var(--sobre-surface-alt);
 }
+.sobre-v2-action:disabled .chip { color: var(--sobre-text-3); }
 .sobre-v2-action .name {
   /* Same unified mono tracked-caps treatment as the section micro-labels. */
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10.5px; font-weight: 500; color: var(--sobre-text-2);
+  font-size: 10.5px; font-weight: 500; color: var(--sobre-primary-hover);
   letter-spacing: 0.06em; text-transform: uppercase;
   text-align: center; line-height: 1.3;
   overflow-wrap: anywhere;
@@ -2072,18 +2097,15 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-hsummary-activity-row {
   display: flex; align-items: center; gap: 10px;
-  padding: 7px 0;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--sobre-accent-soft);
 }
+.sobre-hsummary-activity-row + .sobre-hsummary-activity-row { margin-top: 6px; }
 .sobre-hsummary-activity-row .ic {
-  width: 26px; height: 26px; border-radius: 8px; flex-shrink: 0;
+  width: 22px; height: 22px; flex-shrink: 0;
   display: grid; place-items: center;
-  background: var(--sobre-surface-alt); color: var(--sobre-text-2);
-}
-.sobre-hsummary-activity-row .ic.in {
-  background: var(--sobre-accent-soft); color: var(--sobre-success);
-}
-.sobre-hsummary-activity-row .ic.out {
-  background: var(--sobre-surface-alt); color: var(--sobre-text-1);
+  background: transparent; color: var(--sobre-primary-hover);
 }
 .sobre-hsummary-activity-row .what {
   flex: 1; min-width: 0; font-size: 13px; color: var(--sobre-text-1);
@@ -2172,11 +2194,12 @@ body { overflow-x: clip; min-width: 320px; }
   border-radius: 12px;
   padding: 11px 14px;
   font-size: 13px;
+  /* One hue: every signal rides Green 50 — no colored dots/backgrounds per
+     severity (rejected as too colorful). Severity reads from the copy. */
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-text-1);
 }
 .sobre-v2-pill-note + .sobre-v2-pill-note { margin-top: 8px; }
-.sobre-v2-pill-note .dot {
-  width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0;
-}
 .sobre-v2-pill-note b { font-weight: 600; }
 .sobre-v2-pill-note .when {
   margin-left: auto; flex-shrink: 0;

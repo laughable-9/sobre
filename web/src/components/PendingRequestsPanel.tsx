@@ -156,8 +156,8 @@ export function PendingRequestsPanel({
                   width: 32,
                   height: 32,
                   borderRadius: 999,
-                  background: "#fdf3d8",
-                  color: "#b88b1c",
+                  background: "var(--sobre-cream)",
+                  color: "var(--sobre-warning)",
                 }}
               >
                 <Hourglass size={14} strokeWidth={2} />

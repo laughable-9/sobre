@@ -60,8 +60,8 @@ export function UpgradeAvailableCard({
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: "#fdf3d8",
-            color: "#b88b1c",
+            background: "var(--sobre-cream)",
+            color: "var(--sobre-warning)",
           }}
         >
           <Sparkles size={18} strokeWidth={2.2} />

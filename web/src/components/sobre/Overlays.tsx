@@ -16,7 +16,7 @@ export function Celebration({
   return (
     <div
       className="sobre-celebration"
-      style={kind === "warn" ? { background: "#b88b1c" } : {}}
+      style={kind === "warn" ? { background: "var(--sobre-warning)" } : {}}
       role="status"
     >
       {kind === "warn" ? (

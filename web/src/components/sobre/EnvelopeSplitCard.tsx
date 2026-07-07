@@ -99,43 +99,27 @@ export function EnvelopeSplitCard({
  * Remove or replace this whole component when the real signals land.
  * ──────────────────────────────────────────────────────────────────────── */
 export function HomeSignalsPlaceholder() {
+  // One hue by design: every pill rides the shared Green-50 class style —
+  // no per-severity colors or dot prefixes (rejected as too colorful).
   return (
     <div aria-hidden>
       {/* PLACEHOLDER pill: split fired (sample copy from the board) */}
-      <div
-        className="sobre-v2-pill-note"
-        style={{ background: "var(--sobre-accent-soft)", color: "var(--sobre-text-1)" }}
-      >
-        <span className="dot" style={{ background: "var(--sobre-success)" }} />
+      <div className="sobre-v2-pill-note">
         <span>
           <b>+₱500.00</b> from Riyadh · split fired
         </span>
         <span className="when">3.4s</span>
       </div>
 
-      {/* PLACEHOLDER pill: pending second approval (board cream accent) */}
-      <div
-        className="sobre-v2-pill-note"
-        style={{
-          background: "var(--sobre-cream)",
-          color: "var(--sobre-text-1)",
-        }}
-      >
-        <span className="dot" style={{ background: "var(--sobre-warning)" }} />
+      {/* PLACEHOLDER pill: pending second approval */}
+      <div className="sobre-v2-pill-note">
         <span>
           <b>Large transfer</b> needs 2nd approval
         </span>
       </div>
 
       {/* PLACEHOLDER pill: over budget */}
-      <div
-        className="sobre-v2-pill-note"
-        style={{
-          background: "var(--sobre-danger-soft)",
-          color: "var(--sobre-text-1)",
-        }}
-      >
-        <span className="dot" style={{ background: "var(--sobre-danger)" }} />
+      <div className="sobre-v2-pill-note">
         <span>
           <b>Transport</b> over budget by ₱10
         </span>
