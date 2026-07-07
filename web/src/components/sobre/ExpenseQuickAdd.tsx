@@ -1,7 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, Plus, Undo2 } from "lucide-react";
+import {
+  ArrowUUpLeft,
+  Check,
+  Plus,
+} from "@phosphor-icons/react";
 
 import { useExpenseLog, type ExpenseLog } from "@/hooks/useExpenseLog";
 
@@ -106,7 +110,7 @@ export function ExpenseQuickAdd({
                 : "pointer",
           }}
         >
-          <Plus size={16} strokeWidth={2.5} />
+          <Plus weight="bold" size={16} />
           {saving ? "Saving…" : "Log"}
         </button>
       </form>
@@ -129,7 +133,7 @@ export function ExpenseQuickAdd({
             className="flex min-w-0 items-center gap-2 text-[13px]"
             style={{ color: "var(--sobre-accent)" }}
           >
-            <Check size={15} strokeWidth={2.5} className="flex-shrink-0" />
+            <Check weight="bold" size={15} className="flex-shrink-0" />
             <span className="truncate">
               Saved “{undoable.note}”
             </span>
@@ -140,7 +144,7 @@ export function ExpenseQuickAdd({
             className="tabular flex flex-shrink-0 items-center gap-1.5 text-[13px] font-semibold"
             style={{ color: "var(--text-1)" }}
           >
-            <Undo2 size={14} strokeWidth={2.5} />
+            <ArrowUUpLeft weight="bold" size={14} />
             Undo ({secondsLeft})
           </button>
         </div>

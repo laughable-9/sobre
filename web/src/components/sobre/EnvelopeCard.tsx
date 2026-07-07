@@ -3,10 +3,10 @@
 import {
   GraduationCap,
   Lock,
+  Plant,
   ShoppingCart,
-  Sprout,
-  TrendingUp,
-} from "lucide-react";
+  TrendUp,
+} from "@phosphor-icons/react";
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
@@ -21,9 +21,9 @@ import { PHP_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
-  Groceries: <ShoppingCart size={20} strokeWidth={2} />,
-  Tuition: <GraduationCap size={20} strokeWidth={2} />,
-  Savings: <Sprout size={20} strokeWidth={2} />,
+  Groceries: <ShoppingCart weight="fill" size={20} />,
+  Tuition: <GraduationCap weight="fill" size={20} />,
+  Savings: <Plant weight="fill" size={20} />,
 };
 
 export function EnvelopeCard({
@@ -92,13 +92,13 @@ export function EnvelopeCard({
               }}
               title="Spends from this envelope need admin approval"
             >
-              <Lock size={11} strokeWidth={2.5} />
+              <Lock weight="fill" size={11} />
               Approval required
             </span>
           ) : null}
           {isSavings ? (
             <span className="sobre-pill sobre-pill-soft-green">
-              <TrendingUp size={12} strokeWidth={2} />
+              <TrendUp weight="fill" size={12} />
               4.5% APY
             </span>
           ) : null}

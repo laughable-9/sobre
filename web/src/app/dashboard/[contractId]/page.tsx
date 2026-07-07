@@ -2,7 +2,12 @@
 
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
-import { AlertTriangle, Pencil, Plus, UserPlus } from "lucide-react";
+import {
+  PencilSimple,
+  Plus,
+  UserPlus,
+  Warning,
+} from "@phosphor-icons/react";
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
@@ -583,7 +588,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 aria-label="Rename wallet"
                 title="Rename wallet"
               >
-                <Pencil size={14} strokeWidth={2.2} />
+                <PencilSimple weight="bold" size={14} />
               </button>
             ) : null}
           </div>
@@ -839,7 +844,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 className="inline-flex items-center gap-2"
                 style={{ color: "var(--sobre-danger)" }}
               >
-                <AlertTriangle size={14} strokeWidth={2.2} />
+                <Warning weight="fill" size={14} />
                 Close this Sobre
               </h3>
               <p
@@ -875,7 +880,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 className="sobre-btn sobre-btn-soft"
                 style={{ justifyContent: "center", minHeight: 48 }}
               >
-                <UserPlus size={18} strokeWidth={2} />
+                <UserPlus weight="fill" size={18} />
                 Invite
               </button>
             ) : null}
@@ -884,7 +889,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               onClick={() => setDepositOpen(true)}
               className="sobre-bottom-cta"
             >
-              <Plus size={18} strokeWidth={2.4} />
+              <Plus weight="bold" size={18} />
               Add money
             </button>
           </div>

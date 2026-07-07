@@ -1,6 +1,8 @@
 "use client";
 
-import { Mail } from "lucide-react";
+import {
+  EnvelopeSimple,
+} from "@phosphor-icons/react";
 
 import type { WalletState } from "@/hooks/useWalletState";
 import {
@@ -55,7 +57,7 @@ export function EnvelopeSplitCard({
           >
             <span className="top">
               <span className="chip">
-                <Mail size={15} strokeWidth={2} />
+                <EnvelopeSimple weight="fill" size={15} />
               </span>
               <span className="name">{name}</span>
               <span className="amt tabular">

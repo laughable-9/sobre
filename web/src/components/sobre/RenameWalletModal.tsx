@@ -1,7 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { Check } from "lucide-react";
+import {
+  Check,
+} from "@phosphor-icons/react";
 
 import { useRenameWallet } from "@/hooks/useRenameWallet";
 import { backdropClose } from "@/lib/ui";
@@ -111,7 +113,7 @@ export function RenameWalletModal({
             disabled={!valid || pending}
             style={{ opacity: !valid || pending ? 0.6 : 1 }}
           >
-            <Check size={14} strokeWidth={2.5} />
+            <Check weight="bold" size={14} />
             {pending ? "Saving…" : "Save name"}
           </button>
         </div>

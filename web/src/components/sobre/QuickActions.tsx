@@ -1,14 +1,14 @@
 "use client";
 
 import {
-  ArrowDownToLine,
-  ArrowUpFromLine,
-  Mail,
-  PenLine,
-  Settings,
+  ArrowLineDown,
+  ArrowLineUp,
+  EnvelopeSimple,
+  GearSix,
+  PencilSimpleLine,
   UserPlus,
-  Users,
-} from "lucide-react";
+  UsersThree,
+} from "@phosphor-icons/react";
 
 /**
  * v2 dashboard quick-action row — native-wallet tiles wired to the same
@@ -43,7 +43,7 @@ export function QuickActions({
     <div className="sobre-v2-actions" role="group" aria-label="Quick actions">
       <button type="button" className="sobre-v2-action" onClick={onDeposit}>
         <span className="chip">
-          <ArrowDownToLine size={19} strokeWidth={2} />
+          <ArrowLineDown weight="fill" size={19} />
         </span>
         <span className="name">Add money</span>
       </button>
@@ -55,21 +55,21 @@ export function QuickActions({
         disabled={cashoutDisabled}
       >
         <span className="chip">
-          <ArrowUpFromLine size={19} strokeWidth={2} />
+          <ArrowLineUp weight="fill" size={19} />
         </span>
         <span className="name">Cash out</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onLogExpense}>
         <span className="chip">
-          <PenLine size={19} strokeWidth={2} />
+          <PencilSimpleLine weight="fill" size={19} />
         </span>
         <span className="name">Log expense</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onEnvelopes}>
         <span className="chip">
-          <Mail size={19} strokeWidth={2} />
+          <EnvelopeSimple weight="fill" size={19} />
         </span>
         <span className="name">Envelopes</span>
       </button>
@@ -77,7 +77,7 @@ export function QuickActions({
       {onInvite ? (
         <button type="button" className="sobre-v2-action" onClick={onInvite}>
           <span className="chip">
-            <UserPlus size={19} strokeWidth={2} />
+            <UserPlus weight="fill" size={19} />
           </span>
           <span className="name">Invite</span>
         </button>
@@ -85,14 +85,14 @@ export function QuickActions({
 
       <button type="button" className="sobre-v2-action" onClick={onSubaccounts}>
         <span className="chip">
-          <Users size={19} strokeWidth={2} />
+          <UsersThree weight="fill" size={19} />
         </span>
         <span className="name">Supplementary</span>
       </button>
 
       <button type="button" className="sobre-v2-action" onClick={onSettings}>
         <span className="chip">
-          <Settings size={19} strokeWidth={2} />
+          <GearSix weight="fill" size={19} />
         </span>
         <span className="name">Settings</span>
       </button>

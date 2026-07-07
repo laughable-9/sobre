@@ -59,7 +59,6 @@ Defined in `web/src/app/globals.css` inside the `.sobre-v2` scope. Hexes come fr
 | `--sobre-warning` | `#C68A2E` | Warning / REVIEW | Needs-attention states (2nd-approval pill dot) |
 | `--sobre-danger` | `#C4443B` | Error / FAILED | Errors, destructive actions |
 | `--sobre-danger-soft` | `#F9E4E2` | — | Soft tint behind danger copy (over-budget pill) |
-| `--sobre-info-soft` | `#E8F0F8` | — (derived from Info) | Soft tint for the info-colored tile chips |
 
 ### Shadows
 
@@ -204,7 +203,7 @@ Board Section 07's split rows. One row per envelope: white row (on green), 30px 
 Also exports **`HomeSignalsPlaceholder`** — the three notification pills (`split fired` green / `needs 2nd approval` cream / `over budget` danger-soft). **Static sample copy**, marked PLACEHOLDER in a header comment with the wire-up plan (Deposit event / `pendingRequests` / spend-vs-split). Remove or wire before launch.
 
 ### `QuickActions`
-Fixed `repeat(4, minmax(0,1fr))` grid (wraps 4+3 — never auto-fit; long labels wrap two lines instead of stretching their tile). Tile: white card, 44px icon chip, mono-caps name. **Chip tints cycle three tokenized pairs** (`accent-soft`/Green 700 → `cream`/Warning → `info-soft`/Info) for GCash-style liveliness without leaving the board palette; disabled tiles fall back to the neutral chip. Hover: `-1px` lift + `shadow-md` + chip `scale(1.07)`; press: `scale(0.97)`. Invite renders only for admins; Cash out disables at zero balance.
+Fixed `repeat(4, minmax(0,1fr))` grid (wraps 4+3 — never auto-fit; long labels wrap two lines instead of stretching their tile). Tile: white card, 44px **Green-50 chip** with a Phosphor `weight="fill"` icon in Green 700, mono-caps name — chips stay green across the grid (a multicolor cycle was tried and rejected as too busy; semantic colors are reserved for the signal pills). Disabled tiles fall back to the neutral chip. Hover: `-1px` lift + `shadow-md` + chip `scale(1.07)`; press: `scale(0.97)`. Invite renders only for admins; Cash out disables at zero balance.
 
 ### `HouseholdSummary` ("This month" card)
 Three stats (Deposited — currency-aware; Logged notes; Spending tracked % with a Success-green progress bar), then `RECENT ACTIVITY`: the **3 latest** feed events as compact rows (26px tone-tinted icon chip, one-line description, `relativeTime` stamp), a `children` slot (the placeholder pills live here), and a full-width "See all activity ›" button. Event copy comes from a local `describeEvent` switch — extend it when new `FeedEvent` kinds appear. The empty state is warm, not bare: an envelope chip + "Your family's story starts with the first deposit."
@@ -222,7 +221,11 @@ Gets `hideBalance` — the balance + deposit/cashout buttons render in the hero/
 
 ## Iconography
 
-`lucide-react`, stroke width 2–2.2, sitting on Green-50 or neutral chips. Established pairs: Add money `ArrowDownToLine`, Cash out `ArrowUpFromLine`, Log expense `PenLine`, Envelopes `Mail`, Invite `UserPlus`, Supplementary `Users`, Settings `Settings`, rename `Pencil`. Mobile: `lucide-react-native`, same names.
+**Phosphor** (`@phosphor-icons/react`, MIT) on the v2 dashboard — chosen over lucide for its solid style and over Hugeicons because Hugeicons' solid variants are Pro/paid. Weight policy: **`weight="fill"` for feature icons** (tile chips, stat chips, envelope icons), **`weight="bold"` for small control glyphs** (carets, check, close, copy, plus). No `strokeWidth` prop — that's a lucide-ism.
+
+Established pairs: Add money `ArrowLineDown`, Cash out `ArrowLineUp`, Log expense `PencilSimpleLine`, Envelopes `EnvelopeSimple`, Invite `UserPlus`, Supplementary `UsersThree`, Settings `GearSix`, rename `PencilSimple`, back `CaretLeft`, warning `Warning`, savings `Plant`, APY `TrendUp`, undo `ArrowUUpLeft`.
+
+Mobile: `phosphor-react-native` — same icon names and weight prop, preserving the web↔mobile parity story. **Migration status:** v2 dashboard surfaces are Phosphor; the long tail (modals, landing, mockups, onboarding) still imports `lucide-react` — swap opportunistically as those surfaces get touched.
 
 ---
 

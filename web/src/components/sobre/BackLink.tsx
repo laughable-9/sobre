@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { ChevronLeft } from "lucide-react";
+import {
+  CaretLeft,
+} from "@phosphor-icons/react";
 
 /**
  * Unified back-navigation pill. One look everywhere: chevron + label in a
@@ -22,7 +24,7 @@ export function BackLink({
 }) {
   const inner = (
     <>
-      <ChevronLeft size={16} strokeWidth={2.4} />
+      <CaretLeft weight="bold" size={16} />
       {label}
     </>
   );

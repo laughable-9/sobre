@@ -1827,7 +1827,6 @@ body { overflow-x: clip; min-width: 320px; }
   --sobre-danger: #C4443B;
   --sobre-cream: #F5E6C8;          /* board Cream accent */
   --sobre-danger-soft: #F9E4E2;    /* soft tint behind danger copy */
-  --sobre-info-soft: #E8F0F8;      /* soft tint derived from board Info */
   --sobre-border: #E9E9E6;         /* neutral */
   --sobre-border-strong: #D6D6D1;
   --sobre-shadow-sm: 0 2px 8px rgba(15, 26, 20, 0.05), 0 1px 2px rgba(15, 26, 20, 0.06);
@@ -2030,14 +2029,9 @@ body { overflow-x: clip; min-width: 320px; }
 @media (hover: hover) {
   .sobre-v2-action:hover .chip { transform: scale(1.07); }
 }
-/* Tile chips cycle three tokenized tints (green / cream / info) so the grid
-   reads lively, GCash-style, without leaving the board palette. */
-.sobre-v2-actions .sobre-v2-action:nth-child(3n + 2) .chip {
-  background: var(--sobre-cream); color: var(--sobre-warning);
-}
-.sobre-v2-actions .sobre-v2-action:nth-child(3n) .chip {
-  background: var(--sobre-info-soft); color: var(--sobre-info);
-}
+/* Chips stay green across the board (Green-50 / Green-700) — semantic colors
+   are reserved for surfaces that MEAN something (signal pills, badges); a
+   multicolor tile grid read as too busy against the board's restraint. */
 .sobre-v2-action:disabled .chip {
   background: var(--sobre-surface-alt); color: var(--sobre-text-3);
 }
