@@ -157,10 +157,6 @@
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes sobre-live-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(46, 107, 76, 0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(46, 107, 76, 0); }
-}
 @keyframes sobre-fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes sobre-pop-in {
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
@@ -442,8 +438,6 @@
 }
 .sobre-activity .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .sobre-activity h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; }
-.sobre-activity .live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sobre-accent); font-weight: 500; }
-.sobre-activity .live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sobre-accent); animation: sobre-live-pulse 1.6s ease-in-out infinite; }
 .sobre-activity .list { overflow-y: auto; flex: 1; padding-right: 4px; }
 .sobre-activity .list::-webkit-scrollbar { width: 6px; }
 .sobre-activity .list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
@@ -1700,8 +1694,7 @@ body { overflow-x: clip; min-width: 320px; }
 @media (prefers-reduced-motion: reduce) {
   .sobre-reveal[data-stagger].is-visible .sobre-stat-num { animation: none; }
   .sobre-v2-action, .sobre-v2-action .chip, .sobre-v2-split-row,
-  .sobre-v2-split-row .fill, .sobre-hsummary-track-fill,
-  .sobre-v2-hero .live .dot {
+  .sobre-v2-split-row .fill, .sobre-hsummary-track-fill {
     animation: none !important;
     transition: none !important;
     transform: none !important;
@@ -1941,43 +1934,14 @@ body { overflow-x: clip; min-width: 320px; }
 /* The wallet column owns its own summary/envelope spacing. */
 .sobre-wallet-col .sobre-envs { display: block; }
 
-/* Balance hero — the wallet's headline card. FLAT Green 600 (the board is
-   flat color blocks — a soft gradient banner reads as Tarsi). The ::before
-   motif is flat Green-700 geometry at low opacity — decorative only. */
+/* Balance hero — the wallet's headline card. Flat Green 600 block. */
 .sobre-v2-hero {
-  position: relative;
-  overflow: hidden;
   background: var(--sobre-primary);
   border: none;
   border-radius: 16px;
   box-shadow: 0 4px 12px rgba(15, 107, 58, 0.12);
   padding: 22px 22px 20px;
   color: #fff;
-}
-.sobre-v2-hero::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(circle at 106% -18%, rgba(15, 107, 58, 0.35) 0 118px, transparent 119px),
-    radial-gradient(circle at 106% -18%, rgba(15, 107, 58, 0.22) 0 168px, transparent 169px);
-}
-.sobre-v2-hero > * { position: relative; }
-.sobre-v2-hero .head {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-}
-/* LIVE badge — the real-time-sync signature. Dot reuses sobre-live-pulse. */
-.sobre-v2-hero .live {
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 10px; font-weight: 500; letter-spacing: 0.1em;
-  color: rgba(255, 255, 255, 0.85);
-}
-.sobre-v2-hero .live .dot {
-  width: 6px; height: 6px; border-radius: 999px;
-  background: #fff;
-  animation: sobre-live-pulse 1.6s ease-in-out infinite;
 }
 /* Wallet-name page title — sits ABOVE the balance card, big ink wordmark
    (Manrope 700, same family as the brand). Ellipsis guards long names so the
