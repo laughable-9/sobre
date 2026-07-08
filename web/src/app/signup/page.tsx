@@ -76,11 +76,7 @@ export default function SignupSmokeTestPage() {
 
   const handleFindOrCreate = () => {
     if (!session) return;
-    const displayName =
-      session.user.user_metadata?.full_name ?? session.user.email ?? "Sobre";
-    return run(() =>
-      findOrCreateWallet(session.user.id, displayName, session.user.email ?? ""),
-    );
+    return run(() => findOrCreateWallet(session));
   };
 
   return (

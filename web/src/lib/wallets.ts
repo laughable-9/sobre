@@ -13,6 +13,14 @@ export function displayNameFromSession(session: Session): string {
   );
 }
 
+/** Google profile picture URL, or `null` when the user hasn't set one. The
+ *  UI falls back to an initials-in-circle avatar in that case. Supabase
+ *  surfaces the picture claim as `picture` on the OAuth user metadata. */
+export function pictureUrlFromSession(session: Session): string | null {
+  const raw = session.user.user_metadata?.picture;
+  return typeof raw === "string" && raw.length > 0 ? raw : null;
+}
+
 /**
  * Bridge between Google identity (Supabase auth.users) and the passkey-backed
  * smart wallet on Stellar. Either reads the existing wallet for this signed-in
@@ -30,6 +38,7 @@ export interface WalletRow {
   credential_id: string;
   display_name: string | null;
   email: string | null;
+  avatar_url: string | null;
   created_at: string;
 }
 
@@ -41,11 +50,13 @@ export interface FindOrCreateResult {
 }
 
 export async function findOrCreateWallet(
-  authUserId: string,
-  displayName: string,
-  email: string,
+  session: Session,
 ): Promise<FindOrCreateResult> {
   const supabase = getSupabaseBrowserClient();
+  const authUserId = session.user.id;
+  const displayName = displayNameFromSession(session);
+  const email = session.user.email ?? "";
+  const avatarUrl = pictureUrlFromSession(session);
 
   const { data: existing, error: lookupErr } = await supabase
     .from("wallets")
@@ -66,6 +77,12 @@ export async function findOrCreateWallet(
       keyIdBase64: row.credential_id,
       contractId: row.contract_id,
     });
+    // Refresh the avatar snapshot if Google returned a new URL. Fire-and-forget:
+    // the write doesn't block bootstrap and callers see the fresh URL locally.
+    if (avatarUrl && avatarUrl !== row.avatar_url) {
+      void supabase.from("wallets").update({ avatar_url: avatarUrl }).eq("id", row.id);
+      return { wallet: { ...row, avatar_url: avatarUrl }, wasCreated: false };
+    }
     return { wallet: row, wasCreated: false };
   }
 
@@ -82,6 +99,7 @@ export async function findOrCreateWallet(
       credential_id: signupResult.keyIdBase64,
       display_name: displayName,
       email,
+      avatar_url: avatarUrl,
     })
     .select()
     .single();

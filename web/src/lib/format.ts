@@ -28,6 +28,15 @@ export function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
+/** "KP" from "Kyle Pagunsan", "AI" from "Airi", "?" from "". Used by the
+ *  Avatar fallback tile when no Google profile picture is available. */
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /** "•••1461" from a bank account number. Preserves the last 4 chars. */
 export function maskAccountNumber(account: string): string {
   return account.replace(/.(?=.{4})/g, "•");

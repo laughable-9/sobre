@@ -18,6 +18,7 @@ import {
   createFamilyWallet,
   deriveFamilyName,
 } from "@/lib/familyWallets";
+import { initialsOf } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { findOrCreateWallet, type WalletRow } from "@/lib/wallets";
 
@@ -137,10 +138,8 @@ export default function SetupFlow() {
   // in Supabase.
   useEffect(() => {
     if (!session || wallet || walletStatus !== "idle") return;
-    const displayName =
-      session.user.user_metadata?.full_name ?? session.user.email ?? "Sobre";
     setWalletStatus("creating");
-    findOrCreateWallet(session.user.id, displayName, session.user.email ?? "")
+    findOrCreateWallet(session)
       .then(({ wallet: w }) => {
         setWallet(w);
         setWalletStatus("idle");
@@ -672,13 +671,6 @@ const PREVIEW_DEPOSIT_PESOS = 30000;
 
 function pesoFor(percent: number): number {
   return Math.round((percent * PREVIEW_DEPOSIT_PESOS) / 100);
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function SummaryRow({

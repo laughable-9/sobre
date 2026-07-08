@@ -96,11 +96,7 @@ export function usePasskeyWallet(): WalletConnectionState {
     bootstrappingRef.current = true;
     setStatus("creating");
     setError(null);
-    findOrCreateWallet(
-      session.user.id,
-      displayNameFromSession(session),
-      session.user.email ?? "",
-    )
+    findOrCreateWallet(session)
       .then(({ wallet: row }) => {
         setWallet(row);
         setStatus("connected");
@@ -148,11 +144,7 @@ export function usePasskeyWallet(): WalletConnectionState {
     if (!session) return;
     setError(null);
     try {
-      const { wallet: row } = await findOrCreateWallet(
-        session.user.id,
-        displayNameFromSession(session),
-        session.user.email ?? "",
-      );
+      const { wallet: row } = await findOrCreateWallet(session);
       setWallet(row);
       setStatus("connected");
     } catch (e) {

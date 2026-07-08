@@ -31,8 +31,13 @@ import {
   createFamilyWallet,
   deriveFamilyName,
 } from "@/lib/familyWallets";
+import { initialsOf } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { findOrCreateWallet, type WalletRow } from "@/lib/wallets";
+import {
+  displayNameFromSession,
+  findOrCreateWallet,
+  type WalletRow,
+} from "@/lib/wallets";
 
 import { MobileScreen, PrimaryCta } from "../mockup/_shared";
 import {
@@ -168,8 +173,7 @@ export default function OnboardingFlow() {
   const [setupError, setSetupError] = useState<string | null>(null);
   const router = useRouter();
 
-  const adminName =
-    session?.user.user_metadata?.full_name ?? session?.user.email ?? "Sobre";
+  const adminName = session ? displayNameFromSession(session) : "Sobre";
 
   // Derived default until the user types — no effect / no setState needed.
   const defaultWalletName = deriveFamilyName(adminName);
@@ -209,11 +213,9 @@ export default function OnboardingFlow() {
   // the guard makes it one-shot. The rule flags the synchronous status flip.
   useEffect(() => {
     if (!session || wallet || walletStatus !== "idle") return;
-    const displayName =
-      session.user.user_metadata?.full_name ?? session.user.email ?? "Sobre";
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot guard above; kicks off async deploy
     setWalletStatus("creating");
-    findOrCreateWallet(session.user.id, displayName, session.user.email ?? "")
+    findOrCreateWallet(session)
       .then(({ wallet: w }) => {
         setWallet(w);
         setWalletStatus("idle");
@@ -947,13 +949,6 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
       {label}
     </button>
   );
-}
-
-function initialsOf(name: string): string {
-  const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
 function WelcomeHero() {
