@@ -84,7 +84,6 @@ export function EnvelopeNamesEditor({
                 onChange={(e) => setAt(i, e.target.value)}
                 disabled={disabled || isLocked}
                 maxLength={MAX_ENVELOPE_NAME_LEN}
-                placeholder={DEFAULT_ENVELOPE_NAMES[i]}
                 className="sobre-input"
                 style={{
                   padding: "10px 12px",

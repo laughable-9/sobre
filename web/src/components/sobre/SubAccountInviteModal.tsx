@@ -123,7 +123,6 @@ export function SubAccountInviteModal({
                 type="text"
                 value={name}
                 onChange={(e) => setName(e.target.value)}
-                placeholder="Junior"
                 className="sobre-input"
                 maxLength={32}
                 style={{ fontSize: 16 }}

@@ -238,7 +238,6 @@ export function SpendModal({
               className="sobre-input has-prefix tabular"
               type="number"
               inputMode="decimal"
-              placeholder="0.00"
               min="0"
               step="0.01"
               value={phpStr}
@@ -324,7 +323,6 @@ export function SpendModal({
             id="spend-memo"
             className="sobre-input"
             type="text"
-            placeholder="groceries, gas, tuition…"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
             disabled={pending}

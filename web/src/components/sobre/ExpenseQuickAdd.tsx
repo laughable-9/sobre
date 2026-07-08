@@ -82,21 +82,20 @@ export function ExpenseQuickAdd({
 
   return (
     <div className="mb-5">
-      <form onSubmit={submit} className="flex items-stretch gap-2">
-        <div className="sobre-input-wrap flex-1">
+      <form onSubmit={submit} className="sobre-input-group">
+        <label htmlFor="expense-note">Note</label>
+        <div className="flex items-stretch gap-2">
           <input
+            id="expense-note"
             type="text"
             value={note}
             onChange={(e) => setNote(e.target.value.slice(0, 200))}
-            placeholder="What did you spend on?"
             maxLength={200}
             disabled={saving || !familyWalletId}
-            className="sobre-input"
-            style={{ padding: "12px 14px", fontSize: 15, width: "100%" }}
-            aria-label="What did you spend on?"
+            className="sobre-input flex-1"
+            style={{ padding: "12px 14px", fontSize: 15 }}
           />
-        </div>
-        <button
+          <button
           type="submit"
           disabled={saving || note.trim().length === 0 || !familyWalletId}
           className="sobre-btn sobre-btn-primary"
@@ -113,6 +112,7 @@ export function ExpenseQuickAdd({
           <PlusIcon weight="bold" size={16} />
           {saving ? "Saving…" : "Log"}
         </button>
+        </div>
       </form>
 
       {error ? (

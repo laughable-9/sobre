@@ -111,7 +111,6 @@ export function CloseWalletModal({
             id="close-confirm"
             className="sobre-input"
             type="text"
-            placeholder="CLOSE"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             disabled={pending}

@@ -325,7 +325,6 @@ export function SubAccountCashoutModal({
                         account_name: e.target.value,
                       }))
                     }
-                    placeholder="Juan Dela Cruz"
                     disabled={bankSaving}
                     maxLength={80}
                   />
@@ -346,7 +345,6 @@ export function SubAccountCashoutModal({
                         account_number: e.target.value.replace(/\D/g, ""),
                       }))
                     }
-                    placeholder="0123456789"
                     disabled={bankSaving}
                     maxLength={20}
                   />
@@ -406,7 +404,6 @@ export function SubAccountCashoutModal({
                   step="1"
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
-                  placeholder="200"
                   autoFocus
                 />
               </div>

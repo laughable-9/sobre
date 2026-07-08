@@ -96,7 +96,6 @@ export function JoinByLinkForm({
             id="invite-link"
             className="sobre-input"
             type="url"
-            placeholder="https://sobre.app/dashboard?join=…"
             value={link}
             onChange={(e) => setLink(e.target.value)}
             autoFocus

@@ -272,7 +272,6 @@ export function PolicySettingsForm({
           value={limitInput}
           onChange={setLimitInput}
           disabled={saving}
-          placeholder="no limit"
           equivLabel={equivLabel}
         />
         <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
@@ -296,7 +295,6 @@ export function PolicySettingsForm({
           value={thresholdInput}
           onChange={setThresholdInput}
           disabled={saving}
-          placeholder="no threshold"
           equivLabel={tEquivLabel}
         />
         <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
@@ -440,7 +438,6 @@ function AmountInput({
   value,
   onChange,
   disabled,
-  placeholder,
   equivLabel,
 }: {
   id: string;
@@ -448,7 +445,6 @@ function AmountInput({
   value: string;
   onChange: (v: string) => void;
   disabled: boolean;
-  placeholder: string;
   equivLabel: string | null;
 }) {
   return (
@@ -463,7 +459,6 @@ function AmountInput({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           className={`sobre-input ${unit === "PHP" ? "has-prefix" : ""}`}
-          placeholder={placeholder}
           disabled={disabled}
         />
       </div>

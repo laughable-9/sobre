@@ -244,7 +244,6 @@ function ProfileJoin({
           id="join-name"
           className="sobre-input"
           type="text"
-          placeholder="Maria"
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={pending}

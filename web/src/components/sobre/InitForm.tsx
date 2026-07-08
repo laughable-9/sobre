@@ -115,7 +115,6 @@ export function InitForm({
           id="wallet-name"
           className="sobre-input"
           type="text"
-          placeholder="My Family"
           value={walletName}
           onChange={(e) => setWalletName(e.target.value)}
           disabled={pending}

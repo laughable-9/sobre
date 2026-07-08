@@ -1010,7 +1010,6 @@ function RegisterBankStep({
           id="cashout-acct-name"
           className="sobre-input"
           type="text"
-          placeholder="Juan Dela Cruz"
           value={accountName}
           onChange={(e) => setAccountName(e.target.value)}
           disabled={saving}
@@ -1025,7 +1024,6 @@ function RegisterBankStep({
           className="sobre-input tabular"
           type="text"
           inputMode="numeric"
-          placeholder="123456789012"
           value={accountNumber}
           onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))}
           disabled={saving}

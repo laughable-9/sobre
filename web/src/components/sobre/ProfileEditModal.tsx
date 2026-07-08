@@ -49,7 +49,6 @@ export function ProfileEditModal({
             id="profile-edit-name"
             className="sobre-input"
             type="text"
-            placeholder="Juan Dela Cruz"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={32}

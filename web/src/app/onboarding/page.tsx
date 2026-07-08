@@ -611,7 +611,6 @@ export default function OnboardingFlow() {
           id="wallet-name"
           className="sobre-input"
           type="text"
-          placeholder="The Santos Family"
           value={walletName}
           onChange={(e) => setWalletName(e.target.value)}
           disabled={busy}
@@ -701,7 +700,6 @@ function MoneyField({
           inputMode="decimal"
           value={value}
           onChange={(e) => onChange(sanitizeMoneyInput(e.target.value))}
-          placeholder="0.00"
           maxLength={14}
           className="tabular flex-1 text-right text-[15px] font-semibold"
           style={{
@@ -886,42 +884,47 @@ function MemberEditRow({
         padding: "12px 14px",
       }}
     >
-      <div className="flex items-center gap-2">
-        <input
-          className="sobre-input flex-1"
-          style={{ padding: "9px 11px", fontSize: 14 }}
-          placeholder="Name"
-          value={member.name}
-          onChange={(e) => onChange({ name: e.target.value })}
-          maxLength={40}
-        />
-        <button
-          type="button"
-          onClick={onRemove}
-          aria-label="Remove"
-          className="grid flex-shrink-0 place-items-center"
-          style={{
-            width: 34,
-            height: 34,
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            background: "var(--surface)",
-            color: "var(--sobre-danger)",
-          }}
-        >
-          <Trash2 size={15} strokeWidth={2} />
-        </button>
+      <div className="sobre-input-group">
+        <label htmlFor={`member-name-${member.id}`}>Name</label>
+        <div className="flex items-stretch gap-2">
+          <input
+            id={`member-name-${member.id}`}
+            className="sobre-input flex-1"
+            style={{ padding: "9px 11px", fontSize: 14 }}
+            value={member.name}
+            onChange={(e) => onChange({ name: e.target.value })}
+            maxLength={40}
+          />
+          <button
+            type="button"
+            onClick={onRemove}
+            aria-label="Remove"
+            className="grid flex-shrink-0 place-items-center"
+            style={{
+              width: 34,
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              color: "var(--sobre-danger)",
+            }}
+          >
+            <Trash2 size={15} strokeWidth={2} />
+          </button>
+        </div>
       </div>
-      <input
-        className="sobre-input"
-        style={{ padding: "9px 11px", fontSize: 14 }}
-        placeholder="Email (for their invite)"
-        type="email"
-        inputMode="email"
-        value={member.email}
-        onChange={(e) => onChange({ email: e.target.value })}
-        maxLength={120}
-      />
+      <div className="sobre-input-group">
+        <label htmlFor={`member-email-${member.id}`}>Email for their invite</label>
+        <input
+          id={`member-email-${member.id}`}
+          className="sobre-input"
+          style={{ padding: "9px 11px", fontSize: 14 }}
+          type="email"
+          inputMode="email"
+          value={member.email}
+          onChange={(e) => onChange({ email: e.target.value })}
+          maxLength={120}
+        />
+      </div>
     </div>
   );
 }
