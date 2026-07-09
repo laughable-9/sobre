@@ -13,13 +13,20 @@ import {
 } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 
-/** Per-row bar colors from the brand board (Section 07): Green 600 / 700 /
- *  500 cycling down the list, exactly like the UI preview. Shared with the
- *  envelopes view's SplitLegendBar so segments match rows everywhere. */
+/** Categorical envelope colors. Kept HUE-distinct on purpose — the earlier
+ *  green triad (Green 600 / 700 / 500) worked for 3 envelopes but blurred
+ *  together and couldn't scale. This palette leans on the brand's own tones
+ *  (green stays the primary), pairs with warm mango and cool slate for the
+ *  next two slots, and rounds out with violet and teal for a 5-envelope
+ *  future without overlap. Shared with SplitLegendBar and the auto-split
+ *  chip strip on activity rows, so a Groceries deposit reads as the same
+ *  color everywhere it appears. */
 export const BAR_COLORS = [
-  "var(--sobre-primary)",
-  "var(--sobre-primary-hover)",
-  "var(--sobre-primary-bright)",
+  "#22A45C", // Groceries — brand green
+  "#E8923C", // Tuition   — mango (v1 accent)
+  "#2E6BAA", // Savings   — slate blue
+  "#8C4EB8", // 4th slot  — violet
+  "#0F9E8A", // 5th slot  — teal
 ] as const;
 
 /**

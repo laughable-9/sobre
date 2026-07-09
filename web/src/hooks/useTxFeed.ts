@@ -259,12 +259,23 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         }
       }
       // Log fetch summary on the first successful call per session so the
-      // recent-activity block "why is this empty" question is answerable
-      // from browser DevTools without instrumenting live code.
+      // "why is this empty" question is answerable from browser DevTools
+      // without instrumenting live code. Also log when a subsequent poll
+      // gains ground on previous ones (matched > known accumulator size)
+      // so the "I just deposited but nothing shows up" case is diagnosable.
+      const previousKnown = eventsMapRef.current.size;
       if (!firstFetchLoggedRef.current) {
         firstFetchLoggedRef.current = true;
         console.info(
-          `[useTxFeed] fetch summary — startLedger=${startLedgerRef.current}, latestLedger=${raw.latestLedger}, matched=${raw.events.length}, parsed=${parsed.length}`,
+          `[useTxFeed] fetch summary — startLedger=${startLedgerRef.current}, latestLedger=${raw.latestLedger}, matched=${raw.events.length}, parsed=${parsed.length}, topics=${JSON.stringify(
+            raw.events
+              .slice(0, 5)
+              .map((ev) => String(scValToNative(ev.topic[0]) ?? "?")),
+          )}`,
+        );
+      } else if (raw.events.length > previousKnown && parsed.length > 0) {
+        console.info(
+          `[useTxFeed] new events — matched=${raw.events.length}, parsed=${parsed.length}, latestLedger=${raw.latestLedger}`,
         );
       }
       // Union-merge into the accumulator. We never remove events that
