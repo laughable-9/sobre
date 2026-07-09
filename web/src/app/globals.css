@@ -341,9 +341,10 @@
   .sobre-total .cents { font-size: 18px; }
 }
 .sobre-label {
-  font-size: 11px; font-weight: 600;
+  font-family: var(--font-sans), system-ui;
+  font-size: 13px; font-weight: 600;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-3);
+  color: var(--sobre-accent);
 }
 .sobre-total {
   font-family: var(--serif);
@@ -798,10 +799,77 @@
 .sobre-nav-links {
   display: flex;
   align-items: center;
-  gap: 24px;
+  gap: 20px;
 }
-.sobre-nav-links a { color: var(--text-2); font-size: 14px; font-weight: 500; }
+.sobre-nav-links a {
+  color: var(--text-2); font-size: 14px; font-weight: 500;
+  /* Labels never wrap mid-phrase ("How it works" was folding onto three
+     lines when the row got tight); the links hide before space runs out. */
+  white-space: nowrap;
+}
 .sobre-nav-links a:hover { color: var(--text-1); }
+
+/* Fixed side rail — one horizontal tick per landing-page section. It sits
+   over every section as the page scrolls, so it needs two palettes: ink
+   ticks by default (readable on the white/gray body sections) and a
+   `.on-dark` variant (white ticks) while the green Final CTA band is behind
+   it — set by SectionRail watching that section with an IntersectionObserver.
+   Desktop only (needs real width clear of the content column); hidden below
+   1280px. */
+.sobre-rail {
+  position: fixed;
+  right: 28px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 14px;
+}
+@media (max-width: 1280px) {
+  .sobre-rail { display: none; }
+}
+.sobre-rail-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-2);
+}
+.sobre-rail-item .dot {
+  width: 18px; height: 3px; border-radius: 999px;
+  background: var(--border-strong);
+  transition: background 160ms ease, width 160ms ease;
+  flex-shrink: 0;
+}
+.sobre-rail-item .label {
+  font-size: 12px; font-weight: 600;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  opacity: 0;
+  transform: translateX(4px);
+  transition: opacity 160ms ease, transform 160ms ease, color 160ms ease;
+}
+.sobre-rail-item:hover .label { opacity: 1; transform: translateX(0); }
+.sobre-rail-item.active .dot {
+  background: var(--sobre-accent);
+  width: 26px;
+}
+.sobre-rail-item.active .label { opacity: 1; transform: translateX(0); color: var(--sobre-accent); }
+
+.sobre-rail.on-dark .sobre-rail-item {
+  color: #fff;
+  filter: drop-shadow(0 1px 2px rgba(15, 26, 20, 0.35));
+}
+.sobre-rail.on-dark .sobre-rail-item .dot { background: rgba(255, 255, 255, 0.55); }
+.sobre-rail.on-dark .sobre-rail-item.active .dot { background: #fff; }
+.sobre-rail.on-dark .sobre-rail-item.active .label { color: #fff; }
+/* Hide the in-page anchor links at the same width the bottom CTA bar
+   appears (900px) — between 760 and 900 the full nav was cramped enough
+   to crumple, and the bar already carries the CTA. */
+@media (max-width: 900px) {
+  .sobre-nav-link-text { display: none; }
+}
 
 /* Mobile: hide the in-page anchor links, shrink everything else, tighten
    gaps so the action buttons + wallet pill fit in a single row without a
@@ -1335,8 +1403,13 @@
   margin-top: 40px;
 }
 @media (max-width: 800px) { .sobre-duo { grid-template-columns: 1fr; } }
+/* One hue for both columns (board rule) — a mango/green split read as a
+   mismatched grey-vs-tint pairing once the mango side went neutral. Both
+   columns now carry a surface so each reads as its own panel against the
+   section's --surface-alt background instead of the left side blending
+   into it; the right keeps the stronger accent tint as the visual lead. */
 .sobre-duo-col { padding: 40px; }
-.sobre-duo-col.mango { background: #fbe7d2; }
+.sobre-duo-col.mango { background: var(--surface); }
 .sobre-duo-col.green { background: var(--accent-soft); }
 .sobre-duo-col h3 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
 .sobre-duo-col ul { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; gap: 14px; }
@@ -1344,13 +1417,12 @@
   display: flex; gap: 12px; align-items: flex-start;
   font-size: 15px; color: var(--text-1); line-height: 1.5;
 }
+/* Checkmark stroke is a pinned hex (data-URIs can't resolve var()):
+   %230F6B3A = --sobre-accent (Green 700). One hue for both columns. */
 .sobre-duo-col li::before {
   content: ""; width: 18px; height: 18px; flex-shrink: 0; margin-top: 2px;
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232E6B4C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%230F6B3A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
   background-repeat: no-repeat; background-size: contain;
-}
-.sobre-duo-col.mango li::before {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23D67E28' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
 }
 
 .sobre-faq { margin-top: 36px; max-width: 820px; }
@@ -1859,11 +1931,13 @@ body { overflow-x: clip; min-width: 320px; }
   gap: 8px;
 }
 
-/* ═══ v2 design system — dashboard-scoped (green board) ═══════════════════
-   Everything below only applies inside `.sobre-v2`. The rest of the app keeps
-   the cream/mango theme until the team promotes this to :root. Palette hexes
-   come from the brand board (Section 04): Green 600/700/500/50, Ink 900/700,
-   Page BG, semantic Success/Info/Warning/Error. */
+/* ═══ v2 design system (green board) ═══════════════════════════════════════
+   Promoted app-wide: `sobre-v2` now sits on <html> (see layout.tsx), so every
+   surface — landing, dashboard, invite, onboarding — rides this scope. The
+   class-scoped selectors are kept (rather than flattened into :root) so the
+   diff stays reviewable and the scope can be narrowed again if needed.
+   Palette hexes come from the brand board (Section 04): Green 600/700/500/50,
+   Ink 900/700, Page BG, semantic Success/Info/Warning/Error. */
 .sobre-v2 {
   /* Board hexes only. Neutrals stay NEUTRAL — no sage/green-washed grays
      (that soft look reads as Tarsi, which we're deliberately not). Green
@@ -1955,6 +2029,41 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2 .sobre-warning-bar svg { color: var(--sobre-warning); }
 .sobre-v2 .sobre-warning-bar b { color: var(--sobre-text-1); }
+/* Landing-page residue (now that the scope is app-wide): the step-number
+   circles, quick-amount hovers, and the danger menu hover all hardcoded
+   warm hexes. (.sobre-duo-col.mango is fixed directly in its base rule —
+   no scope override needed there anymore.) */
+.sobre-v2 .sobre-step-num { background: var(--sobre-accent-soft); }
+/* v1 CTA glow was mango-tinted; re-tint to Green 600. */
+.sobre-v2 .sobre-bottom-bar .sobre-bottom-cta {
+  box-shadow: 0 8px 20px rgba(34, 164, 92, 0.32);
+}
+/* Final CTA was a mango gradient with warm-white copy; the board's closing
+   band (Section 08) is Green 600 → 700 with plain white. Footer drops the
+   cream for the neutral surface. */
+.sobre-v2 .sobre-final-cta {
+  background: linear-gradient(160deg, var(--sobre-primary) 0%, var(--sobre-primary-hover) 100%);
+  color: #fff;
+}
+.sobre-v2 .sobre-final-cta h2 { color: #fff; }
+.sobre-v2 .sobre-final-cta .lede { color: rgba(255, 255, 255, 0.85); }
+.sobre-v2 .sobre-final-cta .fine { color: rgba(255, 255, 255, 0.7); }
+.sobre-v2 .sobre-footer {
+  background: var(--sobre-surface-alt);
+  border-top-color: var(--sobre-border);
+}
+/* The hero loop video has the old cream baked into its background, which
+   read as a mismatched beige card on the white v2 page. Multiply blends
+   white-and-lighter pixels into the page (the brightness lift pushes the
+   near-white cream over that threshold); the artwork's saturated strokes
+   are barely affected. No visible box left, so the card radius goes too. */
+.sobre-v2 .sobre-hero-loop {
+  mix-blend-mode: multiply;
+  filter: brightness(1.05);
+  border-radius: 0;
+}
+.sobre-v2 .sobre-quick-amts button:hover { background: var(--sobre-border); }
+.sobre-v2 .sobre-wallet-menu-item.danger:hover { background: var(--sobre-danger-soft); }
 
 /* Unified card chrome: every card in the v2 column shares the same radius,
    shadow, and padding; vertical rhythm comes ONLY from the column's 16px gap
@@ -1968,12 +2077,35 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2 .sobre-summary { gap: 16px; }
 
-/* Unified micro-labels: Inter, BOLD, tracked caps — one treatment for the
-   hero label, THIS MONTH, RECENT ACTIVITY, and MEMBERS. (Mono caps were
-   tried and swapped out; Geist Mono is reserved for numerals.) */
+/* Manrope reads noticeably lighter than Fraunces at the same weight, so
+   headings bump up now that the serif is retired: h1/h2 (and the display
+   classes, which sometimes sit on divs) go EXTRABOLD 800 to match the hero
+   amount; h3/h4 go 700. Element selectors land late enough in the file to
+   win over the v1 rules that set 500/600; Tailwind's font-semibold loses
+   to these because layered utilities yield to unlayered rules. */
+.sobre-v2 h1, .sobre-v2 h2 { font-weight: 800; }
+.sobre-v2 h3, .sobre-v2 h4 { font-weight: 700; }
+.sobre-v2 .sobre-h1,
+.sobre-v2 .sobre-h2,
+.sobre-v2 .sobre-hero-headline { font-weight: 800; }
+/* Wallet page title sets its own 700 at higher specificity — bump it too. */
+.sobre-v2 .sobre-v2-title .txt { font-weight: 800; }
+
+/* Unified micro-labels: Inter, tracked caps, green (eyebrow treatment) — one
+   treatment for THIS MONTH, RECENT ACTIVITY, and MEMBERS. (Mono caps were
+   tried and swapped out; Geist Mono is reserved for numerals.) The hero
+   label keeps its own size/weight below since it sits on a solid green
+   card and needs the white color override to win. */
 .sobre-v2 .sobre-label,
 .sobre-v2 .sobre-hsummary-head,
-.sobre-v2 .sobre-hsummary-activity-head,
+.sobre-v2 .sobre-hsummary-activity-head {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--sobre-accent);
+}
 .sobre-v2 .sobre-v2-hero .label {
   font-family: var(--font-sans), system-ui, sans-serif;
   font-size: 11px;
@@ -2172,18 +2304,38 @@ body { overflow-x: clip; min-width: 320px; }
   text-transform: uppercase; color: var(--sobre-text-3);
   margin-bottom: 14px;
 }
+/* Extra top clearance so the icon badges (.ic, positioned absolutely
+   against THIS wrapper) can straddle the segment's top edge without being
+   clipped — .track itself still needs overflow:hidden to mask the fill's
+   rounded corners, so the badges live as siblings of .track, not children,
+   positioned relative to this non-clipping wrapper instead. */
+.sobre-v2-splitbar .track-wrap {
+  position: relative;
+  padding-top: 10px;
+}
 .sobre-v2-splitbar .track {
-  display: flex; height: 16px; border-radius: 999px; overflow: hidden;
+  display: flex; height: 20px; border-radius: 999px; overflow: hidden;
   background: var(--sobre-surface-alt);
   /* Subtle inset shadow gives the track physical depth instead of a flat
      fill — reads closer to Stripe/Wise-style balance bars. */
   box-shadow: inset 0 1px 2px rgba(15, 26, 20, 0.08);
 }
 .sobre-v2-splitbar .seg {
-  display: grid; place-items: center; height: 100%;
+  height: 100%;
   animation: sobre-bar-grow 0.35s ease-out backwards;
 }
 .sobre-v2-splitbar .seg + .seg { margin-left: 2px; }
+/* Small white icon badge poking above the segment's top edge — `left` is
+   set inline per-badge as the segment's cumulative center %. */
+.sobre-v2-splitbar .ic {
+  position: absolute;
+  top: 0; transform: translateX(-50%);
+  width: 20px; height: 20px; border-radius: 999px;
+  display: grid; place-items: center;
+  background: var(--sobre-surface);
+  color: var(--sobre-primary);
+  box-shadow: var(--sobre-shadow-sm);
+}
 .sobre-v2-splitbar .legend {
   display: flex; flex-wrap: wrap; gap: 6px 22px; margin-top: 16px;
 }

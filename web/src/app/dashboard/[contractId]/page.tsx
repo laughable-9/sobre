@@ -409,7 +409,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               height={56}
               className="mx-auto opacity-50"
             />
-            <h1 className="font-serif text-[30px] font-semibold mt-5 mb-3">
+            <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
               This Sobre is closed
             </h1>
             <p

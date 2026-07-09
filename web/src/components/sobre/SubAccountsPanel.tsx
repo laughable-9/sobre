@@ -290,7 +290,6 @@ function SubCard({
             <div
               className="tabular"
               style={{
-                fontFamily: "var(--serif)",
                 fontSize: 22,
                 fontWeight: 600,
                 marginTop: 2,

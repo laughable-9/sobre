@@ -417,10 +417,11 @@ function DailyLimitCard({
         </span>
       </div>
       <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        {/* Running numeral — .tabular resolves to Geist Mono in v2; the
+            inline serif that used to sit here was silently overriding it. */}
         <span
           className="tabular whitespace-nowrap"
           style={{
-            fontFamily: "var(--serif)",
             fontSize: 20,
             fontWeight: 600,
             color: "var(--text-1)",
