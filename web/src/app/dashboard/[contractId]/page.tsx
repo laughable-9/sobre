@@ -118,8 +118,14 @@ function Dashboard({ contractId }: { contractId: string }) {
   const state = walletState.state;
   const familyWalletId = walletState.familyWalletId;
   const pendingRequests = usePendingSpendRequests(familyWalletId);
-  const splitProposals = useSplitProposals(familyWalletId);
+  const splitProposals = useSplitProposals(
+    familyWalletId,
+    wallet.wallet?.id ?? null,
+  );
   const subaccountsHook = useSubaccounts(familyWalletId);
+  const proposalNeedsMyVote = Boolean(
+    splitProposals.pending && splitProposals.myVote === null,
+  );
   const subRows = subaccountsHook.subaccounts;
 
   const refresh = () => void walletState.refresh();
@@ -686,21 +692,10 @@ function Dashboard({ contractId }: { contractId: string }) {
                 <button
                   type="button"
                   className="sobre-envs-settings"
-                  data-badge={
-                    splitProposals.pending &&
-                    wallet.wallet?.id &&
-                    !splitProposals.pending.approversWalletIds.includes(
-                      wallet.wallet.id,
-                    ) &&
-                    !splitProposals.pending.rejectersWalletIds.includes(
-                      wallet.wallet.id,
-                    )
-                      ? "true"
-                      : undefined
-                  }
+                  data-badge={proposalNeedsMyVote ? "true" : undefined}
                   onClick={() => switchTab("settings")}
                   aria-label={
-                    splitProposals.pending
+                    proposalNeedsMyVote
                       ? "Sobre rules & settings (proposal awaits your vote)"
                       : "Sobre rules & settings"
                   }

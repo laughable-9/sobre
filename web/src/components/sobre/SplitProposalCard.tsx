@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { CheckIcon, ClockIcon, XIcon } from "@phosphor-icons/react";
 
 import type { SplitProposal } from "@/hooks/useSplitProposals";
@@ -9,6 +9,7 @@ import {
   useVoteSplitProposal,
 } from "@/hooks/useSplitProposalMutations";
 import { Avatar } from "@/components/sobre/Avatar";
+import { toEnvelopeNames } from "@/components/sobre/EnvelopeNamesEditor";
 import { relativeTime, shortenAddress } from "@/lib/format";
 
 /**
@@ -47,18 +48,14 @@ export function SplitProposalCard({
     currentWalletId !== null && currentWalletId === proposal.proposerWalletId;
   const hasVoted =
     currentWalletId !== null &&
-    (proposal.approversWalletIds.includes(currentWalletId) ||
-      proposal.rejectersWalletIds.includes(currentWalletId));
-
+    proposal.approversWalletIds.includes(currentWalletId);
   const approvals = proposal.approversWalletIds.length;
   const busy = voting || cancelling;
-
-  const proposerLabel = useMemo(() => {
-    if (proposal.proposerName) return proposal.proposerName;
-    if (proposal.proposerAddress)
-      return shortenAddress(proposal.proposerAddress);
-    return "An admin";
-  }, [proposal.proposerName, proposal.proposerAddress]);
+  const proposerLabel = proposal.proposerName
+    ?? (proposal.proposerAddress
+      ? shortenAddress(proposal.proposerAddress)
+      : "An admin");
+  const names = toEnvelopeNames(envelopeNames);
 
   const handleVote = async (choice: "approve" | "reject") => {
     setError(null);
@@ -111,9 +108,9 @@ export function SplitProposalCard({
       </div>
 
       <div className="diff">
-        <PercentColumn label="Current" percents={currentPercents} names={envelopeNames} muted />
+        <PercentColumn label="Current" percents={currentPercents} names={names} muted />
         <span className="arrow" aria-hidden>→</span>
-        <PercentColumn label="Proposed" percents={proposal.percents} names={envelopeNames} />
+        <PercentColumn label="Proposed" percents={proposal.percents} names={names} />
       </div>
 
       <div className="status">

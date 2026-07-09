@@ -1,8 +1,9 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback } from "react";
 
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
 
 type ProposeOutcome =
   | { outcome: "created"; id: string }
@@ -29,102 +30,62 @@ type CancelOutcome =
   | { outcome: "not_authenticated" };
 
 /**
- * Thin wrappers around the three split-proposal RPCs. Keeping the mutation
- * hooks small mirrors the useApproveRequest / useDenyRequest split that
- * already exists for spend approvals.
+ * Thin wrappers around the three split-proposal RPCs. Each hook uses the
+ * shared {@link useSupabaseMutation} scaffold so pending/error handling
+ * lives in one place — matches how spend-request writes are built.
  */
 export function useProposeSplit() {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const propose = useCallback(
+  const call = useCallback(
     async (
       familyWalletId: string,
       percents: [number, number, number],
     ): Promise<ProposeOutcome> => {
-      setPending(true);
-      setError(null);
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error: rpcErr } = await supabase.rpc("create_split_proposal", {
-          p_family_wallet_id: familyWalletId,
-          p_percents: percents,
-        });
-        if (rpcErr) throw rpcErr;
-        return data as ProposeOutcome;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
-        throw e;
-      } finally {
-        setPending(false);
-      }
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc("create_split_proposal", {
+        p_family_wallet_id: familyWalletId,
+        p_percents: percents,
+      });
+      if (error) throw error;
+      return data as ProposeOutcome;
     },
     [],
   );
-
+  const { run: propose, pending, error } = useSupabaseMutation(call);
   return { propose, pending, error };
 }
 
 export function useVoteSplitProposal() {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const vote = useCallback(
+  const call = useCallback(
     async (
       proposalId: string,
       choice: "approve" | "reject",
     ): Promise<VoteOutcome> => {
-      setPending(true);
-      setError(null);
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error: rpcErr } = await supabase.rpc(
-          "record_split_vote_and_maybe_apply",
-          { p_proposal_id: proposalId, p_vote: choice },
-        );
-        if (rpcErr) throw rpcErr;
-        return data as VoteOutcome;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
-        throw e;
-      } finally {
-        setPending(false);
-      }
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc(
+        "record_split_vote_and_maybe_apply",
+        { p_proposal_id: proposalId, p_vote: choice },
+      );
+      if (error) throw error;
+      return data as VoteOutcome;
     },
     [],
   );
-
+  const { run: vote, pending, error } = useSupabaseMutation(call);
   return { vote, pending, error };
 }
 
 export function useCancelSplitProposal() {
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const cancel = useCallback(
+  const call = useCallback(
     async (proposalId: string): Promise<CancelOutcome> => {
-      setPending(true);
-      setError(null);
-      try {
-        const supabase = getSupabaseBrowserClient();
-        const { data, error: rpcErr } = await supabase.rpc(
-          "cancel_split_proposal",
-          { p_proposal_id: proposalId },
-        );
-        if (rpcErr) throw rpcErr;
-        return data as CancelOutcome;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
-        throw e;
-      } finally {
-        setPending(false);
-      }
+      const supabase = getSupabaseBrowserClient();
+      const { data, error } = await supabase.rpc("cancel_split_proposal", {
+        p_proposal_id: proposalId,
+      });
+      if (error) throw error;
+      return data as CancelOutcome;
     },
     [],
   );
-
+  const { run: cancel, pending, error } = useSupabaseMutation(call);
   return { cancel, pending, error };
 }
