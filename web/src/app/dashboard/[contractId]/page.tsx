@@ -3,6 +3,7 @@
 import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
+  GearSixIcon,
   PencilSimpleIcon,
   WarningIcon,
 } from "@phosphor-icons/react";
@@ -21,6 +22,7 @@ import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { MembersSection } from "@/components/sobre/MembersSection";
 import { OpenSobreSheet } from "@/components/sobre/OpenSobreSheet";
 import { ProfileSheet } from "@/components/sobre/ProfileSheet";
+import { RecentActivityPreview } from "@/components/sobre/RecentActivityPreview";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
 import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
 import { Reveal } from "@/components/sobre/Reveal";
@@ -542,7 +544,7 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {tab === "home" ? (
       <div
-        className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+        className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
         style={{ maxWidth: 640 }}
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
@@ -576,6 +578,13 @@ function Dashboard({ contractId }: { contractId: string }) {
             />
           </BalanceHero>
 
+          <RecentActivityPreview
+            events={txFeed.events}
+            members={state.members}
+            envelopeNames={state.envelope_names}
+            onSeeAll={() => switchTab("activity")}
+          />
+
           {pendingRequests.pending.length > 0 ? (
             <div className="sobre-admin-section sobre-card-flat">
               <h3>Pending approvals ({pendingRequests.pending.length})</h3>
@@ -598,7 +607,7 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {tab === "activity" ? (
         <div
-          className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+          className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 760 }}
         >
           <ActivityFeed
@@ -660,12 +669,23 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {tab === "envelopes" ? (
         <div
-          className="mx-auto w-full px-4 sm:px-7 pt-2 pb-12"
+          className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 760 }}
         >
           <div className="sobre-envs">
-            <header className="mb-5">
+            <header className="sobre-envs-header">
               <h2>Envelopes</h2>
+              {isAdmin ? (
+                <button
+                  type="button"
+                  className="sobre-envs-settings"
+                  onClick={() => switchTab("settings")}
+                  aria-label="Sobre rules & settings"
+                  title="Sobre rules & settings"
+                >
+                  <GearSixIcon weight="bold" size={18} />
+                </button>
+              ) : null}
             </header>
 
             <SplitLegendBar state={state} />
@@ -721,7 +741,7 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {tab === "profile" ? (
         <div
-          className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
+          className="mx-auto w-full px-4 sm:px-7 pb-12 pt-6"
           style={{ maxWidth: 480 }}
         >
           <ProfileSheet wallet={wallet} />

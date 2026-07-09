@@ -1586,9 +1586,10 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-dock-fab:hover { background: var(--sobre-primary-hover); }
 .sobre-dock-fab:active { transform: scale(0.96); }
 /* Reserve space so content isn't tucked under the dock, and clear the
-   safe-area notch since there's no top bar on dashboard shells. */
+   safe-area notch since there's no top bar on dashboard shells. On
+   desktop the safe-inset is 0px, so max() enforces a real floor. */
 .has-dock {
-  padding-top: var(--safe-top);
+  padding-top: max(var(--safe-top), 8px);
   padding-bottom: calc(var(--sobre-dock-h) + var(--safe-bottom) + 16px);
 }
 
@@ -2219,6 +2220,34 @@ body { overflow-x: clip; min-width: 320px; }
   width: 10px; height: 10px; border-radius: 4px; flex-shrink: 0;
 }
 
+/* Envelopes tab header — title on the left, admin settings gear on the
+   right (family rules — envelope names, split %, policy). */
+.sobre-envs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.sobre-envs-header h2 {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+  margin: 0;
+}
+.sobre-envs-settings {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  color: var(--sobre-text-1);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.sobre-envs-settings:hover {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+
 /* ─── Compact envelope row on the Envelopes tab ─────────────────────────
    Icon · name+subline · amount · chevron. Tapping opens the SpendModal for
    that envelope; policy detail lives inside the modal. */
@@ -2310,6 +2339,71 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-member-row .who .role {
   font-size: 11px; color: var(--sobre-text-3);
   text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+
+/* ─── Recent-activity preview on home ───────────────────────────────────
+   Ink-on-white rows, tabular amounts, small "See all" jumps to the full
+   Activity tab. Mirrors the design guide v2 rule: no colored halos, one
+   vivid green (used only for the inflow icon chip). */
+.sobre-recent { margin-top: 20px; }
+.sobre-recent-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 4px 10px;
+}
+.sobre-recent-head h3 {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin: 0;
+}
+.sobre-recent-see-all {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 12px; font-weight: 600;
+  color: var(--sobre-primary);
+  background: transparent; border: 0; padding: 4px 6px;
+  cursor: pointer;
+}
+.sobre-recent-see-all:hover { color: var(--sobre-primary-hover); }
+.sobre-recent-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.sobre-recent-row .ic {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+}
+.sobre-recent-row .ic.in {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-recent-row .ic.out {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-recent-row .body { flex: 1; min-width: 0; }
+.sobre-recent-row .line {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+}
+.sobre-recent-row .who {
+  font-size: 14px; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.sobre-recent-row .who .env-name { font-weight: 600; }
+.sobre-recent-row .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 14px; font-weight: 700; color: var(--sobre-text-1);
+  flex-shrink: 0;
+}
+.sobre-recent-row .meta {
+  font-size: 12px; color: var(--sobre-text-3); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 
 /* Mini activity feed embedded in the This-month card: 3 latest rows + a
