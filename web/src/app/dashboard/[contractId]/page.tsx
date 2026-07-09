@@ -430,9 +430,13 @@ function Dashboard({ contractId }: { contractId: string }) {
       );
     }
     return (
-      <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} />
-        <DashboardSkeleton />
+      <div className="sobre-app sobre-v2 has-dock">
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
+          style={{ maxWidth: 640 }}
+        >
+          <DashboardSkeleton />
+        </div>
       </div>
     );
   }

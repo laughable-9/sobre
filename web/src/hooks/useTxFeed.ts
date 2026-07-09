@@ -102,6 +102,7 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   // gets distinct entries. Capped at MAX_EVENTS so the demo doesn't keep
   // growing memory after a long session.
   const eventsMapRef = useRef<Map<string, FeedEvent>>(new Map());
+  const firstFetchLoggedRef = useRef<boolean>(false);
 
   const fetchEvents = useCallback(async () => {
     if (!contractId) return;
@@ -113,16 +114,50 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         const latest = await server.getLatestLedger();
         // Widened from 5000 (~7h) — the recent-activity block on home was
         // empty for users whose only deposit had scrolled past the window.
-        // Testnet RPC nodes typically retain ~120k ledgers (~7 days); on
-        // "out of window" we retry narrower below.
+        // Testnet RPC nodes typically retain ~120k ledgers (~7 days); the
+        // narrowing retry below handles nodes with shorter retention.
         startLedgerRef.current = Math.max(latest.sequence - 100_000, 1);
       }
       // Omit `limit`. The SDK wraps it in `pagination: { limit }`, which the
       // Soroban RPC silently treats as "return zero events." Hard-won bug.
-      const raw = await server.getEvents({
-        startLedger: startLedgerRef.current,
-        filters: [{ type: "contract", contractIds: [contractId] }],
-      });
+      let raw;
+      try {
+        raw = await server.getEvents({
+          startLedger: startLedgerRef.current,
+          filters: [{ type: "contract", contractIds: [contractId] }],
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        // Retry narrower on "start ledger before earliest retained". Some
+        // testnet RPC nodes retain fewer ledgers than the ~120k default we
+        // aim for; walk the window down until the RPC accepts.
+        if (/earliest\s*retained|out\s*of\s*retention|before.*retained/i.test(msg)) {
+          const latest = await server.getLatestLedger();
+          const fallbacks = [50_000, 15_000, 5_000];
+          let ok = false;
+          for (const back of fallbacks) {
+            const narrower = Math.max(latest.sequence - back, 1);
+            try {
+              raw = await server.getEvents({
+                startLedger: narrower,
+                filters: [{ type: "contract", contractIds: [contractId] }],
+              });
+              startLedgerRef.current = narrower;
+              ok = true;
+              console.warn(
+                `[useTxFeed] RPC rejected wider window, retried with -${back} ledgers`,
+              );
+              break;
+            } catch {
+              // try the next narrower one
+            }
+          }
+          if (!ok) throw err;
+        } else {
+          throw err;
+        }
+      }
+      if (!raw) return;
       if (gen !== generationRef.current) return;
 
       const parsed: FeedEvent[] = [];
@@ -223,6 +258,15 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
           });
         }
       }
+      // Log fetch summary on the first successful call per session so the
+      // recent-activity block "why is this empty" question is answerable
+      // from browser DevTools without instrumenting live code.
+      if (!firstFetchLoggedRef.current) {
+        firstFetchLoggedRef.current = true;
+        console.info(
+          `[useTxFeed] fetch summary — startLedger=${startLedgerRef.current}, latestLedger=${raw.latestLedger}, matched=${raw.events.length}, parsed=${parsed.length}`,
+        );
+      }
       // Union-merge into the accumulator. We never remove events that
       // were once seen — the only way a previously-emitted Soroban event
       // disappears is if the chain re-orgs, which Stellar doesn't do.
@@ -254,7 +298,9 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
       }
     } catch (e) {
       if (gen !== generationRef.current) return;
-      setError(e instanceof Error ? e.message : String(e));
+      const msg = e instanceof Error ? e.message : String(e);
+      console.warn("[useTxFeed] fetch failed:", msg);
+      setError(msg);
     } finally {
       if (gen === generationRef.current) setLoading(false);
     }
