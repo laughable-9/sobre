@@ -83,7 +83,6 @@ export function CloseWalletModal({
           <div
             className="tabular mt-1"
             style={{
-              fontFamily: "var(--serif)",
               fontSize: 26,
               fontWeight: 600,
               color: "var(--text-1)",

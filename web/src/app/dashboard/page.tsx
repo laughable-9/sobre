@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ChevronRight, PlusCircle, Sparkles, Users } from "lucide-react";
+import {
+  CaretRightIcon,
+  PlusCircleIcon,
+  SparkleIcon,
+  UsersIcon,
+} from "@phosphor-icons/react";
 
 import { BackLink } from "@/components/sobre/BackLink";
 
@@ -21,8 +26,11 @@ import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile } from "@/lib/profile";
-import { STROOPS_PER_USDC } from "@/lib/config";
-import { PHP_PER_USDC } from "@/lib/config";
+import {
+  PAYMENT_TOKEN_LABEL,
+  PHP_PER_USDC,
+  STROOPS_PER_USDC,
+} from "@/lib/config";
 
 type Mode = "list" | "new" | "join";
 
@@ -63,7 +71,7 @@ export default function MySobresPage() {
   // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
           {wallet.status === "signed-out" ? (
@@ -76,7 +84,10 @@ export default function MySobresPage() {
                 priority
                 className="mx-auto"
               />
-              <h1 className="font-serif text-[40px] font-semibold mt-5 mb-3 tracking-tight leading-[1.05]">
+              <h1
+                className="sobre-cover-text mt-5 mb-3"
+                style={{ color: "var(--text-1)" }}
+              >
                 Isang sobre.
                 <br />
                 Isang pamilya.
@@ -110,7 +121,7 @@ export default function MySobresPage() {
   // pre-fills name + emoji for every Sobre the user later opens or joins.
   if (hasProfile === false) {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <ProfileSetupScreen
           address={address}
@@ -124,7 +135,7 @@ export default function MySobresPage() {
   // ─── "Open a new Sobre" branch ──────────────────────────────────────
   if (mode === "new") {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <main className="flex-1 flex flex-col items-center px-4 py-6 sm:py-10">
           <div className="w-full max-w-md">
@@ -156,7 +167,7 @@ export default function MySobresPage() {
                     priority
                   />
                 </div>
-                <h1 className="font-serif text-[26px] sm:text-[30px] font-semibold mt-4 mb-2">
+                <h1 className="font-serif text-[28px] font-semibold mt-4 mb-2">
                   Open a new Sobre
                 </h1>
                 <p
@@ -184,7 +195,7 @@ export default function MySobresPage() {
   // ─── "Join via link" branch ──────────────────────────────────────────
   if (mode === "join") {
     return (
-      <div className="sobre-app">
+      <div className="sobre-app sobre-v2">
         <TopBar wallet={wallet} />
         <JoinByLinkForm
           onValid={(id) => {
@@ -207,7 +218,7 @@ export default function MySobresPage() {
   const allRows = [...adminRows, ...memberRows];
 
   return (
-    <div className="sobre-app">
+    <div className="sobre-app sobre-v2">
       <TopBar wallet={wallet} />
       <main
         className="flex-1 mx-auto w-full px-7 py-12"
@@ -240,7 +251,7 @@ export default function MySobresPage() {
               className="sobre-btn sobre-btn-primary"
               style={{ padding: "12px 18px", fontSize: 14 }}
             >
-              <PlusCircle size={16} strokeWidth={2.2} />
+              <PlusCircleIcon weight="bold" size={16} />
               Open a new Sobre
             </button>
           </div>
@@ -285,7 +296,7 @@ export default function MySobresPage() {
                 color: "var(--text-3)",
               }}
             >
-              <Sparkles size={20} strokeWidth={2} />
+              <SparkleIcon weight="fill" size={20} />
             </div>
             <h2
               className="font-serif"
@@ -405,59 +416,56 @@ function SobreCard({
               ? "Loading…"
               : summary?.walletName || "Family Wallet"}
           </h3>
+          {/* One hue (board): both roles ride Green 50 / Green 700 — the
+              label copy carries the distinction, not a color. */}
           <span
             className="sobre-pill mt-1.5 inline-flex"
             style={{
-              background:
-                role === "admin" ? "#fbe7d2" : "var(--accent-soft)",
-              color:
-                role === "admin"
-                  ? "var(--primary-hover)"
-                  : "var(--sobre-accent)",
+              background: "var(--accent-soft)",
+              color: "var(--sobre-accent)",
               fontSize: 10,
             }}
           >
             {role === "admin" ? "Admin" : "Member"}
           </span>
         </div>
-        <ChevronRight
+        <CaretRightIcon
+          weight="bold"
           size={16}
-          strokeWidth={2}
           style={{ color: "var(--text-3)" }}
         />
       </div>
 
+      {/* Same type ramp as the BalanceHero: sobre-label caps, Manrope 800
+          amount with 0.55em cents, Geist Mono numerals (via .tabular) on
+          the sub-line — only the surface differs (neutral, not green). */}
       <div
         className="rounded-[10px] p-3 mb-3"
         style={{ background: "var(--surface-alt)" }}
       >
+        <div className="sobre-label mb-1">Total balance</div>
         <div
-          className="text-[10px] uppercase tracking-wider mb-0.5"
-          style={{ color: "var(--text-3)", fontWeight: 600 }}
-        >
-          Total balance
-        </div>
-        <div
-          className="tabular"
           style={{
             fontFamily: "var(--serif)",
-            fontSize: 22,
-            fontWeight: 600,
+            fontSize: 32,
+            fontWeight: 800,
+            letterSpacing: "-0.01em",
             color: "var(--text-1)",
             lineHeight: 1,
+            fontVariantNumeric: "tabular-nums",
           }}
         >
-          ₱{" "}
-          {totalPhp.toLocaleString("en-PH", {
-            minimumFractionDigits: 0,
-            maximumFractionDigits: 0,
-          })}
+          ₱
+          {Math.floor(totalPhp).toLocaleString("en-PH")}
+          <span style={{ fontSize: "0.55em", color: "var(--text-3)" }}>
+            .{Math.abs(totalPhp).toFixed(2).split(".")[1]}
+          </span>
         </div>
         <div
           className="text-[11px] tabular mt-0.5"
           style={{ color: "var(--text-3)" }}
         >
-          {totalUsdc.toFixed(4)} USDC
+          {totalUsdc.toFixed(4)} {PAYMENT_TOKEN_LABEL}
         </div>
       </div>
 
@@ -465,9 +473,9 @@ function SobreCard({
         className="flex items-center gap-2 text-[12px]"
         style={{ color: "var(--text-2)" }}
       >
-        <Users
+        <UsersIcon
+          weight="fill"
           size={13}
-          strokeWidth={2}
           style={{ color: "var(--text-3)" }}
         />
         {summary && summary.members.length > 0 ? (

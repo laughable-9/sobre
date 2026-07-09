@@ -160,11 +160,6 @@ export function SummaryCard({
           </>
         )}
 
-        <DailyLimitCard
-          dailyLimit={state.policy.dailyLimit}
-          dailySpent={dailySpent}
-        />
-
         <div className="sobre-members">
           <div className="flex items-center justify-between">
             <span className="sobre-label">
@@ -175,7 +170,19 @@ export function SummaryCard({
                 type="button"
                 onClick={onInvite}
                 className="inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wider"
-                style={{ color: "var(--sobre-primary)" }}
+                style={{
+                  color: "#fff",
+                  background: "var(--sobre-primary)",
+                  padding: "6px 12px",
+                  borderRadius: 999,
+                  transition: "background 120ms ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.background = "var(--primary-hover)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.background = "var(--sobre-primary)";
+                }}
               >
                 <UserPlusIcon weight="fill" size={11} />
                 Invite
@@ -315,6 +322,11 @@ export function SummaryCard({
             </div>
           ) : null}
         </div>
+
+        <DailyLimitCard
+          dailyLimit={state.policy.dailyLimit}
+          dailySpent={dailySpent}
+        />
       </div>
       {children}
     </aside>
@@ -405,10 +417,11 @@ function DailyLimitCard({
         </span>
       </div>
       <div className="mt-1.5 flex items-baseline justify-between gap-2">
+        {/* Running numeral — .tabular resolves to Geist Mono in v2; the
+            inline serif that used to sit here was silently overriding it. */}
         <span
           className="tabular whitespace-nowrap"
           style={{
-            fontFamily: "var(--serif)",
             fontSize: 20,
             fontWeight: 600,
             color: "var(--text-1)",

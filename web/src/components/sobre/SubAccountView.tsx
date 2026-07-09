@@ -138,7 +138,6 @@ export function SubAccountView({
         <div
           className="tabular"
           style={{
-            fontFamily: "var(--serif)",
             fontSize: 52,
             fontWeight: 600,
             letterSpacing: "-0.025em",

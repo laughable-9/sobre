@@ -85,7 +85,7 @@ export default function SignupSmokeTestPage() {
         padding: 24,
         maxWidth: 560,
         margin: "0 auto",
-        fontFamily: "system-ui, -apple-system, sans-serif",
+        fontFamily: "var(--font-sans), system-ui, -apple-system, sans-serif",
         color: "#222",
       }}
     >
@@ -226,7 +226,7 @@ const PRIMARY_BUTTON = {
   padding: "10px 18px",
   fontSize: 14,
   fontWeight: 600,
-  background: "#E8923C",
+  background: "var(--sobre-primary)",
   color: "#fff",
   border: 0,
   borderRadius: 8,

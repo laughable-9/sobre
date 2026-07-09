@@ -89,10 +89,12 @@ function ChooserCard({
   cta: string;
   tone: "mango" | "green";
 }) {
+  // One hue (board): the old "mango" tone rode a peach tint; both cards now
+  // ride Green 50 with the darker Green 700 icon on the primary card.
   const tonePalette =
     tone === "mango"
       ? {
-          iconBg: "#fbe7d2",
+          iconBg: "var(--accent-soft)",
           iconFg: "var(--primary-hover)",
         }
       : {

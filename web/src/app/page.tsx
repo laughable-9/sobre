@@ -1,24 +1,55 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
-  ArrowRight,
-  ChevronDown,
-  Clock,
-  DollarSign,
-  Eye,
-  Lock,
-  Shield,
-  TrendingUp,
-} from "lucide-react";
+  ArrowRightIcon,
+  CaretDownIcon,
+  ClockIcon,
+  CurrencyDollarIcon,
+  EyeIcon,
+  LockIcon,
+  ShieldIcon,
+  TrendUpIcon,
+} from "@phosphor-icons/react";
 
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
+import type { WalletState } from "@/hooks/useWalletState";
+import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { SiteHeader } from "@/components/sobre/SiteHeader";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Reveal } from "@/components/sobre/Reveal";
+import { BalanceHero } from "@/components/sobre/BalanceHero";
+import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
 import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
+
+/**
+ * Sample household state for the landing page's product preview — ₱10,000
+ * in, split 50/30/20. Feeds the real dashboard components (BalanceHero,
+ * EnvelopeSplitCard) so the marketing preview always matches the actual
+ * in-app design, not a hand-rolled lookalike.
+ */
+const PREVIEW_STATE: WalletState = {
+  admin: "",
+  payment_token: "",
+  wallet_name: "Sample family",
+  envelope_names: [],
+  percents: [50, 30, 20],
+  members: [],
+  balances: [5000, 3000, 2000].map((php) =>
+    BigInt(Math.round((php / PHP_PER_USDC) * STROOPS_PER_USDC)),
+  ),
+  subaccounts: [],
+  policy: {
+    requireAllSigs: false,
+    dailyLimit: null,
+    perTxThreshold: null,
+    protectedEnvelopes: [],
+  },
+  savings_lock_all_admins: false,
+  admin_count: 1,
+};
 
 function GithubMark({ size = 18 }: { size?: number }) {
   return (
@@ -86,17 +117,17 @@ const STEPS = [
 
 const TRUST = [
   {
-    icon: <Shield size={18} strokeWidth={2} />,
+    icon: <ShieldIcon weight="fill" size={18} />,
     title: "Built on Stellar",
     body: "Your wallet is a smart contract on Stellar. No bank in the middle.",
   },
   {
-    icon: <Eye size={18} strokeWidth={2} />,
+    icon: <EyeIcon weight="fill" size={18} />,
     title: "Verifiable on-chain",
     body: "Every deposit, spend, and approval is a public transaction.",
   },
   {
-    icon: <DollarSign size={18} strokeWidth={2} />,
+    icon: <CurrencyDollarIcon weight="bold" size={18} />,
     title: "Fractions of a cent",
     body: "Stellar charges micro-fees per transaction. Sobre adds zero.",
   },
@@ -144,6 +175,7 @@ export default function Landing() {
   return (
     <>
       <Nav />
+      <SectionRail />
       <Hero />
       <Problem />
       <HowItWorks />
@@ -198,10 +230,91 @@ function MobileCTABar() {
     <div className="sobre-bottom-bar">
       <OpenSobreButton className="sobre-bottom-cta">
         Open a Sobre
-        <ArrowRight size={18} strokeWidth={2.4} />
+        <ArrowRightIcon weight="bold" size={18} />
       </OpenSobreButton>
     </div>
   );
+}
+
+const NAV_SECTIONS = [
+  { id: "top", label: "Home" },
+  { id: "problem", label: "The reality" },
+  { id: "how", label: "How it works" },
+  { id: "product", label: "The product" },
+  { id: "trust", label: "Why this works" },
+  { id: "two-sides", label: "Two sides" },
+  { id: "about", label: "FAQ" },
+] as const;
+
+/**
+ * Tracks which landing-page section is currently in view, so the nav can
+ * show a "you are here" cue as the user scrolls. Recomputes on every scroll
+ * by picking whichever section's top is closest to (without passing) a line
+ * near the top of the viewport — a plain IntersectionObserver was going
+ * silent (and leaving the old section highlighted) whenever an anchor-link
+ * jump landed a short section entirely outside its narrow intersection
+ * band, so this always has an answer instead of only reacting to crossings.
+ */
+function useScrollSpy(ids: readonly string[]): string | null {
+  const [active, setActive] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sections = ids
+      .map((id) => document.getElementById(id))
+      .filter((el): el is HTMLElement => el !== null);
+    if (sections.length === 0) return;
+
+    const ANCHOR_LINE = 0.25; // 25% down the viewport
+
+    const recompute = () => {
+      const line = window.innerHeight * ANCHOR_LINE;
+      let best: HTMLElement | null = null;
+      let bestDelta = -Infinity;
+      for (const el of sections) {
+        const top = el.getBoundingClientRect().top;
+        // Prefer the last section whose top has crossed the anchor line;
+        // if none has (page hasn't scrolled yet), fall back to the first.
+        if (top <= line && top > bestDelta) {
+          bestDelta = top;
+          best = el;
+        }
+      }
+      setActive((best ?? sections[0]).id);
+    };
+
+    recompute();
+    window.addEventListener("scroll", recompute, { passive: true });
+    window.addEventListener("resize", recompute);
+    return () => {
+      window.removeEventListener("scroll", recompute);
+      window.removeEventListener("resize", recompute);
+    };
+  }, [ids]);
+
+  return active;
+}
+
+/**
+ * True while the given section is in view. Used by the rail to know when
+ * it's scrolled over the dark green Final CTA band, so it can flip its
+ * palette — the light-page ticks that read fine on white/gray sections are
+ * invisible on green, and vice versa.
+ */
+function useSectionInView(id: string): boolean {
+  const [inView, setInView] = useState(false);
+
+  useEffect(() => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
+    );
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [id]);
+
+  return inView;
 }
 
 function Nav() {
@@ -246,6 +359,34 @@ function Nav() {
   );
 }
 
+/**
+ * Fixed side rail (desktop only) showing every major landing-page section as
+ * a tick; the tick for whichever section is currently in view is highlighted
+ * and labeled, so there's always a "you are here" cue while scrolling.
+ */
+function SectionRail() {
+  const active = useScrollSpy(NAV_SECTIONS.map((s) => s.id));
+  const onDark = useSectionInView("final-cta");
+
+  return (
+    <nav
+      className={`sobre-rail${onDark ? " on-dark" : ""}`}
+      aria-label="Page sections"
+    >
+      {NAV_SECTIONS.map((s) => (
+        <a
+          key={s.id}
+          href={`#${s.id}`}
+          className={`sobre-rail-item${active === s.id ? " active" : ""}`}
+        >
+          <span className="dot" aria-hidden />
+          <span className="label">{s.label}</span>
+        </a>
+      ))}
+    </nav>
+  );
+}
+
 function Hero() {
   return (
     <section id="top" className="sobre-hero">
@@ -264,7 +405,7 @@ function Hero() {
           </p>
           <OpenSobreButton className="sobre-hero-cta">
             Open a Sobre
-            <ArrowRight size={16} strokeWidth={2.4} />
+            <ArrowRightIcon weight="bold" size={16} />
           </OpenSobreButton>
         </div>
         <div className="sobre-hero-right">
@@ -288,6 +429,7 @@ function Hero() {
 function Problem() {
   return (
     <section
+      id="problem"
       className="sobre-section"
       style={{ background: "var(--surface-alt)" }}
     >
@@ -370,6 +512,7 @@ function HowItWorks() {
 function Product() {
   return (
     <section
+      id="product"
       className="sobre-section"
       style={{ background: "var(--surface-alt)" }}
     >
@@ -474,135 +617,9 @@ function FeatureCopy({
 function SplitVisual() {
   return (
     <div className="sobre-feat-visual">
-      <div className="sobre-incoming-row">
-        <div
-          className="sobre-incoming-card"
-          style={{
-            background: "#fbe7d2",
-            borderRadius: 10,
-            padding: "14px 16px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--primary-hover)",
-              fontWeight: 600,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-            }}
-          >
-            Incoming
-          </div>
-          <div
-            className="tabular"
-            style={{
-              fontFamily: "var(--serif)",
-              fontSize: 28,
-              fontWeight: 600,
-              color: "var(--primary-hover)",
-              marginTop: 4,
-            }}
-          >
-            ₱ 10,000
-          </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--text-2)",
-              marginTop: 2,
-            }}
-          >
-            625 XLM · from Riyadh
-          </div>
-        </div>
-        <ArrowRight
-          className="sobre-incoming-arrow"
-          size={36}
-          strokeWidth={1.5}
-          color="#A89888"
-        />
-      </div>
-      <div className="sobre-split-tiles">
-        <SplitTile label="Groceries · 50%" amount="₱ 5,000" fill={50} />
-        <SplitTile label="Tuition · 30%" amount="₱ 3,000" fill={30} />
-        <SplitTile label="Savings · 20%" amount="₱ 2,000" fill={20} green />
-      </div>
-      <div
-        style={{
-          marginTop: 18,
-          paddingTop: 14,
-          borderTop: "1px dashed var(--border-strong)",
-          fontSize: 12,
-          color: "var(--text-2)",
-          display: "flex",
-          alignItems: "center",
-          gap: 8,
-        }}
-      >
-        <span
-          style={{
-            width: 6,
-            height: 6,
-            borderRadius: "50%",
-            background: "var(--sobre-accent)",
-          }}
-        />
-        Settled on Stellar in 4.7 seconds · fee ₱0.04
-      </div>
-    </div>
-  );
-}
-
-function SplitTile({
-  label,
-  amount,
-  fill,
-  green,
-}: {
-  label: string;
-  amount: string;
-  fill: number;
-  green?: boolean;
-}) {
-  return (
-    <div
-      style={{
-        background: "#fff",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: 12,
-      }}
-    >
-      <div style={{ fontSize: 11, color: "var(--text-2)" }}>{label}</div>
-      <div
-        className="tabular"
-        style={{
-          fontFamily: "var(--serif)",
-          fontSize: 18,
-          fontWeight: 600,
-          marginTop: 6,
-        }}
-      >
-        {amount}
-      </div>
-      <div
-        style={{
-          height: 4,
-          background: "var(--surface-alt)",
-          borderRadius: 999,
-          marginTop: 8,
-          overflow: "hidden",
-        }}
-      >
-        <div
-          style={{
-            width: `${fill}%`,
-            height: "100%",
-            background: green ? "var(--sobre-accent)" : "var(--sobre-primary)",
-          }}
-        />
-      </div>
+      <BalanceHero state={PREVIEW_STATE}>
+        <EnvelopeSplitCard state={PREVIEW_STATE} onOpen={() => {}} />
+      </BalanceHero>
     </div>
   );
 }
@@ -610,33 +627,40 @@ function SplitTile({
 function MembersVisual() {
   return (
     <div className="sobre-feat-visual">
+      <div className="sobre-label" style={{ marginBottom: 14 }}>
+        Household policy
+      </div>
       <div className="sobre-policy-stack">
         <PolicyRow
-          icon={<Clock size={18} strokeWidth={2} />}
+          icon={<ClockIcon weight="fill" size={18} />}
           title="Daily limit per member"
           value="₱ 500"
         />
         <PolicyRow
-          icon={<Lock size={18} strokeWidth={2} />}
+          icon={<LockIcon weight="fill" size={18} />}
           title="Tuition needs approval"
           value="Locked"
+          locked
         />
         <PolicyRow
-          icon={<Lock size={18} strokeWidth={2} />}
+          icon={<LockIcon weight="fill" size={18} />}
           title="Savings needs approval"
           value="Locked"
+          locked
         />
         <div
+          className="sobre-card-flat"
           style={{
             display: "flex",
             alignItems: "center",
             gap: 14,
-            background: "#fff",
             border: "1.5px dashed var(--border-strong)",
-            borderRadius: 10,
-            padding: 14,
+            padding: "14px 16px",
+            marginTop: 6,
             color: "var(--text-3)",
             fontSize: 13,
+            lineHeight: 1.4,
+            boxShadow: "none",
           }}
         >
           Groceries stays open for small day-to-day spends.
@@ -650,46 +674,47 @@ function PolicyRow({
   icon,
   title,
   value,
+  locked,
 }: {
   icon: React.ReactNode;
   title: string;
   value: string;
+  locked?: boolean;
 }) {
   return (
     <div
+      className="sobre-card-flat"
       style={{
         display: "flex",
         alignItems: "center",
         gap: 14,
-        background: "#fff",
-        border: "1px solid var(--border)",
-        borderRadius: 10,
-        padding: 14,
+        padding: "14px 16px",
       }}
     >
       <div
         style={{
-          width: 36,
-          height: 36,
+          width: 38,
+          height: 38,
+          flexShrink: 0,
           borderRadius: 10,
-          background: "var(--surface-alt)",
+          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
           display: "grid",
           placeItems: "center",
-          color: "var(--text-2)",
+          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
         }}
       >
         {icon}
       </div>
-      <div style={{ flex: 1 }}>
-        <div style={{ fontWeight: 600, fontSize: 14 }}>{title}</div>
+      <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: "var(--text-1)" }}>
+        {title}
       </div>
       <span
         className="sobre-pill"
         style={{
-          background: "#fdf3d8",
-          color: "#b88b1c",
           fontSize: 12,
           fontWeight: 600,
+          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
+          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
         }}
       >
         {value}
@@ -705,48 +730,68 @@ function SavingsVisual() {
         style={{
           display: "flex",
           justifyContent: "space-between",
-          alignItems: "baseline",
+          alignItems: "flex-start",
+          gap: 12,
         }}
       >
         <div>
-          <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-            Savings envelope
-          </div>
+          <div className="sobre-label">Savings envelope</div>
           <div
             className="tabular"
             style={{
-              fontFamily: "var(--serif)",
               fontSize: 34,
-              fontWeight: 600,
-              color: "var(--sobre-accent)",
-              marginTop: 4,
+              fontWeight: 700,
+              color: "var(--text-1)",
+              marginTop: 8,
+              letterSpacing: "-0.01em",
             }}
           >
-            ₱ 11,856.90
+            ₱11,856.90
           </div>
-          <div style={{ fontSize: 12, color: "var(--text-2)" }}>
-204.43 XLM
+          <div
+            className="tabular"
+            style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}
+          >
+            204.43 XLM
           </div>
         </div>
         <span
           className="sobre-pill sobre-pill-soft-green"
-          style={{ padding: "6px 12px", fontSize: 13 }}
+          style={{ padding: "7px 12px", fontSize: 12, fontWeight: 700, flexShrink: 0 }}
         >
-          <TrendingUp size={12} strokeWidth={2.5} />
+          <TrendUpIcon weight="bold" size={12} />
           Est. 4.5% APY
         </span>
       </div>
       <svg
         viewBox="0 0 400 120"
-        style={{ marginTop: 24, width: "100%", height: 140 }}
+        style={{ marginTop: 26, width: "100%", height: 140 }}
         preserveAspectRatio="none"
       >
         <defs>
+          {/* stopColor/stroke moved to style: SVG presentation attributes
+              don't resolve var(), CSS properties do. */}
           <linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1">
-            <stop offset="0%" stopColor="#2E6B4C" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#2E6B4C" stopOpacity="0" />
+            <stop
+              offset="0%"
+              stopOpacity="0.25"
+              style={{ stopColor: "var(--sobre-accent)" }}
+            />
+            <stop
+              offset="100%"
+              stopOpacity="0"
+              style={{ stopColor: "var(--sobre-accent)" }}
+            />
           </linearGradient>
         </defs>
+        <line
+          x1="0"
+          y1="119"
+          x2="400"
+          y2="119"
+          strokeWidth={1}
+          style={{ stroke: "var(--border)" }}
+        />
         <path
           d="M0,100 L40,92 L80,86 L120,80 L160,70 L200,66 L240,58 L280,50 L320,38 L360,28 L400,18 L400,120 L0,120 Z"
           fill="url(#sparkfill)"
@@ -754,11 +799,12 @@ function SavingsVisual() {
         <path
           d="M0,100 L40,92 L80,86 L120,80 L160,70 L200,66 L240,58 L280,50 L320,38 L360,28 L400,18"
           fill="none"
-          stroke="#2E6B4C"
           strokeWidth={2.5}
           strokeLinecap="round"
           strokeLinejoin="round"
+          style={{ stroke: "var(--sobre-accent)" }}
         />
+        <circle cx="400" cy="18" r="4" style={{ fill: "var(--sobre-accent)" }} />
       </svg>
       <div
         style={{
@@ -766,7 +812,7 @@ function SavingsVisual() {
           justifyContent: "space-between",
           fontSize: 11,
           color: "var(--text-3)",
-          marginTop: 4,
+          marginTop: 6,
         }}
       >
         <span>Jan</span>
@@ -782,7 +828,7 @@ function SavingsVisual() {
 
 function Trust() {
   return (
-    <section className="sobre-section">
+    <section id="trust" className="sobre-section">
       <div className="sobre-container">
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">Why this works</div>
@@ -814,6 +860,7 @@ function Trust() {
 function TwoSides() {
   return (
     <section
+      id="two-sides"
       className="sobre-section"
       style={{ background: "var(--surface-alt)" }}
     >
@@ -885,9 +932,9 @@ function Faq({
                 onClick={() => setOpenFaq(openFaq === i ? -1 : i)}
               >
                 <span>{item.q}</span>
-                <ChevronDown
+                <CaretDownIcon
+                  weight="bold"
                   size={20}
-                  strokeWidth={2}
                   className="chev"
                 />
               </button>
@@ -904,7 +951,7 @@ function Faq({
 
 function FinalCTA() {
   return (
-    <section className="sobre-final-cta">
+    <section id="final-cta" className="sobre-final-cta">
       <div className="sobre-container">
         <h2>
           <em className="sobre-em">Open the Sobre.</em> Open the plan.
@@ -915,7 +962,7 @@ function FinalCTA() {
         </p>
         <OpenSobreButton className="sobre-btn-cream sobre-final-cta-btn">
           Start with Sobre, free
-          <ArrowRight size={16} strokeWidth={2} />
+          <ArrowRightIcon weight="bold" size={16} />
         </OpenSobreButton>
       </div>
     </section>

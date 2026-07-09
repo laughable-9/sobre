@@ -39,7 +39,7 @@ export function BackLink({
     boxShadow: "var(--shadow-sm)",
     minHeight: 36,
   };
-  const cls = `inline-flex items-center gap-1 select-none ${className ?? ""}`;
+  const cls = `sobre-backlink inline-flex items-center gap-1 select-none ${className ?? ""}`;
 
   if (href) {
     return (
