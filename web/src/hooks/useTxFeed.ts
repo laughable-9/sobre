@@ -111,7 +111,11 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
       const server = getServer();
       if (startLedgerRef.current === null) {
         const latest = await server.getLatestLedger();
-        startLedgerRef.current = Math.max(latest.sequence - 5_000, 1);
+        // Widened from 5000 (~7h) — the recent-activity block on home was
+        // empty for users whose only deposit had scrolled past the window.
+        // Testnet RPC nodes typically retain ~120k ledgers (~7 days); on
+        // "out of window" we retry narrower below.
+        startLedgerRef.current = Math.max(latest.sequence - 100_000, 1);
       }
       // Omit `limit`. The SDK wraps it in `pagination: { limit }`, which the
       // Soroban RPC silently treats as "return zero events." Hard-won bug.

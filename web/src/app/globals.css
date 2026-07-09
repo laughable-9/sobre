@@ -1993,15 +1993,69 @@ body { overflow-x: clip; min-width: 320px; }
   background: var(--sobre-accent-soft);
   color: var(--sobre-accent);
 }
+/* ─── v2 Activity feed: match the recent-activity row aesthetic ─────────
+   Full feed follows the same ink-on-white row style as home's Recent
+   activity preview and the Envelopes tab rows — one design language for
+   every list surface. Overrides the older sticky-card + colored-halo
+   look from the v1 dashboard. */
+.sobre-v2 .sobre-activity {
+  position: static;
+  max-height: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.sobre-v2 .sobre-activity .head {
+  margin-bottom: 12px;
+}
+.sobre-v2 .sobre-activity h3 {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity .list { overflow: visible; padding-right: 0; }
+.sobre-v2 .sobre-day {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin: 18px 4px 8px;
+}
+.sobre-v2 .sobre-day:first-child { margin-top: 0; }
+.sobre-v2 .sobre-activity-item {
+  padding: 12px 14px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 12px;
+  background: var(--sobre-surface);
+  margin-bottom: 6px;
+  align-items: center;
+}
+.sobre-v2 .sobre-activity-item:hover { background: var(--sobre-surface-alt); }
 .sobre-v2 .sobre-activity-item.new { background: var(--sobre-accent-soft); }
+.sobre-v2 .sobre-activity-item .ic {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity-item.inflow .ic {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
 .sobre-v2 .sobre-activity-item.outflow .ic {
   background: var(--sobre-surface-alt);
   color: var(--sobre-text-1);
 }
 .sobre-v2 .sobre-activity-item.pending .ic {
-  background: var(--sobre-cream);
-  color: var(--sobre-warning);
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
 }
+.sobre-v2 .sobre-activity-item .body { font-size: 14px; }
+.sobre-v2 .sobre-activity-item .body .who { font-weight: 500; }
+.sobre-v2 .sobre-activity-item .body .who .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700;
+}
+.sobre-v2 .sobre-activity-item .body .where { color: var(--sobre-text-3); }
+.sobre-v2 .sobre-activity-item .body .meta { color: var(--sobre-text-3); }
 .sobre-v2 .sobre-warning-bar {
   background: var(--sobre-cream);
   border-color: rgba(198, 138, 46, 0.35);
@@ -2284,7 +2338,9 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-env-row-btn .body .sub {
   display: inline-flex; align-items: center; gap: 6px;
   font-size: 12px; color: var(--sobre-text-3);
+  white-space: nowrap;
 }
+.sobre-env-row-btn .body .sub .pct { font-weight: 600; color: var(--sobre-text-2); }
 .sobre-env-row-btn .body .sub .dot {
   width: 3px; height: 3px; border-radius: 999px;
   background: currentColor; opacity: 0.6;

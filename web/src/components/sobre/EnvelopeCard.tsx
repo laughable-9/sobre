@@ -62,12 +62,11 @@ export function EnvelopeCard({
       <span className="body">
         <span className="name">{name}</span>
         <span className="sub">
-          {percent}% split
+          <span className="pct">{percent}%</span>
           {approvalRequired ? (
             <>
               <span className="dot" aria-hidden />
-              <LockIcon weight="fill" size={11} />
-              Approval
+              <LockIcon weight="fill" size={10} aria-label="Approval required" />
             </>
           ) : null}
         </span>
