@@ -15,18 +15,16 @@ import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
+import { CardsSection } from "@/components/sobre/CardsSection";
 import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
+import { MembersSection } from "@/components/sobre/MembersSection";
 import { OpenSobreSheet } from "@/components/sobre/OpenSobreSheet";
 import { ProfileSheet } from "@/components/sobre/ProfileSheet";
-import {
-  EnvelopeSplitCard,
-  HomeSignalsPlaceholder,
-} from "@/components/sobre/EnvelopeSplitCard";
+import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
 import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
 import { Reveal } from "@/components/sobre/Reveal";
 import { SplitLegendBar } from "@/components/sobre/SplitLegendBar";
-import { QuickActions } from "@/components/sobre/QuickActions";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
@@ -34,27 +32,19 @@ import { DashboardSkeleton } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
 import { backdropClose } from "@/lib/ui";
-import { HouseholdSummary } from "@/components/sobre/HouseholdSummary";
 import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
 import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
-import { RemoveMemberModal } from "@/components/sobre/RemoveMemberModal";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SpendModal } from "@/components/sobre/SpendModal";
 import { SubAccountsPanel } from "@/components/sobre/SubAccountsPanel";
 import { SubAccountView } from "@/components/sobre/SubAccountView";
-import {
-  SummaryCard,
-  type SubaccountSummary,
-} from "@/components/sobre/SummaryCard";
 import { TopBar } from "@/components/sobre/TopBar";
-import type { Member } from "@/hooks/useWalletState";
 
 import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { usePendingSpendRequests } from "@/hooks/usePendingSpendRequests";
-import { useRemoveMember } from "@/hooks/useRemoveMember";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
@@ -246,9 +236,7 @@ function Dashboard({ contractId }: { contractId: string }) {
     window.history.replaceState({}, "", url.toString());
   }, [contractId]);
   const [closeOpen, setCloseOpen] = useState(false);
-  const [removeTarget, setRemoveTarget] = useState<Member | null>(null);
   const [heroPulse, setHeroPulse] = useState(false);
-  const [envelopesPulsing, setEnvelopesPulsing] = useState(false);
   // Display currency is app-wide via CurrencyContext (toggle lives in TopBar).
   const { currency } = useCurrency();
   const [tab, setTab] = useState<Tab>("home");
@@ -292,11 +280,6 @@ function Dashboard({ contractId }: { contractId: string }) {
     { msg: string; kind: "ok" | "warn" } | null
   >(null);
 
-  const { removeMember, pending: kickPending } = useRemoveMember(
-    address,
-    contractId,
-  );
-
   const [newestTxHash, setNewestTxHash] = useState<string | null>(null);
   const seenHashesRef = useRef<Set<string>>(new Set());
   // null = haven't checked localStorage yet (SSR pass + first client render).
@@ -328,28 +311,8 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   const triggerHeroAnimation = () => {
     setHeroPulse(true);
-    setEnvelopesPulsing(true);
     setTimeout(() => setHeroPulse(false), 1500);
-    setTimeout(() => setEnvelopesPulsing(false), 1300);
   };
-
-  // Pre-merged sub-account display rows for the SummaryCard mini-list and
-  // any other read-only consumers. The dedicated tab's panel still merges
-  // its own (full Send / Lock / History context).
-  const subaccountSummary: SubaccountSummary[] = useMemo(() => {
-    if (!state) return [];
-    return subRows.map((row) => {
-      const chain = row.walletAddress
-        ? state.subaccounts.find((s) => s.address === row.walletAddress) ?? null
-        : null;
-      return {
-        displayName: row.displayName,
-        emoji: row.emoji,
-        locked: chain?.locked ?? false,
-        invitePending: row.invitePending,
-      };
-    });
-  }, [state, subRows]);
 
   const dailySpent = useMemo(() => {
     if (!address) return 0n;
@@ -393,25 +356,6 @@ function Dashboard({ contractId }: { contractId: string }) {
       flash(`Spent ${fmtPhp} from ${envLabel}`, "ok");
     }
     refreshAll();
-  };
-
-  const handleKick = (memberAddress: string) => {
-    const member = state?.members.find((m) => m.address === memberAddress);
-    if (!member || kickPending) return;
-    setRemoveTarget(member);
-  };
-
-  const confirmRemove = async () => {
-    if (!removeTarget) return;
-    const label = removeTarget.name || removeTarget.address;
-    try {
-      await removeMember(removeTarget.address);
-      setRemoveTarget(null);
-      flash(`${label} removed`, "warn");
-      refreshAll();
-    } catch {
-      // surfaces via state poll
-    }
   };
 
   // ─── Closed Sobre branch ──────────────────────────────────────────────
@@ -632,59 +576,22 @@ function Dashboard({ contractId }: { contractId: string }) {
             />
           </BalanceHero>
 
-          <QuickActions
-            onDeposit={() => setDepositOpen(true)}
-            onCashout={() => setCashoutOpen(true)}
-            cashoutDisabled={
-              state.balances.reduce((acc, b) => acc + b, 0n) === 0n
-            }
-            onLogExpense={() => setLogExpenseOpen(true)}
-            onEnvelopes={() => switchTab("envelopes")}
-            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
-            onSubaccounts={() => switchTab("subaccounts")}
-            onSettings={() => switchTab("settings")}
-          />
-
-          <HouseholdSummary
-            events={txFeed.events}
-            familyWalletId={familyWalletId}
-            onSeeAllActivity={() => switchTab("activity")}
-          >
-            {/* PLACEHOLDER: board Section-07 signal pills — static sample
-                copy inside Recent activity, not wired to real data yet. See
-                HomeSignalsPlaceholder's header for the wire-up plan. */}
-            <HomeSignalsPlaceholder />
-          </HouseholdSummary>
-
-          <SummaryCard
-            state={state}
-            address={address}
-            onDeposit={() => setDepositOpen(true)}
-            onCashout={() => setCashoutOpen(true)}
-            dailySpent={dailySpent}
-            onKick={isAdmin ? handleKick : undefined}
-            onInvite={isAdmin ? () => setInviteOpen(true) : undefined}
-            subaccounts={subaccountSummary}
-            onOpenSubaccounts={() => switchTab("subaccounts")}
-            hideBalance
-          >
-            {pendingRequests.pending.length > 0 ? (
-              <div className="sobre-admin-section sobre-card-flat">
-                <h3>Pending approvals ({pendingRequests.pending.length})</h3>
-                <PendingRequestsPanel
-                  userAddress={address}
-                  contractId={contractId}
-                  isAdmin={isAdmin}
-                  pending={pendingRequests.pending}
-                  members={state.members}
-                  subaccounts={state.subaccounts}
-                  adminCount={state.admin_count}
-                  envelopeNames={state.envelope_names}
-                  onSuccess={refreshAll}
-                />
-              </div>
-            ) : null}
-          </SummaryCard>
+          {pendingRequests.pending.length > 0 ? (
+            <div className="sobre-admin-section sobre-card-flat">
+              <h3>Pending approvals ({pendingRequests.pending.length})</h3>
+              <PendingRequestsPanel
+                userAddress={address}
+                contractId={contractId}
+                isAdmin={isAdmin}
+                pending={pendingRequests.pending}
+                members={state.members}
+                subaccounts={state.subaccounts}
+                adminCount={state.admin_count}
+                envelopeNames={state.envelope_names}
+                onSuccess={refreshAll}
+              />
+            </div>
+          ) : null}
         </Reveal>
       </div>
       ) : null}
@@ -759,9 +666,6 @@ function Dashboard({ contractId }: { contractId: string }) {
           <div className="sobre-envs">
             <header className="mb-5">
               <h2>Envelopes</h2>
-              <p className="sub">
-                Money split automatically the moment a remittance lands.
-              </p>
             </header>
 
             <SplitLegendBar state={state} />
@@ -777,16 +681,26 @@ function Dashboard({ contractId }: { contractId: string }) {
                   index={i}
                   balanceStroops={bal}
                   percent={state.percents[i] ?? 0}
-                  pulsing={envelopesPulsing}
                   onSpend={() => setSpendOpen(envName)}
                   approvalRequired={approvalRequired}
-                  events={txFeed.events}
-                  members={state.members}
                   envelopeNames={state.envelope_names}
                   currency={currency}
                 />
               );
             })}
+
+            <MembersSection
+              members={state.members}
+              adminAddress={state.admin}
+              canInvite={isAdmin && state.members.length < 2}
+              onInvite={() => setInviteOpen(true)}
+            />
+
+            <CardsSection
+              rows={subRows}
+              canManage={isAdmin}
+              onManage={() => switchTab("subaccounts")}
+            />
           </div>
         </div>
       ) : null}
@@ -1102,16 +1016,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             </div>
           </div>
         </div>
-      ) : null}
-
-      {removeTarget ? (
-        <RemoveMemberModal
-          member={removeTarget}
-          walletName={state.wallet_name}
-          pending={kickPending}
-          onClose={() => setRemoveTarget(null)}
-          onConfirm={() => void confirmRemove()}
-        />
       ) : null}
 
       {closeOpen ? (
