@@ -23,6 +23,7 @@ import { MembersSection } from "@/components/sobre/MembersSection";
 import { OpenSobreSheet } from "@/components/sobre/OpenSobreSheet";
 import { ProfileSheet } from "@/components/sobre/ProfileSheet";
 import { RecentActivityPreview } from "@/components/sobre/RecentActivityPreview";
+import { SplitProposalCard } from "@/components/sobre/SplitProposalCard";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
 import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
 import { Reveal } from "@/components/sobre/Reveal";
@@ -47,6 +48,7 @@ import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { usePendingSpendRequests } from "@/hooks/usePendingSpendRequests";
+import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
@@ -116,6 +118,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   const state = walletState.state;
   const familyWalletId = walletState.familyWalletId;
   const pendingRequests = usePendingSpendRequests(familyWalletId);
+  const splitProposals = useSplitProposals(familyWalletId);
   const subaccountsHook = useSubaccounts(familyWalletId);
   const subRows = subaccountsHook.subaccounts;
 
@@ -683,8 +686,24 @@ function Dashboard({ contractId }: { contractId: string }) {
                 <button
                   type="button"
                   className="sobre-envs-settings"
+                  data-badge={
+                    splitProposals.pending &&
+                    wallet.wallet?.id &&
+                    !splitProposals.pending.approversWalletIds.includes(
+                      wallet.wallet.id,
+                    ) &&
+                    !splitProposals.pending.rejectersWalletIds.includes(
+                      wallet.wallet.id,
+                    )
+                      ? "true"
+                      : undefined
+                  }
                   onClick={() => switchTab("settings")}
-                  aria-label="Sobre rules & settings"
+                  aria-label={
+                    splitProposals.pending
+                      ? "Sobre rules & settings (proposal awaits your vote)"
+                      : "Sobre rules & settings"
+                  }
                   title="Sobre rules & settings"
                 >
                   <GearSixIcon weight="bold" size={18} />
@@ -803,15 +822,41 @@ function Dashboard({ contractId }: { contractId: string }) {
 
           <div className="sobre-admin-section sobre-card-flat">
             <h3>Envelope split</h3>
+            {splitProposals.pending ? (
+              <SplitProposalCard
+                proposal={splitProposals.pending}
+                currentPercents={[
+                  state.percents[0] ?? 0,
+                  state.percents[1] ?? 0,
+                  state.percents[2] ?? 0,
+                ]}
+                currentWalletId={wallet.wallet?.id ?? null}
+                envelopeNames={state.envelope_names}
+                adminCount={state.admin_count}
+                onResolved={(kind) => {
+                  void splitProposals.refresh();
+                  refresh();
+                  if (kind === "approved") flash("Split applied to next deposit", "ok");
+                  else if (kind === "rejected") flash("Proposal rejected", "warn");
+                  else if (kind === "cancelled") flash("Proposal cancelled", "warn");
+                }}
+              />
+            ) : null}
             <EnvelopeSplitForm
               userAddress={address}
               familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.percents}
               envelopeNames={state.envelope_names}
+              adminCount={state.admin_count}
+              hasPendingProposal={Boolean(splitProposals.pending)}
               onSuccess={() => {
                 refresh();
                 flash("Split saved", "ok");
+              }}
+              onProposalSent={() => {
+                void splitProposals.refresh();
+                flash("Proposal sent to the other admin", "ok");
               }}
             />
           </div>
