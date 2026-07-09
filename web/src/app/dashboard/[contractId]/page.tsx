@@ -4,8 +4,6 @@ import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   PencilSimpleIcon,
-  PlusIcon,
-  UserPlusIcon,
   WarningIcon,
 } from "@phosphor-icons/react";
 
@@ -16,8 +14,11 @@ import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
+import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
 import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
+import { OpenSobreSheet } from "@/components/sobre/OpenSobreSheet";
+import { ProfileSheet } from "@/components/sobre/ProfileSheet";
 import {
   EnvelopeSplitCard,
   HomeSignalsPlaceholder,
@@ -67,11 +68,28 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { PHP_PER_USDC } from "@/lib/config";
 
-type Tab = "home" | "envelopes" | "activity" | "subaccounts" | "settings";
+type Tab =
+  | "home"
+  | "envelopes"
+  | "activity"
+  | "subaccounts"
+  | "settings"
+  | "profile";
 const SETTINGS_HASH = "#settings";
 const SUBACCOUNTS_HASH = "#subaccounts";
 const ENVELOPES_HASH = "#envelopes";
 const ACTIVITY_HASH = "#activity";
+const PROFILE_HASH = "#profile";
+
+/** Collapse the dashboard's fine-grained tabs onto the dock's four visible
+ *  slots. Settings has no dock home (reached via home actions), so it maps
+ *  back to Home; sub-accounts nests under Envelopes visually. */
+function dockActive(tab: Tab): DockTab {
+  if (tab === "envelopes" || tab === "subaccounts") return "envelopes";
+  if (tab === "activity") return "activity";
+  if (tab === "profile") return "profile";
+  return "home";
+}
 
 interface RouteParams {
   contractId: string;
@@ -183,6 +201,8 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [inviteOpen, setInviteOpen] = useState(false);
   // "Log expense" quick-action tile → the off-chain note field in a modal.
   const [logExpenseOpen, setLogExpenseOpen] = useState(false);
+  // Dock's center Sobre FAB opens the action sheet.
+  const [sobreSheetOpen, setSobreSheetOpen] = useState(false);
   // Pencil on the balance hero → rename dialog (admin only).
   const [renameOpen, setRenameOpen] = useState(false);
   // Member drafts collected during onboarding, handed off via sessionStorage
@@ -239,6 +259,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       if (window.location.hash === SUBACCOUNTS_HASH) return "subaccounts";
       if (window.location.hash === ENVELOPES_HASH) return "envelopes";
       if (window.location.hash === ACTIVITY_HASH) return "activity";
+      if (window.location.hash === PROFILE_HASH) return "profile";
       return "home";
     };
     setTab(fromHash());
@@ -258,7 +279,9 @@ function Dashboard({ contractId }: { contractId: string }) {
             ? ENVELOPES_HASH
             : next === "activity"
               ? ACTIVITY_HASH
-              : "";
+              : next === "profile"
+                ? PROFILE_HASH
+                : "";
     history.replaceState(
       null,
       "",
@@ -525,23 +548,22 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   // ─── Full dashboard ───────────────────────────────────────────────────
   return (
-    <div className="sobre-app sobre-v2">
-      {/* No walletState/contractId (name lives on the page title) and no
-          showCurrency (the PHP|USD toggle sits on the title row instead). */}
-      <TopBar wallet={wallet} />
+    <div className="sobre-app sobre-v2 has-dock">
+      {/* Top bar removed on this route — mobile-first primary nav is the
+          bottom dock; wallet name + currency toggle now live inside the
+          balance hero header, and the Profile dock tab owns identity. */}
 
-      {/* One back affordance per screen: the immediate parent. Wallet view
-          backs out to My Sobres; Supplementary/Settings back to the wallet. */}
-      <div
-        className="mx-auto w-full px-4 sm:px-7 pt-5"
-        style={{ maxWidth: 1320 }}
-      >
-        {tab === "home" ? (
-          <BackLink href="/dashboard" />
-        ) : (
+      {/* Back affordance only for nested sub-views (subaccounts / settings).
+          Home has no BackLink now — "My Sobres" moved into the Profile dock
+          tab, and there is no top bar to compete with. */}
+      {tab === "subaccounts" || tab === "settings" ? (
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-5"
+          style={{ maxWidth: 1320 }}
+        >
           <BackLink onClick={() => switchTab("home")} label="Wallet" />
-        )}
-      </div>
+        </div>
+      ) : null}
 
       {walletState.familyError ? (
         // Family settings (split %, policy) failed to load — dashboard
@@ -580,25 +602,30 @@ function Dashboard({ contractId }: { contractId: string }) {
         style={{ maxWidth: 640 }}
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
-          <div className="sobre-v2-title">
-            <div className="left">
-              <h1 className="txt">{state.wallet_name || "Family Wallet"}</h1>
-              {isAdmin ? (
-                <button
-                  type="button"
-                  className="wedit"
-                  onClick={() => setRenameOpen(true)}
-                  aria-label="Rename wallet"
-                  title="Rename wallet"
-                >
-                  <PencilSimpleIcon weight="bold" size={14} />
-                </button>
-              ) : null}
-            </div>
-            <CurrencyToggle />
-          </div>
-
-          <BalanceHero state={state}>
+          <BalanceHero
+            state={state}
+            header={
+              <div className="hero-title-row">
+                <div className="hero-title-left">
+                  <span className="hero-title-name">
+                    {state.wallet_name || "Family Wallet"}
+                  </span>
+                  {isAdmin ? (
+                    <button
+                      type="button"
+                      className="hero-title-edit"
+                      onClick={() => setRenameOpen(true)}
+                      aria-label="Rename wallet"
+                      title="Rename wallet"
+                    >
+                      <PencilSimpleIcon weight="bold" size={12} />
+                    </button>
+                  ) : null}
+                </div>
+                <CurrencyToggle />
+              </div>
+            }
+          >
             <EnvelopeSplitCard
               state={state}
               onOpen={() => switchTab("envelopes")}
@@ -778,6 +805,15 @@ function Dashboard({ contractId }: { contractId: string }) {
         />
       ) : null}
 
+      {tab === "profile" ? (
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
+          style={{ maxWidth: 480 }}
+        >
+          <ProfileSheet wallet={wallet} />
+        </div>
+      ) : null}
+
       {tab === "settings" ? (
       <section
         className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
@@ -874,33 +910,25 @@ function Dashboard({ contractId }: { contractId: string }) {
       </section>
       ) : null}
 
-      {/* App-first thumb-zone action bar (phones/tablets only). Mirrors the
-          primary actions that otherwise live in the SummaryCard, kept one
-          tap away while the dashboard scrolls. Hidden on desktop via CSS. */}
-      {tab === "envelopes" ? (
-        <div className="sobre-bottom-bar">
-          <div className="sobre-bottom-actions">
-            {isAdmin ? (
-              <button
-                type="button"
-                onClick={() => setInviteOpen(true)}
-                className="sobre-btn sobre-btn-soft"
-                style={{ justifyContent: "center", minHeight: 48 }}
-              >
-                <UserPlusIcon weight="fill" size={18} />
-                Invite
-              </button>
-            ) : null}
-            <button
-              type="button"
-              onClick={() => setDepositOpen(true)}
-              className="sobre-bottom-cta"
-            >
-              <PlusIcon weight="bold" size={18} />
-              Add money
-            </button>
-          </div>
-        </div>
+      <BottomDock
+        active={dockActive(tab)}
+        onTab={(next) => switchTab(next as Tab)}
+        onOpenSobre={() => setSobreSheetOpen(true)}
+      />
+
+      {sobreSheetOpen ? (
+        <OpenSobreSheet
+          onClose={() => setSobreSheetOpen(false)}
+          onAddMoney={() => setDepositOpen(true)}
+          onLogExpense={() => setLogExpenseOpen(true)}
+          onCashOut={() => setCashoutOpen(true)}
+          onSend={() => {
+            const first = state.balances.findIndex((b) => b > 0n);
+            if (first >= 0) setSpendOpen(ENVELOPE_LABELS[first]);
+            else switchTab("envelopes");
+          }}
+          disableSend={state.balances.every((b) => b === 0n)}
+        />
       ) : null}
 
       {heroPulse ? <HeroPulse /> : null}

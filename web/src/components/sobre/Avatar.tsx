@@ -35,6 +35,7 @@ export function Avatar({
           borderRadius: "50%",
           objectFit: "cover",
           flexShrink: 0,
+          display: "block",
           ...style,
         }}
       />

@@ -16,9 +16,13 @@ import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
  */
 export function BalanceHero({
   state,
+  header,
   children,
 }: {
   state: WalletState;
+  /** Rendered inside the card ABOVE "Total balance" — carries the wallet
+   *  title and the currency toggle so the hero owns the whole context. */
+  header?: React.ReactNode;
   /** Rendered inside the card under the total — the envelope split rows
    *  (board Section 07 puts the split inside the balance card). */
   children?: React.ReactNode;
@@ -31,6 +35,7 @@ export function BalanceHero({
 
   return (
     <section className="sobre-v2-hero" aria-label="Total balance">
+      {header}
       <div className="label">Total balance</div>
       {/* Display number is Manrope (board Section 07) — NOT the Geist Mono
           used for running numerals; the .tabular mono override must not

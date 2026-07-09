@@ -846,12 +846,6 @@
   background: var(--surface-alt);
   border-color: var(--border-strong);
 }
-.sobre-wallet-menu-pill .emoji {
-  font-size: 16px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-}
 .sobre-wallet-menu-pill .addr {
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-weight: 600;
@@ -1530,6 +1524,131 @@ body { overflow-x: clip; min-width: 320px; }
   .has-bottom-bar { padding-bottom: 88px; }
 }
 
+/* ─── Bottom dock (mobile-first primary nav) ────────────────────────────
+   Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
+   Sits pinned to the safe-area bottom. Center slot is a raised mango tile
+   that opens the "action sheet" — the app's only action surface. */
+:root { --sobre-dock-h: 68px; }
+.sobre-dock {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(15, 107, 58, 0.06);
+}
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  .sobre-dock {
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+}
+.sobre-dock-inner {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  height: var(--sobre-dock-h);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 10px;
+  position: relative;
+}
+.sobre-dock-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.sobre-dock-tab:hover { color: var(--text-1); }
+.sobre-dock-tab[data-active="true"] { color: var(--sobre-primary); }
+.sobre-dock-fab {
+  align-self: start;
+  margin-top: -18px;
+  justify-self: center;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--sobre-primary);
+  color: #fff;
+  border: 4px solid var(--surface);
+  box-shadow: 0 6px 16px rgba(15, 107, 58, 0.28);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform .1s ease, background .15s ease;
+}
+.sobre-dock-fab:hover { background: var(--sobre-primary-hover); }
+.sobre-dock-fab:active { transform: scale(0.96); }
+/* Reserve space so content isn't tucked under the dock, and clear the
+   safe-area notch since there's no top bar on dashboard shells. */
+.has-dock {
+  padding-top: var(--safe-top);
+  padding-bottom: calc(var(--sobre-dock-h) + var(--safe-bottom) + 16px);
+}
+
+/* ─── "Opened Sobre" action list ────────────────────────────────────────
+   Buttons rendered inside a shared .sobre-modal — no parallel chrome. */
+.sobre-sheet-actions { display: grid; gap: 8px; }
+.sobre-sheet-action {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s ease, border-color .12s ease;
+}
+.sobre-sheet-action:hover:not(:disabled) {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.sobre-sheet-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.sobre-sheet-action .chip {
+  display: inline-grid; place-items: center;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+  flex-shrink: 0;
+}
+.sobre-sheet-action .body { display: flex; flex-direction: column; min-width: 0; }
+.sobre-sheet-action .label { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sobre-sheet-action .hint { font-size: 12px; color: var(--text-3); }
+
+/* ─── Profile tab content ───────────────────────────────────────────────
+   Rendered inside the dashboard scroll area when the Profile dock tab is
+   active. Not a modal — just the tab's contents. */
+.sobre-profile { display: flex; flex-direction: column; gap: 20px; padding: 8px 4px; }
+.sobre-profile .head { display: flex; align-items: center; gap: 14px; }
+.sobre-profile .who { min-width: 0; }
+.sobre-profile .name {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 20px; font-weight: 700; color: var(--text-1);
+}
+.sobre-profile .email { font-size: 13px; color: var(--text-3); word-break: break-all; }
+.sobre-profile .rows { display: flex; flex-direction: column; gap: 6px; }
+.sobre-profile .row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 15px; font-weight: 500;
+  color: var(--text-1);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.sobre-profile .row:hover { background: var(--surface-alt); }
+.sobre-profile .row.danger { color: var(--sobre-danger); }
+
 /* ─── Landing feature-visual rows that must collapse on phones ───────────
    These replace inline `style={{ display:flex }}` / grid in page.tsx so they
    actually reflow on narrow screens instead of overflowing (per the sobre-web
@@ -1943,35 +2062,46 @@ body { overflow-x: clip; min-width: 320px; }
   padding: 22px 22px 20px;
   color: #fff;
 }
-/* Wallet-name page title — sits ABOVE the balance card, big ink wordmark
-   (Manrope 700, same family as the brand). Ellipsis guards long names so the
-   row never wraps or pushes the pencil off-screen. */
-.sobre-v2-title {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  margin: 2px 2px 2px;
+.sobre-v2-hero .label { color: rgba(255, 255, 255, 0.85); }
+/* Header row printed inside the hero — wallet name + rename + currency
+   toggle, so the balance card owns its title context. */
+.sobre-v2-hero .hero-title-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
   min-width: 0;
+  margin: 0 0 14px;
 }
-.sobre-v2-title .left {
-  display: flex; align-items: center; gap: 10px; min-width: 0;
+.sobre-v2-hero .hero-title-left {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
 }
-.sobre-v2-title .txt {
+.sobre-v2-hero .hero-title-name {
   font-family: var(--font-manrope), var(--font-sans), sans-serif;
-  font-size: clamp(28px, 6.5vw, 38px);
-  font-weight: 700; letter-spacing: -0.02em; line-height: 1.12;
-  color: var(--sobre-text-1);
-  margin: 0; min-width: 0;
+  font-size: 15px; font-weight: 600;
+  color: #fff;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
-.sobre-v2-title .wedit {
-  width: 34px; height: 34px; border-radius: 999px; flex-shrink: 0;
+.sobre-v2-hero .hero-title-edit {
+  width: 22px; height: 22px; border-radius: 999px; flex-shrink: 0;
   display: grid; place-items: center;
-  border: 1px solid var(--sobre-border); cursor: pointer;
-  background: var(--sobre-surface);
-  color: var(--sobre-text-2);
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
   transition: background 120ms ease;
 }
-.sobre-v2-title .wedit:hover { background: var(--sobre-surface-alt); }
-.sobre-v2-hero .label { color: rgba(255, 255, 255, 0.85); }
+.sobre-v2-hero .hero-title-edit:hover { background: rgba(255, 255, 255, 0.22); }
+/* Currency toggle sitting on the green hero — invert to translucent white
+   so it reads as a chip on green, not a floating light card. */
+.sobre-v2-hero [role="radiogroup"] {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+.sobre-v2-hero [role="radiogroup"] [role="radio"] {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+.sobre-v2-hero [role="radiogroup"] [role="radio"][aria-checked="true"] {
+  background: #fff !important;
+  color: var(--sobre-primary-hover) !important;
+}
 .sobre-v2-hero .amount {
   /* Board Section 07: the hero figure is Manrope display 700–800. Geist Mono
      is reserved for running numerals (sub-lines, tables), not this number. */

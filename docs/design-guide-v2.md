@@ -1,5 +1,7 @@
 # Sobre Design Guide — v2 (Green Board)
 
+> **Priority: mobile-first (portrait, 375–430pt).** Every screen is designed and built for mobile first; desktop is a widened variant, never the source. Primary navigation lives in the bottom dock, not the top bar. The center dock slot is the Sobre itself — tapping it opens an action sheet ("open the envelope"). No headers, no floating action buttons, no navigation in the top edge.
+
 **Document type:** Design system reference for the v2 rebrand (web, mobile-ready)
 **Project:** Sobre — shared family wallet for OFW households
 **Status:** Live on the dashboard route (`/dashboard/[contractId]`), scoped under `.sobre-v2`. The rest of the app (landing, onboarding, invite) still runs the v1 cream/mango system in `design-guide.md` until the team promotes these tokens to `:root`.
