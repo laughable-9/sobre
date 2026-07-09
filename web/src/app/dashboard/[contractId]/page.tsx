@@ -1040,6 +1040,8 @@ function Dashboard({ contractId }: { contractId: string }) {
         <InviteModal
           walletName={state.wallet_name}
           contractId={contractId}
+          familyWalletId={familyWalletId}
+          createdByWalletId={wallet.wallet?.id ?? null}
           suggestions={inviteSuggestions}
           onClose={() => setInviteOpen(false)}
         />

@@ -33,12 +33,16 @@ export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
 
 /** Build the invite URL the admin shares. Hardcoded to `APP_ORIGIN` so a
  *  link minted from `localhost:3000` during local dev still resolves to the
- *  deployed app when the recipient opens it. */
+ *  deployed app when the recipient opens it. `variant` maps to the `?as=`
+ *  query the landing page reads to pick the join flow. Owns the URL shape
+ *  for every invite type — do not decorate `?as=` at the call site. */
 export function buildInviteUrl(
   contractId: string,
   tokenBase64Url: string,
+  variant: "member" | "admin" | "subaccount" = "member",
 ): string {
-  return `${APP_ORIGIN}/invite/${tokenBase64Url}?wallet=${contractId}`;
+  const base = `${APP_ORIGIN}/invite/${tokenBase64Url}?wallet=${contractId}`;
+  return variant === "member" ? base : `${base}&as=${variant}`;
 }
 
 /** Lowercase hex string of an arbitrary byte array. Shared by the on-chain
@@ -48,6 +52,14 @@ export function bytesToHex(bytes: Uint8Array): string {
   let out = "";
   for (const b of bytes) out += b.toString(16).padStart(2, "0");
   return out;
+}
+
+/** Postgres bytea literal string — `\x` prefix followed by lowercase hex.
+ *  PostgREST accepts this shape for bytea column inserts and RPC bytea
+ *  arguments; use it wherever a Uint8Array (typically a sha256 digest)
+ *  needs to cross the Supabase boundary. */
+export function byteaLiteral(bytes: Uint8Array): string {
+  return `\\x${bytesToHex(bytes)}`;
 }
 
 /** base64url → 32-byte plaintext invite token, or null on malformed input.

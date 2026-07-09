@@ -88,13 +88,12 @@ export function useCreateSubaccountInvite(
           );
         }
 
-        // Append the sub-account routing query param. The /invite/[token]
-        // page reads `?as=subaccount` and routes redemption through
-        // `join_as_subaccount` instead of `join_wallet`. One-line override
-        // beats a generic opts param on buildInviteUrl.
-        const baseUrl = buildInviteUrl(contractId, base64UrlEncode(token));
         return {
-          url: `${baseUrl}&as=subaccount`,
+          url: buildInviteUrl(
+            contractId,
+            base64UrlEncode(token),
+            "subaccount",
+          ),
           expiresAtLedger,
         };
       } catch (e) {

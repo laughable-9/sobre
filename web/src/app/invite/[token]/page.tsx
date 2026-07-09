@@ -3,6 +3,7 @@
 import { Suspense, use, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
+import { AdminJoinForm } from "@/components/sobre/AdminJoinForm";
 import { BackLink } from "@/components/sobre/BackLink";
 import { JoinForm } from "@/components/sobre/JoinForm";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
@@ -41,7 +42,9 @@ function Landing({ token }: { token: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const contractId = searchParams.get("wallet");
-  const isSubaccountInvite = searchParams.get("as") === "subaccount";
+  const asParam = searchParams.get("as");
+  const isSubaccountInvite = asParam === "subaccount";
+  const isAdminInvite = asParam === "admin";
   const wallet = usePasskeyWallet();
   const { address } = wallet;
   const walletState = useWalletState(address, contractId);
@@ -65,7 +68,14 @@ function Landing({ token }: { token: string }) {
     state !== null &&
     address !== null &&
     state.subaccounts.some((s) => s.address === address);
-  const alreadyJoined = isSubaccountInvite ? alreadySubaccount : alreadyMember;
+  // Admin invites don't auto-bounce on "already a member" — the invitee
+  // may be a member who still needs the role flip. The AdminJoinForm's
+  // redeem_admin_invite RPC is idempotent, so it's safe to render.
+  const alreadyJoined = isAdminInvite
+    ? false
+    : isSubaccountInvite
+      ? alreadySubaccount
+      : alreadyMember;
   useEffect(() => {
     if (alreadyJoined && !redeeming && contractId) {
       router.replace(`/dashboard/${contractId}`);
@@ -142,6 +152,19 @@ function Landing({ token }: { token: string }) {
             router.replace(`/dashboard/${contractId}`);
           }}
           onCancel={() => router.replace("/dashboard")}
+        />
+      ) : isAdminInvite ? (
+        <AdminJoinForm
+          wallet={wallet}
+          state={state}
+          contractId={contractId}
+          inviteToken={inviteToken}
+          alreadyMember={alreadyMember}
+          refreshWalletState={walletState.refresh}
+          onSuccess={() => {
+            setRedeeming(true);
+            router.replace(`/dashboard/${contractId}`);
+          }}
         />
       ) : (
         <JoinForm

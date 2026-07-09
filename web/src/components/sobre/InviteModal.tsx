@@ -18,11 +18,21 @@ export interface InviteSuggestion {
 export function InviteModal({
   walletName,
   contractId,
+  familyWalletId,
+  createdByWalletId,
   suggestions = [],
   onClose,
 }: {
   walletName: string;
   contractId: string;
+  /** family_wallets.id — required so admin-role invites can persist their
+   *  Supabase hint row. Non-admin (generic member) invites don't touch
+   *  Supabase, so null is tolerated but disables admin-row minting. */
+  familyWalletId: string | null;
+  /** wallets.id of the current admin. Threaded through from the parent's
+   *  usePasskeyWallet so the admin-invite path doesn't do a redundant
+   *  wallets round-trip. Null disables admin-row minting. */
+  createdByWalletId: string | null;
   /** Optional pre-filled members from onboarding. Each gets its own on-demand
    *  link so the admin mints one invite (one passkey prompt) at a time. */
   suggestions?: InviteSuggestion[];
@@ -49,7 +59,18 @@ export function InviteModal({
   const generateFor = async (idx: number) => {
     setActiveIdx(idx);
     try {
-      const result = await createInvite();
+      const suggestion = suggestions[idx];
+      const canMintAdmin =
+        suggestion?.role === "admin" && familyWalletId && createdByWalletId;
+      const result = await createInvite(
+        canMintAdmin
+          ? {
+              intendedRole: "admin",
+              familyWalletId,
+              createdByWalletId,
+            }
+          : undefined,
+      );
       setLinks((prev) => ({ ...prev, [idx]: result.url }));
     } catch {
       // surfaces via the hook's error state
@@ -58,6 +79,9 @@ export function InviteModal({
     }
   };
 
+  // Generic invites (no named suggestion) can't infer intent — always
+  // mint them as member. Admins who want to hand-invite another admin
+  // should use a named suggestion so we know to mark the hint.
   const generateGeneric = async () => {
     setActiveIdx(-1);
     try {

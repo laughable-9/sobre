@@ -4,7 +4,13 @@ import { useCallback, useState } from "react";
 import { xdr } from "@stellar/stellar-sdk";
 
 import { getServer, invokeWrite } from "@/lib/contract";
-import { base64UrlEncode, buildInviteUrl, sha256 } from "@/lib/encoding";
+import {
+  base64UrlEncode,
+  buildInviteUrl,
+  byteaLiteral,
+  sha256,
+} from "@/lib/encoding";
+import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 /** Stellar ledgers close every ~5s on testnet. 360 ledgers ≈ 30 min — the
  *  expiry window the admin's invite link is valid for. Keep short so a
@@ -22,8 +28,22 @@ export interface CreateInviteResult {
   expiresAtLedger: number;
 }
 
+/** Discriminated union so 'admin' invites can't be minted without the
+ *  family_wallets.id + creator wallets.id the hint row needs. Member
+ *  invites carry no options because they don't touch Supabase. */
+export type CreateInviteOptions =
+  | { intendedRole?: "member" }
+  | {
+      intendedRole: "admin";
+      familyWalletId: string;
+      /** wallets.id of the admin minting the invite. Passed in from the
+       *  caller (usePasskeyWallet.wallet.id) so the hook doesn't need
+       *  a second Supabase round-trip to look it up. */
+      createdByWalletId: string;
+    };
+
 export interface UseCreateInviteResult {
-  createInvite: () => Promise<CreateInviteResult>;
+  createInvite: (opts?: CreateInviteOptions) => Promise<CreateInviteResult>;
   pending: boolean;
   error: string | null;
 }
@@ -48,35 +68,59 @@ export function useCreateInvite(
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const createInvite = useCallback(async (): Promise<CreateInviteResult> => {
-    if (!contractId) throw new Error("No wallet selected.");
-    setPending(true);
-    setError(null);
-    try {
-      const token = crypto.getRandomValues(new Uint8Array(32));
-      const tokenHash = await sha256(token);
+  const createInvite = useCallback(
+    async (opts?: CreateInviteOptions): Promise<CreateInviteResult> => {
+      if (!contractId) throw new Error("No wallet selected.");
+      const intendedRole = opts?.intendedRole ?? "member";
+      setPending(true);
+      setError(null);
+      try {
+        const token = crypto.getRandomValues(new Uint8Array(32));
+        const tokenHash = await sha256(token);
 
-      const latest = await getServer().getLatestLedger();
-      const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+        const latest = await getServer().getLatestLedger();
+        const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
 
-      const args = [
-        xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
-        xdr.ScVal.scvU32(expiresAtLedger),
-      ];
-      await invokeWrite(contractId, "create_invite", args);
+        const args = [
+          xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
+          xdr.ScVal.scvU32(expiresAtLedger),
+        ];
+        await invokeWrite(contractId, "create_invite", args);
 
-      return {
-        url: buildInviteUrl(contractId, base64UrlEncode(token)),
-        expiresAtLedger,
-      };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
-      throw e;
-    } finally {
-      setPending(false);
-    }
-  }, [contractId]);
+        // Admin-role hint. Insert AFTER the on-chain mint so we never
+        // leave a Supabase hint pointing at a hash that never made it
+        // to chain. RLS enforces admin-only insert; the caller supplies
+        // family_wallets.id + wallets.id so we skip a round-trip.
+        if (opts?.intendedRole === "admin") {
+          const supabase = getSupabaseBrowserClient();
+          const { error: insertErr } = await supabase
+            .from("admin_invite_hints")
+            .insert({
+              token_hash: byteaLiteral(tokenHash),
+              family_wallet_id: opts.familyWalletId,
+              created_by: opts.createdByWalletId,
+            });
+          if (insertErr) throw new Error(insertErr.message);
+        }
+
+        return {
+          url: buildInviteUrl(
+            contractId,
+            base64UrlEncode(token),
+            intendedRole,
+          ),
+          expiresAtLedger,
+        };
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
+        throw e;
+      } finally {
+        setPending(false);
+      }
+    },
+    [contractId],
+  );
 
   return { createInvite, pending, error };
 }
