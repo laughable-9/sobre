@@ -57,6 +57,10 @@ export interface WalletState {
   /** Count of family_members with role='admin' for this family. Read live by
    *  the relay route at release-time; surfaced here for UI gating. */
   admin_count: number;
+  /** Maximum admins allowed. Configurable per family (default 2). Used by
+   *  the MembersSection to display "N of M admins" and by redeem_admin_invite
+   *  to reject over-cap redemptions. */
+  admin_cap: number;
 }
 
 export interface UseWalletStateResult {
@@ -71,6 +75,11 @@ export interface UseWalletStateResult {
   familyError: string | null;
   familyWalletId: string | null;
   refresh: () => Promise<void>;
+  /** Re-fetches the Supabase-side family display only — no on-chain
+   *  simulate. Prefer this when the change is off-chain (envelope names,
+   *  split percents, admin_cap, spend policy) so the ~200-400ms Soroban
+   *  RPC round-trip isn't spent for nothing. */
+  refreshDisplay: () => Promise<void>;
 }
 
 interface OnChainState {
@@ -184,6 +193,7 @@ export function useWalletState(
       policy: display.policy,
       savings_lock_all_admins: display.savingsLockAllAdmins,
       admin_count: adminCount,
+      admin_cap: display.adminCap,
     };
   }, [
     onChain,
@@ -192,6 +202,7 @@ export function useWalletState(
     display.percents,
     display.policy,
     display.savingsLockAllAdmins,
+    display.adminCap,
     display.membersByAddress,
   ]);
 
@@ -207,6 +218,7 @@ export function useWalletState(
     familyError: display.loadError,
     familyWalletId: display.familyWalletId,
     refresh,
+    refreshDisplay: display.refresh,
   };
 }
 

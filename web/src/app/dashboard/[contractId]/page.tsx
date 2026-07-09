@@ -76,10 +76,13 @@ const ACTIVITY_HASH = "#activity";
 const PROFILE_HASH = "#profile";
 
 /** Collapse the dashboard's fine-grained tabs onto the dock's four visible
- *  slots. Settings has no dock home (reached via home actions), so it maps
- *  back to Home; sub-accounts nests under Envelopes visually. */
+ *  slots. Settings is reached from the Envelopes-tab gear, so its dock
+ *  home stays "envelopes" — the highlight matches the parent surface the
+ *  user came from and back-nav feels honest. Sub-accounts nests under
+ *  Envelopes for the same reason. */
 function dockActive(tab: Tab): DockTab {
-  if (tab === "envelopes" || tab === "subaccounts") return "envelopes";
+  if (tab === "envelopes" || tab === "subaccounts" || tab === "settings")
+    return "envelopes";
   if (tab === "activity") return "activity";
   if (tab === "profile") return "profile";
   return "home";
@@ -512,15 +515,16 @@ function Dashboard({ contractId }: { contractId: string }) {
           bottom dock; wallet name + currency toggle now live inside the
           balance hero header, and the Profile dock tab owns identity. */}
 
-      {/* Back affordance only for nested sub-views (subaccounts / settings).
-          Home has no BackLink now — "My Sobres" moved into the Profile dock
-          tab, and there is no top bar to compete with. */}
+      {/* Back affordance for nested sub-views. Both subaccounts and settings
+          are reached from the Envelopes tab (settings via the gear, sub-
+          accounts via a Cards row), so back-nav should return there — not
+          to Home, which is a peer tab, not a parent. */}
       {tab === "subaccounts" || tab === "settings" ? (
         <div
           className="mx-auto w-full px-4 sm:px-7 pt-5"
           style={{ maxWidth: 1320 }}
         >
-          <BackLink onClick={() => switchTab("home")} label="Wallet" />
+          <BackLink onClick={() => switchTab("envelopes")} label="Envelopes" />
         </div>
       ) : null}
 
@@ -730,8 +734,13 @@ function Dashboard({ contractId }: { contractId: string }) {
             <MembersSection
               members={state.members}
               adminAddress={state.admin}
-              canInvite={isAdmin && state.members.length < 2}
+              adminCount={state.admin_count}
+              adminCap={state.admin_cap}
+              familyWalletId={familyWalletId}
+              canInvite={isAdmin && state.members.length < state.admin_cap}
+              canEditCap={isAdmin}
               onInvite={() => setInviteOpen(true)}
+              onCapChanged={() => void walletState.refreshDisplay()}
             />
 
             <CardsSection
@@ -1042,6 +1051,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           contractId={contractId}
           familyWalletId={familyWalletId}
           createdByWalletId={wallet.wallet?.id ?? null}
+          adminCount={state.admin_count}
+          adminCap={state.admin_cap}
           suggestions={inviteSuggestions}
           onClose={() => setInviteOpen(false)}
         />

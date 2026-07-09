@@ -20,6 +20,8 @@ export function InviteModal({
   contractId,
   familyWalletId,
   createdByWalletId,
+  adminCount,
+  adminCap,
   suggestions = [],
   onClose,
 }: {
@@ -33,11 +35,17 @@ export function InviteModal({
    *  usePasskeyWallet so the admin-invite path doesn't do a redundant
    *  wallets round-trip. Null disables admin-row minting. */
   createdByWalletId: string | null;
+  /** Live admin count vs cap — used to gate admin-role minting so the
+   *  invitee doesn't sail into a `family_full` reject at redeem time. */
+  adminCount: number;
+  adminCap: number;
   /** Optional pre-filled members from onboarding. Each gets its own on-demand
    *  link so the admin mints one invite (one passkey prompt) at a time. */
   suggestions?: InviteSuggestion[];
   onClose: () => void;
 }) {
+  const adminSlotsFree = adminCap - adminCount;
+  const canMintAdmin = adminSlotsFree > 0;
   // Links generated for named suggestions, keyed by row index.
   const [links, setLinks] = useState<Record<number, string>>({});
   // A single "generic" link (no specific member), for the manual path.
@@ -60,10 +68,14 @@ export function InviteModal({
     setActiveIdx(idx);
     try {
       const suggestion = suggestions[idx];
-      const canMintAdmin =
+      const wantsAdmin =
         suggestion?.role === "admin" && familyWalletId && createdByWalletId;
+      // Silent downgrade to a member invite when the family is at cap.
+      // The Save button also drops the "Admin" label + adds a hint in the
+      // suggestion row so this isn't invisible to the admin.
+      const mintAsAdmin = wantsAdmin && canMintAdmin;
       const result = await createInvite(
-        canMintAdmin
+        mintAsAdmin
           ? {
               intendedRole: "admin",
               familyWalletId,
@@ -95,6 +107,8 @@ export function InviteModal({
   };
 
   const hasSuggestions = suggestions.length > 0;
+  const anyAdminSuggestion = suggestions.some((s) => s.role === "admin");
+  const showAdminCapFull = anyAdminSuggestion && !canMintAdmin;
 
   return (
     <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
@@ -105,6 +119,20 @@ export function InviteModal({
             ? `Generate a one-time link for each person you added to ${walletName}. Each link works for one person and expires in ${INVITE_TTL_MINUTES} minutes.`
             : `Generate a one-time link to add a member to ${walletName}. The link works for one person, expires in ${INVITE_TTL_MINUTES} minutes, and can't be reused.`}
         </p>
+        {showAdminCapFull ? (
+          <p
+            className="text-xs mb-3"
+            style={{
+              padding: "8px 10px",
+              borderRadius: 8,
+              background: "var(--sobre-cream)",
+              color: "var(--sobre-text-1)",
+            }}
+          >
+            Admin cap is full ({adminCount} of {adminCap}). Admin-role invites
+            will join as members until you raise the cap in Envelopes → Members.
+          </p>
+        ) : null}
 
         {hasSuggestions ? (
           <div className="mb-4 space-y-2">

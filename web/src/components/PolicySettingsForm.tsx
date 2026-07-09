@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Info, Lock } from "lucide-react";
+import { Lock } from "lucide-react";
 
 import { SAVINGS_NAME } from "@/components/sobre/EnvelopeNamesEditor";
 import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
@@ -274,10 +274,8 @@ export function PolicySettingsForm({
           disabled={saving}
           equivLabel={equivLabel}
         />
-        <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
-          <Info size={12} strokeWidth={2} className="mt-0.5 shrink-0" />
-          Limit applies to members. Your own spends as admin always execute
-          immediately and don&apos;t count against the daily counter.
+        <p className="text-xs" style={{ color: "var(--text-3)" }}>
+          Admins bypass this limit.
         </p>
       </div>
 
@@ -297,10 +295,8 @@ export function PolicySettingsForm({
           disabled={saving}
           equivLabel={tEquivLabel}
         />
-        <p className="text-xs flex items-start gap-1.5" style={{ color: "var(--text-3)" }}>
-          <Info size={12} strokeWidth={2} className="mt-0.5 shrink-0" />
-          Single-transaction cap. Member spends above this need your approval.
-          Admin spends always bypass.
+        <p className="text-xs" style={{ color: "var(--text-3)" }}>
+          Per spend. Members over this need your approval; admins bypass.
         </p>
       </div>
 
@@ -327,8 +323,7 @@ export function PolicySettingsForm({
             Lock the Savings envelope
           </span>
           <span className="text-xs" style={{ color: "var(--text-3)" }}>
-            Every admin must approve before money leaves Savings. Admins
-            included.
+            Every admin must approve to spend from Savings.
           </span>
         </span>
       </label>
@@ -348,15 +343,14 @@ export function PolicySettingsForm({
 
       <fieldset
         className="space-y-1.5"
-        style={requireAllSigs ? { opacity: 0.65 } : {}}
+        style={requireAllSigs ? { opacity: 0.55 } : {}}
       >
         <legend className="font-medium" style={{ color: "var(--text-1)" }}>
           Envelopes requiring approval
         </legend>
         {requireAllSigs ? (
           <p className="text-xs ml-1" style={{ color: "var(--text-3)" }}>
-            All envelopes are protected because{" "}
-            <em>require admin approval</em> is on.
+            All envelopes are protected while the require-all toggle is on.
           </p>
         ) : null}
         {ENVELOPE_LABELS.map((envelope) => {

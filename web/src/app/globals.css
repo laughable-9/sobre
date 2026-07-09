@@ -2514,6 +2514,56 @@ body { overflow-x: clip; min-width: 320px; }
   cursor: pointer;
 }
 .sobre-envs-section-action:hover { color: var(--sobre-primary-hover); }
+/* "N of M admins" hint row + inline cap editor. Sits between the section
+   heading and the member rows. */
+.sobre-envs-section-hint {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  margin: 0 4px 8px;
+  font-size: 12px; color: var(--sobre-text-3);
+}
+.sobre-envs-section-hint b { color: var(--sobre-text-1); font-weight: 700; }
+.sobre-envs-section-cap-edit {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 8px;
+  border: 1px solid var(--sobre-border);
+  background: var(--sobre-surface);
+  border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+  color: var(--sobre-text-2);
+  cursor: pointer;
+}
+.sobre-envs-section-cap-edit:hover {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-envs-section-cap-editor {
+  display: inline-flex; align-items: center; gap: 4px;
+}
+.sobre-envs-section-cap-editor input {
+  width: 44px;
+  padding: 3px 6px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 6px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 12px; font-weight: 700;
+  text-align: center;
+  background: var(--sobre-surface);
+  color: var(--sobre-text-1);
+}
+.sobre-envs-section-cap-editor button {
+  width: 22px; height: 22px;
+  display: grid; place-items: center;
+  border: 1px solid var(--sobre-border);
+  background: var(--sobre-surface);
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--sobre-text-1);
+}
+.sobre-envs-section-cap-editor button:hover { background: var(--sobre-surface-alt); }
+.sobre-envs-section-cap-editor .err {
+  font-size: 11px; color: var(--sobre-danger);
+  margin-left: 6px;
+}
 .sobre-member-row {
   display: flex; align-items: center; gap: 12px;
   padding: 10px 14px;

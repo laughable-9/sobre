@@ -27,6 +27,11 @@ export interface FamilyDisplayState {
   /** When true, money leaving Savings needs every admin's approval. Read fresh
    *  at release-time so adding/removing admins re-thresholds in flight. */
   savingsLockAllAdmins: boolean;
+  /** Maximum number of family_members with role='admin' allowed on this
+   *  family. Configurable per family (default 2 for the OFW-couple model);
+   *  enforced by the redeem_admin_invite RPC when an invitee tries to
+   *  promote to admin. */
+  adminCap: number;
   membersByAddress: Map<string, FamilyMemberDisplay>;
   loading: boolean;
   /** Non-null when the latest Supabase fetch errored. Consumers can read
@@ -60,6 +65,7 @@ interface FamilyRow {
     protected_envelopes?: EnvelopeName[];
   } | null;
   savings_lock_all_admins: boolean | null;
+  admin_cap: number | null;
 }
 
 function normalizePolicy(raw: FamilyRow["policy_json"]): SpendPolicyShape {
@@ -95,6 +101,7 @@ export function useFamilyDisplay(
     useState<[number, number, number]>(DEFAULT_PERCENTS);
   const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
   const [savingsLockAllAdmins, setSavingsLockAllAdmins] = useState(false);
+  const [adminCap, setAdminCap] = useState<number>(2);
   const [membersByAddress, setMembersByAddress] = useState<
     Map<string, FamilyMemberDisplay>
   >(new Map());
@@ -116,7 +123,7 @@ export function useFamilyDisplay(
       const { data: family, error: familyErr } = await supabase
         .from("family_wallets")
         .select(
-          "id, display_name, percents, policy_json, savings_lock_all_admins",
+          "id, display_name, percents, policy_json, savings_lock_all_admins, admin_cap",
         )
         .eq("contract_id", contractId)
         .maybeSingle();
@@ -132,6 +139,7 @@ export function useFamilyDisplay(
         setPercents(DEFAULT_PERCENTS);
         setPolicy(DEFAULT_POLICY);
         setSavingsLockAllAdmins(false);
+        setAdminCap(2);
         setMembersByAddress(new Map());
         return;
       }
@@ -164,6 +172,11 @@ export function useFamilyDisplay(
       setPercents(normalizePercents(row.percents));
       setPolicy(normalizePolicy(row.policy_json));
       setSavingsLockAllAdmins(Boolean(row.savings_lock_all_admins));
+      setAdminCap(
+        typeof row.admin_cap === "number" && row.admin_cap >= 1
+          ? row.admin_cap
+          : 2,
+      );
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
       for (const n of (namesQ.data as Array<{
@@ -254,6 +267,7 @@ export function useFamilyDisplay(
       percents,
       policy,
       savingsLockAllAdmins,
+      adminCap,
       membersByAddress,
       loading,
       loadError,
@@ -266,6 +280,7 @@ export function useFamilyDisplay(
       percents,
       policy,
       savingsLockAllAdmins,
+      adminCap,
       membersByAddress,
       loading,
       loadError,

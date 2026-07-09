@@ -74,6 +74,13 @@ export const PAYMENT_TOKEN_LABEL: string = PAYMENT_TOKEN;
  *  resolves to the production app when the recipient opens it. */
 export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
 
+/** Defensive client-side ceiling for `family_wallets.admin_cap`. The DB
+ *  CHECK guards `>= 1` only, but the household model tops out well before
+ *  this — 5 keeps the UI validation honest without artificially blocking
+ *  a rare use-case. Bump here if the model ever widens; the input min/max
+ *  in the cap editor reads from this. */
+export const MAX_ADMIN_CAP = 5;
+
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
   name: "TESTNET",
