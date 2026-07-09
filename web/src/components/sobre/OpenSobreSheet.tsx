@@ -53,12 +53,6 @@ export function OpenSobreSheet({
             onClick={act(onAddMoney)}
           />
           <SheetAction
-            label="Log expense"
-            hint="Note a household spend"
-            Icon={NoteIcon}
-            onClick={act(onLogExpense)}
-          />
-          <SheetAction
             label="Cash out"
             hint="Withdraw to your bank"
             Icon={ArrowUpIcon}
@@ -70,6 +64,12 @@ export function OpenSobreSheet({
             Icon={PaperPlaneTiltIcon}
             onClick={act(onSend)}
             disabled={disableSend}
+          />
+          <SheetAction
+            label="Log expense"
+            hint="Note a household spend"
+            Icon={NoteIcon}
+            onClick={act(onLogExpense)}
           />
         </div>
       </div>

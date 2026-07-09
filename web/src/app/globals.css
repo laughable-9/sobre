@@ -1814,7 +1814,7 @@ body { overflow-x: clip; min-width: 320px; }
 @media (prefers-reduced-motion: reduce) {
   .sobre-reveal[data-stagger].is-visible .sobre-stat-num { animation: none; }
   .sobre-v2-action, .sobre-v2-action .chip, .sobre-v2-split-row,
-  .sobre-v2-split-row .fill, .sobre-hsummary-track-fill {
+  .sobre-hsummary-track-fill {
     animation: none !important;
     transition: none !important;
     transform: none !important;
@@ -2044,6 +2044,9 @@ body { overflow-x: clip; min-width: 320px; }
   background: var(--sobre-surface-alt);
   color: var(--sobre-text-1);
 }
+.sobre-v2 .sobre-activity-item.pending {
+  opacity: 0.72;
+}
 .sobre-v2 .sobre-activity-item.pending .ic {
   background: var(--sobre-surface-alt);
   color: var(--sobre-text-2);
@@ -2056,6 +2059,56 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-v2 .sobre-activity-item .body .where { color: var(--sobre-text-3); }
 .sobre-v2 .sobre-activity-item .body .meta { color: var(--sobre-text-3); }
+
+/* Auto-split chip strip — only rendered on Deposit rows. 3 segments, each
+   tinted with the matching BAR_COLORS envelope color. Reads as "the
+   remittance became these three envelope credits" without needing prose. */
+.sobre-activity-split-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 8px;
+}
+.sobre-activity-split-chips .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--sobre-surface-alt);
+  font-size: 11px;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-activity-split-chips .chip .swatch {
+  width: 4px; height: 12px; border-radius: 2px;
+  flex-shrink: 0;
+}
+.sobre-activity-split-chips .chip.c0 .swatch { background: var(--sobre-primary); }
+.sobre-activity-split-chips .chip.c1 .swatch { background: var(--sobre-primary-hover); }
+.sobre-activity-split-chips .chip.c2 .swatch { background: var(--sobre-primary-bright); }
+.sobre-activity-split-chips .chip .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700; font-size: 11px;
+}
+.sobre-activity-split-chips .chip .lbl {
+  color: var(--sobre-text-3);
+}
+
+/* Activity feed empty state — muted circle with a Clock, one line copy. */
+.sobre-activity-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 48px 20px;
+  color: var(--sobre-text-2);
+}
+.sobre-activity-empty .ic {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
+  display: grid; place-items: center;
+}
+.sobre-activity-empty .msg {
+  font-size: 13px; font-weight: 500;
+  color: var(--sobre-text-2);
+}
 .sobre-v2 .sobre-warning-bar {
   background: var(--sobre-cream);
   border-color: rgba(198, 138, 46, 0.35);
@@ -2566,21 +2619,7 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
   flex-shrink: 0;
 }
-.sobre-v2-split-row .track {
-  /* display:block is load-bearing — .track is a <span> inside the row
-     button, and an inline span ignores height, which silently hides the
-     progress bar entirely. */
-  display: block;
-  margin-top: 9px; height: 6px; border-radius: 999px;
-  background: rgba(15, 26, 20, 0.07);
-  overflow: hidden;
-}
 .sobre-v2-split-row .top { min-width: 0; }
-.sobre-v2-split-row .fill {
-  height: 100%; border-radius: 999px;
-  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.25s backwards;
-}
-@keyframes sobre-bar-grow { from { width: 0; } }
 
 /* ── PLACEHOLDER styles: notification pills + rail meta (board Section 07).
    The pills render static sample copy until they're wired to real signals —

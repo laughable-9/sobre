@@ -263,9 +263,14 @@ export function ActivityFeed({
         events.length === 0 &&
         !pendingDeposits?.length &&
         !pendingCashouts?.length ? (
-          <p className="text-xs" style={{ color: "var(--text-3)" }}>
-            {loading ? "Loading activity…" : "No activity yet."}
-          </p>
+          <div className="sobre-activity-empty">
+            <div className="ic">
+              <Clock size={22} strokeWidth={1.75} />
+            </div>
+            <div className="msg">
+              {loading ? "Loading activity…" : "Activity will show up here."}
+            </div>
+          </div>
         ) : null}
 
         {ordered.map((day) => (
@@ -450,7 +455,6 @@ function PendingDepositRow({
       }`}
       style={{
         cursor: exiting ? "default" : "pointer",
-        background: "var(--accent-soft)",
         pointerEvents: cancelling ? "none" : undefined,
       }}
     >
@@ -539,10 +543,7 @@ function PendingCashoutRow({
         }
       }}
       className="sobre-activity-item pending"
-      style={{
-        cursor: "pointer",
-        background: "var(--accent-soft)",
-      }}
+      style={{ cursor: "pointer" }}
     >
       <div className="ic">
         <ArrowUpFromLine size={16} strokeWidth={2} />
@@ -611,11 +612,37 @@ function ActivityRow({
               </span>
             </div>
             <div className="where">
-              Auto-split · G {formatPhpLocale(ev.groceries)} · T{" "}
-              {formatPhpLocale(ev.tuition)} · S{" "}
-              {formatPhpLocale(ev.savings)}
+              Auto-split · {time} · view tx ↗
             </div>
-            <div className="meta">{time} · view tx ↗</div>
+            <div className="sobre-activity-split-chips" aria-hidden>
+              <span className="chip c0">
+                <span className="swatch" />
+                <span className="amt tabular">
+                  {formatPhpLocale(ev.groceries)}
+                </span>
+                <span className="lbl">
+                  {displayEnvelopeName("Groceries", envelopeNames)}
+                </span>
+              </span>
+              <span className="chip c1">
+                <span className="swatch" />
+                <span className="amt tabular">
+                  {formatPhpLocale(ev.tuition)}
+                </span>
+                <span className="lbl">
+                  {displayEnvelopeName("Tuition", envelopeNames)}
+                </span>
+              </span>
+              <span className="chip c2">
+                <span className="swatch" />
+                <span className="amt tabular">
+                  {formatPhpLocale(ev.savings)}
+                </span>
+                <span className="lbl">
+                  {displayEnvelopeName("Savings", envelopeNames)}
+                </span>
+              </span>
+            </div>
           </div>
         </>,
       );

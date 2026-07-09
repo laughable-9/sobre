@@ -48,6 +48,8 @@ export function EnvelopeSplitCard({
         const token = Number(bal) / STROOPS_PER_USDC;
         const amount = showUsd ? token : token * PHP_PER_USDC;
         const pct = state.percents[i] ?? 0;
+        // pct is preserved so future budget/runway indicators can key off it
+        void pct;
         return (
           <button
             key={i}
@@ -68,16 +70,6 @@ export function EnvelopeSplitCard({
                   maximumFractionDigits: 2,
                 })}
               </span>
-            </span>
-            <span className="track" aria-hidden>
-              <span
-                className="fill"
-                style={{
-                  display: "block",
-                  width: `${pct}%`,
-                  background: BAR_COLORS[i % BAR_COLORS.length],
-                }}
-              />
             </span>
           </button>
         );
