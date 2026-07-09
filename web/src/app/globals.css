@@ -2405,6 +2405,14 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 12px; color: var(--sobre-text-3); margin-top: 2px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
+.sobre-recent-empty {
+  padding: 22px 16px;
+  background: var(--sobre-surface);
+  border: 1px dashed var(--sobre-border);
+  border-radius: 12px;
+  font-size: 13px; color: var(--sobre-text-3);
+  text-align: center;
+}
 
 /* Mini activity feed embedded in the This-month card: 3 latest rows + a
    see-all button that opens the full activity view. */

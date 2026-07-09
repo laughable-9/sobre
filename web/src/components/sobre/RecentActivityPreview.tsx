@@ -18,8 +18,8 @@ import { formatPhpLocale, relativeTime, shortenAddress } from "@/lib/format";
 /**
  * Home-tab activity preview: 3 most-recent Spend or Deposit events, ink
  * on white, no colored halos, tabular numerals. "See all" jumps to the
- * full Activity tab. Renders nothing when the wallet has no activity
- * yet — an empty card is worse than none.
+ * full Activity tab. Section header always renders (so the user sees the
+ * surface exists); an empty state fills in when there's no activity yet.
  */
 export function RecentActivityPreview({
   events,
@@ -36,29 +36,35 @@ export function RecentActivityPreview({
     .filter((e) => e.kind === "Spend" || e.kind === "Deposit")
     .slice(0, 3);
 
-  if (rows.length === 0) return null;
-
   return (
     <section className="sobre-recent" aria-label="Recent activity">
       <div className="sobre-recent-head">
         <h3>Recent activity</h3>
-        <button
-          type="button"
-          className="sobre-recent-see-all"
-          onClick={onSeeAll}
-        >
-          See all
-          <CaretRightIcon weight="bold" size={12} />
-        </button>
+        {rows.length > 0 ? (
+          <button
+            type="button"
+            className="sobre-recent-see-all"
+            onClick={onSeeAll}
+          >
+            See all
+            <CaretRightIcon weight="bold" size={12} />
+          </button>
+        ) : null}
       </div>
-      {rows.map((ev) => (
-        <RecentRow
-          key={ev.txHash}
-          ev={ev}
-          members={members}
-          envelopeNames={envelopeNames}
-        />
-      ))}
+      {rows.length === 0 ? (
+        <div className="sobre-recent-empty">
+          Nothing yet. Deposits and spends will show up here.
+        </div>
+      ) : (
+        rows.map((ev) => (
+          <RecentRow
+            key={ev.txHash}
+            ev={ev}
+            members={members}
+            envelopeNames={envelopeNames}
+          />
+        ))
+      )}
     </section>
   );
 }
