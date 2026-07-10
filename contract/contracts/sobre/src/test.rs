@@ -1,7 +1,11 @@
 #![cfg(test)]
 use super::*;
+use blend_contract_sdk::{
+    pool as blend_pool,
+    testutils::{default_reserve_config, BlendFixture},
+};
 use soroban_sdk::{
-    testutils::{Address as _, Ledger as _},
+    testutils::{Address as _, BytesN as _, Ledger as _},
     token, Bytes, BytesN, Env, String,
 };
 
@@ -646,4 +650,257 @@ fn close_wallet_sweeps_subaccount_balances_to_admin() {
         f.token().balance(&f.admin),
         admin_before + 100 * STROOPS_PER_TOKEN,
     );
+}
+
+// ─── Earn: Blend integration ──────────────────────────────────────────────
+
+/// Full Blend v2 fixture wrapping the Sobre fixture. Deploys backstop +
+/// emitter + pool_factory, spins up a pool with `payment_token` as its sole
+/// reserve, and moves the pool into an active status. Setup is heavy but
+/// paid once per test.
+struct EarnFixture {
+    sobre: Fixture,
+    blend_pool: Address,
+}
+
+impl EarnFixture {
+    fn new() -> Self {
+        let sobre = Fixture::funded();
+        let env = &sobre.env;
+
+        let deployer = Address::generate(env);
+        let blnd = env
+            .register_stellar_asset_contract_v2(deployer.clone())
+            .address();
+        let usdc = env
+            .register_stellar_asset_contract_v2(deployer.clone())
+            .address();
+        let blend = BlendFixture::deploy(env, &deployer, &blnd, &usdc);
+
+        // Reuse Sobre's payment token as the reserve asset so a real supply
+        // path shares one token contract with the Savings envelope.
+        let pool_addr = blend.pool_factory.mock_all_auths().deploy(
+            &deployer,
+            &String::from_str(env, "sobre-test"),
+            &BytesN::<32>::random(env),
+            &Address::generate(env),
+            &0_1000000, // 10% take rate
+            &4,         // max positions
+            &1_0000000, // min collateral (7-decimal oracle)
+        );
+        let pool_client = blend_pool::Client::new(env, &pool_addr);
+        pool_client
+            .mock_all_auths()
+            .queue_set_reserve(&sobre.payment_token, &default_reserve_config());
+        pool_client.mock_all_auths().set_reserve(&sobre.payment_token);
+
+        blend
+            .backstop
+            .mock_all_auths()
+            .deposit(&deployer, &pool_addr, &50_000_0000000);
+        pool_client.mock_all_auths().set_status(&3);
+        pool_client.mock_all_auths().update_status();
+
+        Self {
+            sobre,
+            blend_pool: pool_addr,
+        }
+    }
+
+    /// Reads the position for `envelope`, defaulting to zero when absent.
+    /// Test-only helper so assertions don't have to walk `positions` inline.
+    fn position(&self, envelope: Envelope) -> EarnPosition {
+        let state = self.sobre.client().get_state();
+        let earn = state.earn.get(0).expect("earn should be enabled");
+        for p in earn.positions.iter() {
+            if p.envelope == envelope {
+                return p.clone();
+            }
+        }
+        EarnPosition {
+            envelope,
+            b_tokens: 0,
+            underlying: 0,
+        }
+    }
+}
+
+#[test]
+fn earn_enable_persists_pool_and_asset_and_marks_enabled() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let state = f.client().get_state();
+    let earn = state.earn.get(0).expect("enabled");
+    assert_eq!(earn.pool, ef.blend_pool);
+    assert_eq!(earn.asset, f.payment_token);
+    assert_eq!(earn.positions.len(), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #19)")]
+fn earn_enable_rejects_second_call() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #20)")]
+fn earn_supply_rejects_when_disabled() {
+    let f = Fixture::funded();
+    f.client()
+        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #20)")]
+fn earn_withdraw_rejects_when_disabled() {
+    let f = Fixture::funded();
+    f.client()
+        .earn_withdraw(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn earn_supply_rejects_zero() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client().earn_supply(&Envelope::Savings, &0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn earn_supply_rejects_amount_over_envelope_balance() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    // Fixture::funded credited 20 into Savings. Try to supply 21.
+    f.client()
+        .earn_supply(&Envelope::Savings, &(21 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+fn earn_supply_debits_envelope_and_credits_b_tokens() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let amount = 15 * STROOPS_PER_TOKEN;
+    f.client().earn_supply(&Envelope::Savings, &amount);
+    let state = f.client().get_state();
+    // Savings envelope drops from 20 → 5.
+    assert_eq!(state.balances.get(2).unwrap(), 5 * STROOPS_PER_TOKEN);
+    let pos = ef.position(Envelope::Savings);
+    assert!(pos.b_tokens > 0);
+    assert!(pos.underlying >= amount - 1); // fixed-point drift ≤ 1 stroop
+    assert!(pos.underlying <= amount);
+}
+
+#[test]
+fn earn_withdraw_credits_envelope_and_burns_b_tokens() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client()
+        .earn_supply(&Envelope::Savings, &(15 * STROOPS_PER_TOKEN));
+    let mid_pos = ef.position(Envelope::Savings);
+    let savings_before = f.client().get_state().balances.get(2).unwrap();
+
+    let withdraw = 10 * STROOPS_PER_TOKEN;
+    f.client().earn_withdraw(&Envelope::Savings, &withdraw);
+    let end = f.client().get_state();
+    assert_eq!(end.balances.get(2).unwrap(), savings_before + withdraw);
+    let end_pos = ef.position(Envelope::Savings);
+    assert!(end_pos.b_tokens < mid_pos.b_tokens);
+    assert!(end_pos.b_tokens > 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #21)")]
+fn earn_withdraw_rejects_when_no_position() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client()
+        .earn_withdraw(&Envelope::Savings, &(1 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+fn earn_state_is_empty_vec_when_disabled() {
+    let f = Fixture::funded();
+    assert_eq!(f.client().get_state().earn.len(), 0);
+}
+
+#[test]
+fn earn_supply_then_withdraw_round_trips_underlying() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let supplied = 12 * STROOPS_PER_TOKEN;
+    f.client().earn_supply(&Envelope::Savings, &supplied);
+
+    // Advance ledger past reserve accrual so b_rate ticks slightly.
+    f.env.ledger().with_mut(|l| l.timestamp += 60);
+
+    f.client().earn_withdraw(&Envelope::Savings, &supplied);
+    let state = f.client().get_state();
+    // Savings envelope should be back at ~20 (may be off by a stroop or two
+    // if b_rate moved during accrual; no drift means the round trip works).
+    assert!(state.balances.get(2).unwrap() >= 20 * STROOPS_PER_TOKEN - 2);
+    assert!(state.balances.get(2).unwrap() <= 20 * STROOPS_PER_TOKEN);
+    let pos = ef.position(Envelope::Savings);
+    assert!(pos.b_tokens >= 0);
+}
+
+#[test]
+fn earn_supply_isolates_per_envelope_bookkeeping() {
+    // The altitude story: parameterizing by Envelope must actually attribute
+    // deltas to the caller envelope only. Supply 5 to Groceries, then 5 to
+    // Savings. Verify each position tracks its own share.
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client()
+        .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
+    f.client()
+        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+
+    let g = ef.position(Envelope::Groceries);
+    let s = ef.position(Envelope::Savings);
+    assert!(g.b_tokens > 0);
+    assert!(s.b_tokens > 0);
+    // Both should be within ±1 of each other since they supplied the same amount.
+    let diff = if g.b_tokens > s.b_tokens {
+        g.b_tokens - s.b_tokens
+    } else {
+        s.b_tokens - g.b_tokens
+    };
+    assert!(diff <= 1);
+
+    // Withdraw from Groceries: only its position should shrink; Savings untouched.
+    f.client()
+        .earn_withdraw(&Envelope::Groceries, &(3 * STROOPS_PER_TOKEN));
+    let g2 = ef.position(Envelope::Groceries);
+    let s2 = ef.position(Envelope::Savings);
+    assert!(g2.b_tokens < g.b_tokens);
+    assert_eq!(s2.b_tokens, s.b_tokens);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #21)")]
+fn earn_withdraw_cannot_drain_sibling_envelope() {
+    // Attribution invariant: Groceries funds 5, Savings 5. Total aggregate
+    // is ~10. Groceries tries to withdraw 8 — the delta would exceed its own
+    // position, so we reject before overspending against sibling accounting.
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client()
+        .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
+    f.client()
+        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+    f.client()
+        .earn_withdraw(&Envelope::Groceries, &(8 * STROOPS_PER_TOKEN));
 }

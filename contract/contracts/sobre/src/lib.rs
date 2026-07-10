@@ -1,11 +1,27 @@
 #![no_std]
 use soroban_sdk::{
+    auth::{ContractContext, InvokerContractAuthEntry, SubContractInvocation},
     contract, contracterror, contractevent, contractimpl, contracttype, panic_with_error, token,
-    vec, Address, Bytes, BytesN, Env, String, Vec,
+    vec, Address, Bytes, BytesN, Env, IntoVal, String, Symbol, Vec,
 };
+
+use blend_contract_sdk::pool::{self, Request as PoolRequest};
 
 const MAX_MEMBERS: u32 = 2;
 const MAX_SUBACCOUNTS: u32 = 4;
+
+/// Blend v2 non-collateral supply request. bTokens are minted; no collateral
+/// factor, no borrow surface. That's the "just earn yield on my spare XLM"
+/// shape Sobre's Savings envelope wants.
+const REQUEST_TYPE_SUPPLY: u32 = 0;
+/// Blend v2 non-collateral withdraw. Burns bTokens, transfers underlying back
+/// to `to`. Pairs with REQUEST_TYPE_SUPPLY — never mix Supply + Collateral in
+/// the same reserve because they mint different position types.
+const REQUEST_TYPE_WITHDRAW: u32 = 1;
+
+/// Blend's b_rate is a 12-decimal fixed-point ratio of underlying-per-bToken.
+/// underlying = b_tokens * b_rate / SCALAR_12.
+const SCALAR_12: i128 = 1_000_000_000_000;
 
 // ─── Domain types ─────────────────────────────────────────────────────────
 
@@ -74,6 +90,20 @@ pub enum DataKey {
     /// `join_as_subaccount` so a redeemed token can only ever create a
     /// sub-account, never a member.
     SubAccountInvite(BytesN<32>),
+    /// Whether admin has opted this wallet into Blend yield. Absent key
+    /// defaults to false so pre-upgrade instances read as disabled.
+    EarnEnabled,
+    /// Address of the Blend v2 pool this wallet supplies into. One pool
+    /// shared across all envelopes that opt into Earn.
+    EarnPoolId,
+    /// Address of the SEP-41 SAC being supplied. For the XLM demo this equals
+    /// PaymentToken; kept separate so a future USDC-yield flip doesn't rely
+    /// on the payment token matching.
+    EarnAsset,
+    /// Sobre's cumulative bToken position attributable to a given envelope.
+    /// Sum across envelopes equals Sobre's aggregate `positions.supply` on
+    /// the pool. Underlying value = this * b_rate / SCALAR_12.
+    EarnBToken(Envelope),
 }
 
 #[contracttype]
@@ -84,6 +114,32 @@ pub struct WalletState {
     pub members: Vec<Member>,
     pub balances: Vec<i128>,
     pub subaccounts: Vec<SubAccount>,
+    /// Empty when the wallet hasn't opted into Earn. Otherwise a one-element
+    /// vec carrying the pool + asset + per-envelope positions. Vec-of-one is
+    /// the wire shape for optional here: `contracttype` doesn't auto-derive
+    /// `Option<T>` XDR conversion for our own struct types (SDK 25).
+    pub earn: Vec<EarnState>,
+}
+
+/// Only present when Earn is enabled. `positions` includes an entry per
+/// envelope that currently holds a non-zero bToken balance; empty vec means
+/// enabled-but-no-supply-yet.
+#[contracttype]
+#[derive(Clone)]
+pub struct EarnState {
+    pub pool: Address,
+    pub asset: Address,
+    pub positions: Vec<EarnPosition>,
+}
+
+/// A single envelope's Blend position. `underlying` is computed live from
+/// the current b_rate at get_state time.
+#[contracttype]
+#[derive(Clone)]
+pub struct EarnPosition {
+    pub envelope: Envelope,
+    pub b_tokens: i128,
+    pub underlying: i128,
 }
 
 /// Emitted by `deposit_with_split`. Topic list: ("Deposit", from). The
@@ -200,6 +256,41 @@ pub struct SubAccountLockChanged {
     pub locked: bool,
 }
 
+/// Emitted once per Sobre wallet lifetime by `earn_enable`. Downstream
+/// indexers key on this to know when the wallet started earning yield.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct EarnEnabledEvent {
+    #[topic]
+    pub pool: Address,
+    #[topic]
+    pub asset: Address,
+}
+
+/// Emitted by `earn_supply`. `amount` is underlying (XLM stroops); `b_tokens`
+/// is the fresh position delta the pool returned. b_rate slippage between
+/// simulate and submit means amount ≠ b_tokens * scalar.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct EarnSupply {
+    #[topic]
+    pub envelope: Envelope,
+    pub amount: i128,
+    pub b_tokens: i128,
+}
+
+/// Emitted by `earn_withdraw`. `amount` is underlying returned to the
+/// envelope; `b_tokens` is the position delta burned. Same b_rate slippage
+/// note applies.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct EarnWithdraw {
+    #[topic]
+    pub envelope: Envelope,
+    pub amount: i128,
+    pub b_tokens: i128,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -219,6 +310,9 @@ pub enum Error {
     SubAccountLocked = 16,
     DuplicateSubAccount = 17,
     SubAccountLimitReached = 18,
+    EarnAlreadyEnabled = 19,
+    EarnNotEnabled = 20,
+    EarnInsufficientPosition = 21,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -296,6 +390,78 @@ fn require_member(env: &Env, addr: &Address) {
         panic_with_error!(env, Error::NotAMember);
     }
 }
+
+/// Loads Earn config; panics with EarnNotEnabled if the wallet hasn't opted in.
+/// Reserve index is derived from a live `get_reserve` call at submit time —
+/// no cached storage slot, no chance of drift if Blend ever remaps reserves.
+fn load_earn_config(env: &Env) -> (Address, Address) {
+    let inst = env.storage().instance();
+    if !inst.get::<_, bool>(&DataKey::EarnEnabled).unwrap_or(false) {
+        panic_with_error!(env, Error::EarnNotEnabled);
+    }
+    let pool: Address = inst.get(&DataKey::EarnPoolId).unwrap();
+    let asset: Address = inst.get(&DataKey::EarnAsset).unwrap();
+    (pool, asset)
+}
+
+/// Pre-authorizes a `token.transfer(self → pool, amount)` sub-invocation so
+/// the pool contract can pull the underlying from Sobre when it processes a
+/// Supply request. Without this the pool's inner `require_auth` would trap.
+fn authorize_pool_pull(env: &Env, self_addr: &Address, asset: &Address, pool: &Address, amount: i128) {
+    env.authorize_as_current_contract(vec![
+        env,
+        InvokerContractAuthEntry::Contract(SubContractInvocation {
+            context: ContractContext {
+                contract: asset.clone(),
+                fn_name: Symbol::new(env, "transfer"),
+                args: (self_addr.clone(), pool.clone(), amount).into_val(env),
+            },
+            sub_invocations: vec![env],
+        }),
+    ]);
+}
+
+/// Runs one Blend submit (Supply or Withdraw) and returns the |delta| of
+/// Sobre's aggregate bTokens on this reserve. Caller supplies the prior
+/// aggregate and attributes the delta to whichever envelope is being served.
+fn submit_earn_request(
+    env: &Env,
+    pool: &Address,
+    asset: &Address,
+    request_type: u32,
+    amount: i128,
+    prior_total_b_tokens: i128,
+) -> i128 {
+    let self_addr = env.current_contract_address();
+    let pool_client = pool::Client::new(env, pool);
+    let reserve_index = pool_client.get_reserve(asset).config.index;
+    if request_type == REQUEST_TYPE_SUPPLY {
+        authorize_pool_pull(env, &self_addr, asset, pool, amount);
+    }
+    let requests: Vec<PoolRequest> = vec![
+        env,
+        PoolRequest {
+            request_type,
+            address: asset.clone(),
+            amount,
+        },
+    ];
+    let positions = pool_client.submit(&self_addr, &self_addr, &self_addr, &requests);
+    let new_total: i128 = positions.supply.get(reserve_index).unwrap_or(0);
+    (new_total - prior_total_b_tokens).abs()
+}
+
+/// Sobre's aggregate bTokens across all envelopes. Sum of per-envelope
+/// `EarnBToken(_)` entries; caller must keep the sum equal to Blend's
+/// `positions.supply` post-submit.
+fn sum_earn_b_tokens(env: &Env) -> i128 {
+    let inst = env.storage().instance();
+    ENVELOPES.iter().fold(0i128, |acc, e| {
+        acc + inst.get::<_, i128>(&DataKey::EarnBToken(*e)).unwrap_or(0)
+    })
+}
+
+const ENVELOPES: [Envelope; 3] = [Envelope::Groceries, Envelope::Tuition, Envelope::Savings];
 
 /// Shared by `spend` and `spend_on_behalf`. Assumes auth + member checks
 /// already done. Transfers tokens to `caller`'s wallet, debits the envelope,
@@ -694,6 +860,105 @@ impl SobreContract {
         set_subaccount_lock(&env, &subaccount, false);
     }
 
+    /// One-shot opt-in to Blend yield. Admin picks the pool + underlying
+    /// asset (the SEP-41 SAC must be a live reserve on that pool). The
+    /// `get_reserve` probe validates both addresses resolve — an invalid
+    /// pool traps here, not later on a supply.
+    ///
+    /// Not idempotent: reject if already enabled so we don't silently swap
+    /// the pool underneath existing bToken positions.
+    pub fn earn_enable(env: Env, pool_id: Address, asset: Address) {
+        require_admin_auth(&env);
+        let inst = env.storage().instance();
+        if inst.get::<_, bool>(&DataKey::EarnEnabled).unwrap_or(false) {
+            panic_with_error!(&env, Error::EarnAlreadyEnabled);
+        }
+        pool::Client::new(&env, &pool_id).get_reserve(&asset);
+        inst.set(&DataKey::EarnPoolId, &pool_id);
+        inst.set(&DataKey::EarnAsset, &asset);
+        inst.set(&DataKey::EarnEnabled, &true);
+        EarnEnabledEvent {
+            pool: pool_id,
+            asset,
+        }
+        .publish(&env);
+    }
+
+    /// Admin moves `amount` underlying stroops from `envelope` into Blend.
+    /// The envelope's balance is debited immediately; the position tracked
+    /// under `EarnBToken(envelope)` is credited by whatever the pool reports
+    /// on return (never trust local math over b_rate slippage).
+    pub fn earn_supply(env: Env, envelope: Envelope, amount: i128) {
+        require_admin_auth(&env);
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let (pool_id, asset) = load_earn_config(&env);
+        let inst = env.storage().instance();
+        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+        let env_idx = envelope.index();
+        let current = balances.get(env_idx).unwrap();
+        if current < amount {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+        let prior_total = sum_earn_b_tokens(&env);
+        let delta =
+            submit_earn_request(&env, &pool_id, &asset, REQUEST_TYPE_SUPPLY, amount, prior_total);
+
+        balances.set(env_idx, current - amount);
+        inst.set(&DataKey::Balances, &balances);
+        let env_key = DataKey::EarnBToken(envelope);
+        let env_prior: i128 = inst.get(&env_key).unwrap_or(0);
+        inst.set(&env_key, &(env_prior + delta));
+        EarnSupply {
+            envelope,
+            amount,
+            b_tokens: delta,
+        }
+        .publish(&env);
+    }
+
+    /// Admin pulls `amount` underlying stroops back from Blend into
+    /// `envelope`. Panics if the envelope's position can't cover the amount
+    /// (b_rate slippage: what looked spendable during simulate can shrink
+    /// slightly by submit time; caller should sim-then-submit tight).
+    pub fn earn_withdraw(env: Env, envelope: Envelope, amount: i128) {
+        require_admin_auth(&env);
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let (pool_id, asset) = load_earn_config(&env);
+        let inst = env.storage().instance();
+        let env_key = DataKey::EarnBToken(envelope);
+        let env_prior: i128 = inst.get(&env_key).unwrap_or(0);
+        if env_prior <= 0 {
+            panic_with_error!(&env, Error::EarnInsufficientPosition);
+        }
+
+        let prior_total = sum_earn_b_tokens(&env);
+        let delta =
+            submit_earn_request(&env, &pool_id, &asset, REQUEST_TYPE_WITHDRAW, amount, prior_total);
+        if delta > env_prior {
+            // Envelope-attribution invariant: never let a withdraw burn more
+            // shares than THIS envelope holds. Blend would let a big withdraw
+            // drain Sobre's aggregate; that's accounting theft from sibling
+            // envelopes.
+            panic_with_error!(&env, Error::EarnInsufficientPosition);
+        }
+
+        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+        let env_idx = envelope.index();
+        balances.set(env_idx, balances.get(env_idx).unwrap() + amount);
+        inst.set(&DataKey::Balances, &balances);
+        inst.set(&env_key, &(env_prior - delta));
+        EarnWithdraw {
+            envelope,
+            amount,
+            b_tokens: delta,
+        }
+        .publish(&env);
+    }
+
     /// Polled by both dashboards. Only on-chain truth — display + family
     /// rules (split, policy, pending requests) live in Supabase and the
     /// dashboard joins them client-side.
@@ -706,14 +971,53 @@ impl SobreContract {
         let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let subaccounts = load_subaccounts(&env);
+        let earn = load_earn_state(&env);
         WalletState {
             admin,
             payment_token,
             members,
             balances,
             subaccounts,
+            earn,
         }
     }
+}
+
+/// Builds the earn wire shape — an empty vec if disabled, a one-element vec
+/// otherwise. Underlying value is computed from the LIVE b_rate (via a
+/// preflight-only cross-contract read), so yield accrual shows up on every
+/// dashboard poll without a write.
+fn load_earn_state(env: &Env) -> Vec<EarnState> {
+    let inst = env.storage().instance();
+    if !inst.get::<_, bool>(&DataKey::EarnEnabled).unwrap_or(false) {
+        return Vec::new(env);
+    }
+    let pool_id: Address = inst.get(&DataKey::EarnPoolId).unwrap();
+    let asset: Address = inst.get(&DataKey::EarnAsset).unwrap();
+    let mut positions: Vec<EarnPosition> = Vec::new(env);
+    let mut b_rate_cache: Option<i128> = None;
+    for envelope in ENVELOPES.iter() {
+        let b_tokens: i128 = inst.get(&DataKey::EarnBToken(*envelope)).unwrap_or(0);
+        if b_tokens <= 0 {
+            continue;
+        }
+        let b_rate = *b_rate_cache.get_or_insert_with(|| {
+            pool::Client::new(env, &pool_id).get_reserve(&asset).data.b_rate
+        });
+        positions.push_back(EarnPosition {
+            envelope: *envelope,
+            b_tokens,
+            underlying: (b_tokens * b_rate) / SCALAR_12,
+        });
+    }
+    vec![
+        env,
+        EarnState {
+            pool: pool_id,
+            asset,
+            positions,
+        },
+    ]
 }
 
 mod test;
