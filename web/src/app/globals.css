@@ -144,9 +144,9 @@
   100% { opacity: 0; transform: translateY(-6px); }
 }
 @keyframes sobre-celebrate {
-  0%        { opacity: 0; transform: translate(-50%, -16px); }
+  0%        { opacity: 0; transform: translate(-50%, 16px); }
   10%, 80%  { opacity: 1; transform: translate(-50%, 0); }
-  100%      { opacity: 0; transform: translate(-50%, -16px); }
+  100%      { opacity: 0; transform: translate(-50%, 16px); }
 }
 @keyframes sobre-env-pulse {
   0%   { box-shadow: 0 0 0 0 rgba(232, 146, 60, 0); }
@@ -592,15 +592,38 @@
   z-index: 50; pointer-events: none;
   animation: sobre-hero-pulse 1.4s ease-out;
 }
+/* Bottom-anchored confirmation toast. Sits above the dock (or above the
+   safe-area home indicator on dock-less screens). White pill with a
+   green success icon or a warning icon on the warn variant — no solid
+   fill, so it doesn't fight the balance hero's green or shout on top of
+   content the way a mango pill in the header used to. */
 .sobre-celebration {
-  position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-  background: var(--sobre-accent); color: #fff;
-  padding: 14px 22px; border-radius: 999px;
-  font-weight: 500; font-size: 14px;
+  position: fixed;
+  bottom: calc(var(--sobre-dock-h, 0px) + var(--safe-bottom) + 20px);
+  left: 50%; transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  background: var(--sobre-surface);
+  color: var(--sobre-text-1);
+  padding: 12px 18px 12px 14px; border-radius: 999px;
+  font-weight: 500; font-size: 14px; line-height: 1.2;
   display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 12px 28px rgba(46, 107, 76, 0.3);
+  border: 1px solid var(--sobre-border);
+  box-shadow: 0 8px 24px rgba(15, 26, 20, 0.12);
   z-index: 60;
   animation: sobre-celebrate 2.4s ease;
+}
+.sobre-celebration .ic {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  flex-shrink: 0;
+}
+.sobre-celebration[data-kind="ok"] .ic {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-celebration[data-kind="warn"] .ic {
+  background: var(--sobre-cream);
+  color: var(--sobre-warning);
 }
 
 .sobre-card-flat {

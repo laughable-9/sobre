@@ -14,16 +14,14 @@ export function Celebration({
   kind?: "ok" | "warn";
 }) {
   return (
-    <div
-      className="sobre-celebration"
-      style={kind === "warn" ? { background: "var(--sobre-warning)" } : {}}
-      role="status"
-    >
-      {kind === "warn" ? (
-        <AlertTriangle size={16} strokeWidth={2} />
-      ) : (
-        <Check size={16} strokeWidth={2.5} />
-      )}
+    <div className="sobre-celebration" data-kind={kind} role="status">
+      <span className="ic" aria-hidden>
+        {kind === "warn" ? (
+          <AlertTriangle size={13} strokeWidth={2.4} />
+        ) : (
+          <Check size={13} strokeWidth={2.8} />
+        )}
+      </span>
       {message}
     </div>
   );
