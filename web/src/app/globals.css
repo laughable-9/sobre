@@ -1551,7 +1551,12 @@ body { overflow-x: clip; min-width: 320px; }
    Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
    Sits pinned to the safe-area bottom. Center slot is a raised mango tile
    that opens the "action sheet" — the app's only action surface. */
-:root { --sobre-dock-h: 68px; }
+/* Scoped to .has-dock so descendants of a dock-less shell (e.g. the
+   sub-account view, which still uses the top bar) see the variable as
+   unset. The `.sobre-celebration` toast reads it with a 0px fallback so
+   it sits close to the bottom on dock-less screens and above the dock on
+   dock-ful ones without any per-view props. */
+.has-dock { --sobre-dock-h: 68px; }
 .sobre-dock {
   position: fixed;
   left: 0; right: 0; bottom: 0;
