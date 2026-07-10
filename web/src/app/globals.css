@@ -2516,53 +2516,82 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-envs-section-action:hover { color: var(--sobre-primary-hover); }
 /* "N of M admins" hint row + inline cap editor. Sits between the section
    heading and the member rows. */
+/* "N of M admins" hint row. flex-wrap so on narrow phones the Change
+   button can drop below the text instead of collapsing on top of it. */
 .sobre-envs-section-hint {
-  display: flex; align-items: center; justify-content: space-between; gap: 8px;
-  margin: 0 4px 8px;
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0 4px 10px;
   font-size: 12px; color: var(--sobre-text-3);
 }
 .sobre-envs-section-hint b { color: var(--sobre-text-1); font-weight: 700; }
 .sobre-envs-section-cap-edit {
-  display: inline-flex; align-items: center; gap: 4px;
-  padding: 3px 8px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
   border: 1px solid var(--sobre-border);
   background: var(--sobre-surface);
   border-radius: 999px;
-  font-size: 11px; font-weight: 600;
-  color: var(--sobre-text-2);
-  cursor: pointer;
-}
-.sobre-envs-section-cap-edit:hover {
-  background: var(--sobre-surface-alt);
+  font-size: 12px; font-weight: 600;
+  line-height: 1;
   color: var(--sobre-text-1);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
+.sobre-envs-section-cap-edit:hover,
+.sobre-envs-section-cap-edit:active {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+.sobre-envs-section-cap-edit svg { flex-shrink: 0; }
 .sobre-envs-section-cap-editor {
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
 }
 .sobre-envs-section-cap-editor input {
-  width: 44px;
-  padding: 3px 6px;
+  width: 56px;
+  padding: 6px 8px;
   border: 1px solid var(--sobre-border);
-  border-radius: 6px;
+  border-radius: 8px;
   font-family: var(--font-geist-mono), ui-monospace, monospace;
-  font-size: 12px; font-weight: 700;
+  font-size: 14px; font-weight: 700;
   text-align: center;
   background: var(--sobre-surface);
   color: var(--sobre-text-1);
 }
 .sobre-envs-section-cap-editor button {
-  width: 22px; height: 22px;
+  width: 32px; height: 32px;
   display: grid; place-items: center;
   border: 1px solid var(--sobre-border);
   background: var(--sobre-surface);
-  border-radius: 6px;
+  border-radius: 8px;
   cursor: pointer;
   color: var(--sobre-text-1);
+  transition: background 120ms ease;
 }
-.sobre-envs-section-cap-editor button:hover { background: var(--sobre-surface-alt); }
+.sobre-envs-section-cap-editor button:hover,
+.sobre-envs-section-cap-editor button:active {
+  background: var(--sobre-surface-alt);
+}
 .sobre-envs-section-cap-editor .err {
+  flex-basis: 100%;
   font-size: 11px; color: var(--sobre-danger);
-  margin-left: 6px;
+  margin-top: 2px;
+}
+
+/* Coarse-pointer (touch) tap targets — Apple/Google recommend ≥44px.
+   Small pills across the Envelopes tab bump up so finger-sized touches
+   land reliably. The currency pill in the hero and the Spending-policy
+   PHP/USDC switch bump too because they share the same "too small on
+   phones" complaint from a hallway test. */
+@media (pointer: coarse) {
+  .sobre-envs-section-cap-edit { min-height: 40px; padding: 8px 14px; font-size: 13px; }
+  .sobre-envs-section-cap-editor button { width: 40px; height: 40px; }
+  .sobre-envs-section-cap-editor input { width: 64px; padding: 8px; font-size: 16px; }
+  .sobre-envs-section-action { min-height: 40px; padding: 8px 10px; }
+  .sobre-unit-toggle button { padding: 10px 16px; font-size: 13px; }
+  .sobre-v2-hero .hero-title-row [role="radio"] {
+    min-height: 36px !important;
+    padding: 8px 16px !important;
+  }
 }
 .sobre-member-row {
   display: flex; align-items: center; gap: 12px;
