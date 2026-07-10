@@ -165,6 +165,8 @@ function errorFor(r: RedeemAdminOutcome): string | null {
       return "Chain hasn't caught up yet — refresh in a moment.";
     case "already_redeemed":
       return "This invite has already been used.";
+    case "cancelled":
+      return "This admin invite was cancelled — the household's admin cap changed. Ask for a fresh link.";
     case "invalid_invite":
       return "This isn't an admin invite. Ask for a fresh link.";
     case "not_authenticated":

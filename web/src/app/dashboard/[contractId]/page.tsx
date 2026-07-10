@@ -740,7 +740,17 @@ function Dashboard({ contractId }: { contractId: string }) {
               canInvite={isAdmin && state.members.length < state.admin_cap}
               canEditCap={isAdmin}
               onInvite={() => setInviteOpen(true)}
-              onCapChanged={() => void walletState.refreshDisplay()}
+              onCapChanged={({ cancelledHints }) => {
+                void walletState.refreshDisplay();
+                if (cancelledHints > 0) {
+                  flash(
+                    `Cap lowered. Cancelled ${cancelledHints} pending admin invite${cancelledHints === 1 ? "" : "s"}.`,
+                    "warn",
+                  );
+                } else {
+                  flash("Admin cap updated", "ok");
+                }
+              }}
             />
 
             <CardsSection

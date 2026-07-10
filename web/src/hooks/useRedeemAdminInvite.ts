@@ -11,6 +11,7 @@ export type RedeemAdminOutcome =
   | { outcome: "family_full"; admin_cap: number; current_admins: number }
   | { outcome: "not_a_chain_member" }
   | { outcome: "already_redeemed" }
+  | { outcome: "cancelled" }
   | { outcome: "invalid_invite" }
   | { outcome: "not_authenticated" };
 

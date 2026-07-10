@@ -1,13 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useState } from "react";
 import { CheckIcon, PencilSimpleIcon, XIcon } from "@phosphor-icons/react";
 
 import type { Member } from "@/hooks/useWalletState";
-import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
+import { useUpdateAdminCap } from "@/hooks/useUpdateAdminCap";
 import { Avatar } from "@/components/sobre/Avatar";
 import { MAX_ADMIN_CAP } from "@/lib/config";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { shortenAddress } from "@/lib/format";
 
 /**
@@ -41,7 +40,11 @@ export function MembersSection({
    *  keeps the UI honest for non-admin viewers. */
   canEditCap: boolean;
   onInvite?: () => void;
-  onCapChanged?: () => void;
+  /** Fires after a successful cap update. `cancelledHints` is the number
+   *  of pending admin invites the RPC just marked cancelled (0 unless
+   *  the cap was lowered enough to orphan them). Caller can flash a
+   *  richer notice when > 0. */
+  onCapChanged?: (info: { cancelledHints: number }) => void;
 }) {
   return (
     <section className="sobre-envs-section" aria-label="Members">
@@ -93,10 +96,11 @@ export function MembersSection({
 }
 
 /** Inline cap adjuster. Small pencil → numeric input + save / cancel.
- *  Direct Supabase update; the family_wallets "Admins can update" RLS
- *  policy gates the write. Enforces min = current admin count (can't
- *  lower below what's already provisioned) and max = 5 (defensive; the
- *  DB check is >= 1 only). */
+ *  Goes through the update_admin_cap RPC (not a direct .from().update())
+ *  so the row-lock + optimistic-locking + cap >= adminCount invariants
+ *  hold under concurrency. On success we also surface how many admin
+ *  invite hints the RPC auto-cancelled — a lowered cap that orphans
+ *  pending invites shouldn't be silent. */
 function AdminCapEditor({
   familyWalletId,
   currentCap,
@@ -106,35 +110,17 @@ function AdminCapEditor({
   familyWalletId: string;
   currentCap: number;
   adminCount: number;
-  onChanged?: () => void;
+  onChanged?: (info: { cancelledHints: number }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(String(currentCap));
   const [validationError, setValidationError] = useState<string | null>(null);
+  const { update, pending: saving, error: saveError } = useUpdateAdminCap();
 
   // Only the family's admin can view this editor (`canEditCap` in the
   // parent), and by construction there is at least one admin — the caller.
   // So the floor is `adminCount`, not `max(1, adminCount)`.
   const min = adminCount;
-
-  const write = useCallback(
-    async (next: number) => {
-      const supabase = getSupabaseBrowserClient();
-      const { data, error: updateErr } = await supabase
-        .from("family_wallets")
-        .update({ admin_cap: next })
-        .eq("id", familyWalletId)
-        // `.select("id").maybeSingle()` is load-bearing: an RLS-silent
-        // rejection returns 0 rows without error, and !data is how we
-        // distinguish that from success.
-        .select("id")
-        .maybeSingle();
-      if (updateErr) throw new Error(updateErr.message);
-      if (!data) throw new Error("Only an admin can change the cap.");
-    },
-    [familyWalletId],
-  );
-  const { run: save, pending: saving, error: saveError } = useSupabaseMutation(write);
 
   const submit = async () => {
     const next = Number.parseInt(draft, 10);
@@ -148,9 +134,39 @@ function AdminCapEditor({
     }
     setValidationError(null);
     try {
-      await save(next);
-      setEditing(false);
-      onChanged?.();
+      const result = await update(familyWalletId, currentCap, next);
+      if (result.outcome === "updated") {
+        setEditing(false);
+        onChanged?.({ cancelledHints: result.cancelled_hints });
+        return;
+      }
+      if (result.outcome === "no_change") {
+        setEditing(false);
+        return;
+      }
+      if (result.outcome === "stale") {
+        setValidationError(
+          `Another admin just changed it to ${result.current_cap}. Reopen to try again.`,
+        );
+        return;
+      }
+      if (result.outcome === "below_admin_count") {
+        setValidationError(
+          `Can't go below ${result.current_admins} — that's the number of admins already in.`,
+        );
+        return;
+      }
+      if (result.outcome === "not_admin") {
+        setValidationError("Only an admin can change the cap.");
+        return;
+      }
+      if (result.outcome === "out_of_range") {
+        setValidationError(
+          `Choose between ${result.min} and ${result.max}.`,
+        );
+        return;
+      }
+      setValidationError("Couldn't save. Try again.");
     } catch {
       // surfaces via saveError
     }
