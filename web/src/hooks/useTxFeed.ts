@@ -149,6 +149,10 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   const [events, setEvents] = useState<FeedEvent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // Cache-hydration state — used by the reset effect below to seed the map
+  // from sessionStorage before any RPC round-trip. Ref not state so the
+  // reset effect's initializer doesn't cascade a render.
+  const hydratedRef = useRef<string | null>(null);
   const startLedgerRef = useRef<number | null>(null);
   // The last cursor we consumed. Once set, subsequent polls resume from
   // here instead of re-scanning from startLedger — cheaper and lets the
@@ -193,6 +197,35 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         | Awaited<ReturnType<typeof server.getEvents>>
         | undefined;
       const parsed: FeedEvent[] = [];
+      // Progressive commit: merge and setEvents after every page instead
+      // of only at the end. The first page's events paint within ~300ms
+      // and later pages fill in behind — the user sees rows immediately
+      // instead of a 2s skeleton hold while all pages sequentially fetch.
+      const commitPage = (pageParsed: FeedEvent[]) => {
+        if (pageParsed.length === 0) return;
+        for (const ev of pageParsed) {
+          const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
+          if (!eventsMapRef.current.has(key)) {
+            eventsMapRef.current.set(key, ev);
+          }
+        }
+        if (eventsMapRef.current.size > MAX_EVENTS) {
+          const sorted = Array.from(eventsMapRef.current.entries()).sort(
+            (a, b) => b[1].ledger - a[1].ledger,
+          );
+          eventsMapRef.current = new Map(sorted.slice(0, MAX_EVENTS));
+        }
+        const merged = Array.from(eventsMapRef.current.values()).sort(
+          (a, b) => b.ledger - a.ledger,
+        );
+        const signature = `${merged.length}:${merged[0]?.txHash ?? ""}:${merged[0]?.kind ?? ""}`;
+        if (signature !== lastSignatureRef.current) {
+          lastSignatureRef.current = signature;
+          setEvents(merged);
+          setLoading(false);
+          if (contractId) writeCache(contractId, merged);
+        }
+      };
       let totalMatched = 0;
       let pages = 0;
       const MAX_PAGES = 40;
@@ -263,6 +296,7 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         totalMatched += raw.events.length;
         if (catchUpLatest === null) catchUpLatest = raw.latestLedger;
 
+        const pageStart = parsed.length;
         for (const ev of raw.events) {
         const topics = ev.topic.map((t) => scValToNative(t));
         const kind = String(topics[0] ?? "").toLowerCase();
@@ -417,6 +451,11 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         }
         }
 
+        // Commit whatever this page produced right now, before starting
+        // the next round-trip — so the first-page rows paint immediately
+        // and the paginate loop feels progressive instead of blocking.
+        commitPage(parsed.slice(pageStart));
+
         // Advance the local cursor and decide whether we've caught up.
         // The RPC may return an empty `events` array with a still-advancing
         // cursor (sparse contract, dense ledgers) — keep paging until the
@@ -457,35 +496,9 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
           `[useTxFeed] new events — matched=${totalMatched}, parsed=${parsed.length}, pages=${pages}, latestLedger=${raw.latestLedger}`,
         );
       }
-      // Union-merge into the accumulator. We never remove events that
-      // were once seen — the only way a previously-emitted Soroban event
-      // disappears is if the chain re-orgs, which Stellar doesn't do.
-      // A stale RPC snapshot returning fewer events than we already know
-      // about is now a no-op instead of a flicker.
-      for (const ev of parsed) {
-        const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
-        if (!eventsMapRef.current.has(key)) {
-          eventsMapRef.current.set(key, ev);
-        }
-      }
-
-      // Cap memory. Keep the newest MAX_EVENTS by ledger; drop older.
-      if (eventsMapRef.current.size > MAX_EVENTS) {
-        const sorted = Array.from(eventsMapRef.current.entries()).sort(
-          (a, b) => b[1].ledger - a[1].ledger,
-        );
-        eventsMapRef.current = new Map(sorted.slice(0, MAX_EVENTS));
-      }
-
-      const merged = Array.from(eventsMapRef.current.values()).sort(
-        (a, b) => b.ledger - a.ledger,
-      );
-
-      const signature = `${merged.length}:${merged[0]?.txHash ?? ""}:${merged[0]?.kind ?? ""}`;
-      if (signature !== lastSignatureRef.current) {
-        lastSignatureRef.current = signature;
-        setEvents(merged);
-      }
+      // Per-page commits handled inside the loop above — no end-of-fetch
+      // merge needed. Trailing empty page still fine: commitPage no-ops
+      // on an empty slice.
     } catch (e) {
       if (gen !== generationRef.current) return;
       const msg = e instanceof Error ? e.message : String(e);
@@ -497,14 +510,35 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   }, [contractId]);
 
   // Reset paging state when switching Sobres so we re-window from the
-  // current ledger for the new contract.
+  // current ledger for the new contract. Also hydrates from sessionStorage
+  // if we've cached this contract's events earlier this tab session —
+  // repeat visits paint instantly instead of flashing the skeleton for a
+  // second while the paginate loop catches up.
   useEffect(() => {
     startLedgerRef.current = null;
     cursorRef.current = null;
     lastSignatureRef.current = "";
     eventsMapRef.current = new Map();
     firstFetchLoggedRef.current = false;
+    hydratedRef.current = contractId;
+    if (contractId) {
+      const cached = readCache(contractId);
+      if (cached && cached.length > 0) {
+        for (const ev of cached) {
+          const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
+          eventsMapRef.current.set(key, ev);
+        }
+        const sorted = cached
+          .slice()
+          .sort((a, b) => b.ledger - a.ledger);
+        lastSignatureRef.current = `${sorted.length}:${sorted[0]?.txHash ?? ""}:${sorted[0]?.kind ?? ""}`;
+        setEvents(sorted);
+        setLoading(false);
+        return;
+      }
+    }
     setEvents([]);
+    setLoading(true);
   }, [contractId]);
 
   useEffect(() => {
@@ -542,6 +576,54 @@ export function eventActor(ev: FeedEvent): string | null {
       return ev.recipient;
     default:
       return null;
+  }
+}
+
+/** sessionStorage key for a contract's cached event snapshot. Snapshot is
+ *  per-tab per-contract so switching between Sobres doesn't pollute each
+ *  other. Cleared implicitly when the browser tab closes. */
+function cacheKey(contractId: string): string {
+  return `sobre.txFeed:${contractId}`;
+}
+
+/** Serialize FeedEvent[] to a string that survives JSON, preserving the
+ *  bigint fields via a tagged prefix. Sits alongside a matching reviver
+ *  so hydration produces the same shape the paginate loop would build. */
+function serializeEvents(events: FeedEvent[]): string {
+  return JSON.stringify(events, (_key, value) =>
+    typeof value === "bigint" ? `__BI__${value.toString()}` : value,
+  );
+}
+
+function reviveEvents(raw: string): FeedEvent[] | null {
+  try {
+    return JSON.parse(raw, (_key, value) => {
+      if (typeof value === "string" && value.startsWith("__BI__")) {
+        return BigInt(value.slice(6));
+      }
+      return value;
+    }) as FeedEvent[];
+  } catch {
+    return null;
+  }
+}
+
+function readCache(contractId: string): FeedEvent[] | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(cacheKey(contractId));
+    return raw ? reviveEvents(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCache(contractId: string, events: FeedEvent[]): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(cacheKey(contractId), serializeEvents(events));
+  } catch {
+    // Quota exceeded / disabled storage — silent no-op, cache is best-effort.
   }
 }
 
