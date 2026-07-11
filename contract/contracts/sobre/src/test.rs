@@ -904,3 +904,193 @@ fn earn_withdraw_cannot_drain_sibling_envelope() {
     f.client()
         .earn_withdraw(&Envelope::Groceries, &(8 * STROOPS_PER_TOKEN));
 }
+
+// ─── Grow: 48h timelock ───────────────────────────────────────────────────
+
+/// Wall-clock 48 hours in seconds — hardcoded here so tests are honest
+/// about the value they're checking against. If the contract's constant
+/// ever changes, this test fails and forces the copy to stay in sync.
+const GROW_TIMELOCK_SECS: u64 = 48 * 3600;
+
+#[test]
+fn grow_enable_marks_state_and_zeroes_balance() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    let state = f.client().get_state();
+    assert!(state.grow_enabled);
+    assert_eq!(state.grow_balance, 0);
+    assert_eq!(state.grow_requests.len(), 0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #22)")]
+fn grow_enable_rejects_second_call() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client().grow_enable();
+}
+
+#[test]
+fn grow_state_default_when_disabled() {
+    let f = Fixture::funded();
+    let state = f.client().get_state();
+    assert!(!state.grow_enabled);
+    assert_eq!(state.grow_balance, 0);
+    assert_eq!(state.grow_requests.len(), 0);
+}
+
+#[test]
+fn grow_transfer_from_savings_moves_stroops_into_bucket() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    let amount = 15 * STROOPS_PER_TOKEN;
+    f.client().grow_transfer_from_savings(&amount);
+    let state = f.client().get_state();
+    assert_eq!(state.grow_balance, amount);
+    // Savings envelope drops from 20 → 5.
+    assert_eq!(state.balances.get(2).unwrap(), 5 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #23)")]
+fn grow_transfer_rejects_when_disabled() {
+    let f = Fixture::funded();
+    f.client().grow_transfer_from_savings(&(1 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #6)")]
+fn grow_transfer_rejects_zero() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client().grow_transfer_from_savings(&0);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn grow_transfer_rejects_over_savings_balance() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    // Savings has 20 after funding; try 21.
+    f.client().grow_transfer_from_savings(&(21 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+fn grow_request_queues_and_reserves_amount() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+    let ts_before = f.env.ledger().timestamp();
+    let id = f.client().request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+    assert_eq!(id, 0);
+    let state = f.client().get_state();
+    assert_eq!(state.grow_requests.len(), 1);
+    let req = state.grow_requests.get(0).unwrap();
+    assert_eq!(req.id, 0);
+    assert_eq!(req.requester, f.admin);
+    assert_eq!(req.amount, 10 * STROOPS_PER_TOKEN);
+    assert_eq!(req.unlock_at, ts_before + GROW_TIMELOCK_SECS);
+    // Balance is still 15 — reservation is virtual, not a debit.
+    assert_eq!(state.grow_balance, 15 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #8)")]
+fn grow_request_rejects_when_reservations_exceed_balance() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(10 * STROOPS_PER_TOKEN));
+    f.client().request_grow_withdrawal(&(7 * STROOPS_PER_TOKEN));
+    // 7 already reserved; asking for 4 more (7+4=11 > 10) must panic.
+    f.client().request_grow_withdrawal(&(4 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #23)")]
+fn grow_request_rejects_when_disabled() {
+    let f = Fixture::funded();
+    f.client().request_grow_withdrawal(&(1 * STROOPS_PER_TOKEN));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #25)")]
+fn grow_execute_rejects_before_unlock() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(10 * STROOPS_PER_TOKEN));
+    let id = f.client().request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+    // One second short of the timelock.
+    f.env.ledger().with_mut(|l| l.timestamp += GROW_TIMELOCK_SECS - 1);
+    f.client().execute_grow_withdrawal(&id);
+}
+
+#[test]
+fn grow_execute_at_unlock_transfers_tokens_and_clears_request() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(10 * STROOPS_PER_TOKEN));
+    let admin_before = f.token().balance(&f.admin);
+    let id = f.client().request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+    f.env.ledger().with_mut(|l| l.timestamp += GROW_TIMELOCK_SECS);
+    f.client().execute_grow_withdrawal(&id);
+    let state = f.client().get_state();
+    assert_eq!(state.grow_balance, 0);
+    assert_eq!(state.grow_requests.len(), 0);
+    assert_eq!(
+        f.token().balance(&f.admin),
+        admin_before + 10 * STROOPS_PER_TOKEN,
+    );
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn grow_execute_with_unknown_id_fails() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client().execute_grow_withdrawal(&999);
+}
+
+#[test]
+fn grow_cancel_clears_request_before_unlock() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(10 * STROOPS_PER_TOKEN));
+    let id = f.client().request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+    f.client().cancel_grow_withdrawal(&id);
+    let state = f.client().get_state();
+    assert_eq!(state.grow_requests.len(), 0);
+    // Balance stays put — cancel is a request-only clear.
+    assert_eq!(state.grow_balance, 10 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #24)")]
+fn grow_cancel_with_unknown_id_fails() {
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client().cancel_grow_withdrawal(&42);
+}
+
+#[test]
+fn grow_execute_after_multiple_requests_only_clears_target() {
+    // Two concurrent requests; execute one; the other stays reserved.
+    let f = Fixture::funded();
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+    let id0 = f.client().request_grow_withdrawal(&(6 * STROOPS_PER_TOKEN));
+    let id1 = f.client().request_grow_withdrawal(&(4 * STROOPS_PER_TOKEN));
+    assert_eq!(id0, 0);
+    assert_eq!(id1, 1);
+    f.env.ledger().with_mut(|l| l.timestamp += GROW_TIMELOCK_SECS);
+    f.client().execute_grow_withdrawal(&id0);
+    let state = f.client().get_state();
+    assert_eq!(state.grow_balance, 9 * STROOPS_PER_TOKEN);
+    assert_eq!(state.grow_requests.len(), 1);
+    assert_eq!(state.grow_requests.get(0).unwrap().id, id1);
+}

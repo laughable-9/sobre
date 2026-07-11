@@ -23,6 +23,20 @@ const REQUEST_TYPE_WITHDRAW: u32 = 1;
 /// underlying = b_tokens * b_rate / SCALAR_12.
 const SCALAR_12: i128 = 1_000_000_000_000;
 
+/// 48 hours in seconds. Wall-clock delay from `request_grow_withdrawal`
+/// to the earliest `execute_grow_withdrawal` that won't panic.
+const GROW_TIMELOCK_SECS: u64 = 48 * 3600;
+
+/// TTL floor for the persistent `GrowRequests` entry — bump on write to
+/// this many ledgers (~72h at 5s/ledger). The 48h timelock plus a 24h
+/// buffer so a request that lands right before the ledger's TTL sweep
+/// doesn't archive out from under the requester.
+const GROW_REQ_TTL_LEDGERS: u32 = 51_840;
+/// Threshold below which `extend_ttl` actually extends. Set to 34_560
+/// (~48h at 5s/ledger) so a re-write within 24h of the last extend
+/// short-circuits the host-side TTL syscall instead of doing a no-op bump.
+const GROW_REQ_TTL_THRESHOLD: u32 = 34_560;
+
 // ─── Domain types ─────────────────────────────────────────────────────────
 
 /// Variant order is wire contract: the `balances` Vec<i128> is indexed
@@ -104,6 +118,22 @@ pub enum DataKey {
     /// Sum across envelopes equals Sobre's aggregate `positions.supply` on
     /// the pool. Underlying value = this * b_rate / SCALAR_12.
     EarnBToken(Envelope),
+    /// Whether admin has opted this wallet into the Grow bucket. Absent key
+    /// defaults to false so pre-upgrade instances read as disabled.
+    GrowEnabled,
+    /// Payment-token stroops locked in the Grow bucket. Distinct from the
+    /// three splittable envelopes — Grow has its own 48h-timelocked exit
+    /// path, not the immediate spend/subaccount-fund affordances envelopes
+    /// have.
+    GrowBalance,
+    /// Monotonically increasing counter for grow-withdraw request IDs.
+    /// Absent key defaults to 0. First request minted gets id=0. Never
+    /// resets (even after all requests clear) so the audit log has stable
+    /// external identifiers.
+    NextGrowReqId,
+    /// Vec of active grow-withdraw requests. Single persistent entry so one
+    /// TTL bump covers every pending timelock. Order is insertion order.
+    GrowRequests,
 }
 
 #[contracttype]
@@ -119,6 +149,18 @@ pub struct WalletState {
     /// the wire shape for optional here: `contracttype` doesn't auto-derive
     /// `Option<T>` XDR conversion for our own struct types (SDK 25).
     pub earn: Vec<EarnState>,
+    /// Grow-bucket balance (payment-token stroops locked under the 48h
+    /// timelock). Zero — with no active requests — when Grow hasn't been
+    /// enabled or hasn't had funds transferred in yet.
+    pub grow_balance: i128,
+    /// Whether the wallet has opted into Grow. Distinct from
+    /// `grow_balance > 0` because a wallet can be enabled with an empty
+    /// bucket (initial state after `grow_enable`).
+    pub grow_enabled: bool,
+    /// Active grow-withdraw requests, insertion order. Frontend renders
+    /// per-request countdowns from `unlock_at - now`. Empty when no
+    /// request is pending.
+    pub grow_requests: Vec<GrowWithdrawRequest>,
 }
 
 /// Only present when Earn is enabled. `positions` includes an entry per
@@ -140,6 +182,20 @@ pub struct EarnPosition {
     pub envelope: Envelope,
     pub b_tokens: i128,
     pub underlying: i128,
+}
+
+/// Grow-withdrawal request. Vec of these lives at `DataKey::GrowRequests`.
+/// `unlock_at` is a unix-seconds timestamp (from `env.ledger().timestamp()`
+/// at request time + GROW_TIMELOCK_SECS). `execute_grow_withdrawal` traps
+/// before that timestamp; `cancel_grow_withdrawal` works anytime the
+/// requester chooses to bail out.
+#[contracttype]
+#[derive(Clone)]
+pub struct GrowWithdrawRequest {
+    pub id: u64,
+    pub requester: Address,
+    pub amount: i128,
+    pub unlock_at: u64,
 }
 
 /// Emitted by `deposit_with_split`. Topic list: ("Deposit", from). The
@@ -291,6 +347,59 @@ pub struct EarnWithdraw {
     pub b_tokens: i128,
 }
 
+/// Emitted once per Sobre wallet lifetime by `grow_enable`.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GrowEnabledEvent {}
+
+/// Emitted by `grow_transfer_from_savings` — funds cross from the Savings
+/// envelope into the Grow bucket. No token leaves the contract; this is
+/// pure internal accounting.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GrowTransfer {
+    pub amount: i128,
+}
+
+/// Emitted by `request_grow_withdrawal`. `unlock_at` is the earliest
+/// unix-seconds timestamp at which `execute_grow_withdrawal` will succeed.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GrowRequest {
+    #[topic]
+    pub request_id: u64,
+    #[topic]
+    pub requester: Address,
+    pub amount: i128,
+    pub unlock_at: u64,
+}
+
+/// Emitted by `execute_grow_withdrawal`. Tokens have left the contract
+/// and landed in the requester's wallet; the corresponding request entry
+/// has been removed.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GrowExecute {
+    #[topic]
+    pub request_id: u64,
+    #[topic]
+    pub requester: Address,
+    pub amount: i128,
+}
+
+/// Emitted by `cancel_grow_withdrawal`. Funds stay in the Grow bucket;
+/// the request is cleared and the requester can retry with a fresh
+/// timelock at any time.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct GrowCancel {
+    #[topic]
+    pub request_id: u64,
+    #[topic]
+    pub requester: Address,
+    pub amount: i128,
+}
+
 #[contracterror]
 #[derive(Copy, Clone, Debug, Eq, PartialEq, PartialOrd, Ord)]
 #[repr(u32)]
@@ -313,6 +422,10 @@ pub enum Error {
     EarnAlreadyEnabled = 19,
     EarnNotEnabled = 20,
     EarnInsufficientPosition = 21,
+    GrowAlreadyEnabled = 22,
+    GrowNotEnabled = 23,
+    GrowRequestNotFound = 24,
+    GrowTimelockNotElapsed = 25,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
@@ -462,6 +575,52 @@ fn sum_earn_b_tokens(env: &Env) -> i128 {
 }
 
 const ENVELOPES: [Envelope; 3] = [Envelope::Groceries, Envelope::Tuition, Envelope::Savings];
+
+fn load_grow_requests(env: &Env) -> Vec<GrowWithdrawRequest> {
+    env.storage()
+        .persistent()
+        .get(&DataKey::GrowRequests)
+        .unwrap_or_else(|| Vec::new(env))
+}
+
+/// Writes the requests vec and bumps its TTL to cover the full 48h wait
+/// plus a 24h buffer. When the vec is empty (last request cleared), drop
+/// the persistent entry entirely instead of leaving an empty-vec ghost
+/// with a fresh TTL bump — reclaims the ledger slot cleanly.
+fn store_grow_requests(env: &Env, requests: &Vec<GrowWithdrawRequest>) {
+    let key = DataKey::GrowRequests;
+    if requests.is_empty() {
+        env.storage().persistent().remove(&key);
+        return;
+    }
+    env.storage().persistent().set(&key, requests);
+    env.storage()
+        .persistent()
+        .extend_ttl(&key, GROW_REQ_TTL_THRESHOLD, GROW_REQ_TTL_LEDGERS);
+}
+
+fn find_grow_request_index(
+    requests: &Vec<GrowWithdrawRequest>,
+    id: u64,
+) -> Option<u32> {
+    for (i, r) in requests.iter().enumerate() {
+        if r.id == id {
+            return Some(i as u32);
+        }
+    }
+    None
+}
+
+fn require_grow_enabled(env: &Env) {
+    if !env
+        .storage()
+        .instance()
+        .get::<_, bool>(&DataKey::GrowEnabled)
+        .unwrap_or(false)
+    {
+        panic_with_error!(env, Error::GrowNotEnabled);
+    }
+}
 
 /// Shared by `spend` and `spend_on_behalf`. Assumes auth + member checks
 /// already done. Transfers tokens to `caller`'s wallet, debits the envelope,
@@ -959,6 +1118,151 @@ impl SobreContract {
         .publish(&env);
     }
 
+    /// One-shot opt-in to the Grow bucket. Sets `GrowEnabled = true` and
+    /// initializes an empty balance. Second call panics — Grow, like Earn,
+    /// isn't idempotent because a re-enable could silently orphan a stale
+    /// balance if the semantic ever changed.
+    pub fn grow_enable(env: Env) {
+        require_admin_auth(&env);
+        let inst = env.storage().instance();
+        if inst.get::<_, bool>(&DataKey::GrowEnabled).unwrap_or(false) {
+            panic_with_error!(&env, Error::GrowAlreadyEnabled);
+        }
+        inst.set(&DataKey::GrowEnabled, &true);
+        inst.set(&DataKey::GrowBalance, &0i128);
+        GrowEnabledEvent {}.publish(&env);
+    }
+
+    /// Admin transfers `amount` payment-token stroops from the Savings
+    /// envelope into the Grow bucket. Internal ledger move — no token
+    /// leaves the contract. Panics if Savings can't cover it.
+    pub fn grow_transfer_from_savings(env: Env, amount: i128) {
+        require_admin_auth(&env);
+        require_grow_enabled(&env);
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let inst = env.storage().instance();
+        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+        let savings_idx = Envelope::Savings.index();
+        let current_savings = balances.get(savings_idx).unwrap();
+        if current_savings < amount {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+        balances.set(savings_idx, current_savings - amount);
+        inst.set(&DataKey::Balances, &balances);
+        inst.set(&DataKey::GrowBalance, &(grow_balance + amount));
+        GrowTransfer { amount }.publish(&env);
+    }
+
+    /// Admin queues a Grow withdrawal. Returns the request id so the caller
+    /// can address it in a follow-up execute/cancel. Reserves `amount`
+    /// against the Grow balance immediately — a second concurrent request
+    /// that would over-commit the bucket panics with InsufficientBalance.
+    pub fn request_grow_withdrawal(env: Env, amount: i128) -> u64 {
+        require_admin_auth(&env);
+        require_grow_enabled(&env);
+        if amount <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
+        }
+        let inst = env.storage().instance();
+        let admin: Address = inst.get(&DataKey::Admin).unwrap();
+        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+        let mut requests = load_grow_requests(&env);
+        let reserved: i128 = requests.iter().fold(0i128, |acc, r| acc + r.amount);
+        if grow_balance - reserved < amount {
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+
+        let id: u64 = inst.get(&DataKey::NextGrowReqId).unwrap_or(0u64);
+        inst.set(&DataKey::NextGrowReqId, &(id + 1));
+
+        let unlock_at = env.ledger().timestamp() + GROW_TIMELOCK_SECS;
+        let req = GrowWithdrawRequest {
+            id,
+            requester: admin.clone(),
+            amount,
+            unlock_at,
+        };
+        requests.push_back(req);
+        store_grow_requests(&env, &requests);
+
+        GrowRequest {
+            request_id: id,
+            requester: admin,
+            amount,
+            unlock_at,
+        }
+        .publish(&env);
+        id
+    }
+
+    /// After the 48h timelock, the requester unlocks and receives the
+    /// tokens directly into their own wallet. Grow balance drops by the
+    /// request amount; the request entry is removed.
+    ///
+    /// Auth is on `req.requester` — under today's single-admin model that
+    /// address IS the current admin, but keying auth off the stored
+    /// requester survives the multi-admin backlog landing without a
+    /// behavior change.
+    pub fn execute_grow_withdrawal(env: Env, request_id: u64) {
+        let mut requests = load_grow_requests(&env);
+        let idx = find_grow_request_index(&requests, request_id)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::GrowRequestNotFound));
+        let req = requests.get(idx).unwrap();
+
+        req.requester.require_auth();
+
+        if env.ledger().timestamp() < req.unlock_at {
+            panic_with_error!(&env, Error::GrowTimelockNotElapsed);
+        }
+
+        let inst = env.storage().instance();
+        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+        if grow_balance < req.amount {
+            // Should never happen given the reserve-at-request accounting,
+            // but the sanity check is cheap and rules out an impossible
+            // negative balance if the invariant ever breaks.
+            panic_with_error!(&env, Error::InsufficientBalance);
+        }
+        let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+        token::Client::new(&env, &payment_token).transfer(
+            &env.current_contract_address(),
+            &req.requester,
+            &req.amount,
+        );
+        inst.set(&DataKey::GrowBalance, &(grow_balance - req.amount));
+        requests.remove(idx);
+        store_grow_requests(&env, &requests);
+
+        GrowExecute {
+            request_id: req.id,
+            requester: req.requester,
+            amount: req.amount,
+        }
+        .publish(&env);
+    }
+
+    /// Cancels a pending grow-withdraw request. Funds stay in the bucket;
+    /// the requester frees up the reserved amount and can queue a new
+    /// request whenever they want (starting a fresh 48h timer).
+    pub fn cancel_grow_withdrawal(env: Env, request_id: u64) {
+        let mut requests = load_grow_requests(&env);
+        let idx = find_grow_request_index(&requests, request_id)
+            .unwrap_or_else(|| panic_with_error!(&env, Error::GrowRequestNotFound));
+        let req = requests.get(idx).unwrap();
+        req.requester.require_auth();
+        requests.remove(idx);
+        store_grow_requests(&env, &requests);
+        GrowCancel {
+            request_id: req.id,
+            requester: req.requester,
+            amount: req.amount,
+        }
+        .publish(&env);
+    }
+
     /// Polled by both dashboards. Only on-chain truth — display + family
     /// rules (split, policy, pending requests) live in Supabase and the
     /// dashboard joins them client-side.
@@ -972,6 +1276,23 @@ impl SobreContract {
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let subaccounts = load_subaccounts(&env);
         let earn = load_earn_state(&env);
+        let grow_enabled: bool =
+            inst.get(&DataKey::GrowEnabled).unwrap_or(false);
+        let (grow_balance, grow_requests) = if grow_enabled {
+            let balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+            // Skip the persistent read if no request has ever been minted —
+            // covers the enabled-but-idle case that dominates polling
+            // traffic once a family clears their queue.
+            let next_id: u64 = inst.get(&DataKey::NextGrowReqId).unwrap_or(0);
+            let requests = if next_id > 0 {
+                load_grow_requests(&env)
+            } else {
+                Vec::new(&env)
+            };
+            (balance, requests)
+        } else {
+            (0i128, Vec::new(&env))
+        };
         WalletState {
             admin,
             payment_token,
@@ -979,6 +1300,9 @@ impl SobreContract {
             balances,
             subaccounts,
             earn,
+            grow_balance,
+            grow_enabled,
+            grow_requests,
         }
     }
 }
