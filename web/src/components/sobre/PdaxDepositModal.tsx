@@ -362,34 +362,14 @@ export function PdaxDepositModal({
 
   const handleGenerate = async () => {
     if (!validAmount) return;
-    // Pre-open the popup SYNCHRONOUSLY inside the click handler. Browsers
-    // require window.open to run in the same tick as a user gesture; once
-    // we await, the gesture chain breaks and Chrome/Safari/Firefox block
-    // the popup. `about:blank` gives us a window handle to redirect once
-    // the checkout URL comes back. The AwaitingStep still renders a plain
-    // <a> as a backup if the browser blocked even this pre-open.
-    const popup = window.open(
-      "about:blank",
-      "_blank",
-      "noopener,noreferrer",
-    );
+    // Don't auto-open a popup — a slow or failing `initiate` leaves the
+    // popup stuck at about:blank, which reads as broken. The AwaitingStep
+    // renders a normal anchor the user taps once the URL is ready; the
+    // click there is in the same gesture chain so no popup blocker fires.
     setPreparing(true);
     try {
-      const result = await initiate(amountPhp);
-      if (popup && !popup.closed) {
-        popup.location.href = result.paymentCheckoutUrl;
-      } else {
-        // Pre-open was blocked. Try one more direct open — some browsers
-        // allow it if the click was very recent — otherwise the user
-        // clicks the AwaitingStep anchor.
-        window.open(
-          result.paymentCheckoutUrl,
-          "_blank",
-          "noopener,noreferrer",
-        );
-      }
+      await initiate(amountPhp);
     } catch {
-      if (popup && !popup.closed) popup.close();
       setPreparing(false);
     }
   };
