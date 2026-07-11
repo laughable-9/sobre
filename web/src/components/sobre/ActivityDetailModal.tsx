@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useMemo, useState } from "react";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
 
 import { Avatar } from "@/components/sobre/Avatar";
+import { Sheet } from "@/components/sobre/Sheet";
 import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
 import { bankName } from "@/lib/banks";
@@ -14,7 +14,6 @@ import {
   maskAccountNumber,
   shortenAddress,
 } from "@/lib/format";
-import { backdropClose } from "@/lib/ui";
 
 /**
  * Row-tap detail modal. Every activity row opens this same modal — the
@@ -66,95 +65,11 @@ export function ActivityDetailModal({
   const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${event.txHash}`;
   const hasDetails = detailsShouldRender(event);
 
-  // Drag-to-close for the mobile bottom-sheet layout. Desktop still renders
-  // as a centered dialog — the drag is scoped to a small handle strip at
-  // the top of the sheet so scrolling inside the modal body doesn't
-  // accidentally start a dismiss. `dragging` doubles as a "no transition"
-  // signal: while the pointer is down we follow it 1:1, and the spring-
-  // back or slide-out animation kicks in only after release.
-  const [dragY, setDragY] = useState(0);
-  const [dragging, setDragging] = useState(false);
-  const [closing, setClosing] = useState(false);
-  const dragStartRef = useRef<number | null>(null);
-  const CLOSE_THRESHOLD = 100;
-  const CLOSE_ANIM_MS = 220;
-
-  // Any dismiss path (backdrop click, drag past threshold) just flips
-  // `closing`; the effect below schedules the real onClose after the
-  // slide-down animation and auto-cleans up if the parent unmounts under
-  // us (so onClose never fires on a dead component).
-  useEffect(() => {
-    if (!closing) return;
-    const t = window.setTimeout(onClose, CLOSE_ANIM_MS);
-    return () => window.clearTimeout(t);
-  }, [closing, onClose]);
-
-  const beginClose = () => {
-    if (!closing) setClosing(true);
-  };
-
-  const onHandlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    dragStartRef.current = e.clientY;
-    setDragging(true);
-    e.currentTarget.setPointerCapture(e.pointerId);
-  };
-  const onHandlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (dragStartRef.current === null) return;
-    const delta = e.clientY - dragStartRef.current;
-    setDragY(delta > 0 ? delta : 0);
-  };
-  const onHandlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (dragStartRef.current === null) return;
-    e.currentTarget.releasePointerCapture(e.pointerId);
-    dragStartRef.current = null;
-    setDragging(false);
-    if (dragY > CLOSE_THRESHOLD) {
-      // Reset the inline translate so the CSS slide-down animation runs
-      // from its "at rest" 0 → 100% instead of jumping past its from-frame.
-      setDragY(0);
-      beginClose();
-    } else {
-      setDragY(0);
-    }
-  };
-
-  // Portal to document.body so the fixed-position sheet escapes any
-  // ancestor stacking context (Reveal wraps the home tab in a
-  // transform + will-change container, which was trapping the modal
-  // BEHIND the bottom dock). SSR-safe via typeof window guard.
-  if (typeof window === "undefined") return null;
-  const content = (
-    <div
-      className={`sobre-modal-bg${closing ? " closing" : ""}`}
-      onMouseDown={backdropClose(beginClose)}
-    >
-      <div
-        className={`sobre-modal sobre-activity-detail has-own-handle${closing ? " closing" : ""}`}
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-modal="true"
-        style={{
-          transform: dragY ? `translateY(${dragY}px)` : undefined,
-          transition: dragging ? "none" : "transform 0.2s ease",
-        }}
-      >
-        {/* Drag handle strip — visible only on the mobile bottom-sheet
-            layout via CSS. Owns the pointer capture so scrolling inside
-            the modal body doesn't fight with the dismiss gesture. */}
-        <div
-          className="sobre-activity-detail-handle-strip"
-          onPointerDown={onHandlePointerDown}
-          onPointerMove={onHandlePointerMove}
-          onPointerUp={onHandlePointerUp}
-          onPointerCancel={onHandlePointerUp}
-          aria-hidden
-        >
-          <div className="sobre-activity-detail-handle" />
-        </div>
-
-        {/* Header — either the actor's avatar or a coloured tint block for
-            envelope-scoped events (deposits, Earn/Grow moves). */}
-        <header className="sobre-activity-detail-head">
+  return (
+    <Sheet onClose={onClose} className="sobre-activity-detail">
+      {/* Header — either the actor's avatar or a coloured tint block for
+          envelope-scoped events (deposits, Earn/Grow moves). */}
+      <header className="sobre-activity-detail-head">
           {actor ? (
             <Avatar
               name={nameOf(actor)}
@@ -181,41 +96,39 @@ export function ActivityDetailModal({
           </div>
         ) : null}
 
-        <div className="sobre-activity-detail-advanced">
-          <button
-            type="button"
-            className="sobre-activity-detail-advanced-toggle"
-            onClick={() => setAdvancedOpen((v) => !v)}
-            aria-expanded={advancedOpen}
-          >
-            <span>Advanced</span>
-            {advancedOpen ? (
-              <CaretUpIcon weight="bold" size={12} />
-            ) : (
-              <CaretDownIcon weight="bold" size={12} />
-            )}
-          </button>
+      <div className="sobre-activity-detail-advanced">
+        <button
+          type="button"
+          className="sobre-activity-detail-advanced-toggle"
+          onClick={() => setAdvancedOpen((v) => !v)}
+          aria-expanded={advancedOpen}
+        >
+          <span>Advanced</span>
           {advancedOpen ? (
-            <div className="sobre-activity-detail-advanced-body">
-              <div className="sobre-activity-detail-row">
-                <span className="k">Transaction ID</span>
-                <span className="v tabular">{shortHash(event.txHash)}</span>
-              </div>
-              <a
-                href={explorerUrl}
-                target="_blank"
-                rel="noreferrer"
-                className="sobre-activity-detail-explorer"
-              >
-                View on Stellar Expert ↗
-              </a>
+            <CaretUpIcon weight="bold" size={12} />
+          ) : (
+            <CaretDownIcon weight="bold" size={12} />
+          )}
+        </button>
+        {advancedOpen ? (
+          <div className="sobre-activity-detail-advanced-body">
+            <div className="sobre-activity-detail-row">
+              <span className="k">Transaction ID</span>
+              <span className="v tabular">{shortHash(event.txHash)}</span>
             </div>
-          ) : null}
-        </div>
+            <a
+              href={explorerUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="sobre-activity-detail-explorer"
+            >
+              View on Stellar Expert ↗
+            </a>
+          </div>
+        ) : null}
       </div>
-    </div>
+    </Sheet>
   );
-  return createPortal(content, document.body);
 }
 
 /** Some event kinds (EarnEnabled, GrowEnabled) carry no useful body — the

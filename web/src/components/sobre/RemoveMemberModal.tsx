@@ -2,9 +2,9 @@
 
 import { AlertTriangle } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import type { Member } from "@/hooks/useWalletState";
 import { shortenAddress } from "@/lib/format";
-import { backdropClose } from "@/lib/ui";
 
 export function RemoveMemberModal({
   member,
@@ -21,8 +21,7 @@ export function RemoveMemberModal({
 }) {
   const label = member.name || shortenAddress(member.address);
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} role="alertdialog" ariaLabel="Remove member">
         <div className="flex items-center gap-3 mb-3">
           <div
             className="grid place-items-center"
@@ -98,7 +97,6 @@ export function RemoveMemberModal({
             {pending ? "Removing…" : "Remove member"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

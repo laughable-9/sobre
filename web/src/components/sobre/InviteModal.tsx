@@ -3,8 +3,8 @@
 import { useState } from "react";
 import { Check, Clock, Copy, Link2, Send } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { INVITE_TTL_MINUTES, useCreateInvite } from "@/hooks/useCreateInvite";
-import { backdropClose } from "@/lib/ui";
 
 /** A member the admin intended to invite (collected during onboarding). Role
  *  is a cosmetic label — the contract only knows a single admin + flat
@@ -111,8 +111,7 @@ export function InviteModal({
   const showAdminCapFull = anyAdminSuggestion && !canMintAdmin;
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} ariaLabel="Invite family member">
         <h2>Invite {hasSuggestions ? "your members" : "a family member"}</h2>
         <p className="sub">
           {hasSuggestions
@@ -296,8 +295,7 @@ export function InviteModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

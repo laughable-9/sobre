@@ -36,7 +36,7 @@ import {
   type CashoutRecoverySnapshot,
 } from "@/lib/cashoutRecovery";
 import { maskAccountNumber } from "@/lib/format";
-import { backdropClose } from "@/lib/ui";
+import { Sheet } from "@/components/sobre/Sheet";
 
 const QUICK_PHP = [100, 500, 1000, 5000];
 
@@ -432,8 +432,7 @@ export function PdaxWithdrawModal({
   const error = pdaxError ?? signError;
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(handleClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={handleClose} draggable={false} ariaLabel="Cash out">
         {/* See PdaxDepositModal for the rationale on key={phase} + the
             entry animation classes. */}
         <div
@@ -550,8 +549,7 @@ export function PdaxWithdrawModal({
           />
         ) : null}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

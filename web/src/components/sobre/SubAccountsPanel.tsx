@@ -26,8 +26,8 @@ import {
   type EnvelopeName,
 } from "@/lib/config";
 import { routeSpend } from "@/lib/policy";
-import { backdropClose } from "@/lib/ui";
 
+import { Sheet } from "./Sheet";
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
 
 interface PanelProps {
@@ -567,12 +567,7 @@ function SendSubAccountModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div
-        className="sobre-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 460 }}
-      >
+    <Sheet onClose={onClose} ariaLabel="Send to sub-account">
         <h2>
           Send to {target.row.displayName} {target.row.emoji}
         </h2>
@@ -706,8 +701,7 @@ function SendSubAccountModal({
             })()}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

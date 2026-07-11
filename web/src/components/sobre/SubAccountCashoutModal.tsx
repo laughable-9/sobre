@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Loader2 } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
 import { usePollStatus } from "@/hooks/usePollStatus";
@@ -12,7 +13,6 @@ import {
   PHP_PER_USDC,
   STROOPS_PER_USDC,
 } from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
 
 /**
  * Sub-account PDAX cashout. Mirrors PdaxWithdrawModal but tailored to the
@@ -258,12 +258,7 @@ export function SubAccountCashoutModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(close)}>
-      <div
-        className="sobre-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 460 }}
-      >
+    <Sheet onClose={close} draggable={false} ariaLabel="Cash out">
         {phase === "loading_bank" ? (
           <CenteredSpinner label="Loading…" />
         ) : null}
@@ -518,8 +513,7 @@ export function SubAccountCashoutModal({
             </div>
           </>
         ) : null}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

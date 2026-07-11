@@ -3,9 +3,9 @@
 import { useState } from "react";
 import { Check, Clock, Copy, Link2, Send } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { INVITE_TTL_MINUTES } from "@/hooks/useCreateInvite";
 import { useCreateSubaccountInvite } from "@/hooks/useCreateSubaccountInvite";
-import { backdropClose } from "@/lib/ui";
 
 import { EmojiPicker, SOBRE_EMOJIS } from "./EmojiPicker";
 
@@ -62,12 +62,7 @@ export function SubAccountInviteModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div
-        className="sobre-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 460 }}
-      >
+    <Sheet onClose={onClose} ariaLabel="Open a supplementary account">
         <h2>Open a supplementary account</h2>
         <p className="sub">
           For a family member who only needs their own spendable balance.
@@ -193,7 +188,6 @@ export function SubAccountInviteModal({
             </button>
           )}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

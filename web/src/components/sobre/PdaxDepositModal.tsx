@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
+import { Sheet } from "@/components/sobre/Sheet";
 import { useDeposit } from "@/hooks/useDeposit";
 import { usePdaxDeposit, type DepositStatus } from "@/hooks/usePdaxDeposit";
 import { usePollStatus } from "@/hooks/usePollStatus";
@@ -14,7 +15,6 @@ import {
   STROOPS_PER_TOKEN,
   displayEnvelopeName,
 } from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
 
 // First pill is the PDAX cash-in minimum (₱200). Anything below is rejected
 // at the /trade/quote step — don't surface it as a one-tap option.
@@ -390,11 +390,11 @@ export function PdaxDepositModal({
   };
 
   return (
-    <div
-      className="sobre-modal-bg"
-      onMouseDown={backdropClose(() => void attemptCancel())}
+    <Sheet
+      onClose={() => void attemptCancel()}
+      draggable={false}
+      ariaLabel="Add money"
     >
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         {/* key={phase} on the inner wrapper remounts the active phase on
             every transition. animate-in fade-in (tw-animate-css) then
             plays an entry animation so the user sees motion as the modal
@@ -505,8 +505,7 @@ export function PdaxDepositModal({
           />
         ) : null}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

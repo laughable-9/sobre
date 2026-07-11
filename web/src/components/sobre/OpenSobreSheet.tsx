@@ -8,7 +8,7 @@ import {
   PaperPlaneTiltIcon,
 } from "@phosphor-icons/react";
 
-import { backdropClose } from "@/lib/ui";
+import { Sheet } from "@/components/sobre/Sheet";
 
 /**
  * The "opened Sobre" — the action sheet that surfaces the four verbs a
@@ -38,13 +38,7 @@ export function OpenSobreSheet({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div
-        className="sobre-modal"
-        onClick={(e) => e.stopPropagation()}
-        role="dialog"
-        aria-label="Sobre actions"
-      >
+    <Sheet onClose={onClose} ariaLabel="Sobre actions">
         <div className="sobre-sheet-actions">
           <SheetAction
             label="Add money"
@@ -72,8 +66,7 @@ export function OpenSobreSheet({
             onClick={act(onLogExpense)}
           />
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

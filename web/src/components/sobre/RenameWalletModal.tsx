@@ -5,8 +5,8 @@ import {
   CheckIcon,
 } from "@phosphor-icons/react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useRenameWallet } from "@/hooks/useRenameWallet";
-import { backdropClose } from "@/lib/ui";
 
 /** Hard cap on the wallet name — same 40-char limit the create forms use.
  *  Long names also ellipsize in the title display, but the guard here stops
@@ -54,8 +54,7 @@ export function RenameWalletModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} ariaLabel="Rename wallet">
         <h2>Rename this wallet</h2>
         <p className="sub">
           The new name shows for every member the moment it saves.
@@ -117,7 +116,6 @@ export function RenameWalletModal({
             {pending ? "Saving…" : "Save name"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

@@ -3,11 +3,11 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { STROOPS_PER_USDC } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
-import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
 import { walletTotalStroops } from "@/lib/walletTotals";
 
@@ -52,8 +52,7 @@ export function CloseWalletModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} role="alertdialog" ariaLabel="Close wallet">
         <div className="flex items-center gap-3 mb-1.5">
           <div
             className="grid place-items-center"
@@ -150,7 +149,6 @@ export function CloseWalletModal({
             {pending ? "Closing…" : "Close wallet"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

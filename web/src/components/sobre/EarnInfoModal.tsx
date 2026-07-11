@@ -6,8 +6,8 @@ import {
   TrendUpIcon,
 } from "@phosphor-icons/react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { EARN_APY_LABEL } from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
 
 /**
  * Explainer for the "up to X% p.a." pill. Language stays plain because
@@ -17,11 +17,11 @@ import { backdropClose } from "@/lib/ui";
  */
 export function EarnInfoModal({ onClose }: { onClose: () => void }) {
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div
-        className="sobre-modal sobre-earn-info-modal"
-        onClick={(e) => e.stopPropagation()}
-      >
+    <Sheet
+      onClose={onClose}
+      className="sobre-earn-info-modal"
+      ariaLabel="How your money earns interest"
+    >
         <h2>Your money earns interest</h2>
 
         <div className="sobre-earn-info-blocks">
@@ -93,7 +93,6 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
             Got it
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

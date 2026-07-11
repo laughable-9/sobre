@@ -8,6 +8,7 @@ import {
   Sprout,
 } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
 import { useSpend } from "@/hooks/useSpend";
 import type { WalletState } from "@/hooks/useWalletState";
@@ -20,7 +21,6 @@ import {
 } from "@/lib/config";
 import { formatPhpInt, formatPhpLocale } from "@/lib/format";
 import { routeSpend } from "@/lib/policy";
-import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
 
 const QUICK_PHP = [50, 100, 500, 1000];
@@ -167,8 +167,7 @@ export function SpendModal({
   }
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} ariaLabel={`Spend from ${displayName}`}>
         <div className="flex items-center gap-3 mb-1.5">
           <div
             className="grid place-items-center"
@@ -366,7 +365,6 @@ export function SpendModal({
                   : "Confirm spend"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

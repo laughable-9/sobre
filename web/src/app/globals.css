@@ -3513,14 +3513,13 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-activity-detail-explorer:hover { text-decoration: underline; }
 
-/* Drag handle strip — invisible on desktop (no drag interaction on a
-   centered dialog), a slim horizontal bar at the top of the mobile
-   bottom sheet. Sits above the header so the pointer area is
-   reachable without covering content. */
-.sobre-activity-detail-handle-strip {
+/* Shared bottom-sheet drag handle — used by <Sheet> to render an
+   interactive grab bar at the top of the mobile sheet. Hidden on
+   desktop (no drag interaction on a centered dialog). */
+.sobre-sheet-handle-strip {
   display: none;
 }
-.sobre-activity-detail-handle {
+.sobre-sheet-handle {
   width: 40px;
   height: 4px;
   border-radius: 999px;
@@ -3528,52 +3527,41 @@ body { overflow-x: clip; min-width: 320px; }
   margin: 0 auto;
 }
 
-/* Sheet close animation — reverse of the built-in sobre-sheet-up so the
-   dismiss glide matches the open glide. Fired on the modal container
-   when React flips `closing=true`, right before the parent unmounts. */
+/* Universal exit animations — mirror the existing sobre-fade-in on the
+   backdrop and sobre-sheet-up on the mobile sheet, so every modal that
+   goes through <Sheet>'s closing state exits with the reverse glide.
+   Kept at global scope so desktop (which doesn't slide) still gets the
+   backdrop fade-out. */
 @keyframes sobre-sheet-down {
   from { transform: translateY(0); }
   to { transform: translateY(100%); }
+}
+@keyframes sobre-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.sobre-modal-bg.closing {
+  animation: sobre-fade-out 0.22s ease forwards;
 }
 
 /* ─── Responsive — bottom sheet on narrow viewports ─────────────────────
  * Centered dialog anywhere >= 640px, bottom-anchored sheet with a
  * grab-handle strip and drag-to-close pointer capture below that. Uses
  * dvh so the mobile URL bar retracting doesn't cut the sheet mid-scroll.
+ * Rules target `.has-own-handle` because that class is added by every
+ * Sheet-managed modal — the base .sobre-modal mobile rules further up
+ * still handle the shared-handle path for any legacy modal.
  * ------------------------------------------------------------------- */
 @media (max-width: 640px) {
-  .sobre-modal-bg:has(.sobre-activity-detail) {
-    align-items: flex-end;
-    padding: 0;
-  }
-  .sobre-modal.sobre-activity-detail {
-    max-width: 100%;
-    width: 100%;
-    border-radius: 20px 20px 0 0;
-    max-height: 88dvh;
-    padding: 8px 24px calc(24px + var(--safe-bottom));
-  }
-  .sobre-activity-detail-handle-strip {
+  .sobre-sheet-handle-strip {
     display: block;
     padding: 8px 0 12px;
-    margin: -8px -24px 0;
+    margin: -8px -20px 0;
     touch-action: none;
     cursor: grab;
   }
-  .sobre-activity-detail-handle-strip:active {
-    cursor: grabbing;
-  }
-  /* Same fade+animate the sobre-modal-bg wrapper on close so the scrim
-     dims out in step with the sheet sliding down. */
-  .sobre-modal-bg.closing {
-    animation: sobre-fade-out 0.22s ease forwards;
-  }
-  .sobre-modal.sobre-activity-detail.closing {
+  .sobre-sheet-handle-strip:active { cursor: grabbing; }
+  .sobre-modal.has-own-handle.closing {
     animation: sobre-sheet-down 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
   }
-}
-
-@keyframes sobre-fade-out {
-  from { opacity: 1; }
-  to { opacity: 0; }
 }
