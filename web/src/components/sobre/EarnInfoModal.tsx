@@ -10,13 +10,10 @@ import { EARN_APY_LABEL, GROW_APY_LABEL } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
 
 /**
- * Explainer modal for the "up to X% p.a." pill. Opens from the Savings
- * envelope row, the Grow panel, and the home-tab yield summary. Keeps
- * the language honest: describes Blend as a permissionless lending pool,
- * flags that the rate is variable, calls out no lockup on Savings vs
- * the 48h cooling-off on Grow — and why that lock earns MORE (Sobre
- * routes locked deposits to a higher-yield strategy that only accepts
- * deposits with predictable duration).
+ * Explainer for the "up to X% p.a." pill. Language stays plain because
+ * OFW families using Sobre are not crypto-native. No jargon like
+ * permissionless, APY, or Stellar. Blend gets one honest link at the
+ * bottom for anyone who wants to look under the hood.
  */
 export function EarnInfoModal({ onClose }: { onClose: () => void }) {
   return (
@@ -25,10 +22,10 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
         className="sobre-modal sobre-earn-info-modal"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2>Your savings earn yield</h2>
+        <h2>Your money earns interest</h2>
         <p className="sub">
-          The pill on your Savings and Grow cards is the rate your money
-          is making right now, in the same wallet you spend from.
+          The pill shows what your money is making right now. It stays in
+          your wallet, ready to spend.
         </p>
 
         <div className="sobre-earn-info-blocks">
@@ -37,12 +34,10 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
               <TrendUpIcon weight="fill" size={22} />
             </span>
             <div className="sobre-earn-info-text">
-              <p className="sobre-earn-info-title">Where the yield comes from</p>
+              <p className="sobre-earn-info-title">Like a savings account</p>
               <p>
-                Idle Savings gets supplied to Blend, a permissionless
-                lending pool on Stellar. Other users borrow from the pool
-                and pay interest — you get a share of that, quoted as APY.
-                Rates are variable.
+                Money in Sobre goes into a safe savings pool that pays
+                interest. Nothing for you to set up. No fees.
               </p>
             </div>
           </div>
@@ -53,13 +48,11 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
             </span>
             <div className="sobre-earn-info-text">
               <p className="sobre-earn-info-title">
-                Savings — {EARN_APY_LABEL}, instantly spendable
+                Savings pays {EARN_APY_LABEL}
               </p>
               <p>
-                Your Savings balance stays one number. When you spend from
-                Savings, the app pulls the exact amount out of Blend in
-                the same transaction — no lockup, no waiting, nothing to
-                claim. You never see the mechanics.
+                Spend from Savings anytime. The app pulls the money out for
+                you instantly. Nothing to claim, nothing to wait for.
               </p>
             </div>
           </div>
@@ -70,24 +63,28 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
             </span>
             <div className="sobre-earn-info-text">
               <p className="sobre-earn-info-title">
-                Grow — {GROW_APY_LABEL}, 48-hour cooling-off
+                Grow pays {GROW_APY_LABEL}
               </p>
               <p>
-                Money you move into Grow earns a higher rate because you
-                commit to a 48-hour delay on withdrawals. Predictable
-                duration is more valuable to lenders, so Grow routes into
-                longer-term strategies that pay a premium. The lock is
-                also a discipline device — cancel any request before the
-                timer runs if you change your mind.
+                Money in Grow earns more because you agree to wait 48
+                hours before you take it out. Change your mind? Cancel
+                anytime before the timer runs.
               </p>
             </div>
           </div>
         </div>
 
         <p className="sobre-earn-info-footer">
-          Blend is open-source and audited. Sobre never takes custody of
-          your funds — the pool contract holds them and your family wallet
-          is the only address that can move them.
+          Your money sits in Blend, a public savings pool anyone can
+          check.{" "}
+          <a
+            href="https://blend.capital"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            See how it works
+          </a>
+          .
         </p>
 
         <div className="sobre-modal-actions">

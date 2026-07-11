@@ -130,7 +130,7 @@ export function EnvelopeCard({
               onEarnInfo?.();
             }}
             title="Tap for how yield works"
-            aria-label={`${earn.apyLabel} — tap for explanation`}
+            aria-label={`${earn.apyLabel}. Tap for explanation.`}
           >
             {earn.apyLabel}
           </button>

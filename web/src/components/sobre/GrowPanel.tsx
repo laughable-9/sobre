@@ -140,7 +140,7 @@ export function GrowPanel({
       const { id } = await submitRequest(stroops);
       setWithdrawPhpStr("");
       return id;
-    }, "Withdrawal requested — 48h lock started");
+    }, "Withdrawal requested. 48h wait started.");
   };
   const runExecute = (id: bigint) =>
     runAction(() => execute(id), "Withdrawal executed");
@@ -173,13 +173,12 @@ export function GrowPanel({
               </span>
               <div>
                 <p className="sobre-earn-card-title">
-                  Lock savings for 48 hours
+                  Earn more with a 48-hour wait
                 </p>
                 <p className="sobre-earn-card-body">
-                  Move funds into Grow to gate withdrawals behind a
-                  wall-clock 48-hour delay. Nothing leaves your family
-                  wallet until the timer runs — a cooling-off period that
-                  slows down impulse spending.
+                  Grow pays a higher rate because you agree to wait 48
+                  hours before pulling money out. Great for money you
+                  don&apos;t plan to touch this week.
                 </p>
               </div>
             </div>
@@ -202,7 +201,7 @@ export function GrowPanel({
                 <p className="sobre-earn-card-title">Locked in Grow</p>
                 <p className="sobre-earn-card-sub">
                   {growTotal > 0n
-                    ? "Funds protected by a 48-hour cooling-off period"
+                    ? "48-hour wait on withdrawals"
                     : `Ready to accept ${savingsDisplayName}`}
                 </p>
               </div>
@@ -211,7 +210,7 @@ export function GrowPanel({
                 className="sobre-env-earn-apy"
                 onClick={onEarnInfo}
                 title="Tap for how yield works"
-                aria-label={`${GROW_APY_LABEL} — tap for explanation`}
+                aria-label={`${GROW_APY_LABEL}. Tap for explanation.`}
               >
                 {GROW_APY_LABEL}
               </button>

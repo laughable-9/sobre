@@ -45,7 +45,7 @@ export function EarnPanel({
   const runEnable = async () => {
     try {
       await enable();
-      onFlash(`Earn enabled — ${savingsDisplayName} is now earning`, "ok");
+      onFlash(`Earn enabled. ${savingsDisplayName} is now earning.`, "ok");
       onChange();
     } catch (e) {
       onFlash(e instanceof Error ? e.message : String(e), "warn");
@@ -67,13 +67,12 @@ export function EarnPanel({
           </span>
           <div>
             <p className="sobre-earn-card-title">
-              Earn yield on {savingsDisplayName}
+              Earn interest on {savingsDisplayName}
             </p>
             <p className="sobre-earn-card-body">
-              Flip this on and your {savingsDisplayName} envelope starts
-              accruing interest on Blend, a Stellar lending pool. Deposits
-              go straight to work; spending pulls funds back in the same
-              transaction — you never see the mechanics.
+              Turn this on and your {savingsDisplayName} starts earning
+              interest right away. Spend from it anytime. Nothing changes
+              for you.
             </p>
           </div>
         </div>

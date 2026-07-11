@@ -3187,6 +3187,14 @@ body { overflow-x: clip; min-width: 320px; }
   color: var(--sobre-text-3);
   line-height: 1.55;
 }
+.sobre-earn-info-footer a {
+  color: var(--sobre-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sobre-earn-info-footer a:hover {
+  color: var(--sobre-primary-hover);
+}
 
 /* ─── Grow panel additions ───────────────────────────────────────────────
    Shares the sobre-earn-card shell + button + stats primitives. Only the
