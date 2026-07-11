@@ -7,6 +7,7 @@ import {
   STROOPS_PER_USDC,
 } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
+import { walletTotalStroops } from "@/lib/walletTotals";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 /**
@@ -28,7 +29,11 @@ export function BalanceHero({
   children?: React.ReactNode;
 }) {
   const { currency } = useCurrency();
-  const totalStroops = state.balances.reduce((acc, b) => acc + b, 0n);
+  // Includes Blend underlying per envelope + Grow so the hero number
+  // matches the yield cards and envelope rows exactly (no ghost gap
+  // between "Savings ₱x" in the split and "Savings earning ₱x+underlying"
+  // in the yield card).
+  const totalStroops = walletTotalStroops(state);
   const totalToken = Number(totalStroops) / STROOPS_PER_USDC;
   const showUsd = currency === "USD";
   const totalDisplay = showUsd ? totalToken : totalToken * PHP_PER_USDC;

@@ -69,6 +69,7 @@ import {
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { PHP_PER_USDC } from "@/lib/config";
+import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 // Sourced from Skeletons so the shared shape stays a single truth — the
 // skeleton needs the exact same tab set to render the right shape while
@@ -758,20 +759,14 @@ function Dashboard({ contractId }: { contractId: string }) {
 
             <SplitLegendBar state={state} />
 
-            {state.balances.map((bal, i) => {
+            {state.balances.map((_, i) => {
               const envName = ENVELOPE_LABELS[i];
               const approvalRequired =
                 state.policy.requireAllSigs ||
                 state.policy.protectedEnvelopes.includes(envName);
-              // For any envelope with an active Blend position, the
-              // on-chain cache (`bal`) is only part of the story — the
-              // rest sits in Blend as `position.underlying`. Add them
-              // so the number the user sees matches what they can spend.
               const earnPos = state.earn?.positions.find(
                 (p) => p.envelope === envName,
               );
-              const unifiedBalance =
-                earnPos !== undefined ? bal + earnPos.underlying : bal;
               const earnStrip = earnPos
                 ? {
                     interestEarnedStroops: earnPos.interestEarned,
@@ -782,7 +777,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 <EnvelopeCard
                   key={i}
                   index={i}
-                  balanceStroops={unifiedBalance}
+                  balanceStroops={envelopeTotalStroops(state, i)}
                   percent={state.percents[i] ?? 0}
                   onSpend={() => setSpendOpen(envName)}
                   approvalRequired={approvalRequired}

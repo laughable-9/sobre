@@ -7,6 +7,7 @@ import { EARN_APY_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import { formatCurrencyLocale } from "@/lib/format";
+import { envelopeTotalStroops, growTotalStroops } from "@/lib/walletTotals";
 
 /**
  * At-a-glance Earn + Grow summary for the home tab. Renders nothing when
@@ -28,12 +29,11 @@ export function EarnGrowSummary({
   const savingsPos = state.earn?.positions.find(
     (p) => p.envelope === "Savings",
   );
-  const savingsTotal =
-    (state.balances[2] ?? 0n) + (savingsPos?.underlying ?? 0n);
+  const savingsTotal = envelopeTotalStroops(state, 2);
   const savingsInterest = savingsPos?.interestEarned ?? 0n;
 
   const growPos = state.earn?.growPosition ?? null;
-  const growTotal = state.grow_balance + (growPos?.underlying ?? 0n);
+  const growTotal = growTotalStroops(state);
   const growInterest = growPos?.interestEarned ?? 0n;
 
   const hasEarn =

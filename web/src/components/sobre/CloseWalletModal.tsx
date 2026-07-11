@@ -9,6 +9,7 @@ import { STROOPS_PER_USDC } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
 import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
+import { walletTotalStroops } from "@/lib/walletTotals";
 
 export function CloseWalletModal({
   adminAddress,
@@ -31,7 +32,9 @@ export function CloseWalletModal({
     adminAddress,
     contractId,
   );
-  const total = state.balances.reduce((a, b) => a + b, 0n);
+  // close_wallet sweeps Blend positions + Grow bucket back to admin, so
+  // the preview total needs to include them (not just envelope caches).
+  const total = walletTotalStroops(state);
   const totalUsdc = Number(total) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 

@@ -12,6 +12,7 @@ import {
   displayEnvelopeName,
 } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
+import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 /** Categorical envelope colors. Kept HUE-distinct on purpose — the earlier
  *  green triad (Green 600 / 700 / 500) worked for 3 envelopes but blurred
@@ -47,12 +48,15 @@ export function EnvelopeSplitCard({
 
   return (
     <div className="sobre-v2-split" role="list" aria-label="Envelope split">
-      {state.balances.map((bal, i) => {
+      {state.balances.map((_, i) => {
         const name = displayEnvelopeName(
           ENVELOPE_LABELS[i],
           state.envelope_names,
         );
-        const token = Number(bal) / STROOPS_PER_USDC;
+        // Cache + Blend underlying so this matches what SpendModal, the
+        // envelope cards, and the yield hero all show.
+        const stroops = envelopeTotalStroops(state, i);
+        const token = Number(stroops) / STROOPS_PER_USDC;
         const amount = showUsd ? token : token * PHP_PER_USDC;
         const pct = state.percents[i] ?? 0;
         // pct is preserved so future budget/runway indicators can key off it
