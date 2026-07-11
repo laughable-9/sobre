@@ -99,13 +99,18 @@ export const BLEND_POOL_ID: string =
 export const BLEND_ASSET_ID: string = XLM_SAC_ID;
 
 /**
- * User-facing APY pill copy shown on the Savings envelope strip, the
- * Grow panel, and the home-tab Yield summary. Testnet b_rate spikes make
- * a live-computed number look wrong in a pitch ("~256% p.a." was seen
- * during Step 5 verification); an aspirational hardcode is honest for
- * the demo. Swap for a live compute against Blend's rate model once the
- * mainnet flip lands. */
+ * User-facing APY pill copy. Two rates: Savings earns the base Blend
+ * supply rate, Grow earns a higher rate because the family commits to a
+ * 48-hour cooling-off period on withdrawals (locked liquidity is more
+ * valuable to lenders / can be deployed against longer-duration debt).
+ *
+ * Both are aspirational-hardcoded for the demo: testnet b_rate spikes
+ * make a live-computed number read as wrong in a pitch (Step 5 verify
+ * observed a ~256% annualized figure due to thin pool activity). Swap
+ * for live computes once the mainnet rate flip lands.
+ */
 export const EARN_APY_LABEL = "up to 3.5% p.a.";
+export const GROW_APY_LABEL = "up to 5.5% p.a.";
 
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */

@@ -126,6 +126,20 @@ export interface UseTxFeedResult {
   refresh: () => Promise<void>;
 }
 
+/** Decode the ledger sequence from an event cursor. Soroban RPC cursor is
+ *  "<toid>-<remainder>" where toid = ledger<<32 | tx<<12 | op. Used to detect
+ *  when we've caught up to `latestLedger` while paginating. */
+function ledgerFromCursor(cursor: string | undefined): number | null {
+  if (!cursor) return null;
+  const [toid] = cursor.split("-");
+  if (!toid) return null;
+  try {
+    return Number(BigInt(toid) >> 32n);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Polls the Soroban RPC's getEvents endpoint, filtered to our contract.
  * Skips setState when the latest event list is identical (avoids forcing a
@@ -136,6 +150,11 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const startLedgerRef = useRef<number | null>(null);
+  // The last cursor we consumed. Once set, subsequent polls resume from
+  // here instead of re-scanning from startLedger — cheaper and lets the
+  // paginator handle both the initial catch-up and steady-state polling
+  // through the same loop.
+  const cursorRef = useRef<string | null>(null);
   const lastSignatureRef = useRef<string>("");
   const generationRef = useRef(0);
   // Accumulate events across polls so a stale RPC snapshot (one replica
@@ -161,50 +180,90 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         // narrowing retry below handles nodes with shorter retention.
         startLedgerRef.current = Math.max(latest.sequence - 100_000, 1);
       }
-      // Omit `limit`. The SDK wraps it in `pagination: { limit }`, which the
-      // Soroban RPC silently treats as "return zero events." Hard-won bug.
-      let raw;
-      try {
-        raw = await server.getEvents({
-          startLedger: startLedgerRef.current,
-          filters: [{ type: "contract", contractIds: [contractId] }],
-        });
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        // Retry narrower on "start ledger before earliest retained". Some
-        // testnet RPC nodes retain fewer ledgers than the ~120k default we
-        // aim for; walk the window down until the RPC accepts.
-        if (/earliest\s*retained|out\s*of\s*retention|before.*retained/i.test(msg)) {
-          const latest = await server.getLatestLedger();
-          const fallbacks = [50_000, 15_000, 5_000];
-          let ok = false;
-          for (const back of fallbacks) {
-            const narrower = Math.max(latest.sequence - back, 1);
-            try {
-              raw = await server.getEvents({
-                startLedger: narrower,
-                filters: [{ type: "contract", contractIds: [contractId] }],
-              });
-              startLedgerRef.current = narrower;
-              ok = true;
-              console.warn(
-                `[useTxFeed] RPC rejected wider window, retried with -${back} ledgers`,
-              );
-              break;
-            } catch {
-              // try the next narrower one
-            }
-          }
-          if (!ok) throw err;
-        } else {
-          throw err;
-        }
-      }
-      if (!raw) return;
-      if (gen !== generationRef.current) return;
 
+      // Page through the window until the cursor catches up to latestLedger.
+      // The RPC's default page size scans a fixed number of ledgers per call
+      // (not events), so a sparse contract can return `events: []` with a
+      // still-advancing cursor for many pages before hitting its first event.
+      // A single non-paginated call at a 100k-ledger window silently returns
+      // zero events for exactly this reason — the reason "recent activity"
+      // was empty for wallets with days-old splits. Cap iterations so a
+      // pathological run can't spin the browser.
+      let raw:
+        | Awaited<ReturnType<typeof server.getEvents>>
+        | undefined;
       const parsed: FeedEvent[] = [];
-      for (const ev of raw.events) {
+      let totalMatched = 0;
+      let pages = 0;
+      const MAX_PAGES = 40;
+      let catchUpLatest: number | null = null;
+      // localCursor stays local to this fetch so a stale generation bailing
+      // mid-page can't leak an advanced cursor to the next fetch (which
+      // would then skip past events this generation saw but didn't merge).
+      // We only commit to cursorRef after the paginate loop completes.
+      let localCursor: string | null = cursorRef.current;
+      // Loop until we've caught up to the latest ledger observed on the
+      // first page (subsequent polls only need to walk from the last-seen
+      // cursor to the new latest — normally a single page).
+      while (pages < MAX_PAGES) {
+        pages += 1;
+        const request = localCursor
+          ? {
+              cursor: localCursor,
+              filters: [
+                { type: "contract" as const, contractIds: [contractId] },
+              ],
+            }
+          : {
+              startLedger: startLedgerRef.current!,
+              filters: [
+                { type: "contract" as const, contractIds: [contractId] },
+              ],
+            };
+        try {
+          raw = await server.getEvents(request);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          // Retry narrower on "start ledger before earliest retained". Only
+          // relevant on the first page (before we have a cursor); the
+          // cursor path never hits this.
+          const isRetentionErr =
+            !localCursor &&
+            /earliest\s*retained|out\s*of\s*retention|before.*retained/i.test(msg);
+          if (isRetentionErr) {
+            const latest = await server.getLatestLedger();
+            const fallbacks = [50_000, 15_000, 5_000];
+            let ok = false;
+            for (const back of fallbacks) {
+              const narrower = Math.max(latest.sequence - back, 1);
+              try {
+                raw = await server.getEvents({
+                  startLedger: narrower,
+                  filters: [
+                    { type: "contract", contractIds: [contractId] },
+                  ],
+                });
+                startLedgerRef.current = narrower;
+                ok = true;
+                console.warn(
+                  `[useTxFeed] RPC rejected wider window, retried with -${back} ledgers`,
+                );
+                break;
+              } catch {
+                // try the next narrower one
+              }
+            }
+            if (!ok) throw err;
+          } else {
+            throw err;
+          }
+        }
+        if (!raw) break;
+        if (gen !== generationRef.current) return;
+        totalMatched += raw.events.length;
+        if (catchUpLatest === null) catchUpLatest = raw.latestLedger;
+
+        for (const ev of raw.events) {
         const topics = ev.topic.map((t) => scValToNative(t));
         const kind = String(topics[0] ?? "").toLowerCase();
         const data = scValToNative(ev.value) as Record<string, unknown>;
@@ -356,7 +415,31 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
             amount: data.amount as bigint,
           });
         }
+        }
+
+        // Advance the local cursor and decide whether we've caught up.
+        // The RPC may return an empty `events` array with a still-advancing
+        // cursor (sparse contract, dense ledgers) — keep paging until the
+        // cursor's ledger meets or exceeds the latestLedger the first page
+        // saw.
+        const nextCursor = raw.cursor;
+        if (!nextCursor || nextCursor === localCursor) break;
+        localCursor = nextCursor;
+        const cursorLedger = ledgerFromCursor(nextCursor);
+        if (
+          catchUpLatest !== null &&
+          cursorLedger !== null &&
+          cursorLedger >= catchUpLatest
+        ) {
+          break;
+        }
       }
+      if (!raw) return;
+      // Commit the advanced cursor now that the loop completed. On a stale
+      // generation bail we returned earlier without this write, so the
+      // next fetch resumes from the same position and no events are lost.
+      cursorRef.current = localCursor;
+
       // Log fetch summary on the first successful call per session so the
       // "why is this empty" question is answerable from browser DevTools
       // without instrumenting live code. Also log when a subsequent poll
@@ -366,15 +449,13 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
       if (!firstFetchLoggedRef.current) {
         firstFetchLoggedRef.current = true;
         console.info(
-          `[useTxFeed] fetch summary — startLedger=${startLedgerRef.current}, latestLedger=${raw.latestLedger}, matched=${raw.events.length}, parsed=${parsed.length}, topics=${JSON.stringify(
-            raw.events
-              .slice(0, 5)
-              .map((ev) => String(scValToNative(ev.topic[0]) ?? "?")),
+          `[useTxFeed] fetch summary — startLedger=${startLedgerRef.current}, latestLedger=${raw.latestLedger}, matched=${totalMatched}, parsed=${parsed.length}, pages=${pages}, topics=${JSON.stringify(
+            parsed.slice(0, 5).map((p) => p.kind),
           )}`,
         );
-      } else if (raw.events.length > previousKnown && parsed.length > 0) {
+      } else if (parsed.length > 0) {
         console.info(
-          `[useTxFeed] new events — matched=${raw.events.length}, parsed=${parsed.length}, latestLedger=${raw.latestLedger}`,
+          `[useTxFeed] new events — matched=${totalMatched}, parsed=${parsed.length}, pages=${pages}, latestLedger=${raw.latestLedger}`,
         );
       }
       // Union-merge into the accumulator. We never remove events that
@@ -420,8 +501,10 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   // current ledger for the new contract.
   useEffect(() => {
     startLedgerRef.current = null;
+    cursorRef.current = null;
     lastSignatureRef.current = "";
     eventsMapRef.current = new Map();
+    firstFetchLoggedRef.current = false;
     setEvents([]);
   }, [contractId]);
 

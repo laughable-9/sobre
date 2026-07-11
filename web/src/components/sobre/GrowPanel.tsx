@@ -12,7 +12,7 @@ import type {
   GrowWithdrawRequest,
   WalletState,
 } from "@/hooks/useWalletState";
-import { EARN_APY_LABEL, displayEnvelopeName } from "@/lib/config";
+import { GROW_APY_LABEL, displayEnvelopeName } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import {
   formatCountdown,
@@ -211,9 +211,9 @@ export function GrowPanel({
                 className="sobre-env-earn-apy"
                 onClick={onEarnInfo}
                 title="Tap for how yield works"
-                aria-label={`${EARN_APY_LABEL} — tap for explanation`}
+                aria-label={`${GROW_APY_LABEL} — tap for explanation`}
               >
-                {EARN_APY_LABEL}
+                {GROW_APY_LABEL}
               </button>
             </div>
 

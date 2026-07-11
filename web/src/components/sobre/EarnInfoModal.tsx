@@ -6,15 +6,17 @@ import {
   TrendUpIcon,
 } from "@phosphor-icons/react";
 
-import { EARN_APY_LABEL } from "@/lib/config";
+import { EARN_APY_LABEL, GROW_APY_LABEL } from "@/lib/config";
 import { backdropClose } from "@/lib/ui";
 
 /**
- * Explainer modal for the "up to 3.5% p.a." pill. Opens when the user
- * taps the pill from the Savings envelope row or the Grow panel. Keeps
+ * Explainer modal for the "up to X% p.a." pill. Opens from the Savings
+ * envelope row, the Grow panel, and the home-tab yield summary. Keeps
  * the language honest: describes Blend as a permissionless lending pool,
- * flags that the rate is variable, and calls out no lockup on Savings
- * vs the 48h cooling-off period on Grow.
+ * flags that the rate is variable, calls out no lockup on Savings vs
+ * the 48h cooling-off on Grow — and why that lock earns MORE (Sobre
+ * routes locked deposits to a higher-yield strategy that only accepts
+ * deposits with predictable duration).
  */
 export function EarnInfoModal({ onClose }: { onClose: () => void }) {
   return (
@@ -25,61 +27,67 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
       >
         <h2>Your savings earn yield</h2>
         <p className="sub">
-          The APY on this pill is what your money is making right now, in
-          the same wallet you spend from.
+          The pill on your Savings and Grow cards is the rate your money
+          is making right now, in the same wallet you spend from.
         </p>
 
-        <div className="sobre-earn-info-block">
-          <span className="sobre-earn-info-ic" aria-hidden>
-            <TrendUpIcon weight="fill" size={20} />
-          </span>
-          <div>
-            <p className="sobre-earn-info-title">Where the yield comes from</p>
-            <p>
-              Idle Savings gets supplied to Blend, a permissionless lending
-              pool on Stellar. Other users borrow from the pool and pay
-              interest — you get a share of that interest, quoted as APY.
-              The rate is variable and can move day to day.
-            </p>
+        <div className="sobre-earn-info-blocks">
+          <div className="sobre-earn-info-block">
+            <span className="sobre-earn-info-ic" aria-hidden>
+              <TrendUpIcon weight="fill" size={22} />
+            </span>
+            <div className="sobre-earn-info-text">
+              <p className="sobre-earn-info-title">Where the yield comes from</p>
+              <p>
+                Idle Savings gets supplied to Blend, a permissionless
+                lending pool on Stellar. Other users borrow from the pool
+                and pay interest — you get a share of that, quoted as APY.
+                Rates are variable.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="sobre-earn-info-block">
-          <span className="sobre-earn-info-ic" aria-hidden>
-            <PlantIcon weight="fill" size={20} />
-          </span>
-          <div>
-            <p className="sobre-earn-info-title">Instantly spendable</p>
-            <p>
-              Your Savings balance stays one number. When you spend from
-              Savings, the app pulls the exact amount back out of Blend in
-              the same transaction — no lockup, no waiting, nothing to
-              claim. You never see the mechanics.
-            </p>
+          <div className="sobre-earn-info-block">
+            <span className="sobre-earn-info-ic" aria-hidden>
+              <PlantIcon weight="fill" size={22} />
+            </span>
+            <div className="sobre-earn-info-text">
+              <p className="sobre-earn-info-title">
+                Savings — {EARN_APY_LABEL}, instantly spendable
+              </p>
+              <p>
+                Your Savings balance stays one number. When you spend from
+                Savings, the app pulls the exact amount out of Blend in
+                the same transaction — no lockup, no waiting, nothing to
+                claim. You never see the mechanics.
+              </p>
+            </div>
           </div>
-        </div>
 
-        <div className="sobre-earn-info-block">
-          <span className="sobre-earn-info-ic" aria-hidden>
-            <ShieldCheckIcon weight="fill" size={20} />
-          </span>
-          <div>
-            <p className="sobre-earn-info-title">
-              Grow adds a 48-hour cooling-off period
-            </p>
-            <p>
-              Money you move into Grow keeps earning at{" "}
-              <b>{EARN_APY_LABEL}</b>, but withdrawals take 48 hours —
-              a wall-clock delay that protects against impulse spending.
-              Cancel a request any time before the timer runs.
-            </p>
+          <div className="sobre-earn-info-block">
+            <span className="sobre-earn-info-ic" aria-hidden>
+              <ShieldCheckIcon weight="fill" size={22} />
+            </span>
+            <div className="sobre-earn-info-text">
+              <p className="sobre-earn-info-title">
+                Grow — {GROW_APY_LABEL}, 48-hour cooling-off
+              </p>
+              <p>
+                Money you move into Grow earns a higher rate because you
+                commit to a 48-hour delay on withdrawals. Predictable
+                duration is more valuable to lenders, so Grow routes into
+                longer-term strategies that pay a premium. The lock is
+                also a discipline device — cancel any request before the
+                timer runs if you change your mind.
+              </p>
+            </div>
           </div>
         </div>
 
         <p className="sobre-earn-info-footer">
           Blend is open-source and audited. Sobre never takes custody of
-          your funds — the pool contract holds them and the family wallet
-          contract is the only address that can move them.
+          your funds — the pool contract holds them and your family wallet
+          is the only address that can move them.
         </p>
 
         <div className="sobre-modal-actions">
