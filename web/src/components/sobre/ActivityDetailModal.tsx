@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
 
 import { Avatar } from "@/components/sobre/Avatar";
@@ -117,7 +118,12 @@ export function ActivityDetailModal({
     }
   };
 
-  return (
+  // Portal to document.body so the fixed-position sheet escapes any
+  // ancestor stacking context (Reveal wraps the home tab in a
+  // transform + will-change container, which was trapping the modal
+  // BEHIND the bottom dock). SSR-safe via typeof window guard.
+  if (typeof window === "undefined") return null;
+  const content = (
     <div
       className={`sobre-modal-bg${closing ? " closing" : ""}`}
       onMouseDown={backdropClose(beginClose)}
@@ -209,6 +215,7 @@ export function ActivityDetailModal({
       </div>
     </div>
   );
+  return createPortal(content, document.body);
 }
 
 /** Some event kinds (EarnEnabled, GrowEnabled) carry no useful body — the
