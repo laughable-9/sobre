@@ -98,6 +98,15 @@ export const BLEND_POOL_ID: string =
   "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF";
 export const BLEND_ASSET_ID: string = XLM_SAC_ID;
 
+/**
+ * User-facing APY pill copy shown on the Savings envelope strip, the
+ * Grow panel, and the home-tab Yield summary. Testnet b_rate spikes make
+ * a live-computed number look wrong in a pitch ("~256% p.a." was seen
+ * during Step 5 verification); an aspirational hardcode is honest for
+ * the demo. Swap for a live compute against Blend's rate model once the
+ * mainnet flip lands. */
+export const EARN_APY_LABEL = "up to 3.5% p.a.";
+
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
   name: "TESTNET",

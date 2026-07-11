@@ -2978,6 +2978,189 @@ body { overflow-x: clip; min-width: 320px; }
   }
 }
 
+/* ─── Envelope-row earn strip ────────────────────────────────────────────
+   Sits directly below the envelope button when that envelope has an
+   active Blend position. Shows lifetime interest earned + APY pill.
+   Wraps the button so it doesn't clip the row's rounded corners. */
+.sobre-env-row-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.sobre-env-earn-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px 4px;
+  font-size: 12px;
+}
+.sobre-env-earn-interest {
+  color: var(--sobre-text-3);
+  font-weight: 500;
+}
+.sobre-env-earn-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+.sobre-env-earn-apy {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+  border: 0;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-env-earn-apy:hover {
+  background: color-mix(in oklab, var(--sobre-accent-soft) 70%, var(--sobre-primary) 30%);
+}
+
+/* ─── Home-tab Yield summary card ────────────────────────────────────────
+   Renders between the BalanceHero and RecentActivityPreview when Earn or
+   Grow have activity worth surfacing at a glance. */
+.sobre-summary-section {
+  margin-top: 22px;
+}
+.sobre-summary-card {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  overflow: hidden;
+}
+.sobre-summary-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--sobre-border);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-summary-row:last-child {
+  border-bottom: 0;
+}
+.sobre-summary-row:hover {
+  background: var(--sobre-surface-alt);
+}
+.sobre-summary-ic {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-summary-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sobre-summary-title-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  justify-content: space-between;
+}
+.sobre-summary-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-summary-badge {
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
+  font-weight: 600;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sobre-summary-numbers {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.sobre-summary-total {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-summary-interest {
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 500;
+}
+.sobre-summary-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+
+/* ─── Earn info modal ────────────────────────────────────────────────────
+   Explainer opened from the "up to X% p.a." pill on Savings envelope
+   card, Grow panel, and the home-tab summary. Uses shared modal shell. */
+.sobre-earn-info-modal {
+  max-width: 480px;
+}
+.sobre-earn-info-modal h2 {
+  font-family: var(--serif);
+}
+.sobre-earn-info-block {
+  display: flex;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--sobre-border);
+}
+.sobre-earn-info-block:first-of-type {
+  border-top: 0;
+  padding-top: 4px;
+}
+.sobre-earn-info-ic {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-earn-info-title {
+  margin: 0 0 4px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-earn-info-block p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sobre-text-2);
+  line-height: 1.5;
+}
+.sobre-earn-info-footer {
+  margin: 12px 0 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--sobre-border);
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  line-height: 1.5;
+}
+
 /* ─── Grow panel additions ───────────────────────────────────────────────
    Shares the sobre-earn-card shell + button + stats primitives. Only the
    request-row + request-list are Grow-specific. */
@@ -3068,4 +3251,28 @@ body { overflow-x: clip; min-width: 320px; }
   padding: 8px 14px;
   min-height: 36px;
   font-size: 12px;
+}
+
+/* Interest-earned line under the Grow stats block. */
+.sobre-grow-interest {
+  margin: 0;
+  padding: 4px 4px 0;
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 600;
+}
+.sobre-grow-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+
+/* When the head has an APY chip alongside the title/sub, allow it to push
+   right instead of stacking. */
+.sobre-earn-card-head {
+  gap: 12px;
+  justify-content: flex-start;
+}
+.sobre-earn-card-head > .sobre-env-earn-apy {
+  margin-left: auto;
+  align-self: center;
 }

@@ -17,6 +17,8 @@ import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
 import { CardsSection } from "@/components/sobre/CardsSection";
+import { EarnGrowSummary } from "@/components/sobre/EarnGrowSummary";
+import { EarnInfoModal } from "@/components/sobre/EarnInfoModal";
 import { EarnPanel } from "@/components/sobre/EarnPanel";
 import { GrowPanel } from "@/components/sobre/GrowPanel";
 import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
@@ -55,6 +57,7 @@ import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
+  EARN_APY_LABEL,
   ENVELOPE_LABELS,
   STROOPS_PER_USDC,
   displayEnvelopeName,
@@ -211,6 +214,7 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [sobreSheetOpen, setSobreSheetOpen] = useState(false);
   // Pencil on the balance hero → rename dialog (admin only).
   const [renameOpen, setRenameOpen] = useState(false);
+  const [earnInfoOpen, setEarnInfoOpen] = useState(false);
   // Member drafts collected during onboarding, handed off via sessionStorage
   // and ?invite=1. Pre-fill the invite modal so the admin can mint each link
   // on demand (one passkey prompt per link — see docs/onboarding-plan.md).
@@ -597,6 +601,12 @@ function Dashboard({ contractId }: { contractId: string }) {
             />
           </BalanceHero>
 
+          <EarnGrowSummary
+            state={state}
+            onOpenEnvelopes={() => switchTab("envelopes")}
+            onEarnInfo={() => setEarnInfoOpen(true)}
+          />
+
           <RecentActivityPreview
             events={txFeed.events}
             members={state.members}
@@ -719,16 +729,33 @@ function Dashboard({ contractId }: { contractId: string }) {
               const approvalRequired =
                 state.policy.requireAllSigs ||
                 state.policy.protectedEnvelopes.includes(envName);
+              // For any envelope with an active Blend position, the
+              // on-chain cache (`bal`) is only part of the story — the
+              // rest sits in Blend as `position.underlying`. Add them
+              // so the number the user sees matches what they can spend.
+              const earnPos = state.earn?.positions.find(
+                (p) => p.envelope === envName,
+              );
+              const unifiedBalance =
+                earnPos !== undefined ? bal + earnPos.underlying : bal;
+              const earnStrip = earnPos
+                ? {
+                    interestEarnedStroops: earnPos.interestEarned,
+                    apyLabel: EARN_APY_LABEL,
+                  }
+                : undefined;
               return (
                 <EnvelopeCard
                   key={i}
                   index={i}
-                  balanceStroops={bal}
+                  balanceStroops={unifiedBalance}
                   percent={state.percents[i] ?? 0}
                   onSpend={() => setSpendOpen(envName)}
                   approvalRequired={approvalRequired}
                   envelopeNames={state.envelope_names}
                   currency={currency}
+                  earn={earnStrip}
+                  onEarnInfo={() => setEarnInfoOpen(true)}
                 />
               );
             })}
@@ -752,6 +779,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 isAdmin={isAdmin}
                 onFlash={flash}
                 onChange={refreshAll}
+                onEarnInfo={() => setEarnInfoOpen(true)}
               />
             ) : null}
 
@@ -1090,6 +1118,10 @@ function Dashboard({ contractId }: { contractId: string }) {
           suggestions={inviteSuggestions}
           onClose={() => setInviteOpen(false)}
         />
+      ) : null}
+
+      {earnInfoOpen ? (
+        <EarnInfoModal onClose={() => setEarnInfoOpen(false)} />
       ) : null}
 
       {renameOpen ? (

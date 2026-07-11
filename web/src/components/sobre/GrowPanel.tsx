@@ -12,7 +12,7 @@ import type {
   GrowWithdrawRequest,
   WalletState,
 } from "@/hooks/useWalletState";
-import { displayEnvelopeName } from "@/lib/config";
+import { EARN_APY_LABEL, displayEnvelopeName } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import {
   formatCountdown,
@@ -44,6 +44,7 @@ export function GrowPanel({
   isAdmin,
   onFlash,
   onChange,
+  onEarnInfo,
 }: {
   userAddress: string;
   contractId: string;
@@ -51,6 +52,9 @@ export function GrowPanel({
   isAdmin: boolean;
   onFlash: (message: string, tone?: "ok" | "warn") => void;
   onChange: () => void;
+  /** Fires when the user taps the "up to X% p.a." pill in the enabled
+   *  card. Opens the shared EarnInfoModal explaining Blend + Grow. */
+  onEarnInfo?: () => void;
 }) {
   const { currency } = useCurrency();
   const savingsSpendable = state.balances[2] ?? 0n;
@@ -58,6 +62,18 @@ export function GrowPanel({
     "Savings",
     state.envelope_names,
   );
+  // Also count Savings' Blend position toward "spendable to Grow" — the
+  // grow_transfer_from_savings method auto-withdraws the shortfall.
+  const savingsUnderlying =
+    state.earn?.positions.find((p) => p.envelope === "Savings")?.underlying ??
+    0n;
+  const savingsAvailable = savingsSpendable + savingsUnderlying;
+  // Total Grow value = local cache + Blend underlying. When Earn is on,
+  // the cache is usually 0 and the whole balance is in Blend.
+  const grow = state.earn?.growPosition ?? null;
+  const growUnderlying = grow?.underlying ?? 0n;
+  const growInterestEarned = grow?.interestEarned ?? 0n;
+  const growTotal = state.grow_balance + growUnderlying;
 
   const { enable, pending: enabling } = useGrowEnable(userAddress, contractId);
   const { transfer, pending: transferring } = useGrowTransferFromSavings(
@@ -111,9 +127,9 @@ export function GrowPanel({
 
   const runEnable = () => runAction(enable, "Grow enabled");
   const runTransferAll = () => {
-    if (savingsSpendable <= 0n) return;
+    if (savingsAvailable <= 0n) return;
     return runAction(
-      () => transfer(savingsSpendable),
+      () => transfer(savingsAvailable),
       `Moved ${savingsDisplayName} into Grow`,
     );
   };
@@ -137,7 +153,7 @@ export function GrowPanel({
     (acc, r) => acc + r.amount,
     0n,
   );
-  const availableForRequest = state.grow_balance - reservedStroops;
+  const availableForRequest = growTotal - reservedStroops;
   const withdrawStroops = phpToStroops(withdrawPhpStr);
   const canRequest =
     withdrawStroops > 0n && withdrawStroops <= availableForRequest;
@@ -183,22 +199,29 @@ export function GrowPanel({
                 <ShieldCheckIcon weight="fill" size={20} />
               </span>
               <div>
-                <p className="sobre-earn-card-title">
-                  Locked in Grow
-                </p>
+                <p className="sobre-earn-card-title">Locked in Grow</p>
                 <p className="sobre-earn-card-sub">
-                  {state.grow_balance > 0n
+                  {growTotal > 0n
                     ? "Funds protected by a 48-hour cooling-off period"
                     : `Ready to accept ${savingsDisplayName}`}
                 </p>
               </div>
+              <button
+                type="button"
+                className="sobre-env-earn-apy"
+                onClick={onEarnInfo}
+                title="Tap for how yield works"
+                aria-label={`${EARN_APY_LABEL} — tap for explanation`}
+              >
+                {EARN_APY_LABEL}
+              </button>
             </div>
 
             <dl className="sobre-earn-stats">
               <div>
                 <dt>Locked</dt>
                 <dd className="tabular">
-                  {formatCurrencyLocale(state.grow_balance, currency)}
+                  {formatCurrencyLocale(growTotal, currency)}
                 </dd>
               </div>
               <div>
@@ -212,13 +235,22 @@ export function GrowPanel({
               </div>
             </dl>
 
+            {growInterestEarned > 0n ? (
+              <p className="sobre-earn-card-sub sobre-grow-interest">
+                Interest earned{" "}
+                <span className="tabular">
+                  {formatCurrencyLocale(growInterestEarned, currency)}
+                </span>
+              </p>
+            ) : null}
+
             {isAdmin ? (
               <div className="sobre-earn-actions">
                 <button
                   type="button"
                   className="sobre-earn-secondary-btn"
                   onClick={runTransferAll}
-                  disabled={busy || savingsSpendable <= 0n}
+                  disabled={busy || savingsAvailable <= 0n}
                 >
                   {transferring
                     ? "Moving…"

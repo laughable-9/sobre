@@ -41,14 +41,38 @@ export interface EarnPosition {
   /** Live underlying-value snapshot at get_state time: bTokens × b_rate /
    *  SCALAR_12. Ticks up between polls as Blend accrues interest. */
   underlying: bigint;
+  /** Monotonic cumulative underlying stroops ever supplied to Blend for
+   *  this envelope. Doesn't decrease. */
+  suppliedTotal: bigint;
+  /** Monotonic cumulative underlying stroops ever withdrawn. Doesn't
+   *  decrease. */
+  withdrawnTotal: bigint;
+  /** `underlying + withdrawnTotal - suppliedTotal`. The lifetime interest
+   *  the envelope has accrued through Blend, honest across withdraw cycles. */
+  interestEarned: bigint;
+}
+
+/** Grow's own Blend position — parallels EarnPosition but not envelope-
+ *  tagged (Grow is its own bucket). Present in `EarnState.growPosition`
+ *  as a 0-or-1 vec when Grow has supplied at least once. */
+export interface GrowEarnPosition {
+  bTokens: bigint;
+  underlying: bigint;
+  suppliedTotal: bigint;
+  withdrawnTotal: bigint;
+  interestEarned: bigint;
 }
 
 export interface EarnState {
   pool: string;
   asset: string;
   /** One entry per envelope with a non-zero position. Absent envelopes
-   *  have zero. Frontend derives per-envelope earn by matching envelope. */
+   *  have zero. */
   positions: EarnPosition[];
+  /** Grow's Blend position (0-or-1 element). Null when Grow has never
+   *  supplied (either Grow disabled or Grow enabled with all funds in
+   *  the cache). */
+  growPosition: GrowEarnPosition | null;
 }
 
 export interface GrowWithdrawRequest {
@@ -337,12 +361,35 @@ function normalizeEarnState(raw: unknown): EarnState | null {
       envelope: envelopeNameFromScNative(row.envelope, "Groceries"),
       bTokens: toBigInt(row.b_tokens),
       underlying: toBigInt(row.underlying),
+      suppliedTotal: toBigInt(row.supplied_total),
+      withdrawnTotal: toBigInt(row.withdrawn_total),
+      interestEarned: toBigInt(row.interest_earned),
     };
   });
+  const growRaw = Array.isArray(outer.grow_position) ? outer.grow_position : [];
+  const growPosition: GrowEarnPosition | null =
+    growRaw.length > 0
+      ? {
+          bTokens: toBigInt((growRaw[0] as Record<string, unknown>).b_tokens),
+          underlying: toBigInt(
+            (growRaw[0] as Record<string, unknown>).underlying,
+          ),
+          suppliedTotal: toBigInt(
+            (growRaw[0] as Record<string, unknown>).supplied_total,
+          ),
+          withdrawnTotal: toBigInt(
+            (growRaw[0] as Record<string, unknown>).withdrawn_total,
+          ),
+          interestEarned: toBigInt(
+            (growRaw[0] as Record<string, unknown>).interest_earned,
+          ),
+        }
+      : null;
   return {
     pool: String(outer.pool ?? ""),
     asset: String(outer.asset ?? ""),
     positions,
+    growPosition,
   };
 }
 
