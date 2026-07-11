@@ -1,12 +1,11 @@
 "use client";
 
-import {
-  ArrowDownIcon,
-  ArrowUpIcon,
-  CaretRightIcon,
-} from "@phosphor-icons/react";
+import { useState } from "react";
+import { ArrowDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 
-import type { FeedEvent } from "@/hooks/useTxFeed";
+import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
+import { Avatar } from "@/components/sobre/Avatar";
+import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
@@ -18,8 +17,10 @@ import { formatPhpLocale, relativeTime, shortenAddress } from "@/lib/format";
 /**
  * Home-tab activity preview: 3 most-recent Spend or Deposit events, ink
  * on white, no colored halos, tabular numerals. "See all" jumps to the
- * full Activity tab. Section header always renders (so the user sees the
- * surface exists); an empty state fills in when there's no activity yet.
+ * full Activity tab. Row style mirrors the redesigned Activity feed —
+ * member-driven rows show the actor's Avatar; deposits show the down
+ * arrow because there's no household actor. Tapping a row opens the
+ * same ActivityDetailModal the full feed uses.
  */
 export function RecentActivityPreview({
   events,
@@ -32,6 +33,7 @@ export function RecentActivityPreview({
   envelopeNames: string[];
   onSeeAll: () => void;
 }) {
+  const [openEvent, setOpenEvent] = useState<FeedEvent | null>(null);
   const rows = events
     .filter((e) => e.kind === "Spend" || e.kind === "Deposit")
     .slice(0, 3);
@@ -62,9 +64,18 @@ export function RecentActivityPreview({
             ev={ev}
             members={members}
             envelopeNames={envelopeNames}
+            onOpen={setOpenEvent}
           />
         ))
       )}
+      {openEvent ? (
+        <ActivityDetailModal
+          event={openEvent}
+          members={members}
+          envelopeNames={envelopeNames}
+          onClose={() => setOpenEvent(null)}
+        />
+      ) : null}
     </section>
   );
 }
@@ -73,34 +84,44 @@ function RecentRow({
   ev,
   members,
   envelopeNames,
+  onOpen,
 }: {
   ev: FeedEvent;
   members: Member[];
   envelopeNames: string[];
+  onOpen: (ev: FeedEvent) => void;
 }) {
+  const actor = eventActor(ev);
+  const profile = actor
+    ? members.find((m) => m.address === actor)
+    : undefined;
+  const actorName = profile?.name ?? (actor ? shortenAddress(actor) : "");
+
   if (ev.kind === "Deposit") {
-    const label = memberLabel(ev.from, members);
     return (
-      <div className="sobre-recent-row">
+      <button
+        type="button"
+        onClick={() => onOpen(ev)}
+        className="sobre-recent-row"
+      >
         <span className="ic in">
           <ArrowDownIcon weight="bold" size={16} />
         </span>
         <div className="body">
           <div className="line">
-            <span className="who">{label} deposited</span>
+            <span className="who">Remittance received</span>
             <span className="amt tabular">
               +{formatPhpLocale(ev.amount)}
             </span>
           </div>
           <div className="meta">{relativeTime(ev.ledgerClosedAt)}</div>
         </div>
-      </div>
+      </button>
     );
   }
 
   // Spend
   if (ev.kind === "Spend") {
-    const label = memberLabel(ev.caller, members);
     const env = displayEnvelopeName(
       ev.envelope as EnvelopeName,
       envelopeNames,
@@ -109,14 +130,22 @@ function RecentRow({
       ev.envelope as EnvelopeName,
     );
     return (
-      <div className="sobre-recent-row">
-        <span className="ic out">
-          <ArrowUpIcon weight="bold" size={16} />
+      <button
+        type="button"
+        onClick={() => onOpen(ev)}
+        className="sobre-recent-row"
+      >
+        <span className="ic ic-avatar" aria-hidden>
+          <Avatar
+            name={actorName || "?"}
+            src={profile?.avatarUrl ?? null}
+            size={32}
+          />
         </span>
         <div className="body">
           <div className="line">
             <span className="who">
-              {label} spent from{" "}
+              {actorName} spent from{" "}
               <span className="env-name">
                 {isKnownEnvelope ? env : ev.envelope}
               </span>
@@ -130,14 +159,9 @@ function RecentRow({
             {relativeTime(ev.ledgerClosedAt)}
           </div>
         </div>
-      </div>
+      </button>
     );
   }
 
   return null;
-}
-
-function memberLabel(address: string, members: Member[]): string {
-  const m = members.find((x) => x.address === address);
-  return m?.name || shortenAddress(address);
 }

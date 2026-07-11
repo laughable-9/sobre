@@ -2681,13 +2681,24 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-recent-see-all:hover { color: var(--sobre-primary-hover); }
 .sobre-recent-row {
+  /* Button reset — every recent row is now a <button> that opens the
+     shared ActivityDetailModal. text-align:left keeps content aligned
+     with the flow, width:100% stretches inside the section container. */
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
   display: flex; align-items: center; gap: 12px;
   padding: 12px 14px;
   background: var(--sobre-surface);
   border: 1px solid var(--sobre-border);
   border-radius: 12px;
   margin-bottom: 6px;
+  transition: background 120ms ease;
 }
+.sobre-recent-row:hover { background: var(--sobre-surface-alt); }
 .sobre-recent-row .ic {
   width: 36px; height: 36px; flex-shrink: 0;
   border-radius: 12px;
@@ -2700,6 +2711,13 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-recent-row .ic.out {
   background: var(--sobre-surface-alt);
   color: var(--sobre-text-1);
+}
+/* Avatar slot on member-driven rows — same 36px footprint as the tinted
+   glyph slot so widths don't shift when rows mix Deposit + Spend. */
+.sobre-recent-row .ic.ic-avatar {
+  background: transparent;
+  padding: 0;
+  border-radius: 50%;
 }
 .sobre-recent-row .body { flex: 1; min-width: 0; }
 .sobre-recent-row .line {
