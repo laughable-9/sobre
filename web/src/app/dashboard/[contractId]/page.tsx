@@ -651,7 +651,8 @@ function Dashboard({ contractId }: { contractId: string }) {
       ) : null}
 
       {tab === "activity" ? (
-        <div
+        <Reveal
+          as="div"
           className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 760 }}
         >
@@ -728,11 +729,12 @@ function Dashboard({ contractId }: { contractId: string }) {
             }
           }}
           />
-        </div>
+        </Reveal>
       ) : null}
 
       {tab === "envelopes" ? (
-        <div
+        <Reveal
+          as="div"
           className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 760 }}
         >
@@ -840,34 +842,38 @@ function Dashboard({ contractId }: { contractId: string }) {
               onManage={() => switchTab("subaccounts")}
             />
           </div>
-        </div>
+        </Reveal>
       ) : null}
 
       {tab === "subaccounts" ? (
-        <SubAccountsPanel
-          userAddress={address}
-          contractId={contractId}
-          familyWalletId={familyWalletId}
-          rows={subRows}
-          state={state}
-          events={txFeed.events}
-          isAdmin={isAdmin}
-          onFlash={flash}
-          onChange={refreshAll}
-        />
+        <Reveal as="div">
+          <SubAccountsPanel
+            userAddress={address}
+            contractId={contractId}
+            familyWalletId={familyWalletId}
+            rows={subRows}
+            state={state}
+            events={txFeed.events}
+            isAdmin={isAdmin}
+            onFlash={flash}
+            onChange={refreshAll}
+          />
+        </Reveal>
       ) : null}
 
       {tab === "profile" ? (
-        <div
+        <Reveal
+          as="div"
           className="mx-auto w-full px-4 sm:px-7 pb-12 pt-6"
           style={{ maxWidth: 480 }}
         >
           <ProfileSheet wallet={wallet} />
-        </div>
+        </Reveal>
       ) : null}
 
       {tab === "settings" ? (
-      <section
+      <Reveal
+        as="section"
         className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
         style={{ maxWidth: 1320 }}
       >
@@ -985,7 +991,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             </div>
           ) : null}
         </div>
-      </section>
+      </Reveal>
       ) : null}
 
       <BottomDock
