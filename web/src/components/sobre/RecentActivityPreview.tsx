@@ -5,6 +5,7 @@ import { ArrowDownIcon, CaretRightIcon } from "@phosphor-icons/react";
 
 import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
 import { Avatar } from "@/components/sobre/Avatar";
+import { SkeletonBlock } from "@/components/sobre/Skeletons";
 import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
 import {
@@ -24,11 +25,16 @@ import { formatPhpLocale, relativeTime, shortenAddress } from "@/lib/format";
  */
 export function RecentActivityPreview({
   events,
+  loading,
   members,
   envelopeNames,
   onSeeAll,
 }: {
   events: FeedEvent[];
+  /** True until the tx feed's first successful RPC page returns. Without
+   *  this the empty state renders during initial load and reads as "no
+   *  activity yet" for a wallet that actually has activity. */
+  loading: boolean;
   members: Member[];
   envelopeNames: string[];
   onSeeAll: () => void;
@@ -54,9 +60,13 @@ export function RecentActivityPreview({
         ) : null}
       </div>
       {rows.length === 0 ? (
-        <div className="sobre-recent-empty">
-          Nothing yet. Deposits and spends will show up here.
-        </div>
+        loading ? (
+          <RecentRowsSkeleton />
+        ) : (
+          <div className="sobre-recent-empty">
+            Nothing yet. Deposits and spends will show up here.
+          </div>
+        )
       ) : (
         rows.map((ev) => (
           <RecentRow
@@ -77,6 +87,41 @@ export function RecentActivityPreview({
         />
       ) : null}
     </section>
+  );
+}
+
+function RecentRowsSkeleton() {
+  return (
+    <div aria-hidden>
+      {[0, 1, 2].map((i) => (
+        <div
+          key={i}
+          className="sobre-recent-row"
+          style={{ pointerEvents: "none", cursor: "default" }}
+        >
+          <span
+            className="ic"
+            style={{
+              background: "var(--sobre-surface-alt)",
+              width: 36,
+              height: 36,
+              borderRadius: 12,
+            }}
+          />
+          <div className="body">
+            <div className="line">
+              <SkeletonBlock width="55%" height={14} />
+              <SkeletonBlock width={68} height={14} />
+            </div>
+            <SkeletonBlock
+              width={80}
+              height={11}
+              style={{ marginTop: 6 }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
   );
 }
 

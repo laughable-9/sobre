@@ -625,6 +625,7 @@ function Dashboard({ contractId }: { contractId: string }) {
 
           <RecentActivityPreview
             events={txFeed.events}
+            loading={txFeed.loading}
             members={state.members}
             envelopeNames={state.envelope_names}
             onSeeAll={() => switchTab("activity")}
