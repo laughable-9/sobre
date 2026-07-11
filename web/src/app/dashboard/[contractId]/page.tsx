@@ -110,15 +110,12 @@ export default function DashboardPage(props: { params: Promise<RouteParams> }) {
 
 function DashboardLoading() {
   // Same layout shell the real dashboard uses, with the tab-shaped skeleton
-  // matching whichever tab the user is refreshing into.
+  // matching whichever tab the user is refreshing into. DashboardSkeleton
+  // owns its own per-tab maxWidth wrapper so this fallback and the mounted
+  // dashboard's skeleton land on identical pixels.
   return (
     <div className="sobre-app sobre-v2 has-dock">
-      <div
-        className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
-        style={{ maxWidth: 640 }}
-      >
-        <DashboardSkeleton tab={tabFromHash()} />
-      </div>
+      <DashboardSkeleton tab={tabFromHash()} />
     </div>
   );
 }
@@ -472,12 +469,7 @@ function Dashboard({ contractId }: { contractId: string }) {
     }
     return (
       <div className="sobre-app sobre-v2 has-dock">
-        <div
-          className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
-          style={{ maxWidth: 640 }}
-        >
-          <DashboardSkeleton tab={tab} />
-        </div>
+        <DashboardSkeleton tab={tab} />
       </div>
     );
   }

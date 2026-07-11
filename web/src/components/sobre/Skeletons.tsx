@@ -100,17 +100,39 @@ export type DashboardSkeletonTab =
 export function DashboardSkeleton({
   tab = "home",
 }: { tab?: DashboardSkeletonTab } = {}) {
+  // maxWidth per tab MUST match the mounted dashboard's per-tab wrapper
+  // (see dashboard/[contractId]/page.tsx). Without this the skeleton loads
+  // at one width, then snaps to another when state arrives.
+  const maxWidth =
+    tab === "settings"
+      ? 1320
+      : tab === "profile"
+        ? 480
+        : tab === "envelopes" || tab === "activity"
+          ? 760
+          : 640;
+  return (
+    <div
+      className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
+      style={{ maxWidth }}
+    >
+      {tabSkeleton(tab)}
+    </div>
+  );
+}
+
+function tabSkeleton(tab: DashboardSkeletonTab) {
   switch (tab) {
     case "activity":
       return <ActivitySkeleton />;
     case "envelopes":
       return <EnvelopesSkeleton />;
     case "subaccounts":
-      return <StackedCardsSkeleton title />;
+      return <StackedCardsSkeleton title="Sub-accounts" />;
     case "settings":
-      return <StackedCardsSkeleton title cards={4} />;
+      return <StackedCardsSkeleton title="Settings" cards={4} />;
     case "profile":
-      return <StackedCardsSkeleton title cards={2} narrow />;
+      return <StackedCardsSkeleton title="Profile" cards={2} narrow />;
     case "home":
     default:
       return <HomeSkeleton />;
@@ -238,16 +260,17 @@ function HomeSkeleton() {
   );
 }
 
-/** Activity tab: "Activity" heading + a stack of activity-row skeletons.
- *  Used both for the initial cold-load fallback (routed via DashboardSkeleton
- *  when the URL hash is #activity) AND as the in-panel loading state so the
- *  same shapes render throughout, no bare "Loading activity…" text. */
+/** Activity tab: real "Activity" heading + skeleton rows. The heading is
+ *  static per-tab, so skeletonizing it just makes the loading state feel
+ *  more broken than "content on its way." Same shape used in the Suspense
+ *  fallback, the pre-state-ready render, and the in-panel loading state,
+ *  so all three transitions land on identical pixels. */
 function ActivitySkeleton() {
   return (
     <div className="sobre-wallet-col">
-      <aside className="sobre-activity" aria-hidden>
+      <aside className="sobre-activity">
         <div className="head">
-          <SkeletonBlock width={110} height={26} />
+          <h3>Activity</h3>
         </div>
         <ActivityRowsSkeleton count={6} />
       </aside>
@@ -304,11 +327,11 @@ export function ActivityRowsSkeleton({ count = 5 }: { count?: number }) {
  *  a variable member list, profile is one detail card — so the placeholder
  *  reads as "the page is loading" without pretending to know the shape. */
 function StackedCardsSkeleton({
-  title = false,
+  title,
   cards = 3,
   narrow = false,
 }: {
-  title?: boolean;
+  title?: string;
   cards?: number;
   narrow?: boolean;
 }) {
@@ -317,7 +340,18 @@ function StackedCardsSkeleton({
       className="sobre-wallet-col"
       style={narrow ? { maxWidth: 480, margin: "0 auto" } : undefined}
     >
-      {title ? <SkeletonBlock width={160} height={24} /> : null}
+      {title ? (
+        <h2
+          style={{
+            fontFamily: "var(--serif)",
+            fontSize: 22,
+            fontWeight: 600,
+            marginBottom: 12,
+          }}
+        >
+          {title}
+        </h2>
+      ) : null}
       <div
         aria-hidden
         style={{ display: "flex", flexDirection: "column", gap: 16 }}
@@ -351,15 +385,15 @@ function StackedCardsSkeleton({
   );
 }
 
-/** Envelopes tab: "Envelopes" heading + a split-legend bar + one card per
- *  envelope. Kept as three cards since the real dashboard is always 3. */
+/** Envelopes tab: real "Envelopes" heading + skeleton envelope cards. Kept
+ *  as three cards since the real dashboard is always 3. Same static-title
+ *  rule as ActivitySkeleton — the heading is the same string every load. */
 function EnvelopesSkeleton() {
   return (
     <div className="sobre-wallet-col">
       <div className="sobre-envs">
         <header className="sobre-envs-header">
-          <SkeletonBlock width={150} height={26} />
-          <SkeletonBlock width={32} height={32} radius={10} />
+          <h2>Envelopes</h2>
         </header>
         <div style={{ marginTop: 12, marginBottom: 16 }}>
           <SkeletonBlock width="100%" height={10} radius={999} />
