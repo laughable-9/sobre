@@ -74,6 +74,23 @@ export type FeedEvent =
       kind: "SubAccountLockChanged";
       subaccount: string;
       locked: boolean;
+    })
+  | (FeedEventBase & {
+      kind: "EarnEnabled";
+      pool: string;
+      asset: string;
+    })
+  | (FeedEventBase & {
+      kind: "EarnSupply";
+      envelope: string;
+      amount: bigint;
+      bTokens: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "EarnWithdraw";
+      envelope: string;
+      amount: bigint;
+      bTokens: bigint;
     });
 
 export interface UseTxFeedResult {
@@ -255,6 +272,29 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
             kind: "SubAccountLockChanged",
             subaccount: String(topics[1]),
             locked: Boolean(data.locked),
+          });
+        } else if (kind === "earn_enabled_event") {
+          parsed.push({
+            ...base,
+            kind: "EarnEnabled",
+            pool: String(topics[1]),
+            asset: String(topics[2]),
+          });
+        } else if (kind === "earn_supply") {
+          parsed.push({
+            ...base,
+            kind: "EarnSupply",
+            envelope: envelopeNameFromScNative(topics[1], "Groceries"),
+            amount: data.amount as bigint,
+            bTokens: data.b_tokens as bigint,
+          });
+        } else if (kind === "earn_withdraw") {
+          parsed.push({
+            ...base,
+            kind: "EarnWithdraw",
+            envelope: envelopeNameFromScNative(topics[1], "Groceries"),
+            amount: data.amount as bigint,
+            bTokens: data.b_tokens as bigint,
           });
         }
       }

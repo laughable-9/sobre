@@ -17,6 +17,7 @@ import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
 import { CardsSection } from "@/components/sobre/CardsSection";
+import { EarnPanel } from "@/components/sobre/EarnPanel";
 import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { MembersSection } from "@/components/sobre/MembersSection";
@@ -730,6 +731,17 @@ function Dashboard({ contractId }: { contractId: string }) {
                 />
               );
             })}
+
+            {address ? (
+              <EarnPanel
+                userAddress={address}
+                contractId={contractId}
+                state={state}
+                isAdmin={isAdmin}
+                onFlash={flash}
+                onChange={refreshAll}
+              />
+            ) : null}
 
             <MembersSection
               members={state.members}

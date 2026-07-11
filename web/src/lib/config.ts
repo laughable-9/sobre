@@ -81,6 +81,23 @@ export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
  *  in the cap editor reads from this. */
 export const MAX_ADMIN_CAP = 5;
 
+/**
+ * Blend Protocol v2 TestnetV2 pool + asset addresses for the Earn feature.
+ * When admin enables Earn, these get passed to `earn_enable(pool, asset)`.
+ *
+ * Pool sourced from `github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json`
+ * (the `TestnetV2` entry). If Blend rotates the pool, update here.
+ * Asset is Sobre's payment token — XLM native SAC on testnet — which is
+ * a live reserve on the TestnetV2 pool at reserve index 0.
+ *
+ * For mainnet promotion: use the mainnet USDC-oriented pool from
+ * `docs.blend.capital/mainnet-deployments` and switch the asset to the
+ * mainnet USDC SAC (once the PDAX↔USDC path lands per project_payment_token_usdc).
+ */
+export const BLEND_POOL_ID: string =
+  "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF";
+export const BLEND_ASSET_ID: string = XLM_SAC_ID;
+
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */
   name: "TESTNET",

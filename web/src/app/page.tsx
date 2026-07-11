@@ -49,6 +49,8 @@ const PREVIEW_STATE: WalletState = {
   },
   savings_lock_all_admins: false,
   admin_count: 1,
+  admin_cap: 2,
+  earn: null,
 };
 
 function GithubMark({ size = 18 }: { size?: number }) {

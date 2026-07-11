@@ -2852,3 +2852,128 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-v2-hero .sobre-v2-split-row .chip {
   background: var(--sobre-accent-soft);
 }
+
+/* ─── Earn panel ──────────────────────────────────────────────────────────
+   One card under the envelope list on the envelopes tab. Two visual states
+   (enable CTA vs enabled position) share the same shell so the layout
+   doesn't shift when admin flips the switch. */
+.sobre-earn-card {
+  padding: 14px 16px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sobre-earn-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sobre-earn-card-ic {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-earn-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-earn-card-body {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sobre-text-2);
+  line-height: 1.45;
+}
+.sobre-earn-card-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--sobre-text-3);
+}
+.sobre-earn-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+}
+.sobre-earn-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sobre-earn-stats dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--sobre-text-3);
+}
+.sobre-earn-stats dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-earn-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sobre-earn-primary-btn,
+.sobre-earn-secondary-btn {
+  flex: 1;
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sobre-earn-primary-btn {
+  background: var(--sobre-primary);
+  border: 1px solid var(--sobre-primary);
+  color: var(--sobre-primary-on);
+}
+.sobre-earn-primary-btn:hover:not(:disabled) {
+  background: var(--sobre-primary-hover);
+  border-color: var(--sobre-primary-hover);
+}
+.sobre-earn-secondary-btn {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  color: var(--sobre-text-1);
+}
+.sobre-earn-secondary-btn:hover:not(:disabled) {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+.sobre-earn-primary-btn:disabled,
+.sobre-earn-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sobre-earn-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sobre-danger);
+}
+@media (max-width: 480px) {
+  .sobre-earn-stats {
+    grid-template-columns: 1fr;
+  }
+}

@@ -8,8 +8,9 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-import { NETWORK } from "@/lib/config";
+import { NETWORK, type EnvelopeName } from "@/lib/config";
 import { getServer, simulateSourceAccount, type SpendPolicyShape } from "@/lib/contract";
+import { envelopeNameFromScNative } from "@/lib/format";
 import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 
 export interface Member {
@@ -29,6 +30,25 @@ export interface SubAccount {
   address: string;
   balance: bigint;
   locked: boolean;
+}
+
+export interface EarnPosition {
+  envelope: EnvelopeName;
+  /** Sobre's non-collateral supply position on the Blend pool, in bTokens.
+   *  Constant absent supply/withdraw actions — yield accrues through b_rate,
+   *  not by minting more shares. */
+  bTokens: bigint;
+  /** Live underlying-value snapshot at get_state time: bTokens × b_rate /
+   *  SCALAR_12. Ticks up between polls as Blend accrues interest. */
+  underlying: bigint;
+}
+
+export interface EarnState {
+  pool: string;
+  asset: string;
+  /** One entry per envelope with a non-zero position. Absent envelopes
+   *  have zero. Frontend derives per-envelope earn by matching envelope. */
+  positions: EarnPosition[];
 }
 
 export interface WalletState {
@@ -61,6 +81,10 @@ export interface WalletState {
    *  the MembersSection to display "N of M admins" and by redeem_admin_invite
    *  to reject over-cap redemptions. */
   admin_cap: number;
+  /** Null when the wallet hasn't opted into Blend Earn. Present when Earn
+   *  is enabled — carries the pool + asset + per-envelope positions. Older
+   *  contracts return no `earn` field on the wire and normalize to null. */
+  earn: EarnState | null;
 }
 
 export interface UseWalletStateResult {
@@ -88,6 +112,7 @@ interface OnChainState {
   members: { address: string }[];
   balances: bigint[];
   subaccounts: SubAccount[];
+  earn: EarnState | null;
 }
 
 /**
@@ -194,6 +219,7 @@ export function useWalletState(
       savings_lock_all_admins: display.savingsLockAllAdmins,
       admin_count: adminCount,
       admin_cap: display.adminCap,
+      earn: onChain.earn,
     };
   }, [
     onChain,
@@ -243,5 +269,39 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
     members,
     balances: (raw.balances as bigint[]) ?? [],
     subaccounts,
+    earn: normalizeEarnState(raw.earn),
   };
+}
+
+/**
+ * Contract wire shape is `Vec<EarnState>` (0- or 1-element) because
+ * contracttype doesn't derive Option XDR for our own structs in SDK 25.
+ * Empty vec (or missing field on a pre-upgrade contract) → null.
+ * One-element vec → the EarnState, with per-envelope positions decoded.
+ * `envelope` inside each position is a Soroban enum unit variant — decoded
+ * by `scValToNative` as `["Groceries"]`-style single-element array.
+ */
+function normalizeEarnState(raw: unknown): EarnState | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const outer = raw[0] as Record<string, unknown>;
+  const positionsRaw = Array.isArray(outer.positions) ? outer.positions : [];
+  const positions: EarnPosition[] = positionsRaw.map((p) => {
+    const row = p as Record<string, unknown>;
+    return {
+      envelope: envelopeNameFromScNative(row.envelope, "Groceries"),
+      bTokens: toBigInt(row.b_tokens),
+      underlying: toBigInt(row.underlying),
+    };
+  });
+  return {
+    pool: String(outer.pool ?? ""),
+    asset: String(outer.asset ?? ""),
+    positions,
+  };
+}
+
+function toBigInt(v: unknown): bigint {
+  if (typeof v === "bigint") return v;
+  if (v === null || v === undefined) return 0n;
+  return BigInt(String(v));
 }
