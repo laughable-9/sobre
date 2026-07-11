@@ -264,55 +264,57 @@ function HomeSkeleton() {
  *  static per-tab, so skeletonizing it just makes the loading state feel
  *  more broken than "content on its way." Same shape used in the Suspense
  *  fallback, the pre-state-ready render, and the in-panel loading state,
- *  so all three transitions land on identical pixels. */
+ *  so all three transitions land on identical pixels — no wrapper column
+ *  because the mounted ActivityFeed renders the aside directly and adding
+ *  a flex-column parent here made rows shrink to intrinsic width. */
 function ActivitySkeleton() {
   return (
-    <div className="sobre-wallet-col">
-      <aside className="sobre-activity">
-        <div className="head">
-          <h3>Activity</h3>
-        </div>
-        <ActivityRowsSkeleton count={6} />
-      </aside>
-    </div>
+    <aside className="sobre-activity">
+      <div className="head">
+        <h3>Activity</h3>
+      </div>
+      <ActivityRowsSkeleton count={5} />
+    </aside>
   );
 }
 
 /** Reusable row cluster for the activity feed — used as the empty/loading
  *  fill inside ActivityFeed too, so we don't fall back to a bare
- *  "Loading activity…" line. */
+ *  "Loading activity…" line. Row shape mirrors the v2 activity item: a
+ *  bordered card with a 40px circular icon/avatar slot and two text
+ *  lines (primary who/what + time meta). */
 export function ActivityRowsSkeleton({ count = 5 }: { count?: number }) {
   return (
     <div className="list" aria-hidden>
-      <div
-        className="sobre-day"
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "10px 4px 6px",
-        }}
-      >
+      <div className="sobre-day">
         <SkeletonBlock width={54} height={11} />
       </div>
       {Array.from({ length: count }).map((_, i) => (
         <div
           key={i}
           className="sobre-activity-item"
-          style={{ pointerEvents: "none" }}
+          style={{
+            pointerEvents: "none",
+            cursor: "default",
+            alignItems: "center",
+          }}
         >
-          <div className="ic" style={{ background: "var(--surface-alt)" }}>
-            <SkeletonBlock width={14} height={14} radius={4} />
-          </div>
-          <div className="body">
-            <SkeletonBlock width="70%" height={14} />
+          <span
+            className="ic"
+            style={{
+              width: 40,
+              height: 40,
+              borderRadius: "50%",
+              background: "var(--sobre-surface-alt)",
+              display: "block",
+              flexShrink: 0,
+            }}
+          />
+          <div className="body" style={{ flex: 1 }}>
+            <SkeletonBlock width="65%" height={14} />
             <SkeletonBlock
-              width="45%"
+              width={72}
               height={11}
-              style={{ marginTop: 6 }}
-            />
-            <SkeletonBlock
-              width={64}
-              height={10}
               style={{ marginTop: 6 }}
             />
           </div>

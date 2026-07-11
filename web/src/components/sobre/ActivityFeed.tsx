@@ -1,7 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -20,18 +19,15 @@ import {
   X as XIcon,
 } from "lucide-react";
 
+import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
+import { ActivityRowsSkeleton } from "@/components/sobre/Skeletons";
+import { Avatar } from "@/components/sobre/Avatar";
 import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
-import type { FeedEvent } from "@/hooks/useTxFeed";
+import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
-import { bankName } from "@/lib/banks";
-import { displayEnvelopeName, STROOPS_PER_TOKEN } from "@/lib/config";
-import {
-  formatPhpLocale,
-  maskAccountNumber,
-  shortenAddress,
-} from "@/lib/format";
-import { ActivityRowsSkeleton } from "@/components/sobre/Skeletons";
+import { STROOPS_PER_TOKEN, displayEnvelopeName } from "@/lib/config";
+import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
@@ -113,24 +109,27 @@ export function ActivityFeed({
   failedCashouts,
   completedCashouts,
 }: ActivityFeedProps) {
-  const nameByAddress = useMemo(() => {
-    const out = new Map<string, { name: string; emoji: string }>();
+  const profileByAddress = useMemo(() => {
+    const out = new Map<string, { name: string; avatarUrl: string | null }>();
     for (const m of members) {
-      out.set(m.address, { name: m.name, emoji: m.emoji });
+      out.set(m.address, { name: m.name, avatarUrl: m.avatarUrl });
     }
     for (const s of subaccounts ?? []) {
-      out.set(s.address, { name: s.name, emoji: s.emoji });
+      // Sub-accounts don't have OAuth pictures — fall back to initials.
+      out.set(s.address, { name: s.name, avatarUrl: null });
     }
     return out;
   }, [members, subaccounts]);
 
-  const labelFor = (addr: string): string => {
-    const profile = nameByAddress.get(addr);
-    if (!profile) return shortenAddress(addr);
-    return profile.emoji
-      ? `${profile.emoji} ${profile.name}`
-      : profile.name;
-  };
+  const labelFor = (addr: string): string =>
+    profileByAddress.get(addr)?.name ?? shortenAddress(addr);
+  const avatarUrlFor = (addr: string): string | null =>
+    profileByAddress.get(addr)?.avatarUrl ?? null;
+
+  // Which activity row's detail modal is open. All rows tap through to the
+  // same modal — parents get date + plain-language breakdown, advanced users
+  // get the tx hash tucked into a collapsed "Advanced" section.
+  const [openEvent, setOpenEvent] = useState<FeedEvent | null>(null);
 
   // Index completed cashouts by envelope+amount+rough-minute so the
   // on-chain Spend event renderer can look up the destination bank
@@ -282,18 +281,15 @@ export function ActivityFeed({
             {groups[day].map((entry) => {
               if (entry.kind === "event") {
                 const ev = entry.data;
-                const completed =
-                  ev.kind === "Spend" && ev.memo === "PDAX cashout"
-                    ? matchCompleted(ev)
-                    : undefined;
                 return (
                   <ActivityRow
                     key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
                     ev={ev}
                     isNew={ev.txHash === newestTxHash}
                     labelFor={labelFor}
+                    avatarUrlFor={avatarUrlFor}
                     envelopeNames={envelopeNames}
-                    completedCashout={completed}
+                    onOpen={setOpenEvent}
                   />
                 );
               }
@@ -315,6 +311,20 @@ export function ActivityFeed({
           </div>
         ))}
       </div>
+      {openEvent ? (
+        <ActivityDetailModal
+          event={openEvent}
+          members={members}
+          subaccounts={subaccounts}
+          envelopeNames={envelopeNames}
+          completedCashout={
+            openEvent.kind === "Spend" && openEvent.memo === "PDAX cashout"
+              ? matchCompleted(openEvent)
+              : undefined
+          }
+          onClose={() => setOpenEvent(null)}
+        />
+      ) : null}
     </aside>
   );
 }
@@ -543,451 +553,254 @@ function ActivityRow({
   ev,
   isNew,
   labelFor,
+  avatarUrlFor,
   envelopeNames,
-  completedCashout,
+  onOpen,
 }: {
   ev: FeedEvent;
   isNew: boolean;
   labelFor: (addr: string) => string;
+  avatarUrlFor: (addr: string) => string | null;
   envelopeNames: string[];
-  /** When this Spend event matches a successfully-paid PDAX cashout
-   *  row, the matching row is passed in so we can render the destination
-   *  bank inline ("✓ Sent to Security Bank •••1461"). */
-  completedCashout?: ActiveCashoutRow;
+  /** Tap on any row opens the shared ActivityDetailModal — parents see the
+   *  breakdown + date/time; advanced users can drill into the tx hash. */
+  onOpen: (ev: FeedEvent) => void;
 }) {
   const time = fmtTime(ev.ledgerClosedAt);
-  const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
 
-  // Each row wraps its content in an anchor so clicking opens the underlying
-  // Stellar transaction on stellar.expert in a new tab. The trailing arrow is
-  // a small affordance so this isn't a mystery hover.
-  const wrap = (kindClass: string, content: React.ReactNode) => (
-    <a
-      href={explorerUrl}
-      target="_blank"
-      rel="noreferrer"
+  // For rows where a household member acted (Spend / MemberJoined / etc.)
+  // the left slot is their Avatar — replaces the old emoji-prefixed name and
+  // makes the row scannable at a glance for non-crypto parents. Deposits
+  // (external inflow) and system events (Earn/Grow toggles) fall back to
+  // the small action glyph.
+  const actorAddr = eventActor(ev);
+  const wrap = (kindClass: string, actionGlyph: React.ReactNode, content: React.ReactNode) => (
+    <button
+      type="button"
+      onClick={() => onOpen(ev)}
       className={`sobre-activity-item ${kindClass} ${isNew ? "new" : ""}`}
-      title="View transaction on stellar.expert"
     >
-      {content}
-    </a>
+      {actorAddr ? (
+        <span className="ic ic-avatar" aria-hidden>
+          <Avatar
+            name={labelFor(actorAddr)}
+            src={avatarUrlFor(actorAddr)}
+            size={40}
+          />
+        </span>
+      ) : (
+        <div className="ic">{actionGlyph}</div>
+      )}
+      <div className="body">{content}</div>
+    </button>
+  );
+
+  // Everything below funnels through `wrap()` — no more per-row markup
+  // scaffold. Each case just names its inflow/outflow tint, its action
+  // glyph (used ONLY when there's no household actor to avatar), and the
+  // one-line primary text. Meta line is the same time-stamp everywhere.
+  const meta = <div className="meta">{time}</div>;
+  const line = (content: React.ReactNode) => (
+    <>
+      <div className="who">{content}</div>
+      {meta}
+    </>
+  );
+  const amt = (n: bigint) => (
+    <span className="amt tabular">{formatPhpLocale(n)}</span>
   );
 
   switch (ev.kind) {
     case "Deposit":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <ArrowDownToLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Remittance received{" "}
-              <span className="amt tabular">
-                + {formatPhpLocale(ev.amount)}
-              </span>
-            </div>
-            <div className="where">
-              Auto-split · {time} · view tx ↗
-            </div>
-            <div className="sobre-activity-split-chips" aria-hidden>
-              <span className="chip c0">
-                <span className="swatch" />
-                <span className="amt tabular">
-                  {formatPhpLocale(ev.groceries)}
-                </span>
-                <span className="lbl">
-                  {displayEnvelopeName("Groceries", envelopeNames)}
-                </span>
-              </span>
-              <span className="chip c1">
-                <span className="swatch" />
-                <span className="amt tabular">
-                  {formatPhpLocale(ev.tuition)}
-                </span>
-                <span className="lbl">
-                  {displayEnvelopeName("Tuition", envelopeNames)}
-                </span>
-              </span>
-              <span className="chip c2">
-                <span className="swatch" />
-                <span className="amt tabular">
-                  {formatPhpLocale(ev.savings)}
-                </span>
-                <span className="lbl">
-                  {displayEnvelopeName("Savings", envelopeNames)}
-                </span>
-              </span>
-            </div>
-          </div>
-        </>,
+        <ArrowDownToLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Remittance received {amt(ev.amount)}
+          </>,
+        ),
       );
     case "Spend": {
-      // Cashout-spends and regular spends are both Spend events on chain;
-      // we differentiate by the memo. For the cashout-flavored entry,
-      // describe what truly happened — the envelope was debited — without
-      // claiming the bank received the money. That's what the PENDING
-      // bucket + the bank-arrival toast are for.
       const isCashout = ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            {isCashout ? (
-              <ArrowUpFromLine size={16} strokeWidth={2} />
-            ) : (
-              <ShoppingBag size={16} strokeWidth={2} />
-            )}
-          </div>
-          <div className="body">
-            <div className="who">
-              {isCashout ? (
-                <>
-                  {labelFor(ev.caller)} withdrew{" "}
-                  <span className="amt tabular">
-                    {formatPhpLocale(ev.amount)}
-                  </span>{" "}
-                  from {displayEnvelopeName(ev.envelope, envelopeNames)} for
-                  cashout
-                </>
-              ) : (
-                <>
-                  {labelFor(ev.caller)} spent{" "}
-                  <span className="amt tabular">
-                    {formatPhpLocale(ev.amount)}
-                  </span>{" "}
-                  from {displayEnvelopeName(ev.envelope, envelopeNames)}
-                </>
-              )}
-            </div>
-            {ev.memo && !isCashout ? (
-              <div className="where">&quot;{ev.memo}&quot;</div>
-            ) : null}
-            {isCashout && completedCashout ? (
-              <div
-                className="where"
-                style={{
-                  color: "var(--sobre-accent)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <CheckCheck size={12} strokeWidth={2.5} />
-                Sent to {bankName(completedCashout.beneficiary_bank_code)}{" "}
-                {maskAccountNumber(
-                  completedCashout.beneficiary_account_number,
-                )}
-              </div>
-            ) : null}
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        isCashout ? (
+          <ArrowUpFromLine size={16} strokeWidth={2} />
+        ) : (
+          <ShoppingBag size={16} strokeWidth={2} />
+        ),
+        line(
+          isCashout ? (
+            <>
+              {labelFor(ev.caller)} cashed out {amt(ev.amount)}
+            </>
+          ) : (
+            <>
+              {labelFor(ev.caller)} spent {amt(ev.amount)} from{" "}
+              {displayEnvelopeName(ev.envelope, envelopeNames)}
+            </>
+          ),
+        ),
       );
     }
     case "RequestCreated":
       return wrap(
         "pending",
-        <>
-          <div className="ic">
-            <Hourglass size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              {labelFor(ev.caller)} requested{" "}
-              <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
-              from {displayEnvelopeName(ev.envelope, envelopeNames)}
-            </div>
-            {ev.memo ? <div className="where">&quot;{ev.memo}&quot;</div> : null}
-            <div className="meta">
-              awaiting approval · {time} · #{ev.requestId.toString()} · view tx ↗
-            </div>
-          </div>
-        </>,
+        <Hourglass size={16} strokeWidth={2} />,
+        line(
+          <>
+            {labelFor(ev.caller)} requested {amt(ev.amount)} from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
       );
     case "RequestApproved":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <CheckCheck size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Request #{ev.requestId.toString()} approved
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <CheckCheck size={16} strokeWidth={2} />,
+        line(<>Request #{ev.requestId.toString()} approved</>),
       );
     case "RequestDenied":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <XIcon size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Request #{ev.requestId.toString()} denied
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <XIcon size={16} strokeWidth={2} />,
+        line(<>Request #{ev.requestId.toString()} denied</>),
       );
     case "MemberJoined":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <UserPlus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              {ev.emoji ? `${ev.emoji} ` : ""}
-              <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserPlus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
+          </>,
+        ),
       );
     case "MemberRemoved":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <UserMinus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.member)}</b> was removed from the wallet
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserMinus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.member)}</b> was removed from the wallet
+          </>,
+        ),
       );
     case "SubAccountFunded":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <Send size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Sent{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              to <b>{labelFor(ev.recipient)}</b> from{" "}
-              {displayEnvelopeName(ev.envelope, envelopeNames)}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <Send size={16} strokeWidth={2} />,
+        line(
+          <>
+            Sent {amt(ev.amount)} to <b>{labelFor(ev.recipient)}</b> from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
       );
     case "SubAccountSpent": {
-      // Sub-account cashout flows reuse this event with memo "Cash out" — the
-      // copy mirrors how Spend renders cashout-flavoured events.
       const isCashout = ev.memo === "Cash out" || ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <ArrowUpFromLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "spent"}{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>
-            </div>
-            {ev.memo && !isCashout ? (
-              <div className="where">&quot;{ev.memo}&quot;</div>
-            ) : null}
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <ArrowUpFromLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "spent"}{" "}
+            {amt(ev.amount)}
+          </>,
+        ),
       );
     }
     case "SubAccountJoined":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <UserPlus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.subaccount)}</b> joined as a supplementary account
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserPlus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.subaccount)}</b> joined as a supplementary account
+          </>,
+        ),
       );
     case "SubAccountLockChanged":
       return wrap(
         ev.locked ? "outflow" : "inflow",
-        <>
-          <div className="ic">
-            {ev.locked ? (
-              <Lock size={16} strokeWidth={2} />
-            ) : (
-              <LockOpen size={16} strokeWidth={2} />
-            )}
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.subaccount)}</b>{" "}
-              {ev.locked ? "was locked" : "was unlocked"}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        ev.locked ? (
+          <Lock size={16} strokeWidth={2} />
+        ) : (
+          <LockOpen size={16} strokeWidth={2} />
+        ),
+        line(
+          <>
+            <b>{labelFor(ev.subaccount)}</b>{" "}
+            {ev.locked ? "was locked" : "was unlocked"}
+          </>,
+        ),
       );
     case "EarnEnabled":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <CheckCheck size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">Started earning yield on Blend</div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <CheckCheck size={16} strokeWidth={2} />,
+        line(<>Started earning yield on Blend</>),
       );
     case "EarnSupply":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <ArrowDownToLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Moved{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              from {displayEnvelopeName(ev.envelope, envelopeNames)} to Earn
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <ArrowDownToLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Moved {amt(ev.amount)} from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)} to Earn
+          </>,
+        ),
       );
     case "EarnWithdraw":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <ArrowUpFromLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Withdrew{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              from Earn to {displayEnvelopeName(ev.envelope, envelopeNames)}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <ArrowUpFromLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Withdrew {amt(ev.amount)} from Earn to{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
       );
     case "GrowEnabled":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <Lock size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Enabled Grow — a 48-hour cooling-off period on withdrawals
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <Lock size={16} strokeWidth={2} />,
+        line(
+          <>Turned Grow on. 48-hour cooling-off on withdrawals.</>,
+        ),
       );
     case "GrowTransfer":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <Lock size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Locked{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              in Grow
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <Lock size={16} strokeWidth={2} />,
+        line(<>Locked {amt(ev.amount)} in Grow</>),
       );
     case "GrowRequest":
       return wrap(
-        "outflow",
-        <>
-          <div className="ic">
-            <Hourglass size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Requested withdrawal of{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              — 48-hour timer started
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        "pending",
+        <Hourglass size={16} strokeWidth={2} />,
+        line(
+          <>
+            Requested {amt(ev.amount)} withdrawal from Grow. 48-hour timer
+            started.
+          </>,
+        ),
       );
     case "GrowExecute":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <LockOpen size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Unlocked{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              from Grow
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <LockOpen size={16} strokeWidth={2} />,
+        line(<>Unlocked {amt(ev.amount)} from Grow</>),
       );
     case "GrowCancel":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <XIcon size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Cancelled a{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              Grow withdrawal request
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <XIcon size={16} strokeWidth={2} />,
+        line(<>Cancelled a {amt(ev.amount)} Grow withdrawal request</>),
       );
   }
 }
+

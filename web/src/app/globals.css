@@ -444,6 +444,17 @@
 .sobre-day { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin: 14px 0 8px; }
 .sobre-day:first-child { margin-top: 0; }
 .sobre-activity-item {
+  /* Button reset — the row is now a <button> so a tap opens the detail
+     modal. Left as flex-row so the same layout rules apply as when it was
+     an <a>. text-align:left keeps the copy aligned with the row above. */
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
   display: flex; gap: 12px;
   padding: 12px 4px;
   border-radius: 8px;
@@ -1719,7 +1730,11 @@ body { overflow-x: clip; min-width: 320px; }
     max-height: 92vh;
     animation: sobre-sheet-up .28s cubic-bezier(.2, .8, .25, 1);
   }
-  .sobre-modal::before {
+  /* Shared grab-bar for every mobile-sized modal that ISN'T managing its
+     own draggable handle. Any modal that renders its own handle (see
+     ActivityDetailModal) opts out with the .has-own-handle class so the
+     bars don't stack. */
+  .sobre-modal:not(.has-own-handle)::before {
     content: "";
     display: block;
     width: 40px; height: 4px;
@@ -3020,71 +3035,68 @@ body { overflow-x: clip; min-width: 320px; }
   background: color-mix(in oklab, var(--sobre-accent-soft) 70%, var(--sobre-primary) 30%);
 }
 
-/* ─── Home-tab Yield summary card ────────────────────────────────────────
-   Renders between the BalanceHero and RecentActivityPreview when Earn or
-   Grow have activity worth surfacing at a glance. One row per surface;
-   each row: circle icon (left) + stacked title / balance / interest,
-   with a chip (APY or badge) hugging the top-right of the row. */
-.sobre-summary-section {
-  margin-top: 22px;
+/* ─── Home-tab Yield hero cards ──────────────────────────────────────────
+   One standalone card per active surface (Savings earning, Grow). No
+   section header, no "Manage" link — the whole card is tappable and
+   jumps to Envelopes where any real action lives. Big balance is the
+   hero; APY chip anchors top-right; interest earned is a caption. */
+.sobre-yield-stack {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
-.sobre-summary-card {
+.sobre-yield-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 20px;
   background: var(--sobre-surface);
   border: 1px solid var(--sobre-border);
-  border-radius: 14px;
-  overflow: hidden;
-}
-.sobre-summary-row {
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  width: 100%;
-  padding: 16px;
-  background: transparent;
-  border: 0;
-  border-bottom: 1px solid var(--sobre-border);
+  border-radius: 16px;
   text-align: left;
   cursor: pointer;
-  transition: background 120ms ease;
+  transition: background 120ms ease, border-color 120ms ease,
+    transform 120ms ease;
 }
-.sobre-summary-row:last-child {
-  border-bottom: 0;
-}
-.sobre-summary-row:hover {
+.sobre-yield-card:hover {
   background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
 }
-.sobre-summary-ic {
+.sobre-yield-card:active {
+  transform: scale(0.998);
+}
+.sobre-yield-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sobre-yield-ic {
   flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   background: var(--sobre-accent-soft);
   color: var(--sobre-primary);
 }
-.sobre-summary-body {
+.sobre-yield-label {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sobre-text-2);
 }
-.sobre-summary-title-row {
+.sobre-yield-chips {
   display: flex;
   align-items: center;
-  gap: 10px;
-  justify-content: space-between;
+  gap: 6px;
+  flex-shrink: 0;
 }
-.sobre-summary-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--sobre-text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-.sobre-summary-badge {
+.sobre-yield-badge {
   padding: 3px 10px;
   border-radius: 999px;
   background: var(--sobre-surface-alt);
@@ -3093,32 +3105,40 @@ body { overflow-x: clip; min-width: 320px; }
   font-size: 11px;
   white-space: nowrap;
 }
-.sobre-summary-trailing {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.sobre-summary-balance {
-  font-size: 26px;
+.sobre-yield-balance {
+  font-size: 32px;
   font-weight: 700;
   color: var(--sobre-text-1);
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  line-height: 1;
+  letter-spacing: -0.015em;
 }
-.sobre-summary-balance .cents {
-  font-size: 16px;
+.sobre-yield-balance .cents {
+  font-size: 18px;
   font-weight: 600;
   color: var(--sobre-text-3);
+  margin-left: 1px;
 }
-.sobre-summary-interest {
+.sobre-yield-interest {
   font-size: 12px;
   color: var(--sobre-text-3);
   font-weight: 500;
+  margin-top: -2px;
 }
-.sobre-summary-interest .tabular {
+.sobre-yield-interest .tabular {
   color: var(--sobre-primary);
   font-weight: 700;
+}
+@media (max-width: 480px) {
+  .sobre-yield-card {
+    padding: 16px;
+    border-radius: 14px;
+  }
+  .sobre-yield-balance {
+    font-size: 28px;
+  }
+  .sobre-yield-balance .cents {
+    font-size: 16px;
+  }
 }
 
 /* ─── Earn info modal ────────────────────────────────────────────────────
@@ -3310,4 +3330,232 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-earn-card-head > .sobre-env-earn-apy {
   margin-left: auto;
   align-self: center;
+}
+
+/* ─── Activity redesign ────────────────────────────────────────────────
+ * When a household member drove the event (spend, request, sub-account
+ * fund, etc.), the row's left slot renders their Avatar instead of the
+ * small action glyph. The avatar carries the identity (with a coloured
+ * initials fallback for members without a photo); the row text stays
+ * short, and the full breakdown lives in ActivityDetailModal.
+ * ------------------------------------------------------------------- */
+.sobre-activity-item .ic.ic-avatar,
+.sobre-activity-item.inflow .ic.ic-avatar,
+.sobre-activity-item.outflow .ic.ic-avatar,
+.sobre-activity-item.pending .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.inflow .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.outflow .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.pending .ic.ic-avatar {
+  /* Override the tinted circle background used for glyph slots — the
+     avatar is opaque and provides its own colour. Same size as .ic so
+     rows with mixed slot types line up. Explicit variant list to beat
+     the per-tint .ic specificity above. */
+  background: transparent;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: inherit;
+}
+
+/* ─── Activity detail modal ─────────────────────────────────────────── */
+.sobre-modal.sobre-activity-detail {
+  padding: 24px;
+  max-width: 420px;
+}
+.sobre-activity-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.sobre-activity-detail-glyph {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sobre-accent-soft);
+}
+.sobre-activity-detail-title .k {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-activity-detail-title .when {
+  font-size: 13px;
+  color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-activity-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--sobre-border);
+  margin-bottom: 16px;
+}
+.sobre-activity-detail-amount {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sobre-text-1);
+  letter-spacing: -0.01em;
+}
+.sobre-activity-detail-amount.in { color: var(--sobre-accent); }
+.sobre-activity-detail-amount.out { color: var(--sobre-text-1); }
+.sobre-activity-detail-amount.pending { color: #b88b1c; }
+.sobre-activity-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+.sobre-activity-detail-row .k {
+  color: var(--sobre-text-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sobre-activity-detail-row .v {
+  color: var(--sobre-text-1);
+  font-weight: 500;
+  text-align: right;
+}
+.sobre-activity-detail-row .v.tabular {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+.sobre-activity-detail-splits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sobre-activity-detail-split-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.sobre-activity-detail-split-row .swatch {
+  width: 6px;
+  height: 20px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.sobre-activity-detail-split-row .swatch.c0 { background: #22A45C; }
+.sobre-activity-detail-split-row .swatch.c1 { background: #E8923C; }
+.sobre-activity-detail-split-row .swatch.c2 { background: #2E6BAA; }
+.sobre-activity-detail-split-row .name {
+  color: var(--sobre-text-1);
+  font-weight: 500;
+  flex: 1;
+}
+.sobre-activity-detail-split-row .amt {
+  color: var(--sobre-text-1);
+  font-weight: 600;
+}
+
+.sobre-activity-detail-advanced-toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--sobre-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sobre-activity-detail-advanced-toggle:hover { color: var(--sobre-text-1); }
+.sobre-activity-detail-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.sobre-activity-detail-explorer {
+  color: var(--sobre-accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+}
+.sobre-activity-detail-explorer:hover { text-decoration: underline; }
+
+/* Drag handle strip — invisible on desktop (no drag interaction on a
+   centered dialog), a slim horizontal bar at the top of the mobile
+   bottom sheet. Sits above the header so the pointer area is
+   reachable without covering content. */
+.sobre-activity-detail-handle-strip {
+  display: none;
+}
+.sobre-activity-detail-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--sobre-border-strong, #d6d3d0);
+  margin: 0 auto;
+}
+
+/* Sheet close animation — reverse of the built-in sobre-sheet-up so the
+   dismiss glide matches the open glide. Fired on the modal container
+   when React flips `closing=true`, right before the parent unmounts. */
+@keyframes sobre-sheet-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+/* ─── Responsive — bottom sheet on narrow viewports ─────────────────────
+ * Centered dialog anywhere >= 640px, bottom-anchored sheet with a
+ * grab-handle strip and drag-to-close pointer capture below that. Uses
+ * dvh so the mobile URL bar retracting doesn't cut the sheet mid-scroll.
+ * ------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .sobre-modal-bg:has(.sobre-activity-detail) {
+    align-items: flex-end;
+    padding: 0;
+  }
+  .sobre-modal.sobre-activity-detail {
+    max-width: 100%;
+    width: 100%;
+    border-radius: 20px 20px 0 0;
+    max-height: 88dvh;
+    padding: 8px 24px calc(24px + var(--safe-bottom));
+  }
+  .sobre-activity-detail-handle-strip {
+    display: block;
+    padding: 8px 0 12px;
+    margin: -8px -24px 0;
+    touch-action: none;
+    cursor: grab;
+  }
+  .sobre-activity-detail-handle-strip:active {
+    cursor: grabbing;
+  }
+  /* Same fade+animate the sobre-modal-bg wrapper on close so the scrim
+     dims out in step with the sheet sliding down. */
+  .sobre-modal-bg.closing {
+    animation: sobre-fade-out 0.22s ease forwards;
+  }
+  .sobre-modal.sobre-activity-detail.closing {
+    animation: sobre-sheet-down 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  }
+}
+
+@keyframes sobre-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
 }

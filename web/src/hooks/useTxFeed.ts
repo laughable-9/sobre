@@ -517,6 +517,34 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   return { events, loading, error, refresh: fetchEvents };
 }
 
+/** The household actor a feed event should be attributed to (member or
+ *  sub-account address), or null for system/external events (deposits from
+ *  outside, Earn/Grow toggles). Single source of truth — every consumer
+ *  that renders an "actor avatar" or "who did this" reads from here so
+ *  the row surface and the detail modal can never drift. */
+export function eventActor(ev: FeedEvent): string | null {
+  switch (ev.kind) {
+    case "Spend":
+    case "SubAccountSpent":
+    case "RequestCreated":
+      return ev.caller;
+    case "GrowRequest":
+    case "GrowExecute":
+    case "GrowCancel":
+      return ev.requester;
+    case "MemberJoined":
+    case "MemberRemoved":
+      return ev.member;
+    case "SubAccountJoined":
+    case "SubAccountLockChanged":
+      return ev.subaccount;
+    case "SubAccountFunded":
+      return ev.recipient;
+    default:
+      return null;
+  }
+}
+
 /** Bound the in-memory accumulator so a long-running session doesn't grow
  *  the Map indefinitely. 500 events is generous — the dashboard only
  *  renders the last few buckets anyway. */
