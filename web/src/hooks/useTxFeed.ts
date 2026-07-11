@@ -169,6 +169,43 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
   // growing memory after a long session.
   const eventsMapRef = useRef<Map<string, FeedEvent>>(new Map());
   const firstFetchLoggedRef = useRef<boolean>(false);
+  // Backfill runs once per mount after the forward-walk fetch lands. Guarded
+  // via ref so a stray re-render can't re-enqueue it and a stale-generation
+  // bail can leave it eligible for retry.
+  const backfillStateRef = useRef<"pending" | "running" | "done">("pending");
+
+  // Merge a page's parsed events into the accumulator, sort newest-first,
+  // dedupe, cap at MAX_EVENTS, then push to state + cache. Called after every
+  // RPC page (progressive commit) so the first-page rows paint immediately
+  // and later pages fill in behind them.
+  const commitPage = useCallback(
+    (pageParsed: FeedEvent[]) => {
+      if (pageParsed.length === 0) return;
+      for (const ev of pageParsed) {
+        const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
+        if (!eventsMapRef.current.has(key)) {
+          eventsMapRef.current.set(key, ev);
+        }
+      }
+      if (eventsMapRef.current.size > MAX_EVENTS) {
+        const sorted = Array.from(eventsMapRef.current.entries()).sort(
+          (a, b) => b[1].ledger - a[1].ledger,
+        );
+        eventsMapRef.current = new Map(sorted.slice(0, MAX_EVENTS));
+      }
+      const merged = Array.from(eventsMapRef.current.values()).sort(
+        (a, b) => b.ledger - a.ledger,
+      );
+      const signature = `${merged.length}:${merged[0]?.txHash ?? ""}:${merged[0]?.kind ?? ""}`;
+      if (signature !== lastSignatureRef.current) {
+        lastSignatureRef.current = signature;
+        setEvents(merged);
+        setLoading(false);
+        if (contractId) writeCache(contractId, merged);
+      }
+    },
+    [contractId],
+  );
 
   const fetchEvents = useCallback(async () => {
     if (!contractId) return;
@@ -182,7 +219,11 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         // empty for users whose only deposit had scrolled past the window.
         // Testnet RPC nodes typically retain ~120k ledgers (~7 days); the
         // narrowing retry below handles nodes with shorter retention.
-        startLedgerRef.current = Math.max(latest.sequence - 100_000, 1);
+        // Narrowed to ~7 hours so the forward walk is 1–2 pages and paints
+        // the actual newest events near-instantly. Older history (up to
+        // ~7 days) fills in behind via runBackfill() after the first
+        // fetch completes.
+        startLedgerRef.current = Math.max(latest.sequence - 5000, 1);
       }
 
       // Page through the window until the cursor catches up to latestLedger.
@@ -197,35 +238,6 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         | Awaited<ReturnType<typeof server.getEvents>>
         | undefined;
       const parsed: FeedEvent[] = [];
-      // Progressive commit: merge and setEvents after every page instead
-      // of only at the end. The first page's events paint within ~300ms
-      // and later pages fill in behind — the user sees rows immediately
-      // instead of a 2s skeleton hold while all pages sequentially fetch.
-      const commitPage = (pageParsed: FeedEvent[]) => {
-        if (pageParsed.length === 0) return;
-        for (const ev of pageParsed) {
-          const key = `${ev.txHash}:${ev.kind}:${ev.ledger}`;
-          if (!eventsMapRef.current.has(key)) {
-            eventsMapRef.current.set(key, ev);
-          }
-        }
-        if (eventsMapRef.current.size > MAX_EVENTS) {
-          const sorted = Array.from(eventsMapRef.current.entries()).sort(
-            (a, b) => b[1].ledger - a[1].ledger,
-          );
-          eventsMapRef.current = new Map(sorted.slice(0, MAX_EVENTS));
-        }
-        const merged = Array.from(eventsMapRef.current.values()).sort(
-          (a, b) => b.ledger - a.ledger,
-        );
-        const signature = `${merged.length}:${merged[0]?.txHash ?? ""}:${merged[0]?.kind ?? ""}`;
-        if (signature !== lastSignatureRef.current) {
-          lastSignatureRef.current = signature;
-          setEvents(merged);
-          setLoading(false);
-          if (contractId) writeCache(contractId, merged);
-        }
-      };
       let totalMatched = 0;
       let pages = 0;
       const MAX_PAGES = 40;
@@ -296,165 +308,13 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
         totalMatched += raw.events.length;
         if (catchUpLatest === null) catchUpLatest = raw.latestLedger;
 
-        const pageStart = parsed.length;
-        for (const ev of raw.events) {
-        const topics = ev.topic.map((t) => scValToNative(t));
-        const kind = String(topics[0] ?? "").toLowerCase();
-        const data = scValToNative(ev.value) as Record<string, unknown>;
-
-        const base = {
-          ledger: ev.ledger,
-          ledgerClosedAt: ev.ledgerClosedAt,
-          txHash: ev.txHash,
-        };
-
-        if (kind === "deposit") {
-          parsed.push({
-            ...base,
-            kind: "Deposit",
-            from: String(topics[1]),
-            amount: data.amount as bigint,
-            groceries: data.groceries as bigint,
-            tuition: data.tuition as bigint,
-            savings: data.savings as bigint,
-          });
-        } else if (kind === "spend") {
-          parsed.push({
-            ...base,
-            kind: "Spend",
-            caller: String(topics[1]),
-            envelope: envelopeNameFromScNative(topics[2], "Groceries"),
-            amount: data.amount as bigint,
-            memo: String(data.memo ?? ""),
-          });
-        } else if (kind === "request_created") {
-          parsed.push({
-            ...base,
-            kind: "RequestCreated",
-            requestId: topics[1] as bigint,
-            caller: String(topics[2]),
-            envelope: envelopeNameFromScNative(data.envelope, "Groceries"),
-            amount: data.amount as bigint,
-            memo: String(data.memo ?? ""),
-          });
-        } else if (kind === "request_approved") {
-          parsed.push({
-            ...base,
-            kind: "RequestApproved",
-            requestId: topics[1] as bigint,
-          });
-        } else if (kind === "request_denied") {
-          parsed.push({
-            ...base,
-            kind: "RequestDenied",
-            requestId: topics[1] as bigint,
-          });
-        } else if (kind === "member_joined") {
-          parsed.push({
-            ...base,
-            kind: "MemberJoined",
-            member: String(topics[1]),
-            name: String(data.name ?? ""),
-            emoji: String(data.emoji ?? ""),
-          });
-        } else if (kind === "member_removed") {
-          parsed.push({
-            ...base,
-            kind: "MemberRemoved",
-            member: String(topics[1]),
-          });
-        } else if (kind === "sub_account_joined") {
-          parsed.push({
-            ...base,
-            kind: "SubAccountJoined",
-            subaccount: String(topics[1]),
-          });
-        } else if (kind === "sub_account_funded") {
-          parsed.push({
-            ...base,
-            kind: "SubAccountFunded",
-            recipient: String(topics[1]),
-            envelope: envelopeNameFromScNative(topics[2], "Groceries"),
-            amount: data.amount as bigint,
-          });
-        } else if (kind === "sub_account_spent") {
-          parsed.push({
-            ...base,
-            kind: "SubAccountSpent",
-            caller: String(topics[1]),
-            amount: data.amount as bigint,
-            memo: String(data.memo ?? ""),
-          });
-        } else if (kind === "sub_account_lock_changed") {
-          parsed.push({
-            ...base,
-            kind: "SubAccountLockChanged",
-            subaccount: String(topics[1]),
-            locked: Boolean(data.locked),
-          });
-        } else if (kind === "earn_enabled_event") {
-          parsed.push({
-            ...base,
-            kind: "EarnEnabled",
-            pool: String(topics[1]),
-            asset: String(topics[2]),
-          });
-        } else if (kind === "earn_supply") {
-          parsed.push({
-            ...base,
-            kind: "EarnSupply",
-            envelope: envelopeNameFromScNative(topics[1], "Groceries"),
-            amount: data.amount as bigint,
-            bTokens: data.b_tokens as bigint,
-          });
-        } else if (kind === "earn_withdraw") {
-          parsed.push({
-            ...base,
-            kind: "EarnWithdraw",
-            envelope: envelopeNameFromScNative(topics[1], "Groceries"),
-            amount: data.amount as bigint,
-            bTokens: data.b_tokens as bigint,
-          });
-        } else if (kind === "grow_enabled_event") {
-          parsed.push({ ...base, kind: "GrowEnabled" });
-        } else if (kind === "grow_transfer") {
-          parsed.push({
-            ...base,
-            kind: "GrowTransfer",
-            amount: data.amount as bigint,
-          });
-        } else if (kind === "grow_request") {
-          parsed.push({
-            ...base,
-            kind: "GrowRequest",
-            requestId: topics[1] as bigint,
-            requester: String(topics[2]),
-            amount: data.amount as bigint,
-            unlockAt: data.unlock_at as bigint,
-          });
-        } else if (kind === "grow_execute") {
-          parsed.push({
-            ...base,
-            kind: "GrowExecute",
-            requestId: topics[1] as bigint,
-            requester: String(topics[2]),
-            amount: data.amount as bigint,
-          });
-        } else if (kind === "grow_cancel") {
-          parsed.push({
-            ...base,
-            kind: "GrowCancel",
-            requestId: topics[1] as bigint,
-            requester: String(topics[2]),
-            amount: data.amount as bigint,
-          });
-        }
-        }
+        const pageParsed = parseRawEvents(raw.events);
+        parsed.push(...pageParsed);
 
         // Commit whatever this page produced right now, before starting
         // the next round-trip — so the first-page rows paint immediately
         // and the paginate loop feels progressive instead of blocking.
-        commitPage(parsed.slice(pageStart));
+        commitPage(pageParsed);
 
         // Advance the local cursor and decide whether we've caught up.
         // The RPC may return an empty `events` array with a still-advancing
@@ -507,7 +367,70 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
     } finally {
       if (gen === generationRef.current) setLoading(false);
     }
-  }, [contractId]);
+  }, [contractId, commitPage]);
+
+  // Historical backfill: one-shot walk of the ~7-day window BEHIND the
+  // recent-only forward fetch. Progressive commit sorts newest-first
+  // globally, so these older events slot in BELOW the already-visible
+  // recent events instead of taking over the top for 2s while pages
+  // stream in. Fires once per mount after the forward fetch completes.
+  const runBackfill = useCallback(async () => {
+    if (!contractId) return;
+    if (backfillStateRef.current !== "pending") return;
+    backfillStateRef.current = "running";
+    const gen = generationRef.current;
+    try {
+      const server = getServer();
+      const latest = await server.getLatestLedger();
+      const backfillStart = Math.max(latest.sequence - 100_000, 1);
+      const backfillEnd = latest.sequence - 5001;
+      if (backfillEnd <= backfillStart) return;
+
+      let localCursor: string | null = null;
+      let pages = 0;
+      const MAX_PAGES = 30;
+      while (pages < MAX_PAGES) {
+        pages += 1;
+        const request = localCursor
+          ? {
+              cursor: localCursor,
+              filters: [
+                { type: "contract" as const, contractIds: [contractId] },
+              ],
+            }
+          : {
+              startLedger: backfillStart,
+              endLedger: backfillEnd,
+              filters: [
+                { type: "contract" as const, contractIds: [contractId] },
+              ],
+            };
+        let raw;
+        try {
+          raw = await server.getEvents(request);
+        } catch (err) {
+          // Backfill is best-effort; retention edge cases + transient RPC
+          // errors just abort the walk without surfacing anything to the
+          // user (their recent-window data is already correct).
+          console.warn("[useTxFeed] backfill failed:", err);
+          return;
+        }
+        if (gen !== generationRef.current) return;
+        commitPage(parseRawEvents(raw.events));
+        const nextCursor = raw.cursor;
+        if (!nextCursor || nextCursor === localCursor) break;
+        localCursor = nextCursor;
+        // The SDK's cursor-mode request drops endLedger, so the RPC could
+        // in principle walk past the historical window. Break as soon as
+        // the cursor's ledger crosses our upper bound so backfill stops
+        // stepping on the forward fetch's territory.
+        const cursorLedger = ledgerFromCursor(nextCursor);
+        if (cursorLedger !== null && cursorLedger >= backfillEnd) break;
+      }
+    } finally {
+      backfillStateRef.current = "done";
+    }
+  }, [contractId, commitPage]);
 
   // Reset paging state when switching Sobres so we re-window from the
   // current ledger for the new contract. Also hydrates from sessionStorage
@@ -520,6 +443,7 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
     lastSignatureRef.current = "";
     eventsMapRef.current = new Map();
     firstFetchLoggedRef.current = false;
+    backfillStateRef.current = "pending";
     hydratedRef.current = contractId;
     if (contractId) {
       const cached = readCache(contractId);
@@ -543,10 +467,17 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
 
   useEffect(() => {
     if (!contractId) return;
-    fetchEvents();
+    // Sequence: recent-window fetch first (paints newest rows fast), then
+    // fire-and-forget backfill in the background so older history slots in
+    // under whatever the forward fetch already surfaced. Steady-state 3s
+    // poll continues the forward walk from the cursor set by fetchEvents.
+    void (async () => {
+      await fetchEvents();
+      void runBackfill();
+    })();
     const interval = setInterval(fetchEvents, 3000);
     return () => clearInterval(interval);
-  }, [contractId, fetchEvents]);
+  }, [contractId, fetchEvents, runBackfill]);
 
   return { events, loading, error, refresh: fetchEvents };
 }
@@ -577,6 +508,173 @@ export function eventActor(ev: FeedEvent): string | null {
     default:
       return null;
   }
+}
+
+/** Parse a batch of raw Soroban events into typed FeedEvents. Module-scoped
+ *  so the forward-walk fetch and the historical backfill can share it —
+ *  the parser is stateless and only depends on the raw ev shape. */
+function parseRawEvents(
+  rawEvents: Array<{
+    ledger: number;
+    ledgerClosedAt: string;
+    txHash: string;
+    topic: Array<unknown>;
+    value: unknown;
+  }>,
+): FeedEvent[] {
+  const out: FeedEvent[] = [];
+  for (const ev of rawEvents) {
+    const topics = ev.topic.map((t) => scValToNative(t as never));
+    const kind = String(topics[0] ?? "").toLowerCase();
+    const data = scValToNative(ev.value as never) as Record<string, unknown>;
+    const base = {
+      ledger: ev.ledger,
+      ledgerClosedAt: ev.ledgerClosedAt,
+      txHash: ev.txHash,
+    };
+    if (kind === "deposit") {
+      out.push({
+        ...base,
+        kind: "Deposit",
+        from: String(topics[1]),
+        amount: data.amount as bigint,
+        groceries: data.groceries as bigint,
+        tuition: data.tuition as bigint,
+        savings: data.savings as bigint,
+      });
+    } else if (kind === "spend") {
+      out.push({
+        ...base,
+        kind: "Spend",
+        caller: String(topics[1]),
+        envelope: envelopeNameFromScNative(topics[2], "Groceries"),
+        amount: data.amount as bigint,
+        memo: String(data.memo ?? ""),
+      });
+    } else if (kind === "request_created") {
+      out.push({
+        ...base,
+        kind: "RequestCreated",
+        requestId: topics[1] as bigint,
+        caller: String(topics[2]),
+        envelope: envelopeNameFromScNative(data.envelope, "Groceries"),
+        amount: data.amount as bigint,
+        memo: String(data.memo ?? ""),
+      });
+    } else if (kind === "request_approved") {
+      out.push({
+        ...base,
+        kind: "RequestApproved",
+        requestId: topics[1] as bigint,
+      });
+    } else if (kind === "request_denied") {
+      out.push({
+        ...base,
+        kind: "RequestDenied",
+        requestId: topics[1] as bigint,
+      });
+    } else if (kind === "member_joined") {
+      out.push({
+        ...base,
+        kind: "MemberJoined",
+        member: String(topics[1]),
+        name: String(data.name ?? ""),
+        emoji: String(data.emoji ?? ""),
+      });
+    } else if (kind === "member_removed") {
+      out.push({
+        ...base,
+        kind: "MemberRemoved",
+        member: String(topics[1]),
+      });
+    } else if (kind === "sub_account_joined") {
+      out.push({
+        ...base,
+        kind: "SubAccountJoined",
+        subaccount: String(topics[1]),
+      });
+    } else if (kind === "sub_account_funded") {
+      out.push({
+        ...base,
+        kind: "SubAccountFunded",
+        recipient: String(topics[1]),
+        envelope: envelopeNameFromScNative(topics[2], "Groceries"),
+        amount: data.amount as bigint,
+      });
+    } else if (kind === "sub_account_spent") {
+      out.push({
+        ...base,
+        kind: "SubAccountSpent",
+        caller: String(topics[1]),
+        amount: data.amount as bigint,
+        memo: String(data.memo ?? ""),
+      });
+    } else if (kind === "sub_account_lock_changed") {
+      out.push({
+        ...base,
+        kind: "SubAccountLockChanged",
+        subaccount: String(topics[1]),
+        locked: Boolean(data.locked),
+      });
+    } else if (kind === "earn_enabled_event") {
+      out.push({
+        ...base,
+        kind: "EarnEnabled",
+        pool: String(topics[1]),
+        asset: String(topics[2]),
+      });
+    } else if (kind === "earn_supply") {
+      out.push({
+        ...base,
+        kind: "EarnSupply",
+        envelope: envelopeNameFromScNative(topics[1], "Groceries"),
+        amount: data.amount as bigint,
+        bTokens: data.b_tokens as bigint,
+      });
+    } else if (kind === "earn_withdraw") {
+      out.push({
+        ...base,
+        kind: "EarnWithdraw",
+        envelope: envelopeNameFromScNative(topics[1], "Groceries"),
+        amount: data.amount as bigint,
+        bTokens: data.b_tokens as bigint,
+      });
+    } else if (kind === "grow_enabled_event") {
+      out.push({ ...base, kind: "GrowEnabled" });
+    } else if (kind === "grow_transfer") {
+      out.push({
+        ...base,
+        kind: "GrowTransfer",
+        amount: data.amount as bigint,
+      });
+    } else if (kind === "grow_request") {
+      out.push({
+        ...base,
+        kind: "GrowRequest",
+        requestId: topics[1] as bigint,
+        requester: String(topics[2]),
+        amount: data.amount as bigint,
+        unlockAt: data.unlock_at as bigint,
+      });
+    } else if (kind === "grow_execute") {
+      out.push({
+        ...base,
+        kind: "GrowExecute",
+        requestId: topics[1] as bigint,
+        requester: String(topics[2]),
+        amount: data.amount as bigint,
+      });
+    } else if (kind === "grow_cancel") {
+      out.push({
+        ...base,
+        kind: "GrowCancel",
+        requestId: topics[1] as bigint,
+        requester: String(topics[2]),
+        amount: data.amount as bigint,
+      });
+    }
+  }
+  return out;
 }
 
 /** sessionStorage key for a contract's cached event snapshot. Snapshot is
