@@ -12,6 +12,9 @@ export interface FamilyMemberDisplay {
   walletDbId: string;
   name: string;
   emoji: string;
+  /** Google profile picture URL (populated on OAuth sign-in). Null when the
+   *  member hasn't signed in yet or their Google account has no picture. */
+  avatarUrl: string | null;
   role: "admin" | "recipient";
 }
 
@@ -152,7 +155,9 @@ export function useFamilyDisplay(
           .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
-          .select("wallet_id, role, name, emoji, wallets(contract_id)")
+          .select(
+            "wallet_id, role, name, emoji, wallets(contract_id, avatar_url)",
+          )
           .eq("family_wallet_id", row.id),
       ]);
       if (namesQ.error) {
@@ -190,12 +195,13 @@ export function useFamilyDisplay(
       setEnvelopeNames(nextNames);
 
       const map = new Map<string, FamilyMemberDisplay>();
+      type WalletJoined = { contract_id: string; avatar_url: string | null };
       type MemberRow = {
         wallet_id: string;
         role: "admin" | "recipient";
         name: string | null;
         emoji: string | null;
-        wallets: { contract_id: string } | { contract_id: string }[] | null;
+        wallets: WalletJoined | WalletJoined[] | null;
       };
       for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
         const wallets = firstJoined(m.wallets);
@@ -205,6 +211,7 @@ export function useFamilyDisplay(
           walletDbId: m.wallet_id,
           name: m.name ?? "",
           emoji: m.emoji ?? "",
+          avatarUrl: wallets.avatar_url ?? null,
           role: m.role,
         });
       }

@@ -17,6 +17,9 @@ export interface Member {
   address: string;
   name: string;
   emoji: string;
+  /** Google profile picture URL when the member has signed in via OAuth,
+   *  else null — Avatar falls back to initials on a name-hashed colour. */
+  avatarUrl: string | null;
   /** Supabase `wallets.id` — handy when a downstream mutation needs to
    *  reference the member's row without a fresh contract_id → id lookup. */
   walletDbId: string | null;
@@ -251,6 +254,7 @@ export function useWalletState(
         address: m.address,
         name: d?.name ?? "",
         emoji: d?.emoji ?? "",
+        avatarUrl: d?.avatarUrl ?? null,
         walletDbId: d?.walletDbId ?? null,
         role,
       };

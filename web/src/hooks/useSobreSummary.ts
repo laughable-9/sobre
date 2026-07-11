@@ -55,6 +55,7 @@ export function useSobreSummary(
               address: String(m.address),
               name: String(m.name ?? ""),
               emoji: String(m.emoji ?? ""),
+              avatarUrl: null,
               walletDbId: null,
               role: "recipient",
             }))
