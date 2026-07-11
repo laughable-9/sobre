@@ -91,6 +91,32 @@ export type FeedEvent =
       envelope: string;
       amount: bigint;
       bTokens: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "GrowEnabled";
+    })
+  | (FeedEventBase & {
+      kind: "GrowTransfer";
+      amount: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "GrowRequest";
+      requestId: bigint;
+      requester: string;
+      amount: bigint;
+      unlockAt: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "GrowExecute";
+      requestId: bigint;
+      requester: string;
+      amount: bigint;
+    })
+  | (FeedEventBase & {
+      kind: "GrowCancel";
+      requestId: bigint;
+      requester: string;
+      amount: bigint;
     });
 
 export interface UseTxFeedResult {
@@ -295,6 +321,39 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
             envelope: envelopeNameFromScNative(topics[1], "Groceries"),
             amount: data.amount as bigint,
             bTokens: data.b_tokens as bigint,
+          });
+        } else if (kind === "grow_enabled_event") {
+          parsed.push({ ...base, kind: "GrowEnabled" });
+        } else if (kind === "grow_transfer") {
+          parsed.push({
+            ...base,
+            kind: "GrowTransfer",
+            amount: data.amount as bigint,
+          });
+        } else if (kind === "grow_request") {
+          parsed.push({
+            ...base,
+            kind: "GrowRequest",
+            requestId: topics[1] as bigint,
+            requester: String(topics[2]),
+            amount: data.amount as bigint,
+            unlockAt: data.unlock_at as bigint,
+          });
+        } else if (kind === "grow_execute") {
+          parsed.push({
+            ...base,
+            kind: "GrowExecute",
+            requestId: topics[1] as bigint,
+            requester: String(topics[2]),
+            amount: data.amount as bigint,
+          });
+        } else if (kind === "grow_cancel") {
+          parsed.push({
+            ...base,
+            kind: "GrowCancel",
+            requestId: topics[1] as bigint,
+            requester: String(topics[2]),
+            amount: data.amount as bigint,
           });
         }
       }

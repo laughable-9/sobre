@@ -51,6 +51,9 @@ const PREVIEW_STATE: WalletState = {
   admin_count: 1,
   admin_cap: 2,
   earn: null,
+  grow_enabled: false,
+  grow_balance: 0n,
+  grow_requests: [],
 };
 
 function GithubMark({ size = 18 }: { size?: number }) {

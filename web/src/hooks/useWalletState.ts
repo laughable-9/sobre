@@ -51,6 +51,21 @@ export interface EarnState {
   positions: EarnPosition[];
 }
 
+export interface GrowWithdrawRequest {
+  /** Monotonic id assigned by `request_grow_withdrawal`. Stable across
+   *  polls; used to route `execute_grow_withdrawal` / `cancel_grow_withdrawal`. */
+  id: bigint;
+  /** The address that queued the request. Under the current single-admin
+   *  model this equals `state.admin`; kept explicit so a future multi-admin
+   *  refactor doesn't silently break the auth semantic. */
+  requester: string;
+  amount: bigint;
+  /** Unix seconds. Compare with `Math.floor(Date.now() / 1000)` to derive
+   *  the countdown; the contract's `execute_grow_withdrawal` traps until
+   *  `env.ledger().timestamp() >= unlock_at`. */
+  unlockAt: bigint;
+}
+
 export interface WalletState {
   admin: string;
   payment_token: string;
@@ -85,6 +100,13 @@ export interface WalletState {
    *  is enabled — carries the pool + asset + per-envelope positions. Older
    *  contracts return no `earn` field on the wire and normalize to null. */
   earn: EarnState | null;
+  /** True once admin has opted into the Grow bucket. Absent on pre-upgrade
+   *  contracts and normalizes to false. */
+  grow_enabled: boolean;
+  /** Grow-bucket balance in stroops. Zero when disabled or empty. */
+  grow_balance: bigint;
+  /** Pending grow-withdraw requests. Empty when none active. */
+  grow_requests: GrowWithdrawRequest[];
 }
 
 export interface UseWalletStateResult {
@@ -113,6 +135,9 @@ interface OnChainState {
   balances: bigint[];
   subaccounts: SubAccount[];
   earn: EarnState | null;
+  grow_enabled: boolean;
+  grow_balance: bigint;
+  grow_requests: GrowWithdrawRequest[];
 }
 
 /**
@@ -220,6 +245,9 @@ export function useWalletState(
       admin_count: adminCount,
       admin_cap: display.adminCap,
       earn: onChain.earn,
+      grow_enabled: onChain.grow_enabled,
+      grow_balance: onChain.grow_balance,
+      grow_requests: onChain.grow_requests,
     };
   }, [
     onChain,
@@ -270,7 +298,25 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
     balances: (raw.balances as bigint[]) ?? [],
     subaccounts,
     earn: normalizeEarnState(raw.earn),
+    grow_enabled: Boolean(raw.grow_enabled),
+    grow_balance: toBigInt(raw.grow_balance),
+    grow_requests: normalizeGrowRequests(raw.grow_requests),
   };
+}
+
+/** Grow-request rows come across as `[{ id, requester, amount, unlock_at }]`.
+ *  u64 ids and unlock_at land as bigint via scValToNative. */
+function normalizeGrowRequests(raw: unknown): GrowWithdrawRequest[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: toBigInt(row.id),
+      requester: String(row.requester ?? ""),
+      amount: toBigInt(row.amount),
+      unlockAt: toBigInt(row.unlock_at),
+    };
+  });
 }
 
 /**

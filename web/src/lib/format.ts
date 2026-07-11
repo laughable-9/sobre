@@ -89,3 +89,53 @@ export function relativeTime(iso: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   return `${Math.floor(hrs / 24)}d ago`;
 }
+
+/** "47h 12m 3s" / "5m 3s" / "0s" — future-tense sibling to relativeTime, for
+ *  countdown surfaces (Grow request unlock timers). Skips zero hour/minute
+ *  fields when they'd read as noise ("3s" not "0h 0m 3s"), keeps them when
+ *  a higher unit is present ("47h 0m 3s" reads honestly). */
+export function formatCountdown(secondsLeft: number): string {
+  const clamped = Math.max(0, Math.floor(secondsLeft));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
+/** Parses a user-typed PHP amount string ("1,234.56" or "1234.56") to
+ *  payment-token stroops. Returns 0n on empty / invalid input. Strips
+ *  commas so paste-from-currency-formatted works cleanly. Rounds via
+ *  Math.round so a fractional stroop doesn't sneak past the i128
+ *  boundary. */
+export function phpToStroops(raw: string): bigint {
+  const clean = raw.replace(/,/g, "").trim();
+  const php = Number(clean);
+  if (!Number.isFinite(php) || php <= 0) return 0n;
+  const tokens = php / PHP_PER_USDC;
+  const stroops = Math.round(tokens * STROOPS_PER_USDC);
+  return stroops > 0 ? BigInt(stroops) : 0n;
+}
+
+/** Formats a stroop amount as PHP or USD based on the caller's currency
+ *  choice (usually from useCurrency()). Uses tabular locale grouping so
+ *  columns of values align in monospace-numeral flows. */
+export function formatCurrencyLocale(
+  stroops: bigint,
+  currency: "PHP" | "USD",
+): string {
+  const usd = stroopsToUsdc(stroops);
+  if (currency === "USD") {
+    return `$${usd.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+  return `₱${(usd * PHP_PER_USDC).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}

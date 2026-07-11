@@ -2977,3 +2977,95 @@ body { overflow-x: clip; min-width: 320px; }
     grid-template-columns: 1fr;
   }
 }
+
+/* ─── Grow panel additions ───────────────────────────────────────────────
+   Shares the sobre-earn-card shell + button + stats primitives. Only the
+   request-row + request-list are Grow-specific. */
+.sobre-grow-request-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sobre-grow-request-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--sobre-text-3);
+}
+.sobre-grow-request-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  border: 1px solid var(--sobre-border);
+}
+.sobre-grow-request-currency {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-3);
+}
+.sobre-grow-request-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  color: var(--sobre-text-1);
+  outline: none;
+}
+.sobre-grow-request-input-row .sobre-earn-secondary-btn {
+  flex: 0 0 auto;
+  min-width: 88px;
+  padding: 8px 14px;
+  min-height: 36px;
+}
+.sobre-grow-requests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sobre-grow-request-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--sobre-surface-alt);
+  border: 1px solid var(--sobre-border);
+  border-radius: 10px;
+}
+.sobre-grow-request-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sobre-grow-request-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-grow-request-countdown {
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 600;
+}
+.sobre-grow-request-countdown.is-ready {
+  color: var(--sobre-primary);
+}
+.sobre-grow-request-actions {
+  flex-shrink: 0;
+}
+.sobre-grow-request-actions .sobre-earn-secondary-btn {
+  min-width: 84px;
+  padding: 8px 14px;
+  min-height: 36px;
+  font-size: 12px;
+}

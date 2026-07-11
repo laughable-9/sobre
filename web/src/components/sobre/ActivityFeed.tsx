@@ -870,5 +870,147 @@ function ActivityRow({
           </div>
         </>,
       );
+    case "EarnEnabled":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <CheckCheck size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">Started earning yield on Blend</div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "EarnSupply":
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <ArrowDownToLine size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Moved{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              from {displayEnvelopeName(ev.envelope, envelopeNames)} to Earn
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "EarnWithdraw":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <ArrowUpFromLine size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Withdrew{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              from Earn to {displayEnvelopeName(ev.envelope, envelopeNames)}
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "GrowEnabled":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <Lock size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Enabled Grow — a 48-hour cooling-off period on withdrawals
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "GrowTransfer":
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <Lock size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Locked{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              in Grow
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "GrowRequest":
+      return wrap(
+        "outflow",
+        <>
+          <div className="ic">
+            <Hourglass size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Requested withdrawal of{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              — 48-hour timer started
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "GrowExecute":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <LockOpen size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Unlocked{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              from Grow
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
+    case "GrowCancel":
+      return wrap(
+        "inflow",
+        <>
+          <div className="ic">
+            <XIcon size={16} strokeWidth={2} />
+          </div>
+          <div className="body">
+            <div className="who">
+              Cancelled a{" "}
+              <span className="amt tabular">
+                {formatPhpLocale(ev.amount)}
+              </span>{" "}
+              Grow withdrawal request
+            </div>
+            <div className="meta">{time} · view tx ↗</div>
+          </div>
+        </>,
+      );
   }
 }
