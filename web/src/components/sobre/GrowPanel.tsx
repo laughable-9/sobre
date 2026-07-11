@@ -12,7 +12,7 @@ import type {
   GrowWithdrawRequest,
   WalletState,
 } from "@/hooks/useWalletState";
-import { GROW_APY_LABEL, displayEnvelopeName } from "@/lib/config";
+import { EARN_APY_LABEL, displayEnvelopeName } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import {
   formatCountdown,
@@ -173,12 +173,12 @@ export function GrowPanel({
               </span>
               <div>
                 <p className="sobre-earn-card-title">
-                  Earn more with a 48-hour wait
+                  Grow: 48-hour wait on withdrawals
                 </p>
                 <p className="sobre-earn-card-body">
-                  Grow pays a higher rate because you agree to wait 48
-                  hours before pulling money out. Great for money you
-                  don&apos;t plan to touch this week.
+                  Grow earns the same interest as Savings but makes every
+                  withdrawal wait 48 hours. Good for money you don&apos;t
+                  need this week. Stops impulse spending.
                 </p>
               </div>
             </div>
@@ -210,9 +210,9 @@ export function GrowPanel({
                 className="sobre-env-earn-apy"
                 onClick={onEarnInfo}
                 title="Tap for how yield works"
-                aria-label={`${GROW_APY_LABEL}. Tap for explanation.`}
+                aria-label={`${EARN_APY_LABEL}. Tap for explanation.`}
               >
-                {GROW_APY_LABEL}
+                {EARN_APY_LABEL}
               </button>
             </div>
 
