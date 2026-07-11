@@ -35,7 +35,10 @@ import { SplitLegendBar } from "@/components/sobre/SplitLegendBar";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
-import { DashboardSkeleton } from "@/components/sobre/Skeletons";
+import {
+  DashboardSkeleton,
+  type DashboardSkeletonTab,
+} from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
 import { backdropClose } from "@/lib/ui";
@@ -67,13 +70,10 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { PHP_PER_USDC } from "@/lib/config";
 
-type Tab =
-  | "home"
-  | "envelopes"
-  | "activity"
-  | "subaccounts"
-  | "settings"
-  | "profile";
+// Sourced from Skeletons so the shared shape stays a single truth — the
+// skeleton needs the exact same tab set to render the right shape while
+// state is loading. Aliased locally as `Tab` to keep call sites terse.
+type Tab = DashboardSkeletonTab;
 const SETTINGS_HASH = "#settings";
 const SUBACCOUNTS_HASH = "#subaccounts";
 const ENVELOPES_HASH = "#envelopes";
@@ -109,13 +109,33 @@ export default function DashboardPage(props: { params: Promise<RouteParams> }) {
 }
 
 function DashboardLoading() {
+  // Same layout shell the real dashboard uses, with the tab-shaped skeleton
+  // matching whichever tab the user is refreshing into.
   return (
-    <div className="sobre-app sobre-v2">
-      <main className="flex-1 grid place-items-center px-6">
-        <p style={{ color: "var(--text-2)" }}>Loading…</p>
-      </main>
+    <div className="sobre-app sobre-v2 has-dock">
+      <div
+        className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
+        style={{ maxWidth: 640 }}
+      >
+        <DashboardSkeleton tab={tabFromHash()} />
+      </div>
     </div>
   );
+}
+
+/** Resolve the current tab from the URL hash. Safe to call from anywhere
+ *  (including SSR / suspense fallbacks): returns "home" when `window` is
+ *  absent instead of throwing. Used by both the Dashboard mount + the
+ *  Suspense fallback so refresh always renders the right shape. */
+function tabFromHash(hash?: string): DashboardSkeletonTab {
+  const h =
+    hash ?? (typeof window !== "undefined" ? window.location.hash : "");
+  if (h === SETTINGS_HASH) return "settings";
+  if (h === SUBACCOUNTS_HASH) return "subaccounts";
+  if (h === ENVELOPES_HASH) return "envelopes";
+  if (h === ACTIVITY_HASH) return "activity";
+  if (h === PROFILE_HASH) return "profile";
+  return "home";
 }
 
 function Dashboard({ contractId }: { contractId: string }) {
@@ -174,6 +194,15 @@ function Dashboard({ contractId }: { contractId: string }) {
   // filter out the in-modal row from the PENDING bucket in the activity
   // feed so the same deposit doesn't render in two places at once.
   const [activeDepositId, setActiveDepositId] = useState<string | null>(null);
+  // Identifiers the user has just clicked the trash on. Filtered out of
+  // the PENDING bucket the instant the /cancel request kicks off so the
+  // row unmounts without a race. Cleared once activeDeposits.refresh()
+  // resolves, so a row that PDAX resurrects (payment landed late) shows
+  // back up in the UI instead of staying stuck-invisible from a local
+  // hidden flag that survived across the resurrection.
+  const [cancelledDepositIds, setCancelledDepositIds] = useState<Set<string>>(
+    () => new Set(),
+  );
   // Sub-account holders aren't family_members; the active deposits/cashouts
   // routes 403 their session every poll cycle. Pass null in that branch so
   // the hooks idle (they already handle null gracefully) instead of
@@ -259,19 +288,13 @@ function Dashboard({ contractId }: { contractId: string }) {
   const [heroPulse, setHeroPulse] = useState(false);
   // Display currency is app-wide via CurrencyContext (toggle lives in TopBar).
   const { currency } = useCurrency();
-  const [tab, setTab] = useState<Tab>("home");
+  // Read hash synchronously so the first render matches the URL — otherwise
+  // the wrong tab flashes for one paint before the effect below flips it,
+  // AND the DashboardSkeleton below picks the wrong shape while state loads.
+  const [tab, setTab] = useState<Tab>(() => tabFromHash());
   // Hash-sync the tab so refresh + back-button keep the user where they were.
   useEffect(() => {
-    const fromHash = (): Tab => {
-      if (window.location.hash === SETTINGS_HASH) return "settings";
-      if (window.location.hash === SUBACCOUNTS_HASH) return "subaccounts";
-      if (window.location.hash === ENVELOPES_HASH) return "envelopes";
-      if (window.location.hash === ACTIVITY_HASH) return "activity";
-      if (window.location.hash === PROFILE_HASH) return "profile";
-      return "home";
-    };
-    setTab(fromHash());
-    const handler = () => setTab(fromHash());
+    const handler = () => setTab(tabFromHash());
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
@@ -453,7 +476,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 640 }}
         >
-          <DashboardSkeleton />
+          <DashboardSkeleton tab={tab} />
         </div>
       </div>
     );
@@ -654,7 +677,9 @@ function Dashboard({ contractId }: { contractId: string }) {
             }))}
           envelopeNames={state.envelope_names}
           pendingDeposits={activeDeposits.deposits.filter(
-            (d) => d.identifier !== activeDepositId,
+            (d) =>
+              d.identifier !== activeDepositId &&
+              !cancelledDepositIds.has(d.identifier),
           )}
           pendingCashouts={activeCashouts.cashouts.filter(
             (c) => c.identifier !== activeCashoutId,
@@ -671,6 +696,16 @@ function Dashboard({ contractId }: { contractId: string }) {
             setDepositOpen(true);
           }}
           onCancelDeposit={async (identifier) => {
+            // Optimistically hide the row so the PENDING section reflects
+            // the click immediately. Cleared in the finally so a row PDAX
+            // resurrects (payment landed after we cancelled) reappears
+            // correctly instead of being stuck-invisible from a local
+            // hidden flag surviving across the resurrect.
+            setCancelledDepositIds((prev) => {
+              const next = new Set(prev);
+              next.add(identifier);
+              return next;
+            });
             try {
               const res = await fetch(
                 `/api/pdax/deposits/${identifier}/cancel`,
@@ -690,6 +725,13 @@ function Dashboard({ contractId }: { contractId: string }) {
             } catch {
               await activeDeposits.refresh();
               return { ok: false };
+            } finally {
+              setCancelledDepositIds((prev) => {
+                if (!prev.has(identifier)) return prev;
+                const next = new Set(prev);
+                next.delete(identifier);
+                return next;
+              });
             }
           }}
           />

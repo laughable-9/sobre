@@ -31,6 +31,7 @@ import {
   maskAccountNumber,
   shortenAddress,
 } from "@/lib/format";
+import { ActivityRowsSkeleton } from "@/components/sobre/Skeletons";
 
 
 function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
@@ -263,14 +264,16 @@ export function ActivityFeed({
         events.length === 0 &&
         !pendingDeposits?.length &&
         !pendingCashouts?.length ? (
-          <div className="sobre-activity-empty">
-            <div className="ic">
-              <Clock size={22} strokeWidth={1.75} />
+          loading ? (
+            <ActivityRowsSkeleton count={5} />
+          ) : (
+            <div className="sobre-activity-empty">
+              <div className="ic">
+                <Clock size={22} strokeWidth={1.75} />
+              </div>
+              <div className="msg">Activity will show up here.</div>
             </div>
-            <div className="msg">
-              {loading ? "Loading activity…" : "Activity will show up here."}
-            </div>
-          </div>
+          )
         ) : null}
 
         {ordered.map((day) => (
@@ -377,11 +380,13 @@ function FailedCashoutRow({ cashout }: { cashout: ActiveCashoutRow }) {
 /** Row rendered above the on-chain bucket for a non-terminal `pdax_deposits`
  *  row. The primary tap resumes the modal at whatever phase matches the
  *  row's status. A small trash icon on the right cancels the row (marks
- *  it `failed` server-side). Cancel at status='credited' doesn't pull
- *  XLM back out of the smart wallet — that's a caveat we accept for the
- *  demo. */
-const ROW_EXIT_MS = 300;
-
+ *  it `failed` server-side) — visible ONLY on status='pending' because
+ *  the server rejects cancel for funded/credited (money's already in
+ *  flight PDAX-side), and a silent-noop trash led to "I click it and it
+ *  disappears then refresh brings it back" confusion. Visibility is
+ *  driven purely by props — the parent adds this row's identifier to a
+ *  cancelledIds set the instant onCancel fires so the row unmounts
+ *  immediately instead of relying on a local hidden timer. */
 function PendingDepositRow({
   deposit,
   onResume,
@@ -394,15 +399,6 @@ function PendingDepositRow({
   ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
 }) {
   const [cancelling, setCancelling] = useState(false);
-  // Two-step exit so the row stays gone even between "animation done" and
-  // "API + parent refresh complete":
-  // - exiting: applies the animate-out classes
-  // - hidden: returns null after ROW_EXIT_MS so the row doesn't pop back
-  //   into view when the css animation ends (tw-animate-css doesn't pin
-  //   the final state) and isn't seen twice if the parent refreshes
-  //   later than the animation finishes.
-  const [exiting, setExiting] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
@@ -411,50 +407,31 @@ function PendingDepositRow({
     split: "Split",
     failed: "Failed",
   };
+  const canCancel = deposit.status === "pending" && Boolean(onCancel);
   const handleCancel = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!onCancel || cancelling) return;
+    if (!canCancel || cancelling) return;
     setCancelling(true);
-    setExiting(true);
-    const hideTimer = setTimeout(() => setHidden(true), ROW_EXIT_MS);
     try {
-      const result = await onCancel(deposit.identifier);
-      if (!result.ok && result.alreadyPaid) {
-        // PDAX already received the payment. Don't hide the row —
-        // poll-status will drive it through funded → credited and
-        // PendingCashout/Deposit will transition normally.
-        clearTimeout(hideTimer);
-        setHidden(false);
-        setExiting(false);
-      }
-    } catch {
-      clearTimeout(hideTimer);
-      setHidden(false);
-      setExiting(false);
+      await onCancel!(deposit.identifier);
     } finally {
       setCancelling(false);
     }
   };
-  if (hidden) return null;
   return (
     <div
       role="button"
-      tabIndex={exiting ? -1 : 0}
-      onClick={exiting ? undefined : () => onResume?.(deposit.identifier)}
+      tabIndex={0}
+      onClick={() => onResume?.(deposit.identifier)}
       onKeyDown={(e) => {
-        if (exiting) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onResume?.(deposit.identifier);
         }
       }}
-      className={`sobre-activity-item pending ${
-        exiting
-          ? "animate-out fade-out slide-out-to-right duration-300"
-          : ""
-      }`}
+      className="sobre-activity-item pending"
       style={{
-        cursor: exiting ? "default" : "pointer",
+        cursor: "pointer",
         pointerEvents: cancelling ? "none" : undefined,
       }}
     >
@@ -473,7 +450,7 @@ function PendingDepositRow({
         </div>
         <div className="meta">{time}</div>
       </div>
-      {onCancel ? (
+      {canCancel ? (
         <button
           type="button"
           onClick={(e) => void handleCancel(e)}

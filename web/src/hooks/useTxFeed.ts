@@ -443,9 +443,8 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
       // Log fetch summary on the first successful call per session so the
       // "why is this empty" question is answerable from browser DevTools
       // without instrumenting live code. Also log when a subsequent poll
-      // gains ground on previous ones (matched > known accumulator size)
-      // so the "I just deposited but nothing shows up" case is diagnosable.
-      const previousKnown = eventsMapRef.current.size;
+      // brings in any new events so the "I just deposited but nothing
+      // shows up" case is diagnosable.
       if (!firstFetchLoggedRef.current) {
         firstFetchLoggedRef.current = true;
         console.info(

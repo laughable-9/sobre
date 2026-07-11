@@ -7,21 +7,36 @@
  * ActivityFeed item) so users see structure first, content second.
  */
 
+/** `tone="on-hero"` renders a semi-transparent white bar so skeleton blocks
+ *  laid over the green BalanceHero stay visible without the per-instance
+ *  background overrides that were littered inline in HomeSkeleton. */
 export function SkeletonBlock({
   width,
   height,
   radius = 8,
+  tone,
   style,
 }: {
   width: number | string;
   height: number | string;
   radius?: number;
+  tone?: "on-hero";
   style?: React.CSSProperties;
 }) {
+  const toneStyle: React.CSSProperties =
+    tone === "on-hero"
+      ? { background: "rgba(255, 255, 255, 0.28)" }
+      : {};
   return (
     <span
       className="sobre-skeleton"
-      style={{ width, height, borderRadius: radius, ...style }}
+      style={{
+        width,
+        height,
+        borderRadius: radius,
+        ...toneStyle,
+        ...style,
+      }}
     />
   );
 }
@@ -70,99 +85,304 @@ export function SobreCardSkeleton() {
   );
 }
 
-/** Mirrors the 3-column main grid: summary | envelopes | activity. */
-export function DashboardSkeleton() {
+/** Tab this dashboard load is heading to. Passed in from the page so refresh
+ *  to /dashboard/<id>#activity shows the Activity skeleton, not the Home one. */
+export type DashboardSkeletonTab =
+  | "home"
+  | "envelopes"
+  | "activity"
+  | "settings"
+  | "subaccounts"
+  | "profile";
+
+/** Route to the tab-shaped skeleton so refresh preserves the same layout the
+ *  user was looking at. Falls back to home for tabs we haven't specialised. */
+export function DashboardSkeleton({
+  tab = "home",
+}: { tab?: DashboardSkeletonTab } = {}) {
+  switch (tab) {
+    case "activity":
+      return <ActivitySkeleton />;
+    case "envelopes":
+      return <EnvelopesSkeleton />;
+    case "subaccounts":
+      return <StackedCardsSkeleton title />;
+    case "settings":
+      return <StackedCardsSkeleton title cards={4} />;
+    case "profile":
+      return <StackedCardsSkeleton title cards={2} narrow />;
+    case "home":
+    default:
+      return <HomeSkeleton />;
+  }
+}
+
+/** Home tab: green BalanceHero (with 3 envelope split rows inside), Yield
+ *  section card, Recent Activity list. */
+function HomeSkeleton() {
   return (
-    <div className="sobre-dash">
-      <aside className="sobre-summary">
-        <div className="sobre-summary-card">
-          <SkeletonBlock width={80} height={10} />
-          <SkeletonBlock
-            width="70%"
-            height={44}
-            style={{ marginTop: 12 }}
-          />
-          <SkeletonBlock width="40%" height={14} style={{ marginTop: 10 }} />
-          <SkeletonBlock
-            width="100%"
-            height={42}
-            radius={8}
-            style={{ marginTop: 16 }}
-          />
-          <div
-            style={{
-              borderTop: "1px solid var(--border)",
-              marginTop: 22,
-              paddingTop: 18,
-            }}
-          >
-            <SkeletonBlock width={100} height={10} />
-            <div
-              className="flex items-center gap-3"
-              style={{ marginTop: 12 }}
-            >
-              <SkeletonBlock width={32} height={32} radius={999} />
-              <div className="flex-1">
-                <SkeletonBlock width="50%" height={14} />
+    <div className="sobre-wallet-col">
+      {/* Green BalanceHero card. Uses the loaded hero's background so the
+          user reads "the big card is on its way" instead of "the layout
+          just shifted." White skeleton blocks on the green tint. */}
+      <section
+        className="sobre-v2-hero"
+        aria-hidden
+        style={{ pointerEvents: "none" }}
+      >
+        <div className="hero-title-row">
+          <SkeletonBlock width={120} height={16} tone="on-hero" />
+          <SkeletonBlock width={90} height={30} radius={999} tone="on-hero" />
+        </div>
+        <div className="label" style={{ marginTop: 20 }}>
+          <SkeletonBlock width={90} height={11} tone="on-hero" />
+        </div>
+        <SkeletonBlock
+          width="60%"
+          height={44}
+          tone="on-hero"
+          style={{ marginTop: 8 }}
+        />
+        <SkeletonBlock
+          width="40%"
+          height={14}
+          tone="on-hero"
+          style={{ marginTop: 10 }}
+        />
+        <div
+          className="sobre-v2-split"
+          role="list"
+          aria-hidden
+          style={{ marginTop: 18 }}
+        >
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="sobre-v2-split-row" role="listitem">
+              <span className="top">
+                <span className="chip">
+                  <SkeletonBlock width={16} height={16} radius={4} />
+                </span>
+                <SkeletonBlock width={90} height={14} />
                 <SkeletonBlock
-                  width="40%"
-                  height={11}
-                  style={{ marginTop: 4 }}
+                  width={72}
+                  height={14}
+                  style={{ marginLeft: "auto" }}
                 />
+              </span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Yield section — same layout the loaded EarnGrowSummary uses. */}
+      <section className="sobre-summary-section" aria-hidden>
+        <div className="sobre-envs-section-head">
+          <SkeletonBlock width={54} height={12} />
+          <SkeletonBlock width={54} height={12} />
+        </div>
+        <div
+          className="sobre-summary-card"
+          style={{
+            padding: 18,
+            display: "flex",
+            alignItems: "center",
+            gap: 14,
+          }}
+        >
+          <SkeletonBlock width={44} height={44} radius={999} />
+          <div style={{ flex: 1 }}>
+            <SkeletonBlock width={110} height={11} />
+            <SkeletonBlock
+              width="55%"
+              height={22}
+              style={{ marginTop: 8 }}
+            />
+            <SkeletonBlock
+              width="35%"
+              height={12}
+              style={{ marginTop: 8 }}
+            />
+          </div>
+          <SkeletonBlock width={92} height={22} radius={999} />
+        </div>
+      </section>
+
+      {/* Recent activity — matches RecentActivityPreview. */}
+      <section className="sobre-recent" aria-hidden>
+        <div className="sobre-recent-head">
+          <SkeletonBlock width={110} height={13} />
+        </div>
+        {[0, 1, 2].map((i) => (
+          <div
+            key={i}
+            className="sobre-recent-row"
+            style={{ pointerEvents: "none" }}
+          >
+            <span className="ic" style={{ background: "var(--surface-alt)" }}>
+              <SkeletonBlock width={14} height={14} radius={4} />
+            </span>
+            <div className="body">
+              <div className="line">
+                <SkeletonBlock width="55%" height={14} />
+                <SkeletonBlock width={64} height={14} />
               </div>
+              <SkeletonBlock
+                width={80}
+                height={11}
+                style={{ marginTop: 6 }}
+              />
             </div>
           </div>
-        </div>
-      </aside>
+        ))}
+      </section>
+    </div>
+  );
+}
 
+/** Activity tab: "Activity" heading + a stack of activity-row skeletons.
+ *  Used both for the initial cold-load fallback (routed via DashboardSkeleton
+ *  when the URL hash is #activity) AND as the in-panel loading state so the
+ *  same shapes render throughout, no bare "Loading activity…" text. */
+function ActivitySkeleton() {
+  return (
+    <div className="sobre-wallet-col">
+      <aside className="sobre-activity" aria-hidden>
+        <div className="head">
+          <SkeletonBlock width={110} height={26} />
+        </div>
+        <ActivityRowsSkeleton count={6} />
+      </aside>
+    </div>
+  );
+}
+
+/** Reusable row cluster for the activity feed — used as the empty/loading
+ *  fill inside ActivityFeed too, so we don't fall back to a bare
+ *  "Loading activity…" line. */
+export function ActivityRowsSkeleton({ count = 5 }: { count?: number }) {
+  return (
+    <div className="list" aria-hidden>
+      <div
+        className="sobre-day"
+        style={{
+          display: "flex",
+          alignItems: "center",
+          padding: "10px 4px 6px",
+        }}
+      >
+        <SkeletonBlock width={54} height={11} />
+      </div>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          className="sobre-activity-item"
+          style={{ pointerEvents: "none" }}
+        >
+          <div className="ic" style={{ background: "var(--surface-alt)" }}>
+            <SkeletonBlock width={14} height={14} radius={4} />
+          </div>
+          <div className="body">
+            <SkeletonBlock width="70%" height={14} />
+            <SkeletonBlock
+              width="45%"
+              height={11}
+              style={{ marginTop: 6 }}
+            />
+            <SkeletonBlock
+              width={64}
+              height={10}
+              style={{ marginTop: 6 }}
+            />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Generic settings/subaccounts/profile fallback: a heading + N card blocks.
+ *  Purposefully vague — settings has heterogenous forms, subaccounts renders
+ *  a variable member list, profile is one detail card — so the placeholder
+ *  reads as "the page is loading" without pretending to know the shape. */
+function StackedCardsSkeleton({
+  title = false,
+  cards = 3,
+  narrow = false,
+}: {
+  title?: boolean;
+  cards?: number;
+  narrow?: boolean;
+}) {
+  return (
+    <div
+      className="sobre-wallet-col"
+      style={narrow ? { maxWidth: 480, margin: "0 auto" } : undefined}
+    >
+      {title ? <SkeletonBlock width={160} height={24} /> : null}
+      <div
+        aria-hidden
+        style={{ display: "flex", flexDirection: "column", gap: 16 }}
+      >
+        {Array.from({ length: cards }).map((_, i) => (
+          <div
+            key={i}
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: 14,
+              padding: 20,
+              boxShadow: "var(--shadow-sm)",
+            }}
+          >
+            <SkeletonBlock width="35%" height={16} />
+            <SkeletonBlock
+              width="60%"
+              height={28}
+              style={{ marginTop: 12 }}
+            />
+            <SkeletonBlock
+              width="80%"
+              height={12}
+              style={{ marginTop: 10 }}
+            />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** Envelopes tab: "Envelopes" heading + a split-legend bar + one card per
+ *  envelope. Kept as three cards since the real dashboard is always 3. */
+function EnvelopesSkeleton() {
+  return (
+    <div className="sobre-wallet-col">
       <div className="sobre-envs">
-        <div className="mb-5">
-          <SkeletonBlock width={140} height={22} />
-          <SkeletonBlock width="60%" height={13} style={{ marginTop: 6 }} />
+        <header className="sobre-envs-header">
+          <SkeletonBlock width={150} height={26} />
+          <SkeletonBlock width={32} height={32} radius={10} />
+        </header>
+        <div style={{ marginTop: 12, marginBottom: 16 }}>
+          <SkeletonBlock width="100%" height={10} radius={999} />
         </div>
         {[0, 1, 2].map((i) => (
           <div key={i} className="sobre-envelope">
             <div className="row1">
               <SkeletonBlock width={44} height={44} radius={12} />
-              <SkeletonBlock width={120} height={19} />
+              <SkeletonBlock width={140} height={19} />
             </div>
             <SkeletonBlock
-              width="50%"
+              width="55%"
               height={40}
               style={{ marginTop: 16 }}
             />
             <SkeletonBlock
-              width={120}
+              width={140}
               height={13}
               style={{ marginTop: 6 }}
             />
           </div>
         ))}
       </div>
-
-      <aside className="sobre-activity">
-        <div className="head">
-          <SkeletonBlock width={90} height={18} />
-        </div>
-        <div className="list">
-          {[0, 1, 2].map((i) => (
-            <div
-              key={i}
-              style={{ display: "flex", gap: 12, padding: "12px 4px" }}
-            >
-              <SkeletonBlock width={32} height={32} radius={999} />
-              <div style={{ flex: 1 }}>
-                <SkeletonBlock width="80%" height={14} />
-                <SkeletonBlock
-                  width="50%"
-                  height={11}
-                  style={{ marginTop: 6 }}
-                />
-              </div>
-            </div>
-          ))}
-        </div>
-      </aside>
     </div>
   );
 }
