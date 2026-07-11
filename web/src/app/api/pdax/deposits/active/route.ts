@@ -65,20 +65,17 @@ export async function GET(req: Request) {
   // can be re-initiated by the user with a single click and don't lose
   // funds (no money has moved at pending), so over-eager beats letting
   // an unusable URL sit in the feed.
-  const PENDING_TTL_MIN = 15;
-  const cutoff = new Date(
-    Date.now() - PENDING_TTL_MIN * 60_000,
-  ).toISOString();
-  await admin
-    .from("pdax_deposits")
-    .update({
-      status: "failed",
-      failure_reason: "Checkout expired",
-    })
-    .eq("family_wallet_id", familyWalletId)
-    .eq("member_id", memberId)
-    .eq("status", "pending")
-    .lt("created_at", cutoff);
+  // Two staleness gates on top of poll-status: (1) a checkout that PDAX
+  // never advanced (PayMongo source expired mid-InstaPay, ~15 min for UAT),
+  // and (2) a funded row where the modal's poll-status loop is what
+  // advances funded → credited via /crypto/transactions — if the user
+  // closed the modal at funded and never returned, the row shows
+  // "Buying XLM · tap to resume" forever. 60 min is well past PDAX UAT's
+  // 2-10 min crypto-withdraw settlement; a real slow settle can still
+  // reappear by resuming the modal (which drives it through poll-status
+  // before this gate fires for it).
+  await expireStaleDeposits(admin, familyWalletId, memberId, "pending", 15, "Checkout expired");
+  await expireStaleDeposits(admin, familyWalletId, memberId, "funded", 60, "Processing timed out");
 
   // Self-heal: PDAX's /fiat/transactions endpoint can lag the actual
   // settlement by a few seconds — the user may have paid via GrabPay,
@@ -131,6 +128,27 @@ export async function GET(req: Request) {
     deposits: rows ?? [],
     recentlyFailed: failedRows ?? [],
   });
+}
+
+/** Mark all deposit rows sitting in `status` past `ttlMin` minutes as failed
+ *  with `failureReason`. Same query shape as PENDING_TTL_MIN gate; extracting
+ *  keeps a future `credited` gate from becoming a third copy of the block. */
+async function expireStaleDeposits(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  familyWalletId: string,
+  memberId: string,
+  status: "pending" | "funded" | "credited",
+  ttlMin: number,
+  failureReason: string,
+): Promise<void> {
+  const cutoff = new Date(Date.now() - ttlMin * 60_000).toISOString();
+  await admin
+    .from("pdax_deposits")
+    .update({ status: "failed", failure_reason: failureReason })
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", status)
+    .lt("created_at", cutoff);
 }
 
 /** Window in minutes after a row was marked "Cancelled by user" where
