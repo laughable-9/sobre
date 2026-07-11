@@ -59,20 +59,13 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
             </span>
             <div className="sobre-earn-info-text">
               <p className="sobre-earn-info-title">
-                Grow: for money you don&apos;t need this week
+                Grow: money you don&apos;t need this week
               </p>
               <p>
                 Grow earns the same rate as Savings, but every withdrawal
-                has to sit through a 48-hour wait before it can leave your
-                wallet. The wait is the point. It stops impulse spending
-                from turning a remittance into a night out.
-              </p>
-              <p>
-                When you request a withdrawal, a 48-hour timer starts. Anyone
-                in the family with admin access can cancel it before the
-                timer ends. Once the timer is up, the request goes through
-                and the money lands in your wallet. Money you don&apos;t
-                request stays in Grow and keeps earning.
+                has to wait 48 hours before leaving your wallet. That wait
+                stops impulse spending. Cancel a request anytime before
+                the timer ends. Money you leave alone keeps earning.
               </p>
             </div>
           </div>
