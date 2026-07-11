@@ -388,7 +388,7 @@
                   "string": "sobre-test"
                 },
                 {
-                  "bytes": "b70974ecb7595b1cf56e6b9f6cb0cc64fd80c8de401aa2c1cae2fd6c50476b81"
+                  "bytes": "951237cd0da60346683fce2ba90367cbf87e5dcbb25c55a59909c82899d3276e"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
@@ -409,7 +409,7 @@
             {
               "function": {
                 "contract_fn": {
-                  "contract_address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+                  "contract_address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
                   "function_name": "__constructor",
                   "args": [
                     {
@@ -451,7 +451,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract_address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "function_name": "queue_set_reserve",
               "args": [
                 {
@@ -586,7 +586,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                  "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
                 },
                 {
                   "i128": "500000000000"
@@ -625,7 +625,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract_address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "function_name": "set_status",
               "args": [
                 {
@@ -649,7 +649,7 @@
               "function_name": "earn_enable",
               "args": [
                 {
-                  "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                  "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
                 },
                 {
                   "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
@@ -661,6 +661,40 @@
         }
       ]
     ],
+    [],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "function_name": "spend",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "vec": [
+                    {
+                      "symbol": "Groceries"
+                    }
+                  ]
+                },
+                {
+                  "i128": "50000000"
+                },
+                {
+                  "string": "groceries"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [],
     []
   ],
   "ledger": {
@@ -862,6 +896,26 @@
           "data": {
             "contract_data": {
               "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "ledger_key_nonce": {
+                  "nonce": "6391496069076573377"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
@@ -894,13 +948,13 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "500000000"
+                            "i128": "450000000"
                           },
                           {
                             "i128": "300000000"
                           },
                           {
-                            "i128": "200000000"
+                            "i128": "0"
                           }
                         ]
                       }
@@ -915,6 +969,25 @@
                       },
                       "val": {
                         "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnBToken"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -938,7 +1011,26 @@
                         ]
                       },
                       "val": {
-                        "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                        "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnSuppliedTotal"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -1232,7 +1324,7 @@
                     "symbol": "PoolBalance"
                   },
                   {
-                    "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                    "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
                   }
                 ]
               },
@@ -1290,7 +1382,7 @@
                           "symbol": "pool"
                         },
                         "val": {
-                          "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                          "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
                         }
                       },
                       {
@@ -1409,7 +1501,7 @@
                     "symbol": "Contracts"
                   },
                   {
-                    "address": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ"
+                    "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
                   }
                 ]
               },
@@ -1506,214 +1598,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Balance"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "9000000000"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "authorized"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "clawback"
-                    },
-                    "val": {
-                      "bool": false
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 518400
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "Balance"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "map": [
-                  {
-                    "key": {
-                      "symbol": "amount"
-                    },
-                    "val": {
-                      "i128": "1000000000"
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "authorized"
-                    },
-                    "val": {
-                      "bool": true
-                    }
-                  },
-                  {
-                    "key": {
-                      "symbol": "clawback"
-                    },
-                    "val": {
-                      "bool": false
-                    }
-                  }
-                ]
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 518400
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
-              "key": "ledger_key_contract_instance",
-              "durability": "persistent",
-              "val": {
-                "contract_instance": {
-                  "executable": "stellar_asset",
-                  "storage": [
-                    {
-                      "key": {
-                        "symbol": "METADATA"
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "decimal"
-                            },
-                            "val": {
-                              "u32": 7
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "name"
-                            },
-                            "val": {
-                              "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGWF"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "symbol"
-                            },
-                            "val": {
-                              "string": "aaa"
-                            }
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "Admin"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "AssetInfo"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "vec": [
-                          {
-                            "symbol": "AlphaNum4"
-                          },
-                          {
-                            "map": [
-                              {
-                                "key": {
-                                  "symbol": "asset_code"
-                                },
-                                "val": {
-                                  "string": "aaa\\0"
-                                }
-                              },
-                              {
-                                "key": {
-                                  "symbol": "issuer"
-                                },
-                                "val": {
-                                  "bytes": "0000000000000000000000000000000000000000000000000000000000000002"
-                                }
-                              }
-                            ]
-                          }
-                        ]
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 120960
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "key": {
                 "symbol": "ResList"
               },
@@ -1737,7 +1622,68 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Positions"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "collateral"
+                    },
+                    "val": {
+                      "map": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "liabilities"
+                    },
+                    "val": {
+                      "map": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "supply"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "u32": 0
+                          },
+                          "val": {
+                            "i128": "200000000"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "key": {
                 "vec": [
                   {
@@ -1869,7 +1815,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "key": {
                 "vec": [
                   {
@@ -1896,7 +1842,7 @@
                       "symbol": "b_supply"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "200000000"
                     }
                   },
                   {
@@ -1953,7 +1899,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CBSKHJGJKVWTSJPQC7JG2NJF73XGG2O74CS237XELQW3UWJQZSA6JCZJ",
+              "contract": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -2051,6 +1997,265 @@
           "ext": "v0"
         },
         "live_until": 535680
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "amount"
+                    },
+                    "val": {
+                      "i128": "9050000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "authorized"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clawback"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "amount"
+                    },
+                    "val": {
+                      "i128": "750000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "authorized"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clawback"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CA3DRBY6KAETK2I72SQ4JNOTMFIZMF5DBFMIDHTADJBSNE2TTBSJ4IQZ"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "amount"
+                    },
+                    "val": {
+                      "i128": "200000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "authorized"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clawback"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
+              "key": "ledger_key_contract_instance",
+              "durability": "persistent",
+              "val": {
+                "contract_instance": {
+                  "executable": "stellar_asset",
+                  "storage": [
+                    {
+                      "key": {
+                        "symbol": "METADATA"
+                      },
+                      "val": {
+                        "map": [
+                          {
+                            "key": {
+                              "symbol": "decimal"
+                            },
+                            "val": {
+                              "u32": 7
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "name"
+                            },
+                            "val": {
+                              "string": "aaa:GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEGWF"
+                            }
+                          },
+                          {
+                            "key": {
+                              "symbol": "symbol"
+                            },
+                            "val": {
+                              "string": "aaa"
+                            }
+                          }
+                        ]
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "Admin"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD2KM"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "AssetInfo"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "vec": [
+                          {
+                            "symbol": "AlphaNum4"
+                          },
+                          {
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "asset_code"
+                                },
+                                "val": {
+                                  "string": "aaa\\0"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "issuer"
+                                },
+                                "val": {
+                                  "bytes": "0000000000000000000000000000000000000000000000000000000000000002"
+                                }
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 120960
       },
       {
         "entry": {

@@ -388,7 +388,7 @@
                   "string": "sobre-test"
                 },
                 {
-                  "bytes": "5c45606e735a3ae25fd3027486c4ace21f7ba07ea7451795ff6928ea1defdf84"
+                  "bytes": "69e4a3009f3426bd0c5298dd05dad630d4f47ff5fba186e9769bd7232646c87b"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
@@ -409,7 +409,7 @@
             {
               "function": {
                 "contract_fn": {
-                  "contract_address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+                  "contract_address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
                   "function_name": "__constructor",
                   "args": [
                     {
@@ -451,7 +451,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract_address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "function_name": "queue_set_reserve",
               "args": [
                 {
@@ -586,7 +586,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                  "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                 },
                 {
                   "i128": "500000000000"
@@ -625,7 +625,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract_address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "function_name": "set_status",
               "args": [
                 {
@@ -649,7 +649,7 @@
               "function_name": "earn_enable",
               "args": [
                 {
-                  "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                  "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                 },
                 {
                   "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
@@ -673,7 +673,7 @@
                 {
                   "vec": [
                     {
-                      "symbol": "Savings"
+                      "symbol": "Groceries"
                     }
                   ]
                 },
@@ -941,13 +941,13 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "500000000"
+                            "i128": "350000000"
                           },
                           {
                             "i128": "300000000"
                           },
                           {
-                            "i128": "50000000"
+                            "i128": "0"
                           }
                         ]
                       }
@@ -973,7 +973,7 @@
                           {
                             "vec": [
                               {
-                                "symbol": "Savings"
+                                "symbol": "Groceries"
                               }
                             ]
                           }
@@ -981,6 +981,25 @@
                       },
                       "val": {
                         "i128": "150000000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnBToken"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -1004,7 +1023,45 @@
                         ]
                       },
                       "val": {
-                        "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                        "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnSuppliedTotal"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Groceries"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "150000000"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnSuppliedTotal"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -1298,7 +1355,7 @@
                     "symbol": "PoolBalance"
                   },
                   {
-                    "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                    "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                   }
                 ]
               },
@@ -1356,7 +1413,7 @@
                           "symbol": "pool"
                         },
                         "val": {
-                          "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                          "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                         }
                       },
                       {
@@ -1475,7 +1532,7 @@
                     "symbol": "Contracts"
                   },
                   {
-                    "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                    "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                   }
                 ]
               },
@@ -1643,7 +1700,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "850000000"
+                      "i128": "650000000"
                     }
                   },
                   {
@@ -1683,7 +1740,7 @@
                     "symbol": "Balance"
                   },
                   {
-                    "address": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF"
+                    "address": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC"
                   }
                 ]
               },
@@ -1695,7 +1752,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "150000000"
+                      "i128": "350000000"
                     }
                   },
                   {
@@ -1831,7 +1888,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "key": {
                 "symbol": "ResList"
               },
@@ -1855,7 +1912,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "key": {
                 "vec": [
                   {
@@ -1896,7 +1953,7 @@
                             "u32": 0
                           },
                           "val": {
-                            "i128": "150000000"
+                            "i128": "350000000"
                           }
                         }
                       ]
@@ -1916,7 +1973,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "key": {
                 "vec": [
                   {
@@ -2048,7 +2105,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "key": {
                 "vec": [
                   {
@@ -2075,7 +2132,7 @@
                       "symbol": "b_supply"
                     },
                     "val": {
-                      "i128": "150000000"
+                      "i128": "350000000"
                     }
                   },
                   {
@@ -2132,7 +2189,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CB7CIGMNIGV3NWVJCP3CDGF74573MAXS6KELIQT6X35EGF3BODUAORWF",
+              "contract": "CB2MXUWOA2QSTGMWWTVM2V34D4OENKOEJGWOHOAAXUQYC4FQRZTGUUDC",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {

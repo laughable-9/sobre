@@ -388,7 +388,7 @@
                   "string": "sobre-test"
                 },
                 {
-                  "bytes": "703289d05e5b1cb176104fe1fc0592eee4544c17346859d4235b6f381d62c952"
+                  "bytes": "fce3ab94c7b60ba9c3c88f1c01ffc130f265ee4fc02902db05a91d1c80652617"
                 },
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA2ZMN"
@@ -409,7 +409,7 @@
             {
               "function": {
                 "contract_fn": {
-                  "contract_address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+                  "contract_address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
                   "function_name": "__constructor",
                   "args": [
                     {
@@ -451,7 +451,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract_address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "function_name": "queue_set_reserve",
               "args": [
                 {
@@ -586,7 +586,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                  "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
                 },
                 {
                   "i128": "500000000000"
@@ -625,7 +625,7 @@
         {
           "function": {
             "contract_fn": {
-              "contract_address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract_address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "function_name": "set_status",
               "args": [
                 {
@@ -649,7 +649,7 @@
               "function_name": "earn_enable",
               "args": [
                 {
-                  "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                  "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
                 },
                 {
                   "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
@@ -900,7 +900,7 @@
                             "i128": "300000000"
                           },
                           {
-                            "i128": "200000000"
+                            "i128": "0"
                           }
                         ]
                       }
@@ -915,6 +915,25 @@
                       },
                       "val": {
                         "address": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnBToken"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -938,7 +957,26 @@
                         ]
                       },
                       "val": {
-                        "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                        "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
+                            "symbol": "EarnSuppliedTotal"
+                          },
+                          {
+                            "vec": [
+                              {
+                                "symbol": "Savings"
+                              }
+                            ]
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "200000000"
                       }
                     },
                     {
@@ -1232,7 +1270,7 @@
                     "symbol": "PoolBalance"
                   },
                   {
-                    "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                    "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
                   }
                 ]
               },
@@ -1290,7 +1328,7 @@
                           "symbol": "pool"
                         },
                         "val": {
-                          "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                          "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
                         }
                       },
                       {
@@ -1409,7 +1447,7 @@
                     "symbol": "Contracts"
                   },
                   {
-                    "address": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU"
+                    "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
                   }
                 ]
               },
@@ -1577,7 +1615,59 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1000000000"
+                      "i128": "800000000"
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "authorized"
+                    },
+                    "val": {
+                      "bool": true
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "clawback"
+                    },
+                    "val": {
+                      "bool": false
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 518400
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CBEPDNVYXQGWB5YUBXKJWYJA7OXTZW5LFLNO5JRRGE6Z6C5OSUZPCCEL",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Balance"
+                  },
+                  {
+                    "address": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "amount"
+                    },
+                    "val": {
+                      "i128": "200000000"
                     }
                   },
                   {
@@ -1713,7 +1803,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "key": {
                 "symbol": "ResList"
               },
@@ -1737,7 +1827,68 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
+              "key": {
+                "vec": [
+                  {
+                    "symbol": "Positions"
+                  },
+                  {
+                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
+                  }
+                ]
+              },
+              "durability": "persistent",
+              "val": {
+                "map": [
+                  {
+                    "key": {
+                      "symbol": "collateral"
+                    },
+                    "val": {
+                      "map": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "liabilities"
+                    },
+                    "val": {
+                      "map": []
+                    }
+                  },
+                  {
+                    "key": {
+                      "symbol": "supply"
+                    },
+                    "val": {
+                      "map": [
+                        {
+                          "key": {
+                            "u32": 0
+                          },
+                          "val": {
+                            "i128": "200000000"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 2073600
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "key": {
                 "vec": [
                   {
@@ -1869,7 +2020,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "key": {
                 "vec": [
                   {
@@ -1896,7 +2047,7 @@
                       "symbol": "b_supply"
                     },
                     "val": {
-                      "i128": "0"
+                      "i128": "200000000"
                     }
                   },
                   {
@@ -1953,7 +2104,7 @@
           "data": {
             "contract_data": {
               "ext": "v0",
-              "contract": "CC3BJNPEFKXPYK2KXRYAPQ6HG5TBVU5U7HMLC7LMVJEPUEJTCJNAN2QU",
+              "contract": "CC6ZHHQYB3ZKYAVU2ILHYBESUVD27Q7J3LSTSDORFILBDJVNB723N46L",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {

@@ -665,7 +665,17 @@ struct EarnFixture {
 
 impl EarnFixture {
     fn new() -> Self {
-        let sobre = Fixture::funded();
+        Self::build(Fixture::funded())
+    }
+
+    /// Same setup but the Sobre wallet has zero envelope balances. Use for
+    /// tests that want to verify enable-with-empty behavior or drive the
+    /// post-enable deposit path without any migration side-effects.
+    fn new_unfunded() -> Self {
+        Self::build(Fixture::new())
+    }
+
+    fn build(sobre: Fixture) -> Self {
         let env = &sobre.env;
 
         let deployer = Address::generate(env);
@@ -721,13 +731,32 @@ impl EarnFixture {
             envelope,
             b_tokens: 0,
             underlying: 0,
+            supplied_total: 0,
+            withdrawn_total: 0,
+            interest_earned: 0,
         }
     }
 }
 
 #[test]
-fn earn_enable_persists_pool_and_asset_and_marks_enabled() {
+fn earn_enable_migrates_savings_cache_to_blend() {
+    // Fixture::funded deposited 20 into Savings. Enabling Earn must move
+    // that cache into Blend — the "turn on and it's earning immediately"
+    // story depends on this migration happening in one tap.
     let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(2).unwrap(), 0);
+    let pos = ef.position(Envelope::Savings);
+    assert!(pos.b_tokens > 0);
+    assert!(pos.underlying >= 20 * STROOPS_PER_TOKEN - 1);
+    assert_eq!(pos.supplied_total, 20 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn earn_enable_with_empty_savings_leaves_no_position() {
+    let ef = EarnFixture::new_unfunded();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     let state = f.client().get_state();
@@ -740,7 +769,7 @@ fn earn_enable_persists_pool_and_asset_and_marks_enabled() {
 #[test]
 #[should_panic(expected = "Error(Contract, #19)")]
 fn earn_enable_rejects_second_call() {
-    let ef = EarnFixture::new();
+    let ef = EarnFixture::new_unfunded();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
@@ -751,7 +780,7 @@ fn earn_enable_rejects_second_call() {
 fn earn_supply_rejects_when_disabled() {
     let f = Fixture::funded();
     f.client()
-        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+        .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -759,16 +788,16 @@ fn earn_supply_rejects_when_disabled() {
 fn earn_withdraw_rejects_when_disabled() {
     let f = Fixture::funded();
     f.client()
-        .earn_withdraw(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+        .earn_withdraw(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
 fn earn_supply_rejects_zero() {
-    let ef = EarnFixture::new();
+    let ef = EarnFixture::new_unfunded();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
-    f.client().earn_supply(&Envelope::Savings, &0);
+    f.client().earn_supply(&Envelope::Groceries, &0);
 }
 
 #[test]
@@ -777,25 +806,28 @@ fn earn_supply_rejects_amount_over_envelope_balance() {
     let ef = EarnFixture::new();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
-    // Fixture::funded credited 20 into Savings. Try to supply 21.
+    // Groceries has 50; try to supply 51.
     f.client()
-        .earn_supply(&Envelope::Savings, &(21 * STROOPS_PER_TOKEN));
+        .earn_supply(&Envelope::Groceries, &(51 * STROOPS_PER_TOKEN));
 }
 
 #[test]
 fn earn_supply_debits_envelope_and_credits_b_tokens() {
+    // Manual supply from Groceries — the escape-hatch flow (Savings gets
+    // auto-supplied on migration / deposit, so it's not the demo path).
     let ef = EarnFixture::new();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     let amount = 15 * STROOPS_PER_TOKEN;
-    f.client().earn_supply(&Envelope::Savings, &amount);
+    f.client().earn_supply(&Envelope::Groceries, &amount);
     let state = f.client().get_state();
-    // Savings envelope drops from 20 → 5.
-    assert_eq!(state.balances.get(2).unwrap(), 5 * STROOPS_PER_TOKEN);
-    let pos = ef.position(Envelope::Savings);
+    // Groceries envelope drops from 50 → 35.
+    assert_eq!(state.balances.get(0).unwrap(), 35 * STROOPS_PER_TOKEN);
+    let pos = ef.position(Envelope::Groceries);
     assert!(pos.b_tokens > 0);
-    assert!(pos.underlying >= amount - 1); // fixed-point drift ≤ 1 stroop
+    assert!(pos.underlying >= amount - 1);
     assert!(pos.underlying <= amount);
+    assert_eq!(pos.supplied_total, amount);
 }
 
 #[test]
@@ -804,27 +836,30 @@ fn earn_withdraw_credits_envelope_and_burns_b_tokens() {
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     f.client()
-        .earn_supply(&Envelope::Savings, &(15 * STROOPS_PER_TOKEN));
-    let mid_pos = ef.position(Envelope::Savings);
-    let savings_before = f.client().get_state().balances.get(2).unwrap();
+        .earn_supply(&Envelope::Groceries, &(15 * STROOPS_PER_TOKEN));
+    let mid_pos = ef.position(Envelope::Groceries);
+    let groceries_before = f.client().get_state().balances.get(0).unwrap();
 
     let withdraw = 10 * STROOPS_PER_TOKEN;
-    f.client().earn_withdraw(&Envelope::Savings, &withdraw);
+    f.client().earn_withdraw(&Envelope::Groceries, &withdraw);
     let end = f.client().get_state();
-    assert_eq!(end.balances.get(2).unwrap(), savings_before + withdraw);
-    let end_pos = ef.position(Envelope::Savings);
+    assert_eq!(end.balances.get(0).unwrap(), groceries_before + withdraw);
+    let end_pos = ef.position(Envelope::Groceries);
     assert!(end_pos.b_tokens < mid_pos.b_tokens);
     assert!(end_pos.b_tokens > 0);
+    assert_eq!(end_pos.withdrawn_total, withdraw);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #21)")]
 fn earn_withdraw_rejects_when_no_position() {
+    // Groceries never supplied — withdraw must panic. Savings is skipped
+    // here because the migration on enable would create a Savings position.
     let ef = EarnFixture::new();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     f.client()
-        .earn_withdraw(&Envelope::Savings, &(1 * STROOPS_PER_TOKEN));
+        .earn_withdraw(&Envelope::Groceries, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -839,70 +874,193 @@ fn earn_supply_then_withdraw_round_trips_underlying() {
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     let supplied = 12 * STROOPS_PER_TOKEN;
-    f.client().earn_supply(&Envelope::Savings, &supplied);
+    f.client().earn_supply(&Envelope::Groceries, &supplied);
 
-    // Advance ledger past reserve accrual so b_rate ticks slightly.
     f.env.ledger().with_mut(|l| l.timestamp += 60);
 
-    f.client().earn_withdraw(&Envelope::Savings, &supplied);
+    f.client().earn_withdraw(&Envelope::Groceries, &supplied);
     let state = f.client().get_state();
-    // Savings envelope should be back at ~20 (may be off by a stroop or two
-    // if b_rate moved during accrual; no drift means the round trip works).
-    assert!(state.balances.get(2).unwrap() >= 20 * STROOPS_PER_TOKEN - 2);
-    assert!(state.balances.get(2).unwrap() <= 20 * STROOPS_PER_TOKEN);
-    let pos = ef.position(Envelope::Savings);
-    assert!(pos.b_tokens >= 0);
+    // Groceries envelope should be back at ~50 (started 50, supplied 12,
+    // withdrew 12). Slight fixed-point drift tolerated.
+    assert!(state.balances.get(0).unwrap() >= 50 * STROOPS_PER_TOKEN - 2);
+    assert!(state.balances.get(0).unwrap() <= 50 * STROOPS_PER_TOKEN);
 }
 
 #[test]
 fn earn_supply_isolates_per_envelope_bookkeeping() {
-    // The altitude story: parameterizing by Envelope must actually attribute
-    // deltas to the caller envelope only. Supply 5 to Groceries, then 5 to
-    // Savings. Verify each position tracks its own share.
     let ef = EarnFixture::new();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    // Manual supply of Groceries + Tuition on top of the migrated Savings.
     f.client()
         .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
     f.client()
-        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+        .earn_supply(&Envelope::Tuition, &(5 * STROOPS_PER_TOKEN));
 
     let g = ef.position(Envelope::Groceries);
-    let s = ef.position(Envelope::Savings);
+    let t = ef.position(Envelope::Tuition);
     assert!(g.b_tokens > 0);
-    assert!(s.b_tokens > 0);
-    // Both should be within ±1 of each other since they supplied the same amount.
-    let diff = if g.b_tokens > s.b_tokens {
-        g.b_tokens - s.b_tokens
+    assert!(t.b_tokens > 0);
+    let diff = if g.b_tokens > t.b_tokens {
+        g.b_tokens - t.b_tokens
     } else {
-        s.b_tokens - g.b_tokens
+        t.b_tokens - g.b_tokens
     };
     assert!(diff <= 1);
 
-    // Withdraw from Groceries: only its position should shrink; Savings untouched.
+    // Withdraw from Groceries: only its position should shrink; Tuition untouched.
     f.client()
         .earn_withdraw(&Envelope::Groceries, &(3 * STROOPS_PER_TOKEN));
     let g2 = ef.position(Envelope::Groceries);
-    let s2 = ef.position(Envelope::Savings);
+    let t2 = ef.position(Envelope::Tuition);
     assert!(g2.b_tokens < g.b_tokens);
-    assert_eq!(s2.b_tokens, s.b_tokens);
+    assert_eq!(t2.b_tokens, t.b_tokens);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #21)")]
 fn earn_withdraw_cannot_drain_sibling_envelope() {
-    // Attribution invariant: Groceries funds 5, Savings 5. Total aggregate
-    // is ~10. Groceries tries to withdraw 8 — the delta would exceed its own
-    // position, so we reject before overspending against sibling accounting.
     let ef = EarnFixture::new();
     let f = &ef.sobre;
     f.client().earn_enable(&ef.blend_pool, &f.payment_token);
     f.client()
         .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
     f.client()
-        .earn_supply(&Envelope::Savings, &(5 * STROOPS_PER_TOKEN));
+        .earn_supply(&Envelope::Tuition, &(5 * STROOPS_PER_TOKEN));
     f.client()
         .earn_withdraw(&Envelope::Groceries, &(8 * STROOPS_PER_TOKEN));
+}
+
+// ─── Earn: transparent-Savings behavior ───────────────────────────────────
+
+#[test]
+fn deposit_with_split_auto_supplies_savings_when_earn_on() {
+    // Enable Earn on an empty wallet, then deposit. Savings share flows
+    // straight to Blend; envelope cache stays at 0; Groceries/Tuition
+    // credit the cache normally.
+    let ef = EarnFixture::new_unfunded();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.mint(&f.admin, 100 * STROOPS_PER_TOKEN);
+    f.client().deposit_with_split(
+        &f.admin,
+        &(50 * STROOPS_PER_TOKEN),
+        &(30 * STROOPS_PER_TOKEN),
+        &(20 * STROOPS_PER_TOKEN),
+    );
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 50 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(1).unwrap(), 30 * STROOPS_PER_TOKEN);
+    assert_eq!(state.balances.get(2).unwrap(), 0);
+    let pos = ef.position(Envelope::Savings);
+    assert!(pos.b_tokens > 0);
+    assert_eq!(pos.supplied_total, 20 * STROOPS_PER_TOKEN);
+}
+
+#[test]
+fn spend_savings_auto_withdraws_from_blend_when_short() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    // Savings envelope cache = 0 post-migration, but the family can still
+    // spend from Savings — auto-withdraw plugs the shortfall in the same tx.
+    let admin_before = f.token().balance(&f.admin);
+    let spend = 5 * STROOPS_PER_TOKEN;
+    f.client().spend(
+        &f.admin,
+        &Envelope::Savings,
+        &spend,
+        &String::from_str(&f.env, "auto-withdraw path"),
+    );
+    let state = f.client().get_state();
+    // Admin got the tokens; Savings cache back near 0 (or 1-stroop drift).
+    assert_eq!(f.token().balance(&f.admin), admin_before + spend);
+    assert!(state.balances.get(2).unwrap() <= 1);
+    let pos = ef.position(Envelope::Savings);
+    assert!(pos.withdrawn_total >= spend);
+}
+
+#[test]
+fn spend_groceries_does_not_touch_blend() {
+    // Groceries stays as normal cache spending even when Earn is on —
+    // transparent-Earn only applies to Savings.
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let pos_before = ef.position(Envelope::Savings);
+    f.client().spend(
+        &f.admin,
+        &Envelope::Groceries,
+        &(5 * STROOPS_PER_TOKEN),
+        &String::from_str(&f.env, "groceries"),
+    );
+    // Groceries cache dropped; Savings position untouched.
+    let state = f.client().get_state();
+    assert_eq!(state.balances.get(0).unwrap(), 45 * STROOPS_PER_TOKEN);
+    let pos_after = ef.position(Envelope::Savings);
+    assert_eq!(pos_after.b_tokens, pos_before.b_tokens);
+}
+
+#[test]
+fn fund_subaccount_from_savings_auto_withdraws_from_blend() {
+    let (f, kid, blend_pool) = earn_enabled_fixture_with_subaccount();
+    let _ = blend_pool;
+    f.client().fund_subaccount(
+        &Envelope::Savings,
+        &kid,
+        &(5 * STROOPS_PER_TOKEN),
+    );
+    let state = f.client().get_state();
+    // Sub-account balance credited; Savings cache stays ~0.
+    assert_eq!(state.subaccounts.get(0).unwrap().balance, 5 * STROOPS_PER_TOKEN);
+    assert!(state.balances.get(2).unwrap() <= 1);
+}
+
+#[test]
+fn close_wallet_sweeps_blend_positions_when_earn_on() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let admin_before = f.token().balance(&f.admin);
+    f.client().close_wallet();
+    // Everything (envelope caches + Savings-in-Blend) lands with admin.
+    // 20 was in Savings pre-migration and rounds-trips through Blend on
+    // close; the total delta should equal the whole 100-XLM deposit.
+    let delta = f.token().balance(&f.admin) - admin_before;
+    assert!(delta >= 100 * STROOPS_PER_TOKEN - 2);
+    assert!(delta <= 100 * STROOPS_PER_TOKEN);
+    let state = f.client().get_state();
+    for b in state.balances.iter() {
+        assert_eq!(b, 0);
+    }
+}
+
+/// Helper for tests that need Earn-enabled + a sub-account. Registers a
+/// kid via invite so `fund_subaccount` has a valid recipient.
+fn earn_enabled_fixture_with_subaccount() -> (Fixture, Address, Address) {
+    let ef = EarnFixture::new();
+    let f = ef.sobre;
+    let pool = ef.blend_pool;
+    f.client().earn_enable(&pool, &f.payment_token);
+    let kid = Address::generate(&f.env);
+    let token = f.create_subaccount_invite_token(0x21);
+    f.client().join_as_subaccount(&kid, &token);
+    (f, kid, pool)
+}
+
+#[test]
+fn interest_earned_ticks_up_with_ledger_time() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let pos_before = ef.position(Envelope::Savings);
+    // Advance ledger a full day — b_rate should tick meaningfully.
+    f.env.ledger().with_mut(|l| l.timestamp += 86400);
+    let pos_after = ef.position(Envelope::Savings);
+    assert!(pos_after.underlying >= pos_before.underlying);
+    assert!(pos_after.interest_earned >= pos_before.interest_earned);
+    assert_eq!(pos_after.supplied_total, pos_before.supplied_total);
+    assert_eq!(pos_after.withdrawn_total, pos_before.withdrawn_total);
 }
 
 // ─── Grow: 48h timelock ───────────────────────────────────────────────────
@@ -1093,4 +1251,80 @@ fn grow_execute_after_multiple_requests_only_clears_target() {
     assert_eq!(state.grow_balance, 9 * STROOPS_PER_TOKEN);
     assert_eq!(state.grow_requests.len(), 1);
     assert_eq!(state.grow_requests.get(0).unwrap().id, id1);
+}
+
+// ─── Grow: when Earn is also on (composed) ────────────────────────────────
+
+#[test]
+fn grow_transfer_from_savings_routes_through_blend_when_earn_on() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client().grow_enable();
+    // 20 XLM sits in Blend under Savings attribution post-migration. Move
+    // 15 to Grow — Savings position shrinks, Grow position appears, no
+    // token round-trips through the wallet.
+    f.client()
+        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+    let state = f.client().get_state();
+    let earn = state.earn.get(0).expect("enabled");
+    let grow_pos = earn.grow_position.get(0).expect("grow position");
+    assert!(grow_pos.b_tokens > 0);
+    assert!(grow_pos.underlying >= 15 * STROOPS_PER_TOKEN - 1);
+    // Grow cache stays zero — everything is in Blend.
+    assert_eq!(state.grow_balance, 0);
+}
+
+#[test]
+fn grow_execute_at_unlock_auto_withdraws_from_blend() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(10 * STROOPS_PER_TOKEN));
+    let admin_before = f.token().balance(&f.admin);
+    let id = f.client().request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+    f.env.ledger().with_mut(|l| l.timestamp += GROW_TIMELOCK_SECS);
+    f.client().execute_grow_withdrawal(&id);
+    // Admin gets the tokens; Grow position closes.
+    assert_eq!(
+        f.token().balance(&f.admin),
+        admin_before + 10 * STROOPS_PER_TOKEN,
+    );
+    let state = f.client().get_state();
+    let earn = state.earn.get(0).expect("enabled");
+    // Grow bTokens should be near zero (may have 1-stroop residual from
+    // b_rate slippage — the cached position drops to 0 either way).
+    let grow_leftover = earn
+        .grow_position
+        .get(0)
+        .map(|p| p.b_tokens)
+        .unwrap_or(0);
+    assert!(grow_leftover <= 1);
+    assert_eq!(state.grow_balance, 0);
+    assert_eq!(state.grow_requests.len(), 0);
+}
+
+#[test]
+fn earn_enable_when_grow_already_active_migrates_grow_cache() {
+    let ef = EarnFixture::new();
+    let f = &ef.sobre;
+    // Grow first, funded with 15 from Savings cache. Earn hasn't landed
+    // yet so Grow's 15 sits in `grow_balance`.
+    f.client().grow_enable();
+    f.client()
+        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+    let mid = f.client().get_state();
+    assert_eq!(mid.grow_balance, 15 * STROOPS_PER_TOKEN);
+    // Now enable Earn — it should sweep BOTH the Savings envelope cache
+    // AND the Grow cache into Blend, one under each attribution.
+    f.client().earn_enable(&ef.blend_pool, &f.payment_token);
+    let end = f.client().get_state();
+    assert_eq!(end.grow_balance, 0);
+    let earn = end.earn.get(0).expect("enabled");
+    let grow_pos = earn.grow_position.get(0).expect("grow migrated");
+    assert!(grow_pos.b_tokens > 0);
+    assert!(grow_pos.underlying >= 15 * STROOPS_PER_TOKEN - 1);
+    assert_eq!(grow_pos.supplied_total, 15 * STROOPS_PER_TOKEN);
 }

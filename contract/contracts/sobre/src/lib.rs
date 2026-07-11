@@ -115,9 +115,25 @@ pub enum DataKey {
     /// on the payment token matching.
     EarnAsset,
     /// Sobre's cumulative bToken position attributable to a given envelope.
-    /// Sum across envelopes equals Sobre's aggregate `positions.supply` on
-    /// the pool. Underlying value = this * b_rate / SCALAR_12.
+    /// Sum across envelopes + `EarnGrowBToken` equals Sobre's aggregate
+    /// `positions.supply` on the pool. Underlying = this * b_rate / SCALAR_12.
     EarnBToken(Envelope),
+    /// Monotonic cumulative underlying-stroops supplied to Blend for this
+    /// envelope, across the wallet's lifetime. Never decreases. Used with
+    /// `EarnWithdrawnTotal` to derive `interest_earned = underlying +
+    /// withdrawn - supplied` for the dashboard.
+    EarnSuppliedTotal(Envelope),
+    /// Monotonic cumulative underlying-stroops withdrawn from Blend for this
+    /// envelope. Never decreases. Interest formula above.
+    EarnWithdrawnTotal(Envelope),
+    /// Grow's separate Blend position — bTokens attributable to the Grow
+    /// bucket, kept distinct from envelope-tagged EarnBToken so Grow's
+    /// timelocked accounting stays isolated from Savings' spend path.
+    EarnGrowBToken,
+    /// Monotonic supplied total for the Grow-side Blend position.
+    EarnGrowSuppliedTotal,
+    /// Monotonic withdrawn total for the Grow-side Blend position.
+    EarnGrowWithdrawnTotal,
     /// Whether admin has opted this wallet into the Grow bucket. Absent key
     /// defaults to false so pre-upgrade instances read as disabled.
     GrowEnabled,
@@ -165,23 +181,44 @@ pub struct WalletState {
 
 /// Only present when Earn is enabled. `positions` includes an entry per
 /// envelope that currently holds a non-zero bToken balance; empty vec means
-/// enabled-but-no-supply-yet.
+/// enabled-but-no-supply-yet. `grow_position` is a 0-or-1 vec carrying
+/// Grow's separate Blend position when it has one.
 #[contracttype]
 #[derive(Clone)]
 pub struct EarnState {
     pub pool: Address,
     pub asset: Address,
     pub positions: Vec<EarnPosition>,
+    pub grow_position: Vec<GrowEarnPosition>,
 }
 
 /// A single envelope's Blend position. `underlying` is computed live from
-/// the current b_rate at get_state time.
+/// the current b_rate at get_state time. `interest_earned` is derived as
+/// `underlying + withdrawn_total - supplied_total`, giving a running total
+/// of interest accrued to this envelope across the wallet's lifetime.
 #[contracttype]
 #[derive(Clone)]
 pub struct EarnPosition {
     pub envelope: Envelope,
     pub b_tokens: i128,
     pub underlying: i128,
+    pub supplied_total: i128,
+    pub withdrawn_total: i128,
+    pub interest_earned: i128,
+}
+
+/// Grow's Blend position. Parallels EarnPosition but not envelope-tagged
+/// (Grow is its own bucket, not an envelope). Only present in
+/// `WalletState.earn` when both Earn AND Grow are enabled AND Grow has
+/// supplied at least once.
+#[contracttype]
+#[derive(Clone)]
+pub struct GrowEarnPosition {
+    pub b_tokens: i128,
+    pub underlying: i128,
+    pub supplied_total: i128,
+    pub withdrawn_total: i128,
+    pub interest_earned: i128,
 }
 
 /// Grow-withdrawal request. Vec of these lives at `DataKey::GrowRequests`.
@@ -534,9 +571,38 @@ fn authorize_pool_pull(env: &Env, self_addr: &Address, asset: &Address, pool: &A
     ]);
 }
 
+/// Attribution key for an Earn operation — which internal accounting slot
+/// the delta belongs to. Envelope positions live under `EarnBToken(env)`;
+/// the Grow position lives under `EarnGrowBToken`.
+enum EarnAttribution {
+    Envelope(Envelope),
+    Grow,
+}
+
+impl EarnAttribution {
+    fn b_token_key(&self) -> DataKey {
+        match self {
+            EarnAttribution::Envelope(e) => DataKey::EarnBToken(*e),
+            EarnAttribution::Grow => DataKey::EarnGrowBToken,
+        }
+    }
+    fn supplied_key(&self) -> DataKey {
+        match self {
+            EarnAttribution::Envelope(e) => DataKey::EarnSuppliedTotal(*e),
+            EarnAttribution::Grow => DataKey::EarnGrowSuppliedTotal,
+        }
+    }
+    fn withdrawn_key(&self) -> DataKey {
+        match self {
+            EarnAttribution::Envelope(e) => DataKey::EarnWithdrawnTotal(*e),
+            EarnAttribution::Grow => DataKey::EarnGrowWithdrawnTotal,
+        }
+    }
+}
+
 /// Runs one Blend submit (Supply or Withdraw) and returns the |delta| of
 /// Sobre's aggregate bTokens on this reserve. Caller supplies the prior
-/// aggregate and attributes the delta to whichever envelope is being served.
+/// aggregate and attributes the delta downstream.
 fn submit_earn_request(
     env: &Env,
     pool: &Address,
@@ -564,14 +630,159 @@ fn submit_earn_request(
     (new_total - prior_total_b_tokens).abs()
 }
 
-/// Sobre's aggregate bTokens across all envelopes. Sum of per-envelope
-/// `EarnBToken(_)` entries; caller must keep the sum equal to Blend's
-/// `positions.supply` post-submit.
+/// Sobre's aggregate bTokens across all envelopes + Grow. Sum must equal
+/// Blend's `positions.supply` for our reserve at any point in time.
 fn sum_earn_b_tokens(env: &Env) -> i128 {
     let inst = env.storage().instance();
-    ENVELOPES.iter().fold(0i128, |acc, e| {
+    let envelope_sum = ENVELOPES.iter().fold(0i128, |acc, e| {
         acc + inst.get::<_, i128>(&DataKey::EarnBToken(*e)).unwrap_or(0)
-    })
+    });
+    let grow = inst.get::<_, i128>(&DataKey::EarnGrowBToken).unwrap_or(0);
+    envelope_sum + grow
+}
+
+/// Supplies `amount` underlying stroops to Blend and attributes the position
+/// delta (bTokens minted) to the caller-specified attribution slot. Bumps
+/// that slot's `SuppliedTotal` by `amount`. Returns the bToken delta so
+/// callers can emit auditable events. Assumes the caller has already
+/// verified the source has the stroops available — this helper only speaks
+/// to Blend, not to envelope/grow-balance accounting.
+fn do_earn_supply(env: &Env, attribution: EarnAttribution, amount: i128) -> i128 {
+    let (pool, asset) = load_earn_config(env);
+    let inst = env.storage().instance();
+    let prior_total = sum_earn_b_tokens(env);
+    let delta = submit_earn_request(
+        env,
+        &pool,
+        &asset,
+        REQUEST_TYPE_SUPPLY,
+        amount,
+        prior_total,
+    );
+    let btoken_key = attribution.b_token_key();
+    let prior_slot: i128 = inst.get(&btoken_key).unwrap_or(0);
+    inst.set(&btoken_key, &(prior_slot + delta));
+    let supplied_key = attribution.supplied_key();
+    let prior_supplied: i128 = inst.get(&supplied_key).unwrap_or(0);
+    inst.set(&supplied_key, &(prior_supplied + amount));
+    delta
+}
+
+/// Withdraws `amount` underlying stroops from Blend and attributes the
+/// bTokens burned to the caller-specified attribution slot. Bumps that
+/// slot's `WithdrawnTotal` by `amount`. Returns the bToken delta so
+/// callers can emit auditable events. Panics if the delta would exceed
+/// the attribution's tracked bTokens (envelope-attribution invariant:
+/// a Savings withdraw must not burn Grow's shares or a sibling envelope's).
+fn do_earn_withdraw(env: &Env, attribution: EarnAttribution, amount: i128) -> i128 {
+    let (pool, asset) = load_earn_config(env);
+    let inst = env.storage().instance();
+    let btoken_key = attribution.b_token_key();
+    let prior_slot: i128 = inst.get(&btoken_key).unwrap_or(0);
+    if prior_slot <= 0 {
+        panic_with_error!(env, Error::EarnInsufficientPosition);
+    }
+    let prior_total = sum_earn_b_tokens(env);
+    let delta = submit_earn_request(
+        env,
+        &pool,
+        &asset,
+        REQUEST_TYPE_WITHDRAW,
+        amount,
+        prior_total,
+    );
+    if delta > prior_slot {
+        // Attribution invariant: a withdraw can't burn more shares than
+        // this slot holds — otherwise it'd be draining a sibling's stake.
+        panic_with_error!(env, Error::EarnInsufficientPosition);
+    }
+    inst.set(&btoken_key, &(prior_slot - delta));
+    let withdrawn_key = attribution.withdrawn_key();
+    let prior_withdrawn: i128 = inst.get(&withdrawn_key).unwrap_or(0);
+    inst.set(&withdrawn_key, &(prior_withdrawn + amount));
+    delta
+}
+
+/// True when Earn is enabled — used by the P0 paths (deposit / spend /
+/// fund_subaccount / grow_transfer / close_wallet) to decide whether to
+/// route Savings through Blend or use the raw envelope cache.
+fn is_earn_enabled(env: &Env) -> bool {
+    env.storage()
+        .instance()
+        .get(&DataKey::EarnEnabled)
+        .unwrap_or(false)
+}
+
+/// Underlying-stroops value of `b_tokens` at the current b_rate. Fires one
+/// cross-contract `get_reserve` — cheap during simulate, tolerable during
+/// close_wallet's real submission (only paid once per envelope with a
+/// non-zero position).
+fn current_underlying(env: &Env, b_tokens: i128) -> i128 {
+    if b_tokens <= 0 {
+        return 0;
+    }
+    let inst = env.storage().instance();
+    let pool_id: Address = inst.get(&DataKey::EarnPoolId).unwrap();
+    let asset: Address = inst.get(&DataKey::EarnAsset).unwrap();
+    let b_rate = pool::Client::new(env, &pool_id).get_reserve(&asset).data.b_rate;
+    (b_tokens * b_rate) / SCALAR_12
+}
+
+/// Grow's total value = the payment-token cache in `GrowBalance` plus the
+/// current underlying of the Grow-attributed Blend position. Used by
+/// request/reservation math so the family can request against their real
+/// Grow balance (which is mostly in Blend when Earn is on).
+fn grow_total_value(env: &Env) -> i128 {
+    let inst = env.storage().instance();
+    let cache: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+    let b: i128 = inst.get(&DataKey::EarnGrowBToken).unwrap_or(0);
+    if b > 0 {
+        cache + current_underlying(env, b)
+    } else {
+        cache
+    }
+}
+
+/// Ensures `GrowBalance` has at least `amount` stroops available. When
+/// Earn is on and the cache is short, auto-withdraws the shortfall from
+/// Blend under Grow's attribution. Mirrors `ensure_envelope_liquidity`
+/// but for the Grow bucket. Called from `execute_grow_withdrawal`.
+fn ensure_grow_liquidity(env: &Env, amount: i128) {
+    let inst = env.storage().instance();
+    let cache: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+    if cache >= amount || !is_earn_enabled(env) {
+        return;
+    }
+    let shortfall = amount - cache;
+    do_earn_withdraw(env, EarnAttribution::Grow, shortfall);
+    inst.set(&DataKey::GrowBalance, &(cache + shortfall));
+}
+
+/// Ensures `Balances[envelope]` has at least `amount` stroops available.
+/// When Earn is enabled and the envelope's cache is short, auto-withdraws
+/// the shortfall from Blend for that envelope's attribution and credits
+/// the cache. Returns the balances vec (mutated in-place so callers can
+/// do their own debit and one `inst.set` on the way out).
+///
+/// This is the "transparent Earn" magic — spenders/subaccount-funders
+/// never call `earn_withdraw` themselves; they just call `spend` and this
+/// helper handles the Blend round-trip in the same tx.
+fn ensure_envelope_liquidity(env: &Env, envelope: Envelope, amount: i128) -> Vec<i128> {
+    let inst = env.storage().instance();
+    let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+    let idx = envelope.index();
+    let current = balances.get(idx).unwrap();
+    if current >= amount || !is_earn_enabled(env) {
+        // Either the cache covers the ask or there's no Blend fallback to
+        // reach for — either way, let the caller run its normal balance
+        // check (which will pass or InsufficientBalance-panic).
+        return balances;
+    }
+    let shortfall = amount - current;
+    do_earn_withdraw(env, EarnAttribution::Envelope(envelope), shortfall);
+    balances.set(idx, current + shortfall);
+    inst.set(&DataKey::Balances, &balances);
+    balances
 }
 
 const ENVELOPES: [Envelope; 3] = [Envelope::Groceries, Envelope::Tuition, Envelope::Savings];
@@ -624,14 +835,16 @@ fn require_grow_enabled(env: &Env) {
 
 /// Shared by `spend` and `spend_on_behalf`. Assumes auth + member checks
 /// already done. Transfers tokens to `caller`'s wallet, debits the envelope,
-/// emits Spend with `caller` as the topic.
+/// emits Spend with `caller` as the topic. When Earn is enabled and the
+/// envelope's cache is short, `ensure_envelope_liquidity` auto-withdraws
+/// from Blend so the spend lands transparently in the same tx.
 fn execute_spend(env: &Env, caller: &Address, envelope: Envelope, amount: i128, memo: &String) {
     if amount <= 0 {
         panic_with_error!(env, Error::InvalidAmount);
     }
     let inst = env.storage().instance();
     let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
-    let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+    let mut balances = ensure_envelope_liquidity(env, envelope, amount);
     let index = envelope.index();
     let current = balances.get(index).unwrap();
     if current < amount {
@@ -748,8 +961,50 @@ impl SobreContract {
         let inst = env.storage().instance();
         let admin: Address = inst.get(&DataKey::Admin).unwrap();
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
+
+        // When Earn is enabled, sweep every envelope's Blend position + the
+        // Grow-attributed position back into their caches before summing.
+        // Otherwise close_wallet would leak custody into the pool.
+        if is_earn_enabled(&env) {
+            let pool_id: Address = inst.get(&DataKey::EarnPoolId).unwrap();
+            let asset: Address = inst.get(&DataKey::EarnAsset).unwrap();
+            let b_rate = pool::Client::new(&env, &pool_id)
+                .get_reserve(&asset)
+                .data
+                .b_rate;
+            let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+            let mut wrote_balances = false;
+            for e in ENVELOPES.iter() {
+                let b: i128 = inst.get(&DataKey::EarnBToken(*e)).unwrap_or(0);
+                if b <= 0 {
+                    continue;
+                }
+                let underlying = (b * b_rate) / SCALAR_12;
+                if underlying <= 0 {
+                    continue;
+                }
+                do_earn_withdraw(&env, EarnAttribution::Envelope(*e), underlying);
+                let idx = e.index();
+                balances.set(idx, balances.get(idx).unwrap() + underlying);
+                wrote_balances = true;
+            }
+            if wrote_balances {
+                inst.set(&DataKey::Balances, &balances);
+            }
+            let grow_b: i128 = inst.get(&DataKey::EarnGrowBToken).unwrap_or(0);
+            if grow_b > 0 {
+                let underlying = (grow_b * b_rate) / SCALAR_12;
+                if underlying > 0 {
+                    do_earn_withdraw(&env, EarnAttribution::Grow, underlying);
+                    let cur: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+                    inst.set(&DataKey::GrowBalance, &(cur + underlying));
+                }
+            }
+        }
+
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let subs = load_subaccounts(&env);
+        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
         let mut total: i128 = 0;
         for b in balances.iter() {
             total += b;
@@ -760,6 +1015,7 @@ impl SobreContract {
         for s in subs.iter() {
             total += s.balance;
         }
+        total += grow_balance;
         if total > 0 {
             token::Client::new(&env, &payment_token).transfer(
                 &env.current_contract_address(),
@@ -768,6 +1024,7 @@ impl SobreContract {
             );
         }
         inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
+        inst.set(&DataKey::GrowBalance, &0i128);
         if !subs.is_empty() {
             let mut zeroed: Vec<SubAccount> = Vec::new(&env);
             for s in subs.iter() {
@@ -826,15 +1083,28 @@ impl SobreContract {
             &env.current_contract_address(),
             &total,
         );
+        // Groceries + Tuition always credit the envelope cache directly.
+        // Savings routes through Blend when Earn is enabled — the envelope
+        // cache stays at its current value (usually 0 post-migration) so
+        // spending logic uses `ensure_envelope_liquidity` to auto-withdraw.
+        let earn_on = is_earn_enabled(&env);
+        let new_savings_cache = if earn_on && savings > 0 {
+            balances.get(2).unwrap()
+        } else {
+            balances.get(2).unwrap() + savings
+        };
         inst.set(
             &DataKey::Balances,
             &vec![
                 &env,
                 balances.get(0).unwrap() + groceries,
                 balances.get(1).unwrap() + tuition,
-                balances.get(2).unwrap() + savings,
+                new_savings_cache,
             ],
         );
+        if earn_on && savings > 0 {
+            do_earn_supply(&env, EarnAttribution::Envelope(Envelope::Savings), savings);
+        }
         Deposit {
             from,
             amount: total,
@@ -951,8 +1221,10 @@ impl SobreContract {
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
+        // Auto-withdraws from Blend when the envelope is Savings and its
+        // cache is short — same transparent-Earn magic as `execute_spend`.
+        let mut balances = ensure_envelope_liquidity(&env, envelope, amount);
         let inst = env.storage().instance();
-        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let idx = envelope.index();
         let current = balances.get(idx).unwrap();
         if current < amount {
@@ -1026,6 +1298,13 @@ impl SobreContract {
     ///
     /// Not idempotent: reject if already enabled so we don't silently swap
     /// the pool underneath existing bToken positions.
+    /// Enables transparent Earn on this wallet. Sets the pool + asset flags,
+    /// then migrates the current `Balances[Savings]` cache into Blend so
+    /// enabling *immediately* starts earning yield on the family's existing
+    /// savings — no separate "supply" tap required.
+    ///
+    /// Not idempotent: reject if already enabled so we don't silently swap
+    /// the pool underneath existing bToken positions.
     pub fn earn_enable(env: Env, pool_id: Address, asset: Address) {
         require_admin_auth(&env);
         let inst = env.storage().instance();
@@ -1041,18 +1320,54 @@ impl SobreContract {
             asset,
         }
         .publish(&env);
+
+        // Migrate the current Savings envelope balance into Blend so the
+        // "turn on Earn, watch it earn immediately" story works even for
+        // wallets that had funds sitting in Savings pre-enable.
+        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
+        let savings_idx = Envelope::Savings.index();
+        let savings_cache = balances.get(savings_idx).unwrap();
+        if savings_cache > 0 {
+            balances.set(savings_idx, 0);
+            inst.set(&DataKey::Balances, &balances);
+            let delta = do_earn_supply(
+                &env,
+                EarnAttribution::Envelope(Envelope::Savings),
+                savings_cache,
+            );
+            EarnSupply {
+                envelope: Envelope::Savings,
+                amount: savings_cache,
+                b_tokens: delta,
+            }
+            .publish(&env);
+        }
+
+        // Same for Grow if it was already enabled and has cached funds —
+        // once Earn is on, "in Blend" is the canonical home for both
+        // Savings and Grow. Keeps the accounting consistent.
+        let grow_enabled: bool = inst
+            .get(&DataKey::GrowEnabled)
+            .unwrap_or(false);
+        if grow_enabled {
+            let grow_cache: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+            if grow_cache > 0 {
+                inst.set(&DataKey::GrowBalance, &0i128);
+                do_earn_supply(&env, EarnAttribution::Grow, grow_cache);
+            }
+        }
     }
 
-    /// Admin moves `amount` underlying stroops from `envelope` into Blend.
-    /// The envelope's balance is debited immediately; the position tracked
-    /// under `EarnBToken(envelope)` is credited by whatever the pool reports
-    /// on return (never trust local math over b_rate slippage).
+    /// Admin explicitly moves `amount` underlying stroops from `envelope`'s
+    /// cache into Blend. Normally callers don't reach for this — Savings
+    /// gets auto-supplied on deposit and auto-withdrawn on spend — but
+    /// it's kept as an escape hatch for Groceries/Tuition or for post-hoc
+    /// migration into Blend.
     pub fn earn_supply(env: Env, envelope: Envelope, amount: i128) {
         require_admin_auth(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
-        let (pool_id, asset) = load_earn_config(&env);
         let inst = env.storage().instance();
         let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let env_idx = envelope.index();
@@ -1060,15 +1375,9 @@ impl SobreContract {
         if current < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
-        let prior_total = sum_earn_b_tokens(&env);
-        let delta =
-            submit_earn_request(&env, &pool_id, &asset, REQUEST_TYPE_SUPPLY, amount, prior_total);
-
         balances.set(env_idx, current - amount);
         inst.set(&DataKey::Balances, &balances);
-        let env_key = DataKey::EarnBToken(envelope);
-        let env_prior: i128 = inst.get(&env_key).unwrap_or(0);
-        inst.set(&env_key, &(env_prior + delta));
+        let delta = do_earn_supply(&env, EarnAttribution::Envelope(envelope), amount);
         EarnSupply {
             envelope,
             amount,
@@ -1077,39 +1386,20 @@ impl SobreContract {
         .publish(&env);
     }
 
-    /// Admin pulls `amount` underlying stroops back from Blend into
-    /// `envelope`. Panics if the envelope's position can't cover the amount
-    /// (b_rate slippage: what looked spendable during simulate can shrink
-    /// slightly by submit time; caller should sim-then-submit tight).
+    /// Admin explicitly pulls `amount` underlying stroops back from Blend
+    /// into `envelope`'s cache. Escape hatch — auto-withdraw already covers
+    /// the Savings spend path.
     pub fn earn_withdraw(env: Env, envelope: Envelope, amount: i128) {
         require_admin_auth(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
-        let (pool_id, asset) = load_earn_config(&env);
+        let delta = do_earn_withdraw(&env, EarnAttribution::Envelope(envelope), amount);
         let inst = env.storage().instance();
-        let env_key = DataKey::EarnBToken(envelope);
-        let env_prior: i128 = inst.get(&env_key).unwrap_or(0);
-        if env_prior <= 0 {
-            panic_with_error!(&env, Error::EarnInsufficientPosition);
-        }
-
-        let prior_total = sum_earn_b_tokens(&env);
-        let delta =
-            submit_earn_request(&env, &pool_id, &asset, REQUEST_TYPE_WITHDRAW, amount, prior_total);
-        if delta > env_prior {
-            // Envelope-attribution invariant: never let a withdraw burn more
-            // shares than THIS envelope holds. Blend would let a big withdraw
-            // drain Sobre's aggregate; that's accounting theft from sibling
-            // envelopes.
-            panic_with_error!(&env, Error::EarnInsufficientPosition);
-        }
-
         let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let env_idx = envelope.index();
         balances.set(env_idx, balances.get(env_idx).unwrap() + amount);
         inst.set(&DataKey::Balances, &balances);
-        inst.set(&env_key, &(env_prior - delta));
         EarnWithdraw {
             envelope,
             amount,
@@ -1134,32 +1424,44 @@ impl SobreContract {
     }
 
     /// Admin transfers `amount` payment-token stroops from the Savings
-    /// envelope into the Grow bucket. Internal ledger move — no token
-    /// leaves the contract. Panics if Savings can't cover it.
+    /// envelope into the Grow bucket. When Earn is enabled, the transfer
+    /// routes through Blend: Savings-attributed shares are burned, Grow-
+    /// attributed shares are minted, the token never leaves the pool.
+    /// When Earn is off, it's a plain internal ledger move.
     pub fn grow_transfer_from_savings(env: Env, amount: i128) {
         require_admin_auth(&env);
         require_grow_enabled(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
+        // Auto-withdraw from Blend for Savings if the cache is short.
+        let mut balances = ensure_envelope_liquidity(&env, Envelope::Savings, amount);
         let inst = env.storage().instance();
-        let mut balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let savings_idx = Envelope::Savings.index();
         let current_savings = balances.get(savings_idx).unwrap();
         if current_savings < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
-        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
         balances.set(savings_idx, current_savings - amount);
         inst.set(&DataKey::Balances, &balances);
-        inst.set(&DataKey::GrowBalance, &(grow_balance + amount));
+
+        if is_earn_enabled(&env) {
+            // Supply to Blend under Grow's attribution. Both the withdraw
+            // (in ensure_envelope_liquidity) and the supply happened via
+            // Blend, so the token round-trips through the pool.
+            do_earn_supply(&env, EarnAttribution::Grow, amount);
+        } else {
+            let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+            inst.set(&DataKey::GrowBalance, &(grow_balance + amount));
+        }
         GrowTransfer { amount }.publish(&env);
     }
 
     /// Admin queues a Grow withdrawal. Returns the request id so the caller
     /// can address it in a follow-up execute/cancel. Reserves `amount`
-    /// against the Grow balance immediately — a second concurrent request
-    /// that would over-commit the bucket panics with InsufficientBalance.
+    /// against the total Grow value (cache + Blend underlying) immediately —
+    /// a second concurrent request that would over-commit trips
+    /// InsufficientBalance upfront.
     pub fn request_grow_withdrawal(env: Env, amount: i128) -> u64 {
         require_admin_auth(&env);
         require_grow_enabled(&env);
@@ -1168,10 +1470,10 @@ impl SobreContract {
         }
         let inst = env.storage().instance();
         let admin: Address = inst.get(&DataKey::Admin).unwrap();
-        let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
+        let total = grow_total_value(&env);
         let mut requests = load_grow_requests(&env);
         let reserved: i128 = requests.iter().fold(0i128, |acc, r| acc + r.amount);
-        if grow_balance - reserved < amount {
+        if total - reserved < amount {
             panic_with_error!(&env, Error::InsufficientBalance);
         }
 
@@ -1218,12 +1520,16 @@ impl SobreContract {
             panic_with_error!(&env, Error::GrowTimelockNotElapsed);
         }
 
+        // Auto-withdraw from Blend for Grow if the cache can't cover — the
+        // funds have been earning yield under Grow's attribution all along,
+        // and now flow from Blend → contract → requester in one tx.
+        ensure_grow_liquidity(&env, req.amount);
+
         let inst = env.storage().instance();
         let grow_balance: i128 = inst.get(&DataKey::GrowBalance).unwrap_or(0);
         if grow_balance < req.amount {
-            // Should never happen given the reserve-at-request accounting,
-            // but the sanity check is cheap and rules out an impossible
-            // negative balance if the invariant ever breaks.
+            // Should never happen given the reserve-at-request accounting +
+            // the ensure_grow_liquidity top-up above. Cheap sanity guard.
             panic_with_error!(&env, Error::InsufficientBalance);
         }
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
@@ -1328,18 +1634,61 @@ fn load_earn_state(env: &Env) -> Vec<EarnState> {
         let b_rate = *b_rate_cache.get_or_insert_with(|| {
             pool::Client::new(env, &pool_id).get_reserve(&asset).data.b_rate
         });
+        let underlying = (b_tokens * b_rate) / SCALAR_12;
+        let supplied: i128 = inst
+            .get(&DataKey::EarnSuppliedTotal(*envelope))
+            .unwrap_or(0);
+        let withdrawn: i128 = inst
+            .get(&DataKey::EarnWithdrawnTotal(*envelope))
+            .unwrap_or(0);
+        // interest_earned = underlying_now + withdrawn_all_time - supplied_all_time.
+        // Non-negative under normal Blend behavior; the abs() guard keeps
+        // us safe from micro-rounding underflow if b_rate ever regresses.
+        let raw_interest = underlying + withdrawn - supplied;
+        let interest_earned = if raw_interest < 0 { 0 } else { raw_interest };
         positions.push_back(EarnPosition {
             envelope: *envelope,
             b_tokens,
-            underlying: (b_tokens * b_rate) / SCALAR_12,
+            underlying,
+            supplied_total: supplied,
+            withdrawn_total: withdrawn,
+            interest_earned,
         });
     }
+    let grow_b_tokens: i128 = inst.get(&DataKey::EarnGrowBToken).unwrap_or(0);
+    let grow_position: Vec<GrowEarnPosition> = if grow_b_tokens > 0 {
+        let b_rate = *b_rate_cache.get_or_insert_with(|| {
+            pool::Client::new(env, &pool_id).get_reserve(&asset).data.b_rate
+        });
+        let underlying = (grow_b_tokens * b_rate) / SCALAR_12;
+        let supplied: i128 = inst
+            .get(&DataKey::EarnGrowSuppliedTotal)
+            .unwrap_or(0);
+        let withdrawn: i128 = inst
+            .get(&DataKey::EarnGrowWithdrawnTotal)
+            .unwrap_or(0);
+        let raw = underlying + withdrawn - supplied;
+        let interest_earned = if raw < 0 { 0 } else { raw };
+        vec![
+            env,
+            GrowEarnPosition {
+                b_tokens: grow_b_tokens,
+                underlying,
+                supplied_total: supplied,
+                withdrawn_total: withdrawn,
+                interest_earned,
+            },
+        ]
+    } else {
+        Vec::new(env)
+    };
     vec![
         env,
         EarnState {
             pool: pool_id,
             asset,
             positions,
+            grow_position,
         },
     ]
 }
