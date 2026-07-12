@@ -286,6 +286,7 @@ export function SubAccountView({
           style={{ maxWidth: 460 }}
         >
           <ProfileSheet wallet={wallet} />
+          <BankAccountSection />
           <MembersSection
             members={state.members}
             adminAddress={state.admin}
@@ -301,7 +302,6 @@ export function SubAccountView({
             events={events}
             envelopeNames={state.envelope_names}
           />
-          <BankAccountSection />
         </Reveal>
       ) : null}
 

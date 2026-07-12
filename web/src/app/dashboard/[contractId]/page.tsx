@@ -831,6 +831,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           style={{ maxWidth: 480 }}
         >
           <ProfileSheet wallet={wallet} />
+          <BankAccountSection />
           <MembersSection
             members={state.members}
             adminAddress={state.admin}
@@ -863,7 +864,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             onFlash={flash}
             onChange={refreshAll}
           />
-          <BankAccountSection />
         </Reveal>
       ) : null}
 
