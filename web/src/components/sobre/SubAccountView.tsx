@@ -445,21 +445,23 @@ function useOwnSubaccountRow(
   useEffect(() => {
     let cancelled = false;
     const supabase = getSupabaseBrowserClient();
-    // Sub-accounts can now SELECT peer rows too (see migration
-    // subaccount_can_read_peer_subaccounts). Without an explicit
-    // wallet_address filter, .maybeSingle() would error on 2+ rows and
-    // silently leave the caller without their own row — which the fab
-    // gates on, so Cash out would look dead.
+    // Two things to defeat here: RLS widening now returns peer rows too
+    // (multiple rows), and testing has left some wallets with more than
+    // one family_subaccounts row (e.g. re-redeemed invites). Both would
+    // trip .maybeSingle() and leave `row` null — which kept the Cash
+    // out fab dead. Filter to wallet_address = callerAddress, sort by
+    // most recent, take one row.
     void supabase
       .from("family_subaccounts")
       .select(
         "id, family_wallet_id, wallet_id, wallet_address, display_name, invite_token_hash, created_at",
       )
       .eq("wallet_address", callerAddress)
-      .maybeSingle()
+      .order("created_at", { ascending: false })
+      .limit(1)
       .then(({ data }) => {
-        if (cancelled || !data) return;
-        const r = data as {
+        if (cancelled || !data || data.length === 0) return;
+        const r = data[0] as {
           id: string;
           family_wallet_id: string;
           wallet_id: string | null;
