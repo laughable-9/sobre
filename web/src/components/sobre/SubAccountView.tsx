@@ -62,7 +62,7 @@ export function SubAccountView({
     [state.subaccounts, userAddress],
   );
 
-  const myRow = useOwnSubaccountRow();
+  const myRow = useOwnSubaccountRow(userAddress);
   // Peers list uses the same subaccounts hook the admin panel uses.
   // RLS was widened to allow sub-account holders to SELECT peer rows in
   // their own family — see migration subaccount_can_read_peer_subaccounts.
@@ -438,16 +438,24 @@ function SubAccountDock({
  * keyed to the auth user, so a plain `from('family_subaccounts').select()`
  * returns exactly one row.
  */
-function useOwnSubaccountRow(): FamilySubaccountRow | null {
+function useOwnSubaccountRow(
+  callerAddress: string,
+): FamilySubaccountRow | null {
   const [row, setRow] = useState<FamilySubaccountRow | null>(null);
   useEffect(() => {
     let cancelled = false;
     const supabase = getSupabaseBrowserClient();
+    // Sub-accounts can now SELECT peer rows too (see migration
+    // subaccount_can_read_peer_subaccounts). Without an explicit
+    // wallet_address filter, .maybeSingle() would error on 2+ rows and
+    // silently leave the caller without their own row — which the fab
+    // gates on, so Cash out would look dead.
     void supabase
       .from("family_subaccounts")
       .select(
         "id, family_wallet_id, wallet_id, wallet_address, display_name, invite_token_hash, created_at",
       )
+      .eq("wallet_address", callerAddress)
       .maybeSingle()
       .then(({ data }) => {
         if (cancelled || !data) return;
@@ -474,7 +482,7 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [callerAddress]);
   return row;
 }
 
