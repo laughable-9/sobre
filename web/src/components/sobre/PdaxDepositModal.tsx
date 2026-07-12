@@ -15,6 +15,14 @@ import { ENVELOPE_LABELS, displayEnvelopeName } from "@/lib/config";
 // at the /trade/quote step — don't surface it as a one-tap option.
 const QUICK_PHP = [200, 500, 1000, 5000];
 
+/** InstaPay per-transaction ceiling. Deposits use `instapay_upay_cashin`
+ *  which inherits the BSP-mandated ₱50k real-time InstaPay cap. Above
+ *  ₱50k also triggers PDAX's Travel Rule fields (sender ID or address
+ *  or DOB + place of birth) which we don't collect today — capping at
+ *  the tier boundary lets the flow stay identity-light. */
+const PDAX_DEPOSIT_MIN_PHP = 200;
+const PDAX_DEPOSIT_MAX_PHP = 49_999;
+
 /**
  * "Add money via PDAX" flow. Step machine driven by the `pdax_deposits`
  * row's status, surfaced via Supabase Realtime:
@@ -207,7 +215,14 @@ export function PdaxDepositModal({
   }, []);
 
   const amountPhp = Number(amountStr);
-  const validAmount = Number.isFinite(amountPhp) && amountPhp > 0;
+  const belowMin =
+    Number.isFinite(amountPhp) && amountPhp > 0 && amountPhp < PDAX_DEPOSIT_MIN_PHP;
+  const aboveMax =
+    Number.isFinite(amountPhp) && amountPhp > PDAX_DEPOSIT_MAX_PHP;
+  const validAmount =
+    Number.isFinite(amountPhp) &&
+    amountPhp >= PDAX_DEPOSIT_MIN_PHP &&
+    amountPhp <= PDAX_DEPOSIT_MAX_PHP;
   const expectedToken = amountPhp / phpPerToken;
 
   // When the modal opens via "Resume", row is null for one paint while the
@@ -367,6 +382,8 @@ export function PdaxDepositModal({
             inputRef={inputRef}
             pending={pdaxPending}
             valid={validAmount}
+            belowMin={belowMin}
+            aboveMax={aboveMax}
             expectedToken={expectedToken}
             phpPerToken={phpPerToken}
             state={state}
@@ -454,6 +471,8 @@ function InputStep({
   inputRef,
   pending,
   valid,
+  belowMin,
+  aboveMax,
   expectedToken,
   phpPerToken,
   state,
@@ -466,6 +485,8 @@ function InputStep({
   inputRef: React.RefObject<HTMLInputElement | null>;
   pending: boolean;
   valid: boolean;
+  belowMin: boolean;
+  aboveMax: boolean;
   expectedToken: number;
   phpPerToken: number;
   state: WalletState;
@@ -473,6 +494,13 @@ function InputStep({
   onGenerate: () => void;
   error: string | null;
 }) {
+  const rangeHint = `Between ₱${PDAX_DEPOSIT_MIN_PHP.toLocaleString("en-PH")} and ₱${PDAX_DEPOSIT_MAX_PHP.toLocaleString("en-PH")} per deposit.`;
+  const validationMsg = belowMin
+    ? `PDAX minimum is ₱${PDAX_DEPOSIT_MIN_PHP.toLocaleString("en-PH")}.`
+    : aboveMax
+      ? `InstaPay caps single deposits at ₱${PDAX_DEPOSIT_MAX_PHP.toLocaleString("en-PH")}. Split across multiple deposits for larger amounts.`
+      : null;
+
   return (
     <>
       <h2>Add money via PDAX</h2>
@@ -487,7 +515,8 @@ function InputStep({
             className="sobre-input has-prefix tabular"
             type="number"
             inputMode="decimal"
-            min="0"
+            min={PDAX_DEPOSIT_MIN_PHP}
+            max={PDAX_DEPOSIT_MAX_PHP}
             step="1"
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
@@ -506,6 +535,14 @@ function InputStep({
               ₱{q.toLocaleString()}
             </button>
           ))}
+        </div>
+        <div
+          className="mt-2 text-[11px]"
+          style={{
+            color: validationMsg ? "var(--sobre-danger)" : "var(--text-3)",
+          }}
+        >
+          {validationMsg ?? rangeHint}
         </div>
       </div>
 
