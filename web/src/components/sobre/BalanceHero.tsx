@@ -13,7 +13,7 @@ import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 /**
  * v2 dashboard headline card: the household's total balance, big and
  * mono-numeric, following the app-wide currency toggle. Presentational only —
- * the actions that used to sit under the total live in <QuickActions>.
+ * money actions live in the OpenSobreSheet triggered from the bottom dock.
  */
 export function BalanceHero({
   state,

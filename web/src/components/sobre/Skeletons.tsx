@@ -3,7 +3,7 @@
 /**
  * Skeleton placeholders that mirror the real card shapes so the layout
  * doesn't reflow when the data arrives. Each component matches the visual
- * footprint of its loaded counterpart (SobreCard, SummaryCard, EnvelopeCard,
+ * footprint of its loaded counterpart (SobreCard, EnvelopeCard,
  * ActivityFeed item) so users see structure first, content second.
  */
 
