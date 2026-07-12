@@ -72,14 +72,18 @@ export function GrowPanel({
   // contract already aggregates the idle cache + Blend-XLM-in-USDC via
   // a live Soroswap quote.
   const growTotal = state.grow_balance;
-  // interest = current value + everything ever paid out − everything
-  // ever supplied. Clamped at zero so a Soroswap-rate dip mid-poll can't
-  // show a negative number to the user.
+  // grow_supplied_total / grow_withdrawn_total were added post-2026-07-12;
+  // wallets on the previous wasm serialize them as 0 (their XDR shape
+  // predates the fields). Treat "positive grow_balance AND zero supplied
+  // total" as "old contract, interest is unknown" and hide the number
+  // rather than showing a bogus interest == balance.
+  const growTotalsKnown = state.grow_supplied_total > 0n;
   const rawGrowInterest =
     state.grow_balance +
     state.grow_withdrawn_total -
     state.grow_supplied_total;
-  const growInterestEarned = rawGrowInterest > 0n ? rawGrowInterest : 0n;
+  const growInterestEarned =
+    growTotalsKnown && rawGrowInterest > 0n ? rawGrowInterest : 0n;
 
   const { enable, pending: enabling } = useGrowEnable(userAddress, contractId);
   const { transfer, pending: transferring } = useGrowTransferFromSavings(
@@ -245,7 +249,7 @@ export function GrowPanel({
               </div>
             </dl>
 
-            {state.grow_balance > 0n || state.grow_supplied_total > 0n ? (
+            {growTotalsKnown ? (
               <p className="sobre-earn-card-sub sobre-grow-interest">
                 Interest earned{" "}
                 <span className="tabular">

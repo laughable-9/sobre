@@ -33,11 +33,17 @@ export function EarnGrowSummary({
   const savingsInterest = savingsPos?.interestEarned ?? 0n;
 
   const growTotal = growTotalStroops(state);
+  // Hide interest when the wire doesn't yet carry the two totals
+  // (pre-2026-07-12 wasm) — otherwise the formula degrades to
+  // interest = balance and the card lies. See GrowPanel for the same
+  // guard.
+  const growTotalsKnown = state.grow_supplied_total > 0n;
   const rawGrowInterest =
     state.grow_balance +
     state.grow_withdrawn_total -
     state.grow_supplied_total;
-  const growInterest = rawGrowInterest > 0n ? rawGrowInterest : 0n;
+  const growInterest =
+    growTotalsKnown && rawGrowInterest > 0n ? rawGrowInterest : 0n;
 
   const hasEarn =
     state.earn !== null && (savingsPos !== undefined || state.balances[2] > 0n);
