@@ -19,6 +19,7 @@ import { formatShortDateTime } from "@/lib/format";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+import { BankAccountSection } from "./BankAccountSection";
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
 import { Reveal } from "./Reveal";
@@ -300,6 +301,7 @@ export function SubAccountView({
             events={events}
             envelopeNames={state.envelope_names}
           />
+          <BankAccountSection />
         </Reveal>
       ) : null}
 

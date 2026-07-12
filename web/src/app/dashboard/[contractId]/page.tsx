@@ -47,6 +47,7 @@ import {
   HeroPulse,
   TRUNCATE_CHAR_LIMIT,
 } from "@/components/sobre/Overlays";
+import { BankAccountSection } from "@/components/sobre/BankAccountSection";
 import { EnvelopeActionsSheet } from "@/components/sobre/EnvelopeActionsSheet";
 import { FundSubAccountModal } from "@/components/sobre/FundSubAccountModal";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
@@ -862,6 +863,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             onFlash={flash}
             onChange={refreshAll}
           />
+          <BankAccountSection />
         </Reveal>
       ) : null}
 
