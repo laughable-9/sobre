@@ -53,6 +53,8 @@ const PREVIEW_STATE: WalletState = {
   earn: null,
   grow_enabled: false,
   grow_balance: 0n,
+  grow_supplied_total: 0n,
+  grow_withdrawn_total: 0n,
   grow_requests: [],
 };
 

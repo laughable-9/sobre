@@ -72,8 +72,14 @@ export function GrowPanel({
   // contract already aggregates the idle cache + Blend-XLM-in-USDC via
   // a live Soroswap quote.
   const growTotal = state.grow_balance;
-  // Interest attribution for Grow isn't emitted on the v9 wire yet.
-  const growInterestEarned = 0n;
+  // interest = current value + everything ever paid out − everything
+  // ever supplied. Clamped at zero so a Soroswap-rate dip mid-poll can't
+  // show a negative number to the user.
+  const rawGrowInterest =
+    state.grow_balance +
+    state.grow_withdrawn_total -
+    state.grow_supplied_total;
+  const growInterestEarned = rawGrowInterest > 0n ? rawGrowInterest : 0n;
 
   const { enable, pending: enabling } = useGrowEnable(userAddress, contractId);
   const { transfer, pending: transferring } = useGrowTransferFromSavings(
@@ -239,7 +245,7 @@ export function GrowPanel({
               </div>
             </dl>
 
-            {growInterestEarned > 0n ? (
+            {state.grow_balance > 0n || state.grow_supplied_total > 0n ? (
               <p className="sobre-earn-card-sub sobre-grow-interest">
                 Interest earned{" "}
                 <span className="tabular">

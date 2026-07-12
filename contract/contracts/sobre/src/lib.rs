@@ -235,6 +235,14 @@ pub struct WalletState {
     /// `grow_balance > 0` because a wallet can be enabled with an empty
     /// bucket (initial state after `grow_enable`).
     pub grow_enabled: bool,
+    /// Monotonic cumulative USDC stroops the wallet has ever routed
+    /// into Grow via `grow_transfer_from_savings`. Frontend derives
+    /// interest_earned = grow_balance + withdrawn_total - supplied_total.
+    pub grow_supplied_total: i128,
+    /// Monotonic cumulative USDC stroops the wallet has ever paid out
+    /// of Grow via `execute_grow_withdrawal`. Frontend derives interest
+    /// with the formula above.
+    pub grow_withdrawn_total: i128,
     /// Active grow-withdraw requests, insertion order. Frontend renders
     /// per-request countdowns from `unlock_at - now`. Empty when no
     /// request is pending.
@@ -1848,18 +1856,23 @@ impl SobreContract {
         let earn = load_earn_state(&env);
         let grow_enabled: bool =
             inst.get(&DataKey::GrowEnabled).unwrap_or(false);
-        let (grow_balance, grow_requests) = if grow_enabled {
-            let balance = grow_total_value_usdc(&env);
-            let next_id: u64 = inst.get(&DataKey::NextGrowReqId).unwrap_or(0);
-            let requests = if next_id > 0 {
-                load_grow_requests(&env)
+        let (grow_balance, grow_requests, grow_supplied_total, grow_withdrawn_total) =
+            if grow_enabled {
+                let balance = grow_total_value_usdc(&env);
+                let next_id: u64 = inst.get(&DataKey::NextGrowReqId).unwrap_or(0);
+                let requests = if next_id > 0 {
+                    load_grow_requests(&env)
+                } else {
+                    Vec::new(&env)
+                };
+                let supplied: i128 =
+                    inst.get(&DataKey::GrowSuppliedUsdcTotal).unwrap_or(0);
+                let withdrawn: i128 =
+                    inst.get(&DataKey::GrowWithdrawnUsdcTotal).unwrap_or(0);
+                (balance, requests, supplied, withdrawn)
             } else {
-                Vec::new(&env)
+                (0i128, Vec::new(&env), 0i128, 0i128)
             };
-            (balance, requests)
-        } else {
-            (0i128, Vec::new(&env))
-        };
         WalletState {
             admin,
             payment_token,
@@ -1869,6 +1882,8 @@ impl SobreContract {
             earn,
             grow_balance,
             grow_enabled,
+            grow_supplied_total,
+            grow_withdrawn_total,
             grow_requests,
         }
     }

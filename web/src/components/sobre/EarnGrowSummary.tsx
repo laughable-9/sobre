@@ -33,10 +33,11 @@ export function EarnGrowSummary({
   const savingsInterest = savingsPos?.interestEarned ?? 0n;
 
   const growTotal = growTotalStroops(state);
-  // Grow-side interest isn't emitted on the v9 wire (only the aggregate
-  // USDC-equivalent grow_balance is). Kept at 0 until the wire adds
-  // GrowSuppliedUsdcTotal / GrowWithdrawnUsdcTotal.
-  const growInterest = 0n;
+  const rawGrowInterest =
+    state.grow_balance +
+    state.grow_withdrawn_total -
+    state.grow_supplied_total;
+  const growInterest = rawGrowInterest > 0n ? rawGrowInterest : 0n;
 
   const hasEarn =
     state.earn !== null && (savingsPos !== undefined || state.balances[2] > 0n);

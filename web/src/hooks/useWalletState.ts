@@ -118,6 +118,14 @@ export interface WalletState {
   grow_enabled: boolean;
   /** Grow-bucket balance in stroops. Zero when disabled or empty. */
   grow_balance: bigint;
+  /** Cumulative USDC stroops routed into Grow via
+   *  grow_transfer_from_savings. Frontend derives interest as
+   *  `grow_balance + grow_withdrawn_total - grow_supplied_total`. Zero
+   *  on pre-2026-07-13 contracts that predate the field. */
+  grow_supplied_total: bigint;
+  /** Cumulative USDC stroops paid out of Grow via
+   *  execute_grow_withdrawal. Zero on pre-2026-07-13 contracts. */
+  grow_withdrawn_total: bigint;
   /** Pending grow-withdraw requests. Empty when none active. */
   grow_requests: GrowWithdrawRequest[];
 }
@@ -150,6 +158,8 @@ interface OnChainState {
   earn: EarnState | null;
   grow_enabled: boolean;
   grow_balance: bigint;
+  grow_supplied_total: bigint;
+  grow_withdrawn_total: bigint;
   grow_requests: GrowWithdrawRequest[];
 }
 
@@ -261,6 +271,8 @@ export function useWalletState(
       earn: onChain.earn,
       grow_enabled: onChain.grow_enabled,
       grow_balance: onChain.grow_balance,
+      grow_supplied_total: onChain.grow_supplied_total,
+      grow_withdrawn_total: onChain.grow_withdrawn_total,
       grow_requests: onChain.grow_requests,
     };
   }, [
@@ -314,6 +326,8 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
     earn: normalizeEarnState(raw.earn),
     grow_enabled: Boolean(raw.grow_enabled),
     grow_balance: toBigInt(raw.grow_balance),
+    grow_supplied_total: toBigInt(raw.grow_supplied_total),
+    grow_withdrawn_total: toBigInt(raw.grow_withdrawn_total),
     grow_requests: normalizeGrowRequests(raw.grow_requests),
   };
 }
