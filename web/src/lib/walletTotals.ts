@@ -1,17 +1,18 @@
 /**
  * Small helpers so every "how much does this envelope hold" and "what's
  * the wallet total" reads from one source of truth. When Earn is on, an
- * envelope's real balance is its cache PLUS whatever it has in Blend;
+ * envelope's real balance is its cache PLUS whatever it has in USDY;
  * spending logic pulls from either seamlessly, so the display should
- * match. Grow's total is its cache + its Blend position.
+ * match. Grow's total comes straight from the contract's grow_balance
+ * (already USDC-equivalent via Soroswap quote).
  */
 
 import type { WalletState } from "@/hooks/useWalletState";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 
-/** Cache balance + Blend underlying for one envelope. Everything the
+/** Cache balance + USDY current value for one envelope. Everything the
  *  family can access from that envelope in the same tx (spends
- *  auto-withdraw the shortfall). */
+ *  auto-redeem the shortfall). */
 export function envelopeTotalStroops(
   state: WalletState,
   index: number,
@@ -19,16 +20,17 @@ export function envelopeTotalStroops(
   const cache = state.balances[index] ?? 0n;
   const envName = ENVELOPE_LABELS[index] as EnvelopeName | undefined;
   if (!envName) return cache;
-  const earnUnderlying =
-    state.earn?.positions.find((p) => p.envelope === envName)?.underlying ??
+  const usdyValue =
+    state.earn?.positions.find((p) => p.envelope === envName)?.currentValue ??
     0n;
-  return cache + earnUnderlying;
+  return cache + usdyValue;
 }
 
-/** Grow's real value — cache + Blend underlying. Zero when Grow is
- *  disabled or empty. */
+/** Grow's real value in USDC stroops. The contract already sums the
+ *  idle cache and the Blend-XLM-underlying-in-USDC-terms via a live
+ *  Soroswap quote, so this is just a passthrough. */
 export function growTotalStroops(state: WalletState): bigint {
-  return state.grow_balance + (state.earn?.growPosition?.underlying ?? 0n);
+  return state.grow_balance;
 }
 
 /** Wallet-wide total: every envelope's real balance + Grow's real value.

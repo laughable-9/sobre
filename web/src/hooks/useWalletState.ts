@@ -36,45 +36,29 @@ export interface SubAccount {
 
 export interface EarnPosition {
   envelope: EnvelopeName;
-  /** Sobre's non-collateral supply position on the Blend pool, in bTokens.
-   *  Constant absent supply/withdraw actions — yield accrues through b_rate,
-   *  not by minting more shares. */
-  bTokens: bigint;
-  /** Live underlying-value snapshot at get_state time: bTokens × b_rate /
-   *  SCALAR_12. Ticks up between polls as Blend accrues interest. */
-  underlying: bigint;
-  /** Monotonic cumulative underlying stroops ever supplied to Blend for
-   *  this envelope. Doesn't decrease. */
+  /** USDC stroops originally deposited into USDY under this envelope,
+   *  net of prior withdrawals. Baseline for interest calculation. */
+  principal: bigint;
+  /** Yield-inclusive USDY balance attributed to this envelope, in USDC
+   *  stroops. Ticks up between polls as USDY accrues. */
+  currentValue: bigint;
+  /** Monotonic cumulative USDC stroops ever supplied under this envelope's
+   *  attribution. Doesn't decrease. */
   suppliedTotal: bigint;
-  /** Monotonic cumulative underlying stroops ever withdrawn. Doesn't
-   *  decrease. */
+  /** Monotonic cumulative USDC stroops ever redeemed. Doesn't decrease. */
   withdrawnTotal: bigint;
-  /** `underlying + withdrawnTotal - suppliedTotal`. The lifetime interest
-   *  the envelope has accrued through Blend, honest across withdraw cycles. */
-  interestEarned: bigint;
-}
-
-/** Grow's own Blend position — parallels EarnPosition but not envelope-
- *  tagged (Grow is its own bucket). Present in `EarnState.growPosition`
- *  as a 0-or-1 vec when Grow has supplied at least once. */
-export interface GrowEarnPosition {
-  bTokens: bigint;
-  underlying: bigint;
-  suppliedTotal: bigint;
-  withdrawnTotal: bigint;
+  /** `currentValue + withdrawnTotal - suppliedTotal`. Lifetime interest
+   *  accrued to this envelope through USDY. */
   interestEarned: bigint;
 }
 
 export interface EarnState {
-  pool: string;
-  asset: string;
-  /** One entry per envelope with a non-zero position. Absent envelopes
-   *  have zero. */
+  /** USDY-shaped token contract Sobre deposits into (MockUSDY on testnet,
+   *  real Ondo USDY once it ships on Stellar). */
+  usdyContract: string;
+  /** One entry per envelope with any USDY history (live position OR
+   *  supplied>0 OR withdrawn>0). Absent envelopes have zero. */
   positions: EarnPosition[];
-  /** Grow's Blend position (0-or-1 element). Null when Grow has never
-   *  supplied (either Grow disabled or Grow enabled with all funds in
-   *  the cache). */
-  growPosition: GrowEarnPosition | null;
 }
 
 export interface GrowWithdrawRequest {
@@ -365,37 +349,16 @@ function normalizeEarnState(raw: unknown): EarnState | null {
     const row = p as Record<string, unknown>;
     return {
       envelope: envelopeNameFromScNative(row.envelope, "Groceries"),
-      bTokens: toBigInt(row.b_tokens),
-      underlying: toBigInt(row.underlying),
+      principal: toBigInt(row.principal),
+      currentValue: toBigInt(row.current_value),
       suppliedTotal: toBigInt(row.supplied_total),
       withdrawnTotal: toBigInt(row.withdrawn_total),
       interestEarned: toBigInt(row.interest_earned),
     };
   });
-  const growRaw = Array.isArray(outer.grow_position) ? outer.grow_position : [];
-  const growPosition: GrowEarnPosition | null =
-    growRaw.length > 0
-      ? {
-          bTokens: toBigInt((growRaw[0] as Record<string, unknown>).b_tokens),
-          underlying: toBigInt(
-            (growRaw[0] as Record<string, unknown>).underlying,
-          ),
-          suppliedTotal: toBigInt(
-            (growRaw[0] as Record<string, unknown>).supplied_total,
-          ),
-          withdrawnTotal: toBigInt(
-            (growRaw[0] as Record<string, unknown>).withdrawn_total,
-          ),
-          interestEarned: toBigInt(
-            (growRaw[0] as Record<string, unknown>).interest_earned,
-          ),
-        }
-      : null;
   return {
-    pool: String(outer.pool ?? ""),
-    asset: String(outer.asset ?? ""),
+    usdyContract: String(outer.usdy_contract ?? ""),
     positions,
-    growPosition,
   };
 }
 

@@ -32,9 +32,11 @@ export function EarnGrowSummary({
   const savingsTotal = envelopeTotalStroops(state, 2);
   const savingsInterest = savingsPos?.interestEarned ?? 0n;
 
-  const growPos = state.earn?.growPosition ?? null;
   const growTotal = growTotalStroops(state);
-  const growInterest = growPos?.interestEarned ?? 0n;
+  // Grow-side interest isn't emitted on the v9 wire (only the aggregate
+  // USDC-equivalent grow_balance is). Kept at 0 until the wire adds
+  // GrowSuppliedUsdcTotal / GrowWithdrawnUsdcTotal.
+  const growInterest = 0n;
 
   const hasEarn =
     state.earn !== null && (savingsPos !== undefined || state.balances[2] > 0n);
@@ -127,7 +129,18 @@ function YieldCard({
   );
   const cents = Math.abs(fiat).toFixed(2).split(".")[1];
   return (
-    <button type="button" className="sobre-yield-card" onClick={onClick}>
+    <div
+      role="button"
+      tabIndex={0}
+      className="sobre-yield-card"
+      onClick={onClick}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onClick();
+        }
+      }}
+    >
       <div className="sobre-yield-head">
         <span className="sobre-yield-ic" aria-hidden>
           {icon}
@@ -148,6 +161,6 @@ function YieldCard({
           </span>
         </div>
       ) : null}
-    </button>
+    </div>
   );
 }

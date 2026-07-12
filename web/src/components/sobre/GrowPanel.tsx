@@ -62,18 +62,18 @@ export function GrowPanel({
     "Savings",
     state.envelope_names,
   );
-  // Also count Savings' Blend position toward "spendable to Grow" — the
-  // grow_transfer_from_savings method auto-withdraws the shortfall.
-  const savingsUnderlying =
-    state.earn?.positions.find((p) => p.envelope === "Savings")?.underlying ??
-    0n;
-  const savingsAvailable = savingsSpendable + savingsUnderlying;
-  // Total Grow value = local cache + Blend underlying. When Earn is on,
-  // the cache is usually 0 and the whole balance is in Blend.
-  const grow = state.earn?.growPosition ?? null;
-  const growUnderlying = grow?.underlying ?? 0n;
-  const growInterestEarned = grow?.interestEarned ?? 0n;
-  const growTotal = state.grow_balance + growUnderlying;
+  // Also count Savings' USDY balance toward "spendable to Grow" — the
+  // grow_transfer_from_savings method auto-redeems the shortfall.
+  const savingsUsdyValue =
+    state.earn?.positions.find((p) => p.envelope === "Savings")
+      ?.currentValue ?? 0n;
+  const savingsAvailable = savingsSpendable + savingsUsdyValue;
+  // Grow total value comes straight from state.grow_balance — the
+  // contract already aggregates the idle cache + Blend-XLM-in-USDC via
+  // a live Soroswap quote.
+  const growTotal = state.grow_balance;
+  // Interest attribution for Grow isn't emitted on the v9 wire yet.
+  const growInterestEarned = 0n;
 
   const { enable, pending: enabling } = useGrowEnable(userAddress, contractId);
   const { transfer, pending: transferring } = useGrowTransferFromSavings(
