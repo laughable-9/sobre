@@ -364,6 +364,10 @@ function SobreCard({
   }, [summary, stillAMember, onNotAMember]);
 
   if (summary && !stillAMember) return null;
+  // Orphan on-chain contracts with no Supabase mirror (typically failed
+  // creates before the schema migration landed) don't render — they'd all
+  // show up as identical "Family Wallet" cards otherwise.
+  if (summary && summary.isOrphan) return null;
 
   const totalUsdc =
     summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;

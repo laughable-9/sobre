@@ -468,6 +468,40 @@ function Dashboard({ contractId }: { contractId: string }) {
         </div>
       );
     }
+    // Real error from the on-chain sim (bad contract id, missing method,
+    // network flake). Surface it so the user isn't stuck on the skeleton
+    // forever — with retry + a way back to the wallet list.
+    if (walletState.error) {
+      return (
+        <div className="sobre-app sobre-v2">
+          <TopBar wallet={wallet} />
+          <main className="flex-1 grid place-items-center px-6">
+            <div className="text-center max-w-md">
+              <h1 className="font-serif text-[24px] font-semibold mb-3">
+                Can&apos;t load this Sobre
+              </h1>
+              <p
+                className="text-[13px] break-all mb-5"
+                style={{ color: "var(--text-2)" }}
+              >
+                {walletState.error}
+              </p>
+              <div className="flex gap-2 justify-center">
+                <button
+                  type="button"
+                  onClick={refresh}
+                  className="sobre-btn sobre-btn-primary"
+                  style={{ padding: "10px 16px", fontSize: 13 }}
+                >
+                  Try again
+                </button>
+                <BackLink href="/dashboard" />
+              </div>
+            </div>
+          </main>
+        </div>
+      );
+    }
     return (
       <div className="sobre-app sobre-v2 has-dock">
         <DashboardSkeleton tab={tab} />
