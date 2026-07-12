@@ -20,6 +20,7 @@ import {
 import { routeSpend } from "@/lib/policy";
 
 import { Avatar } from "./Avatar";
+import { ConfirmSheet } from "./ConfirmSheet";
 import { Sheet } from "./Sheet";
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
 import { SupplementaryDetailModal } from "./SupplementaryDetailModal";
@@ -186,6 +187,7 @@ function SubCard({
   );
   const { cancel: cancelInvite, pending: cancelPending } =
     useCancelSubaccountInvite(contractId);
+  const [confirmingCancel, setConfirmingCancel] = useState(false);
   const { row, chain } = sub;
   // Pending = the invite hasn't been redeemed in Supabase yet (wallet_id
   // is null). Don't conflate this with "chain match missing": once the row
@@ -210,7 +212,7 @@ function SubCard({
     }
   };
 
-  const handleCancelInvite = async () => {
+  const openCancelConfirm = () => {
     if (!row.inviteTokenHash) {
       onFlash(
         "This invite predates the cancel feature. Delete the row manually or wait for it to expire.",
@@ -218,19 +220,19 @@ function SubCard({
       );
       return;
     }
-    if (
-      !window.confirm(
-        "Cancel this invite? The share link becomes unredeemable and the pending row disappears.",
-      )
-    ) {
-      return;
-    }
+    setConfirmingCancel(true);
+  };
+
+  const confirmCancelInvite = async () => {
+    if (!row.inviteTokenHash) return;
     try {
       await cancelInvite(row.inviteTokenHash);
       onFlash("Invite cancelled");
+      setConfirmingCancel(false);
       onChange();
     } catch (e) {
       onFlash(e instanceof Error ? e.message : String(e), "warn");
+      setConfirmingCancel(false);
     }
   };
 
@@ -296,7 +298,7 @@ function SubCard({
           >
             <button
               type="button"
-              onClick={() => void handleCancelInvite()}
+              onClick={openCancelConfirm}
               disabled={cancelPending}
               className="sobre-btn sobre-btn-soft"
               style={{
@@ -378,6 +380,18 @@ function SubCard({
           </div>
         ) : null}
       </div>
+
+      <ConfirmSheet
+        open={confirmingCancel}
+        title="Cancel this invite?"
+        body="The share link becomes unredeemable and the pending row disappears. You can send a fresh invite afterwards."
+        confirmLabel="Cancel invite"
+        cancelLabel="Keep it"
+        confirmTone="danger"
+        pending={cancelPending}
+        onConfirm={() => void confirmCancelInvite()}
+        onCancel={() => setConfirmingCancel(false)}
+      />
     </div>
   );
 }
