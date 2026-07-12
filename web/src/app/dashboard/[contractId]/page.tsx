@@ -155,6 +155,11 @@ function Dashboard({ contractId }: { contractId: string }) {
     void txFeed.refresh();
     void activeDeposits.refresh();
     void activeCashouts.refresh();
+    // Realtime channel on family_subaccounts silently drops DELETE
+    // events for rows RLS would hide, so cancel-invite / claim don't
+    // always propagate. Explicit re-fetch keeps the supplementary list
+    // in sync with the DB regardless.
+    void subaccountsHook.refresh();
   };
 
   const isAdmin = Boolean(state && address && state.admin === address);
