@@ -3,10 +3,14 @@
 import { Address, contract } from "@stellar/stellar-sdk";
 
 import {
+  BLEND_POOL_ID,
   FACTORY_CONTRACT_ID,
   NETWORK,
   PAYMENT_TOKEN_SAC_ID,
+  SOROSWAP_ROUTER_ID,
+  XLM_SAC_ID,
 } from "@/lib/config";
+import { invokeWrite } from "@/lib/contract";
 import {
   getDeployerAddress,
   signTransaction,
@@ -175,6 +179,26 @@ export async function createFamilyWallet(
   } catch (err) {
     throw new Error(
       `[create_sobre step 5] parsing result failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
+  // Enable Grow inline so the PDAX ramp works on first deposit — the
+  // contract's `deposit_from_xlm` reads Blend + Soroswap addresses out
+  // of Grow storage, and skipping this would strand any freshly-created
+  // family at "PDAX credited, on-chain invoke panicked". Two FaceID
+  // prompts back-to-back is the trade-off; the alternative (a separate
+  // contract-side SwapConfig DataKey) would require a wasm redeploy for
+  // what is architecturally the same pin. Families that never use Grow
+  // just leave the bucket empty — enabling costs nothing beyond the fee.
+  try {
+    await invokeWrite(familyContractId, "grow_enable", [
+      Address.fromString(BLEND_POOL_ID).toScVal(),
+      Address.fromString(XLM_SAC_ID).toScVal(),
+      Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+    ]);
+  } catch (err) {
+    throw new Error(
+      `[create_sobre step 6] auto-grow_enable failed: ${err instanceof Error ? err.message : String(err)}`,
     );
   }
 
