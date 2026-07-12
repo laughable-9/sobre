@@ -9,10 +9,10 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 export interface SobreSummary {
   walletName: string;
   members: Member[];
-  /** Sub-account holders in this wallet — used by SobreCard to keep the
-   *  caller's card visible on My Sobres when they're a supplementary
-   *  (not a member). Only the address is needed for the presence check. */
-  subaccounts: { address: string }[];
+  /** Sub-account holders in this wallet. SobreCard uses this both to
+   *  keep the caller's card visible when they're a supplementary and to
+   *  show THEIR balance (not the family total) on the summary card. */
+  subaccounts: { address: string; balance: bigint }[];
   totalStroops: bigint;
   isClosed: boolean;
   /** True when the contract exists on chain but has no matching Supabase
@@ -75,7 +75,7 @@ export function useSobreSummary(
         const supabaseName = familyRow?.display_name ?? null;
 
         let members: Member[] = [];
-        let subaccounts: { address: string }[] = [];
+        let subaccounts: { address: string; balance: bigint }[] = [];
         let totalStroops = 0n;
         let chainWalletName = "";
         let chainFailed = false;
@@ -93,6 +93,10 @@ export function useSobreSummary(
           subaccounts = Array.isArray(raw.subaccounts)
             ? (raw.subaccounts as Record<string, unknown>[]).map((s) => ({
                 address: String(s.address),
+                balance:
+                  typeof s.balance === "bigint"
+                    ? s.balance
+                    : BigInt(String(s.balance ?? 0)),
               }))
             : [];
           const balances = (raw.balances as bigint[] | undefined) ?? [];

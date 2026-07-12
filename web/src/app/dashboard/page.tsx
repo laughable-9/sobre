@@ -489,8 +489,18 @@ function SobreCard({
 
   if (shouldHide) return null;
 
-  const totalUsdc =
-    summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;
+  // Supplementary cards show the caller's own spendable balance, not
+  // the family total — a supplementary has no visibility into the
+  // family's overall funds and shouldn't see it summarised on their
+  // My Sobres.
+  const displayStroops =
+    summary === null
+      ? 0n
+      : role === "subaccount"
+        ? summary.subaccounts.find((s) => s.address === callerAddress)
+            ?.balance ?? 0n
+        : summary.totalStroops;
+  const totalUsdc = Number(displayStroops) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 
   const walletName = summary?.walletName || "Family Wallet";
@@ -540,7 +550,9 @@ function SobreCard({
         className="rounded-[10px] p-3 mb-3"
         style={{ background: "var(--surface-alt)" }}
       >
-        <div className="sobre-label mb-1">Total balance</div>
+        <div className="sobre-label mb-1">
+          {role === "subaccount" ? "Spendable balance" : "Total balance"}
+        </div>
         <div
           style={{
             fontFamily: "var(--serif)",
