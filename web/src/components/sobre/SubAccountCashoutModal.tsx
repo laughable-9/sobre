@@ -37,6 +37,11 @@ interface Props {
    *  amount at this. Ignored when resumeIdentifier is set (the row's
    *  amount_usdc is what matters at that point). */
   balanceStroops: bigint;
+  /** True when this sub-account is locked on-chain. The modal short-
+   *  circuits to a locked empty state instead of the input phase — a
+   *  cashout would revert anyway, so we head that off with an
+   *  explanation. */
+  locked?: boolean;
   /** When set, hydrate from an existing pdax_withdrawals row instead of
    *  starting a fresh cashout. Used by the PENDING strip in SubAccountView
    *  to let the user reopen a mid-pipeline cashout (modal closed before
@@ -66,6 +71,7 @@ export function SubAccountCashoutModal({
   contractId,
   subaccountId,
   balanceStroops,
+  locked = false,
   resumeIdentifier,
   onClose,
   onSuccess,
@@ -256,6 +262,33 @@ export function SubAccountCashoutModal({
     // server-side; the activity feed surfaces it as pending.
     onClose();
   };
+
+  // Empty-state short-circuit: locked account OR zero balance. Skip the
+  // regular phase machinery — a fresh cashout attempt would revert
+  // on-chain or fail validation anyway, so tell the user why plainly.
+  // The `resumeIdentifier` path bypasses this because we're just
+  // watching a mid-pipeline row settle, not starting a new cashout.
+  if (!resumeIdentifier && (locked || balanceStroops <= 0n)) {
+    return (
+      <Sheet onClose={close} ariaLabel="Cash out">
+        <h2>{locked ? "Account locked" : "Nothing to cash out yet"}</h2>
+        <p className="sub">
+          {locked
+            ? "Ask an admin to unlock this account before cashing out."
+            : "Money will appear here once an admin tops you up."}
+        </p>
+        <div className="sobre-modal-actions">
+          <button
+            type="button"
+            className="sobre-btn sobre-btn-primary"
+            onClick={close}
+          >
+            Done
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet onClose={close} ariaLabel="Cash out">

@@ -19,6 +19,7 @@ import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { Avatar } from "./Avatar";
+import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
 
@@ -87,20 +88,10 @@ export function SubAccountView({
     preferredDisplayName ?? myRow?.displayName ?? "Allowance";
   const avatarUrl = wallet.wallet?.avatar_url ?? null;
 
-  const onCashOutTap = () => {
-    if (locked) {
-      onFlash(
-        "This account is locked. Ask an admin to unlock it before cashing out.",
-        "warn",
-      );
-      return;
-    }
-    if (balanceStroops <= 0n) {
-      onFlash("Nothing to cash out yet.", "warn");
-      return;
-    }
-    setCashoutOpen(true);
-  };
+  // Always open the modal — the modal itself renders a friendly empty
+  // state when the balance is zero or the account is locked, so the fab
+  // never feels dead.
+  const onCashOutTap = () => setCashoutOpen(true);
 
   return (
     <>
@@ -133,7 +124,7 @@ export function SubAccountView({
                   gap: 6,
                 }}
               >
-                <span>{state.wallet_name || "Sobre family"}</span>
+                <span>Supplementary account</span>
                 {locked ? (
                   <span
                     style={{
@@ -158,33 +149,27 @@ export function SubAccountView({
             </div>
           </div>
 
-          <div style={{ marginTop: 28, textAlign: "left" }}>
-            <div
-              className="tabular"
-              style={{
-                fontSize: 52,
-                fontWeight: 600,
-                letterSpacing: "-0.025em",
-                lineHeight: 1,
-                color: locked ? "var(--text-3)" : "var(--text-1)",
-              }}
-            >
+          <section
+            className="sobre-v2 sobre-v2-hero"
+            aria-label="Spendable balance"
+            style={{ marginTop: 22 }}
+          >
+            <div className="hero-title-row">
+              <div className="hero-title-left">
+                <span className="hero-title-name">
+                  {state.wallet_name || "Sobre family"}
+                </span>
+              </div>
+            </div>
+            <div className="label">Spendable balance</div>
+            <div className="amount">
               ₱
-              {balancePhp.toLocaleString("en-PH", {
-                minimumFractionDigits: 2,
-                maximumFractionDigits: 2,
-              })}
+              {Math.floor(balancePhp).toLocaleString("en-PH")}
+              <span className="cents">
+                .{Math.abs(balancePhp).toFixed(2).split(".")[1]}
+              </span>
             </div>
-            <div
-              style={{
-                fontSize: 12,
-                color: "var(--text-3)",
-                marginTop: 6,
-              }}
-            >
-              Spendable balance
-            </div>
-          </div>
+          </section>
 
           <section style={{ marginTop: 28 }}>
             <h2
@@ -346,10 +331,19 @@ export function SubAccountView({
 
       {tab === "user" ? (
         <div
-          className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
+          className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12 space-y-5"
           style={{ maxWidth: 460 }}
         >
           <ProfileSheet wallet={wallet} />
+          <MembersSection
+            members={state.members}
+            adminAddress={state.admin}
+            adminCount={state.admin_count}
+            adminCap={state.admin_cap}
+            familyWalletId={null}
+            canInvite={false}
+            canEditCap={false}
+          />
         </div>
       ) : null}
 
@@ -365,6 +359,7 @@ export function SubAccountView({
           contractId={contractId}
           subaccountId={myRow.id}
           balanceStroops={balanceStroops}
+          locked={locked}
           resumeIdentifier={resumeCashoutId ?? undefined}
           onClose={() => {
             setCashoutOpen(false);
