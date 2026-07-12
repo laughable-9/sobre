@@ -157,7 +157,7 @@ export function ActivityFeed({
   }, [completedCashouts]);
 
   const matchCompleted = (
-    ev: FeedEvent & { kind: "Spend" },
+    ev: FeedEvent & { kind: "Withdraw" },
   ): ActiveCashoutRow | undefined => {
     const minuteKey = Math.floor(
       new Date(ev.ledgerClosedAt).getTime() / 60_000,
@@ -319,7 +319,7 @@ export function ActivityFeed({
           subaccounts={subaccounts}
           envelopeNames={envelopeNames}
           completedCashout={
-            openEvent.kind === "Spend" && openEvent.memo === "PDAX cashout"
+            openEvent.kind === "Withdraw" && openEvent.memo === "PDAX cashout"
               ? matchCompleted(openEvent)
               : undefined
           }
@@ -703,7 +703,7 @@ function ActivityRow({
           </>,
         ),
       );
-    case "Spend": {
+    case "Withdraw": {
       const isCashout = ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
@@ -719,7 +719,7 @@ function ActivityRow({
             </>
           ) : (
             <>
-              {labelFor(ev.caller)} spent {amt(ev.amount)} from{" "}
+              {labelFor(ev.caller)} withdrew {amt(ev.amount)} from{" "}
               {displayEnvelopeName(ev.envelope, envelopeNames)}
             </>
           ),
@@ -780,14 +780,14 @@ function ActivityRow({
           </>,
         ),
       );
-    case "SubAccountSpent": {
+    case "SubAccountWithdraw": {
       const isCashout = ev.memo === "Cash out" || ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
         <ArrowUpFromLine size={16} strokeWidth={2} />,
         line(
           <>
-            <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "spent"}{" "}
+            <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "withdrew"}{" "}
             {amt(ev.amount)}
           </>,
         ),

@@ -57,7 +57,7 @@ export function HouseholdSummary({
     for (const ev of events) {
       if (!inThisMonth(ev.ledgerClosedAt)) continue;
       if (ev.kind === "Deposit") deposited += ev.amount;
-      else if (ev.kind === "Spend" || ev.kind === "SubAccountSpent") spends += 1;
+      else if (ev.kind === "Withdraw" || ev.kind === "SubAccountWithdraw") spends += 1;
     }
     return { depositedStroops: deposited, spendCount: spends };
   }, [events]);
@@ -121,7 +121,7 @@ export function HouseholdSummary({
             <TargetIcon weight="fill" size={15} />
           </span>
           <div className="sobre-hsummary-body">
-            <div className="sobre-hsummary-label">Spending tracked</div>
+            <div className="sobre-hsummary-label">Withdrawals tracked</div>
             <div className="sobre-hsummary-value tabular accent">
               {trackedPct === null ? "—" : `${trackedPct}%`}
             </div>
@@ -133,8 +133,8 @@ export function HouseholdSummary({
             </div>
             <div className="sobre-hsummary-sub">
               {spendCount === 0
-                ? "No spends yet"
-                : `${loggedThisMonth} of ${spendCount} spends noted`}
+                ? "No withdrawals yet"
+                : `${loggedThisMonth} of ${spendCount} withdrawals noted`}
             </div>
           </div>
         </div>
@@ -194,10 +194,10 @@ function describeEvent(ev: FeedEvent): {
         text: `Received ${formatPhpLocale(ev.amount)}`,
         tone: "in",
       };
-    case "Spend":
+    case "Withdraw":
       return {
         icon: <ArrowUpRightIcon weight="fill" size={13} />,
-        text: `Spent ${formatPhpLocale(ev.amount)}`,
+        text: `Cashed out ${formatPhpLocale(ev.amount)}`,
         tone: "out",
       };
     case "SubAccountFunded":
@@ -206,10 +206,10 @@ function describeEvent(ev: FeedEvent): {
         text: `Sent ${formatPhpLocale(ev.amount)} to supplementary`,
         tone: "out",
       };
-    case "SubAccountSpent":
+    case "SubAccountWithdraw":
       return {
         icon: <ArrowUpRightIcon weight="fill" size={13} />,
-        text: `Supplementary spent ${formatPhpLocale(ev.amount)}`,
+        text: `Supplementary cashed out ${formatPhpLocale(ev.amount)}`,
         tone: "out",
       };
     case "RequestCreated":

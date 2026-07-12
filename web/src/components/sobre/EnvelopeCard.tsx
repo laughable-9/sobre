@@ -1,12 +1,11 @@
 "use client";
 
-import { CaretRightIcon, LockIcon } from "@phosphor-icons/react";
+import { CaretRightIcon } from "@phosphor-icons/react";
 
 import {
   ENVELOPE_LABELS,
   STROOPS_PER_USDC,
   displayEnvelopeName,
-  type EnvelopeName,
 } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
@@ -15,21 +14,18 @@ import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 /**
  * One-row envelope entry on the Envelopes tab: icon · name · amount ·
- * chevron. Tapping opens SpendModal (or the empty-envelope explanation).
- * Detail (spend history, approval policy specifics) lives inside that
- * modal, not on this list.
+ * chevron. Tapping opens the envelope action sheet (Cash out / Send to
+ * family member); the action sheet owns whichever downstream modal fires.
  *
- * `earn` — optional Blend-yield context. Balance passed in already
- * includes the Blend underlying so the number the user sees is unified;
- * the row also shows lifetime interest earned once it's non-zero. The
- * APY pill lives on the Grow card, not here, to avoid stacking pills.
+ * `earn` — optional yield context. Balance passed in already includes
+ * any USDY underlying so the number the user sees is unified; the row
+ * also shows lifetime interest earned once it's non-zero.
  */
 export function EnvelopeCard({
   index,
   balanceStroops,
   percent,
-  onSpend,
-  approvalRequired,
+  onOpen,
   envelopeNames,
   envelopeIcons,
   currency = "PHP",
@@ -38,9 +34,7 @@ export function EnvelopeCard({
   index: number;
   balanceStroops: bigint;
   percent: number;
-  onSpend: () => void;
-  /** True when require_all_sigs is on OR this envelope is in protected_envelopes. */
-  approvalRequired: boolean;
+  onOpen: () => void;
   envelopeNames: string[];
   /** Per-envelope icon keys — see lib/envelopeIcons. Falls back to slot
    *  defaults for missing/unknown keys. */
@@ -62,22 +56,12 @@ export function EnvelopeCard({
 
   return (
     <div className="sobre-env-row-wrap">
-      <button type="button" onClick={onSpend} className="sobre-env-row-btn">
+      <button type="button" onClick={onOpen} className="sobre-env-row-btn">
         <span className="ic">{renderEnvelopeIcon(iconKey, slot, 18)}</span>
         <span className="body">
           <span className="name">{name}</span>
           <span className="sub">
             <span className="pct">{percent}%</span>
-            {approvalRequired ? (
-              <>
-                <span className="dot" aria-hidden />
-                <LockIcon
-                  weight="fill"
-                  size={10}
-                  aria-label="Approval required"
-                />
-              </>
-            ) : null}
           </span>
         </span>
         <span className="amount tabular">

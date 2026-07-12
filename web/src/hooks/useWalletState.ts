@@ -9,7 +9,7 @@ import {
 } from "@stellar/stellar-sdk";
 
 import { NETWORK, type EnvelopeName } from "@/lib/config";
-import { getServer, simulateSourceAccount, type SpendPolicyShape } from "@/lib/contract";
+import { getServer, simulateSourceAccount, type WalletPolicyShape } from "@/lib/contract";
 import { envelopeNameFromScNative } from "@/lib/format";
 import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 
@@ -97,7 +97,7 @@ export interface WalletState {
    *  not present-as-empty. */
   subaccounts: SubAccount[];
   /** Family policy (Supabase). Frontend gates spends against this. */
-  policy: SpendPolicyShape;
+  policy: WalletPolicyShape;
   /** Savings-envelope all-admins lock (Supabase). Routes Savings spends +
    *  sub-account funds to a pending request when on AND the family has more
    *  than one admin. */

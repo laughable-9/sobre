@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { SpendPolicyShape } from "@/lib/contract";
+import type { WalletPolicyShape } from "@/lib/contract";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 import { DEFAULT_ICON_KEY_BY_SLOT } from "@/lib/envelopeIcons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -29,7 +29,7 @@ export interface FamilyDisplayState {
   /** Per-envelope split percentages, indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
   /** Family-level spend policy. Defaults are "no gate, nobody protected". */
-  policy: SpendPolicyShape;
+  policy: WalletPolicyShape;
   /** When true, money leaving Savings needs every admin's approval. Read fresh
    *  at release-time so adding/removing admins re-thresholds in flight. */
   savingsLockAllAdmins: boolean;
@@ -58,7 +58,7 @@ const DEFAULT_ICONS: [string, string, string] = [
   DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[2]],
 ];
 const DEFAULT_PERCENTS: [number, number, number] = [50, 30, 20];
-const DEFAULT_POLICY: SpendPolicyShape = {
+const DEFAULT_POLICY: WalletPolicyShape = {
   requireAllSigs: false,
   dailyLimit: null,
   perTxThreshold: null,
@@ -79,7 +79,7 @@ interface FamilyRow {
   admin_cap: number | null;
 }
 
-function normalizePolicy(raw: FamilyRow["policy_json"]): SpendPolicyShape {
+function normalizePolicy(raw: FamilyRow["policy_json"]): WalletPolicyShape {
   if (!raw) return DEFAULT_POLICY;
   const optBigint = (v: string | number | null | undefined) =>
     v === null || v === undefined ? null : BigInt(v);
@@ -112,7 +112,7 @@ export function useFamilyDisplay(
     useState<[string, string, string]>(DEFAULT_ICONS);
   const [percents, setPercents] =
     useState<[number, number, number]>(DEFAULT_PERCENTS);
-  const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
+  const [policy, setPolicy] = useState<WalletPolicyShape>(DEFAULT_POLICY);
   const [savingsLockAllAdmins, setSavingsLockAllAdmins] = useState(false);
   const [adminCap, setAdminCap] = useState<number>(2);
   const [membersByAddress, setMembersByAddress] = useState<

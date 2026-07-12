@@ -54,14 +54,14 @@ export function OpenSobreSheet({
           />
           <SheetAction
             label="Send"
-            hint="From an envelope to a member"
+            hint="Top up a family member"
             Icon={PaperPlaneTiltIcon}
             onClick={act(onSend)}
             disabled={disableSend}
           />
           <SheetAction
             label="Log expense"
-            hint="Note a household spend"
+            hint="Note a household expense"
             Icon={NoteIcon}
             onClick={act(onLogExpense)}
           />

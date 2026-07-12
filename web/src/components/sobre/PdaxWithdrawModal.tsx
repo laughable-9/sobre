@@ -106,6 +106,7 @@ export function PdaxWithdrawModal({
   onSuccess,
   resumeIdentifier,
   onActiveIdentifierChange,
+  initialEnvelope,
 }: {
   userAddress: string;
   state: WalletState;
@@ -120,10 +121,16 @@ export function PdaxWithdrawModal({
   /** Same contract as the deposit modal — surfaces the active row id so
    *  the dashboard can filter it out of the PENDING bucket while open. */
   onActiveIdentifierChange?: (identifier: string | null) => void;
+  /** Pre-select the envelope the cashout draws from. Set when the modal
+   *  is entered from a specific envelope card; leave undefined for the
+   *  dock's "Cash out" FAB, which lets the user pick. */
+  initialEnvelope?: EnvelopeName;
 }) {
   const [localPhase, setLocalPhase] = useState<LocalPhase>("loading_bank");
   const [bank, setBank] = useState<BankRecord | null>(null);
-  const [envelope, setEnvelope] = useState<EnvelopeName>("Groceries");
+  const [envelope, setEnvelope] = useState<EnvelopeName>(
+    initialEnvelope ?? "Groceries",
+  );
   const [amountStr, setAmountStr] = useState("500");
   const inputRef = useRef<HTMLInputElement | null>(null);
 

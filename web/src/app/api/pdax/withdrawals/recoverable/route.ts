@@ -154,7 +154,7 @@ export async function GET(req: Request) {
       });
       for (const ev of raw.events) {
         const topics = ev.topic.map((t) => scValToNative(t));
-        if (String(topics[0] ?? "").toLowerCase() !== "spend") continue;
+        if (String(topics[0] ?? "").toLowerCase() !== "withdraw") continue;
         const data = scValToNative(ev.value) as Record<string, unknown>;
         const memo = String(data.memo ?? "");
         if (memo !== SPEND_MEMO) continue;

@@ -174,7 +174,7 @@ function DetailBody({
           </div>
         </>
       );
-    case "Spend": {
+    case "Withdraw": {
       const isCashout = ev.memo === "PDAX cashout";
       return (
         <>
@@ -231,7 +231,7 @@ function DetailBody({
           <KVRow k="From" v={displayEnvelopeName(ev.envelope, envelopeNames)} />
         </>
       );
-    case "SubAccountSpent": {
+    case "SubAccountWithdraw": {
       const isCashout = ev.memo === "Cash out" || ev.memo === "PDAX cashout";
       return (
         <>
@@ -350,10 +350,10 @@ function kindLabel(ev: FeedEvent): string {
   switch (ev.kind) {
     case "Deposit":
       return "Remittance received";
-    case "Spend":
-      return ev.memo === "PDAX cashout" ? "Cash out" : "Spent from envelope";
+    case "Withdraw":
+      return ev.memo === "PDAX cashout" ? "Cash out" : "Withdrew from envelope";
     case "RequestCreated":
-      return "Spend request";
+      return "Withdrawal request";
     case "RequestApproved":
       return "Request approved";
     case "RequestDenied":
@@ -366,8 +366,8 @@ function kindLabel(ev: FeedEvent): string {
       return "Sub-account added";
     case "SubAccountFunded":
       return "Sent to sub-account";
-    case "SubAccountSpent":
-      return "Sub-account spent";
+    case "SubAccountWithdraw":
+      return "Sub-account cash out";
     case "SubAccountLockChanged":
       return "Sub-account lock changed";
     case "EarnEnabled":

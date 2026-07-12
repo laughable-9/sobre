@@ -41,7 +41,7 @@ export function RecentActivityPreview({
 }) {
   const [openEvent, setOpenEvent] = useState<FeedEvent | null>(null);
   const rows = events
-    .filter((e) => e.kind === "Spend" || e.kind === "Deposit")
+    .filter((e) => e.kind === "Withdraw" || e.kind === "Deposit")
     .slice(0, 3);
 
   return (
@@ -165,8 +165,8 @@ function RecentRow({
     );
   }
 
-  // Spend
-  if (ev.kind === "Spend") {
+  // Withdraw
+  if (ev.kind === "Withdraw") {
     const env = displayEnvelopeName(
       ev.envelope as EnvelopeName,
       envelopeNames,
@@ -190,7 +190,7 @@ function RecentRow({
         <div className="body">
           <div className="line">
             <span className="who">
-              {actorName} spent from{" "}
+              {actorName} withdrew from{" "}
               <span className="env-name">
                 {isKnownEnvelope ? env : ev.envelope}
               </span>

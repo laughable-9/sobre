@@ -22,7 +22,7 @@ export type FeedEvent =
       savings: bigint;
     })
   | (FeedEventBase & {
-      kind: "Spend";
+      kind: "Withdraw";
       caller: string;
       envelope: string;
       amount: bigint;
@@ -64,7 +64,7 @@ export type FeedEvent =
       amount: bigint;
     })
   | (FeedEventBase & {
-      kind: "SubAccountSpent";
+      kind: "SubAccountWithdraw";
       caller: string;
       amount: bigint;
       memo: string;
@@ -488,8 +488,8 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
  *  the row surface and the detail modal can never drift. */
 export function eventActor(ev: FeedEvent): string | null {
   switch (ev.kind) {
-    case "Spend":
-    case "SubAccountSpent":
+    case "Withdraw":
+    case "SubAccountWithdraw":
     case "RequestCreated":
       return ev.caller;
     case "GrowRequest":
@@ -541,10 +541,10 @@ function parseRawEvents(
         tuition: data.tuition as bigint,
         savings: data.savings as bigint,
       });
-    } else if (kind === "spend") {
+    } else if (kind === "withdraw") {
       out.push({
         ...base,
-        kind: "Spend",
+        kind: "Withdraw",
         caller: String(topics[1]),
         envelope: envelopeNameFromScNative(topics[2], "Groceries"),
         amount: data.amount as bigint,
@@ -599,10 +599,10 @@ function parseRawEvents(
         envelope: envelopeNameFromScNative(topics[2], "Groceries"),
         amount: data.amount as bigint,
       });
-    } else if (kind === "sub_account_spent") {
+    } else if (kind === "sub_account_withdraw") {
       out.push({
         ...base,
-        kind: "SubAccountSpent",
+        kind: "SubAccountWithdraw",
         caller: String(topics[1]),
         amount: data.amount as bigint,
         memo: String(data.memo ?? ""),

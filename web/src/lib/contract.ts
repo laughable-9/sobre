@@ -162,8 +162,8 @@ export function envelopeScVal(
   return xdr.ScVal.scvVec([xdr.ScVal.scvSymbol(variant)]);
 }
 
-/** SpendPolicy is now a Supabase-resident concept; no contract-side encoder. */
-export interface SpendPolicyShape {
+/** WalletPolicy is now a Supabase-resident concept; no contract-side encoder. */
+export interface WalletPolicyShape {
   requireAllSigs: boolean;
   dailyLimit: bigint | null;
   perTxThreshold: bigint | null;

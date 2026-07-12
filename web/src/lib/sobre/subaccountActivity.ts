@@ -43,7 +43,7 @@ export function subaccountActivity(
         direction: "in",
       });
     } else if (
-      ev.kind === "SubAccountSpent" &&
+      ev.kind === "SubAccountWithdraw" &&
       ev.caller === walletAddress
     ) {
       const php = (Number(ev.amount) / STROOPS_PER_USDC) * PHP_PER_USDC;

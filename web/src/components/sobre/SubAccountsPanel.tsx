@@ -4,25 +4,16 @@ import { useMemo, useState } from "react";
 import { Activity, Lock, LockOpen, Send, XCircle } from "lucide-react";
 
 import { useCancelSubaccountInvite } from "@/hooks/useCancelSubaccountInvite";
-import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
-import { useFundSubaccount } from "@/hooks/useFundSubaccount";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import { useToggleSubaccountLock } from "@/hooks/useToggleSubaccountLock";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
-import {
-  ENVELOPE_LABELS,
-  PHP_PER_USDC,
-  STROOPS_PER_USDC,
-  displayEnvelopeName,
-  type EnvelopeName,
-} from "@/lib/config";
+import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { friendlyError } from "@/lib/format";
-import { routeSpend } from "@/lib/policy";
 
 import { Avatar } from "./Avatar";
 import { ConfirmSheet } from "./ConfirmSheet";
-import { Sheet } from "./Sheet";
+import { FundSubAccountModal } from "./FundSubAccountModal";
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
 import { SupplementaryDetailModal } from "./SupplementaryDetailModal";
 
@@ -134,13 +125,16 @@ export function SubAccountsPanel({
         />
       ) : null}
 
-      {sendTarget && sendTarget.chain && sendTarget.row.walletAddress ? (
-        <SendSubAccountModal
-          target={sendTarget}
-          state={state}
-          familyWalletId={familyWalletId}
+      {sendTarget && sendTarget.row.walletAddress ? (
+        <FundSubAccountModal
           userAddress={userAddress}
           contractId={contractId}
+          state={state}
+          subRows={rows}
+          initialTarget={{
+            address: sendTarget.row.walletAddress,
+            displayName: sendTarget.row.displayName,
+          }}
           onClose={() => setSendTarget(null)}
           onSuccess={() => {
             setSendTarget(null);
@@ -283,7 +277,7 @@ function SubCard({
             <div
               style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}
             >
-              {isPending ? "Awaiting sign-up" : "Spendable balance"}
+              {isPending ? "Awaiting sign-up" : "Available balance"}
             </div>
           </div>
         </div>
@@ -394,252 +388,6 @@ function SubCard({
         onCancel={() => setConfirmingCancel(false)}
       />
     </div>
-  );
-}
-
-interface SendModalProps {
-  target: MergedSub;
-  state: WalletState;
-  familyWalletId: string | null;
-  userAddress: string;
-  contractId: string;
-  onClose: () => void;
-  onSuccess: () => void;
-  onFlash: (msg: string, kind?: "ok" | "warn") => void;
-}
-
-function SendSubAccountModal({
-  target,
-  state,
-  familyWalletId,
-  userAddress,
-  contractId,
-  onClose,
-  onSuccess,
-  onFlash,
-}: SendModalProps) {
-  const balances = state.balances;
-  const envelopeNames = state.envelope_names;
-  const [envelope, setEnvelope] = useState<EnvelopeName>("Groceries");
-  const [amount, setAmount] = useState<string>("500");
-  const { fund, pending: fundPending, error: fundError } = useFundSubaccount(
-    userAddress,
-    contractId,
-  );
-  // Admin's own wallet UUID. They are the originator of any pending
-  // request created here. Used to auto-record their approval at
-  // create-time so the 1-of-N count starts at 1.
-  const adminWalletDbId =
-    state.members.find((m) => m.address === userAddress)?.walletDbId ?? null;
-  const {
-    create: createPending,
-    pending: pendingPending,
-    error: pendingError,
-  } = useCreatePendingRequest(userAddress, adminWalletDbId);
-  const pending = fundPending || pendingPending;
-  const error = fundError ?? pendingError;
-
-  const recipient = target.row.walletAddress!;
-  const parsed = Number(amount);
-  const validAmount = parsed > 0 && Number.isFinite(parsed);
-
-  const envelopeIndex = ENVELOPE_LABELS.indexOf(envelope);
-  const envelopeBalancePhp =
-    (Number(balances[envelopeIndex] ?? 0n) / STROOPS_PER_USDC) * PHP_PER_USDC;
-
-  const ok = validAmount && parsed <= envelopeBalancePhp;
-
-  // Funding a sub-account FROM Savings IS a Savings withdrawal. Route the
-  // decision through the same spec the spend modal reads. Daily limits and
-  // per-tx threshold don't apply to admin-initiated sub-account top-ups, so
-  // we pass `dailySpent: 0`; the Savings-lock branch sits before the admin
-  // bypass in routeSpend specifically so admin-as-originator still routes
-  // to pending.
-  const stroopsRequested = validAmount
-    ? BigInt(Math.round((parsed / PHP_PER_USDC) * STROOPS_PER_USDC))
-    : 0n;
-  const verdict = routeSpend({
-    policy: state.policy,
-    caller: userAddress,
-    admin: state.admin,
-    envelope,
-    amountStroops: stroopsRequested,
-    dailySpentStroops: 0n,
-    envelopeBalanceStroops: balances[envelopeIndex] ?? 0n,
-    savingsLockAllAdmins: state.savings_lock_all_admins,
-    adminCount: state.admin_count,
-  });
-  const willGoPending = verdict.route === "pending";
-  // Same reason as in SpendModal: 0 admins means Supabase join hasn't
-  // resolved yet, so the verdict could mis-route. Disable submit until
-  // it does.
-  const familyNotReady = state.admin_count === 0;
-
-  const handleSend = async () => {
-    if (!ok || stroopsRequested <= 0n || familyNotReady) return;
-    try {
-      if (willGoPending) {
-        if (!familyWalletId) {
-          throw new Error("Family record not loaded yet. Try again.");
-        }
-        await createPending({
-          familyWalletId,
-          envelope,
-          amountStroops: stroopsRequested,
-          memo: `Top up ${target.row.displayName}`,
-          approvalMode: verdict.approvalMode,
-          kind: "subaccount_fund",
-          recipientAddress: recipient,
-        });
-        onFlash(
-          `Requested ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} for ${target.row.displayName}. Waiting on the other admins.`,
-        );
-      } else {
-        await fund(envelope, recipient, stroopsRequested);
-        onFlash(
-          `Sent ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} to ${target.row.displayName}`,
-        );
-      }
-      onSuccess();
-    } catch {
-      // surfaced via the hook error states above
-    }
-  };
-
-  return (
-    <Sheet onClose={onClose} ariaLabel="Send to sub-account">
-        <h2>Send to {target.row.displayName}</h2>
-        <p className="sub">
-          Money leaves an envelope and lands in their spendable balance.
-        </p>
-
-        {willGoPending ? (
-          <div
-            className="text-xs"
-            style={{
-              padding: "8px 10px",
-              borderRadius: 8,
-              background: "var(--surface-alt)",
-              border: "1px solid var(--border)",
-              color: "var(--text-2)",
-              marginBottom: 12,
-            }}
-          >
-            Savings is locked. This will create a top-up request that every
-            admin must approve.
-          </div>
-        ) : null}
-
-        <div className="sobre-input-group">
-          <label>Envelope</label>
-          <div className="grid grid-cols-3 gap-2 mt-1">
-            {ENVELOPE_LABELS.map((e, i) => {
-              const bal =
-                (Number(balances[i] ?? 0n) / STROOPS_PER_USDC) * PHP_PER_USDC;
-              const active = envelope === e;
-              return (
-                <button
-                  key={e}
-                  type="button"
-                  onClick={() => setEnvelope(e)}
-                  disabled={pending}
-                  className="flex flex-col items-start gap-1 p-3 rounded-[10px] text-left"
-                  style={{
-                    border: active
-                      ? "1.5px solid var(--sobre-accent)"
-                      : "1px solid var(--border)",
-                    background: active
-                      ? "var(--accent-soft)"
-                      : "var(--surface-alt)",
-                    cursor: pending ? "not-allowed" : "pointer",
-                    opacity: pending ? 0.6 : 1,
-                  }}
-                >
-                  <div
-                    className="text-[13px] font-medium"
-                    style={{
-                      color: active ? "var(--sobre-accent)" : "var(--text-1)",
-                    }}
-                  >
-                    {displayEnvelopeName(e, envelopeNames)}
-                  </div>
-                  <div
-                    className="text-[11px] tabular"
-                    style={{ color: "var(--text-3)" }}
-                  >
-                    ₱{bal.toLocaleString("en-PH", { maximumFractionDigits: 0 })}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="sobre-input-group">
-          <label htmlFor="sub-fund-amount">Amount in pesos</label>
-          <div className="sobre-input-wrap">
-            <span className="prefix">₱</span>
-            <input
-              id="sub-fund-amount"
-              type="number"
-              inputMode="decimal"
-              min="0"
-              step="1"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-              className="sobre-input has-prefix tabular"
-              disabled={pending}
-            />
-          </div>
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-3)",
-              marginTop: 6,
-            }}
-          >
-            Envelope holds ₱
-            {envelopeBalancePhp.toLocaleString("en-PH", {
-              minimumFractionDigits: 2,
-              maximumFractionDigits: 2,
-            })}
-            .
-          </div>
-        </div>
-
-        {error ? (
-          <p
-            className="text-xs break-all mb-3"
-            style={{ color: "var(--sobre-danger)" }}
-          >
-            {error}
-          </p>
-        ) : null}
-
-        <div className="sobre-modal-actions">
-          <button
-            type="button"
-            className="sobre-btn sobre-btn-soft"
-            onClick={onClose}
-          >
-            Cancel
-          </button>
-          <button
-            type="button"
-            onClick={handleSend}
-            disabled={!ok || pending || familyNotReady}
-            className="sobre-btn sobre-btn-primary"
-            style={{ opacity: !ok || pending || familyNotReady ? 0.55 : 1 }}
-          >
-            {(() => {
-              const verb = willGoPending ? "Request" : "Send";
-              if (familyNotReady) return "Loading family rules…";
-              if (pending) return `${verb}ing…`;
-              return `${verb} ₱${validAmount ? parsed.toLocaleString("en-PH") : "0"}`;
-            })()}
-          </button>
-        </div>
-    </Sheet>
   );
 }
 
