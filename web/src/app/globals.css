@@ -902,7 +902,9 @@
    Anchored to its trigger via the wrapping .sobre-wallet-menu div. */
 .sobre-wallet-menu { position: relative; display: inline-block; }
 .sobre-wallet-menu-pill {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
   gap: 8px;
   padding: 7px 12px;
@@ -916,6 +918,7 @@
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
 }
+.sobre-wallet-menu-pill > * { align-self: center; }
 .sobre-wallet-menu-pill:hover {
   background: var(--surface-alt);
   border-color: var(--border-strong);

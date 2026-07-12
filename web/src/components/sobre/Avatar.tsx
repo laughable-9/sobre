@@ -58,6 +58,7 @@ export function Avatar({
         fontFamily: "var(--font-manrope), var(--font-sans), sans-serif",
         fontWeight: 600,
         fontSize: Math.round(size * 0.42),
+        lineHeight: 1,
         letterSpacing: 0.4,
         userSelect: "none",
         ...style,
