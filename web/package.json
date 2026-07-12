@@ -7,6 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "bootstrap:relay-usdc-trustline": "node scripts/bootstrap-relay-usdc-trustline.mjs",
     "postinstall": "node scripts/fix-passkey-kit.mjs"
   },
   "dependencies": {
