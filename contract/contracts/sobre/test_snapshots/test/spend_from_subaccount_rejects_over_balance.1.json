@@ -160,7 +160,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "i128": "100000000"
+                  "i128": "20000000"
                 }
               ]
             }
@@ -340,7 +340,7 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "400000000"
+                            "i128": "480000000"
                           },
                           {
                             "i128": "300000000"
@@ -425,7 +425,7 @@
                                   "symbol": "balance"
                                 },
                                 "val": {
-                                  "i128": "100000000"
+                                  "i128": "20000000"
                                 }
                               },
                               {

@@ -111,6 +111,38 @@
                 {
                   "vec": [
                     {
+                      "symbol": "Groceries"
+                    }
+                  ]
+                },
+                {
+                  "i128": "100000000"
+                },
+                {
+                  "string": "x"
+                }
+              ]
+            }
+          },
+          "sub_invocations": []
+        }
+      ]
+    ],
+    [
+      [
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+        {
+          "function": {
+            "contract_fn": {
+              "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
+              "function_name": "spend",
+              "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
+                  "vec": [
+                    {
                       "symbol": "Tuition"
                     }
                   ]
@@ -119,7 +151,7 @@
                   "i128": "50000000"
                 },
                 {
-                  "string": "school fee"
+                  "string": "x"
                 }
               ]
             }
@@ -151,7 +183,7 @@
                   "i128": "20000000"
                 },
                 {
-                  "string": "savings draw"
+                  "string": "x"
                 }
               ]
             }
@@ -160,6 +192,7 @@
         }
       ]
     ],
+    [],
     []
   ],
   "ledger": {
@@ -282,6 +315,26 @@
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
               "key": {
                 "ledger_key_nonce": {
+                  "nonce": "4270020994084947596"
+                }
+              },
+              "durability": "temporary",
+              "val": "void"
+            }
+          },
+          "ext": "v0"
+        },
+        "live_until": 6311999
+      },
+      {
+        "entry": {
+          "last_modified_ledger_seq": 0,
+          "data": {
+            "contract_data": {
+              "ext": "v0",
+              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M",
+              "key": {
+                "ledger_key_nonce": {
                   "nonce": "4837995959683129791"
                 }
               },
@@ -331,7 +384,7 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "500000000"
+                            "i128": "400000000"
                           },
                           {
                             "i128": "250000000"
@@ -425,7 +478,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "9070000000"
+                      "i128": "9170000000"
                     }
                   },
                   {
@@ -477,7 +530,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "930000000"
+                      "i128": "830000000"
                     }
                   },
                   {
