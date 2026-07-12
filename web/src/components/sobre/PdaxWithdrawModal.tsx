@@ -432,7 +432,7 @@ export function PdaxWithdrawModal({
   const error = pdaxError ?? signError;
 
   return (
-    <Sheet onClose={handleClose} draggable={false} ariaLabel="Cash out">
+    <Sheet onClose={handleClose} ariaLabel="Cash out">
         {/* See PdaxDepositModal for the rationale on key={phase} + the
             entry animation classes. */}
         <div

@@ -258,7 +258,7 @@ export function SubAccountCashoutModal({
   };
 
   return (
-    <Sheet onClose={close} draggable={false} ariaLabel="Cash out">
+    <Sheet onClose={close} ariaLabel="Cash out">
         {phase === "loading_bank" ? (
           <CenteredSpinner label="Loading…" />
         ) : null}

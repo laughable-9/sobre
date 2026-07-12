@@ -350,7 +350,6 @@ export function PdaxDepositModal({
     <Sheet
       onClose={() => void attemptCancel()}
       canClose={!lockedPhase}
-      draggable={false}
       ariaLabel="Add money"
     >
         {/* key={phase} on the inner wrapper remounts the active phase on

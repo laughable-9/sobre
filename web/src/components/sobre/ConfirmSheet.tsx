@@ -42,7 +42,6 @@ export function ConfirmSheet({
     <Sheet
       onClose={onCancel}
       canClose={!pending}
-      draggable={false}
       ariaLabel={title}
       role="alertdialog"
       className="sobre-confirm-sheet"
