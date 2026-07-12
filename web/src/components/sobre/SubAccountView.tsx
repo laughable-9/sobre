@@ -5,10 +5,8 @@ import { Clock, Lock } from "lucide-react";
 import {
   ArrowSquareOutIcon,
   HouseIcon,
-  SignOutIcon,
   UserIcon,
 } from "@phosphor-icons/react";
-import { useRouter } from "next/navigation";
 
 import { useActiveSubaccountCashouts } from "@/hooks/useActiveSubaccountCashouts";
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
@@ -16,11 +14,12 @@ import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
 import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
-import { formatShortDateTime, shortenAddress } from "@/lib/format";
+import { formatShortDateTime } from "@/lib/format";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { Avatar } from "./Avatar";
+import { ProfileSheet } from "./ProfileSheet";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
 
 interface Props {
@@ -87,9 +86,21 @@ export function SubAccountView({
   const displayName =
     preferredDisplayName ?? myRow?.displayName ?? "Allowance";
   const avatarUrl = wallet.wallet?.avatar_url ?? null;
-  const email = wallet.user?.email ?? "";
 
-  const canCashOut = !locked && balanceStroops > 0n;
+  const onCashOutTap = () => {
+    if (locked) {
+      onFlash(
+        "This account is locked. Ask an admin to unlock it before cashing out.",
+        "warn",
+      );
+      return;
+    }
+    if (balanceStroops <= 0n) {
+      onFlash("Nothing to cash out yet.", "warn");
+      return;
+    }
+    setCashoutOpen(true);
+  };
 
   return (
     <>
@@ -334,21 +345,18 @@ export function SubAccountView({
       ) : null}
 
       {tab === "user" ? (
-        <SubAccountProfile
-          displayName={displayName}
-          email={email}
-          avatarUrl={avatarUrl}
-          address={userAddress}
-          walletName={state.wallet_name}
-          wallet={wallet}
-        />
+        <div
+          className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
+          style={{ maxWidth: 460 }}
+        >
+          <ProfileSheet wallet={wallet} />
+        </div>
       ) : null}
 
       <SubAccountDock
         active={tab}
         onTab={setTab}
-        canCashOut={canCashOut}
-        onCashOut={() => setCashoutOpen(true)}
+        onCashOut={onCashOutTap}
       />
 
       {cashoutOpen && myRow ? (
@@ -374,91 +382,16 @@ export function SubAccountView({
   );
 }
 
-function SubAccountProfile({
-  displayName,
-  email,
-  avatarUrl,
-  address,
-  walletName,
-  wallet,
-}: {
-  displayName: string;
-  email: string;
-  avatarUrl: string | null;
-  address: string;
-  walletName: string;
-  wallet: WalletConnectionState;
-}) {
-  const router = useRouter();
-  const [busy, setBusy] = useState(false);
-
-  const signOut = async () => {
-    setBusy(true);
-    try {
-      await wallet.disconnect();
-    } finally {
-      router.replace("/");
-    }
-  };
-
-  return (
-    <section
-      className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
-      aria-label="User"
-      style={{ maxWidth: 460 }}
-    >
-      <div className="sobre-profile">
-        <div className="head">
-          <Avatar src={avatarUrl} name={displayName} size={72} />
-          <div className="who">
-            <div className="name">{displayName}</div>
-            {email ? <div className="email">{email}</div> : null}
-          </div>
-        </div>
-
-        <dl className="sobre-profile-meta">
-          <div>
-            <dt>Family</dt>
-            <dd>{walletName || "Sobre family"}</dd>
-          </div>
-          <div>
-            <dt>Your wallet</dt>
-            <dd className="tabular">{shortenAddress(address)}</dd>
-          </div>
-        </dl>
-
-        <button
-          type="button"
-          onClick={() => void signOut()}
-          disabled={busy}
-          className="sobre-btn sobre-btn-soft w-full justify-center"
-          style={{
-            padding: "14px 22px",
-            fontSize: 15,
-            marginTop: 18,
-            opacity: busy ? 0.55 : 1,
-          }}
-        >
-          <SignOutIcon weight="bold" size={16} />
-          {busy ? "Signing out…" : "Sign out"}
-        </button>
-      </div>
-    </section>
-  );
-}
-
 /** Sub-account dock: mirrors the main wallet's 5-slot dock but with only
  *  Home + Cash-out fab + User. Uses the same .sobre-dock chrome so both
  *  shells look identical. */
 function SubAccountDock({
   active,
   onTab,
-  canCashOut,
   onCashOut,
 }: {
   active: SubTab;
   onTab: (tab: SubTab) => void;
-  canCashOut: boolean;
   onCashOut: () => void;
 }) {
   return (
@@ -478,10 +411,8 @@ function SubAccountDock({
         <button
           type="button"
           onClick={onCashOut}
-          disabled={!canCashOut}
           className="sobre-dock-fab"
           aria-label="Cash out"
-          style={{ opacity: canCashOut ? 1 : 0.5 }}
         >
           <ArrowSquareOutIcon weight="fill" size={26} />
         </button>
