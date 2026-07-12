@@ -6,7 +6,6 @@ import type { WalletPolicyShape } from "@/lib/contract";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 import { DEFAULT_ICON_KEY_BY_SLOT } from "@/lib/envelopeIcons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { firstJoined } from "@/lib/supabase/utils";
 
 export interface FamilyMemberDisplay {
   contractId: string;
@@ -166,9 +165,7 @@ export function useFamilyDisplay(
           .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
-          .select(
-            "wallet_id, role, name, wallets(contract_id, avatar_url)",
-          )
+          .select("wallet_id, role, name, contract_id, avatar_url")
           .eq("family_wallet_id", row.id),
       ]);
       if (namesQ.error) {
@@ -215,21 +212,20 @@ export function useFamilyDisplay(
       setEnvelopeIcons(nextIcons);
 
       const map = new Map<string, FamilyMemberDisplay>();
-      type WalletJoined = { contract_id: string; avatar_url: string | null };
       type MemberRow = {
         wallet_id: string;
         role: "admin" | "recipient";
         name: string | null;
-        wallets: WalletJoined | WalletJoined[] | null;
+        contract_id: string | null;
+        avatar_url: string | null;
       };
       for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
-        const wallets = firstJoined(m.wallets);
-        if (!wallets?.contract_id) continue;
-        map.set(wallets.contract_id, {
-          contractId: wallets.contract_id,
+        if (!m.contract_id) continue;
+        map.set(m.contract_id, {
+          contractId: m.contract_id,
           walletDbId: m.wallet_id,
           name: m.name ?? "",
-          avatarUrl: wallets.avatar_url ?? null,
+          avatarUrl: m.avatar_url ?? null,
           role: m.role,
         });
       }
