@@ -1,11 +1,7 @@
 "use client";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import {
-  PAYMENT_TOKEN_LABEL,
-  PHP_PER_USDC,
-  STROOPS_PER_USDC,
-} from "@/lib/config";
+import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import { walletTotalStroops } from "@/lib/walletTotals";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
@@ -60,22 +56,6 @@ export function BalanceHero({
             );
           }}
         />
-      </div>
-      <div className="sub">
-        <span className="tabular">
-          {totalToken.toFixed(4)} {PAYMENT_TOKEN_LABEL}
-        </span>
-        <span
-          aria-hidden
-          style={{
-            width: 3,
-            height: 3,
-            borderRadius: 999,
-            background: "currentColor",
-            opacity: 0.7,
-          }}
-        />
-        <span>{state.balances.length} envelopes</span>
       </div>
       {children}
     </section>
