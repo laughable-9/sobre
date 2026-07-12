@@ -4,7 +4,13 @@ import { useCallback } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
 import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
-import { FACTORY_CONTRACT_ID, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
+import {
+  BLEND_POOL_ID,
+  FACTORY_CONTRACT_ID,
+  PAYMENT_TOKEN_SAC_ID,
+  SOROSWAP_ROUTER_ID,
+  XLM_SAC_ID,
+} from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
 import { mirrorFamilyCreate } from "@/lib/familyWallets";
 
@@ -57,6 +63,14 @@ export function useCreateSobre(
         throw new Error("create_sobre returned no contract address");
       }
       const newContractId = returnValue;
+      // Auto-enable Grow so PDAX deposits work on first try — the
+      // contract's deposit_from_xlm reads Blend + Soroswap addresses
+      // out of Grow storage. Second FaceID prompt is the trade-off.
+      await invokeWrite(newContractId, "grow_enable", [
+        Address.fromString(BLEND_POOL_ID).toScVal(),
+        Address.fromString(XLM_SAC_ID).toScVal(),
+        Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+      ]);
       await mirrorFamilyCreate({
         contractId: newContractId,
         displayName: walletName,
