@@ -292,34 +292,70 @@ export default function MySobresPage() {
           </div>
         ) : allRows.length === 0 ? (
           <div
-            className="text-center py-16 px-6 sobre-card-flat"
-            style={{ boxShadow: "none" }}
+            className="text-center px-6 sobre-card-flat"
+            style={{
+              padding: "56px 24px",
+              background: "var(--surface-alt)",
+              boxShadow: "none",
+            }}
           >
-            <Image
-              src="/sobre-logo2.svg"
-              alt=""
-              width={48}
-              height={48}
-              className="mx-auto mb-4 opacity-70"
-            />
+            <div
+              className="mx-auto grid place-items-center"
+              style={{
+                width: 72,
+                height: 72,
+                borderRadius: 20,
+                background: "var(--accent-soft)",
+                color: "var(--sobre-accent)",
+                marginBottom: 20,
+              }}
+              aria-hidden
+            >
+              <Image
+                src="/sobre-logo2.svg"
+                alt=""
+                width={40}
+                height={40}
+              />
+            </div>
             <h2
               className="font-serif"
-              style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}
+              style={{ fontSize: 26, fontWeight: 600, marginBottom: 10 }}
             >
-              No Sobres yet
+              Open your first Sobre
             </h2>
             <p
               style={{
-                fontSize: 14,
+                fontSize: 15,
                 color: "var(--text-2)",
-                maxWidth: 380,
-                margin: "0 auto",
+                maxWidth: 420,
+                margin: "0 auto 24px",
+                lineHeight: 1.55,
               }}
             >
-              Open your first Sobre to start the auto-split for your family,
-              or paste an invite link if someone in your family already opened
-              one.
+              A shared wallet for your family. Every deposit splits
+              automatically across the envelopes you set — Groceries, Tuition,
+              Savings.
             </p>
+            <div className="flex gap-2 flex-wrap justify-center">
+              <button
+                type="button"
+                onClick={() => setMode("new")}
+                className="sobre-btn sobre-btn-primary"
+                style={{ padding: "12px 20px", fontSize: 14 }}
+              >
+                <PlusCircleIcon weight="bold" size={16} />
+                Open a new Sobre
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("join")}
+                className="sobre-btn sobre-btn-soft"
+                style={{ padding: "12px 20px", fontSize: 14 }}
+              >
+                Join via invite link
+              </button>
+            </div>
           </div>
         ) : (
           <div
