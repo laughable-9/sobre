@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -42,6 +42,20 @@ export default function MySobresPage() {
   const adminSobres = useSobresOfAdmin(address);
   const mirroredIds = useFamilyWalletContractIds();
   const [joined, setJoined] = useState<string[]>([]);
+  // Contract IDs each SobreCard reports as "don't render" (chain sim
+  // trapped, no Supabase mirror, or caller isn't in the members list).
+  // Filtering these out of allRows lets the empty state trigger when
+  // every wallet is broken instead of an empty grid rendering under the
+  // header.
+  const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
+  const markHidden = useCallback((id: string) => {
+    setHiddenIds((prev) => {
+      if (prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.add(id);
+      return next;
+    });
+  }, []);
   const [mode, setMode] = useState<Mode>("list");
   // null = still hydrating (avoids SSR/client localStorage divergence).
   const [hasProfile, setHasProfile] = useState<boolean | null>(null);
@@ -226,7 +240,8 @@ export default function MySobresPage() {
         )
         .map((id) => ({ id, role: "member" as const }))
     : [];
-  const allRows = [...adminRows, ...memberRows];
+  const combinedRows = [...adminRows, ...memberRows];
+  const allRows = combinedRows.filter((r) => !hiddenIds.has(r.id));
 
   return (
     <div className="sobre-app sobre-v2">
@@ -371,6 +386,7 @@ export default function MySobresPage() {
                 contractId={row.id}
                 role={row.role}
                 callerAddress={address}
+                onHide={() => markHidden(row.id)}
                 onNotAMember={
                   row.role === "member"
                     ? () => {
@@ -392,11 +408,15 @@ function SobreCard({
   contractId,
   role,
   callerAddress,
+  onHide,
   onNotAMember,
 }: {
   contractId: string;
   role: "admin" | "member";
   callerAddress: string;
+  /** Called once when this card decides not to render — parent uses it to
+   *  drop the row from allRows so the empty state can trigger. */
+  onHide: () => void;
   /** Called once when the on-chain members list confirms the caller has been
    *  kicked. Parent uses this to forget the localStorage entry + drop the
    *  card from the list. Only fired for `role === "member"`. */
@@ -404,8 +424,12 @@ function SobreCard({
 }) {
   const { summary, loading } = useSobreSummary(contractId, callerAddress);
 
+  // Only trust the on-chain membership list when get_state actually worked.
+  // If it trapped (chainFailed) the members array is empty by default, and
+  // treating that as "you got kicked" would hide the card wrongly.
   const stillAMember =
     summary === null ||
+    summary.chainFailed ||
     summary.members.some((m) => m.address === callerAddress);
   useEffect(() => {
     if (summary && !stillAMember && onNotAMember) {
@@ -413,11 +437,15 @@ function SobreCard({
     }
   }, [summary, stillAMember, onNotAMember]);
 
-  if (summary && !stillAMember) return null;
-  // Orphan on-chain contracts with no Supabase mirror (typically failed
-  // creates before the schema migration landed) don't render — they'd all
-  // show up as identical "Family Wallet" cards otherwise.
-  if (summary && summary.isOrphan) return null;
+  const shouldHide =
+    (summary && !stillAMember) ||
+    (summary && summary.isOrphan) ||
+    (summary && summary.chainFailed);
+  useEffect(() => {
+    if (shouldHide) onHide();
+  }, [shouldHide, onHide]);
+
+  if (shouldHide) return null;
 
   const totalUsdc =
     summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;
@@ -444,31 +472,16 @@ function SobreCard({
           >
             {loading ? "Loading…" : walletName}
           </h3>
-          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
-            <span
-              className="sobre-pill inline-flex"
-              style={{
-                background: "var(--accent-soft)",
-                color: "var(--sobre-accent)",
-                fontSize: 10,
-              }}
-            >
-              {role === "admin" ? "Admin" : "Member"}
-            </span>
-            {summary?.chainFailed ? (
-              <span
-                className="sobre-pill inline-flex"
-                style={{
-                  background: "rgba(220,38,38,0.07)",
-                  color: "var(--sobre-danger)",
-                  fontSize: 10,
-                }}
-                title="On-chain call to get_state trapped. Wasm probably needs an upgrade."
-              >
-                Needs upgrade
-              </span>
-            ) : null}
-          </div>
+          <span
+            className="sobre-pill mt-1.5 inline-flex"
+            style={{
+              background: "var(--accent-soft)",
+              color: "var(--sobre-accent)",
+              fontSize: 10,
+            }}
+          >
+            {role === "admin" ? "Admin" : "Member"}
+          </span>
         </div>
         <CaretRightIcon
           weight="bold"
