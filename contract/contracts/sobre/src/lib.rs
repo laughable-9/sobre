@@ -111,7 +111,7 @@ impl Envelope {
 
 /// On-chain a member is just an address. Display + role + family rules
 /// (split percents, policy, thresholds, daily limits) all live in Supabase.
-/// The contract only cares which addresses are authorized to spend.
+/// The contract only cares which addresses are authorized to withdraw.
 #[contracttype]
 #[derive(Clone, Debug)]
 pub struct Member {
@@ -119,9 +119,9 @@ pub struct Member {
 }
 
 /// Supplementary-card holder. A separate identity tier from `Member`:
-/// sub-accounts can only spend from their own `balance` (not envelopes),
+/// sub-accounts can only withdraw from their own `balance` (not envelopes),
 /// admin tops them up from any envelope via `fund_subaccount`, and admin can
-/// flip `locked` to freeze spending instantly. Token custody stays with the
+/// flip `locked` to freeze withdrawals instantly. Token custody stays with the
 /// contract; this is an internal ledger entry.
 #[contracttype]
 #[derive(Clone, Debug)]
@@ -316,11 +316,12 @@ pub struct Deposit {
     pub savings: i128,
 }
 
-/// Emitted by `spend` (self-spend) AND `spend_on_behalf` (admin-released).
-/// `caller` is always the member whose envelope was debited.
+/// Emitted by `withdraw`. `caller` is the member whose envelope was
+/// debited — tokens land in their wallet, ready to be forwarded to
+/// PDAX for a bank cashout (the only real off-ramp for OFW families).
 #[contractevent]
 #[derive(Clone, Debug)]
-pub struct Spend {
+pub struct Withdraw {
     #[topic]
     pub caller: Address,
     #[topic]
@@ -419,7 +420,7 @@ pub struct SubAccountFunded {
 
 #[contractevent]
 #[derive(Clone, Debug)]
-pub struct SubAccountSpent {
+pub struct SubAccountWithdraw {
     #[topic]
     pub caller: Address,
     pub amount: i128,
@@ -732,8 +733,8 @@ const ENVELOPES: [Envelope; 3] = [Envelope::Groceries, Envelope::Tuition, Envelo
 /// the cache. Returns the balances vec (mutated in-place so callers can
 /// do their own debit and one `inst.set` on the way out).
 ///
-/// This is the "transparent Earn" magic — spenders/subaccount-funders
-/// never call `earn_withdraw` themselves; they just call `spend` and this
+/// This is the "transparent Earn" magic — withdrawers/subaccount-funders
+/// never call `earn_withdraw` themselves; they just call `withdraw` and this
 /// helper handles the USDY redeem in the same tx.
 fn ensure_envelope_liquidity(env: &Env, envelope: Envelope, amount: i128) -> Vec<i128> {
     let inst = env.storage().instance();
@@ -995,12 +996,12 @@ fn find_grow_request_index(
     None
 }
 
-/// Shared by `spend` and `spend_on_behalf`. Assumes auth + member checks
-/// already done. Transfers tokens to `caller`'s wallet, debits the envelope,
-/// emits Spend with `caller` as the topic. When Earn is enabled and the
+/// Used by `withdraw`. Assumes auth + member checks already done.
+/// Transfers tokens to `caller`'s wallet, debits the envelope, emits
+/// Withdraw with `caller` as the topic. When Earn is enabled and the
 /// envelope's cache is short, `ensure_envelope_liquidity` auto-redeems
-/// from USDY so the spend lands transparently in the same tx.
-fn execute_spend(env: &Env, caller: &Address, envelope: Envelope, amount: i128, memo: &String) {
+/// from USDY so the withdraw lands transparently in the same tx.
+fn execute_withdraw(env: &Env, caller: &Address, envelope: Envelope, amount: i128, memo: &String) {
     if amount <= 0 {
         panic_with_error!(env, Error::InvalidAmount);
     }
@@ -1019,7 +1020,7 @@ fn execute_spend(env: &Env, caller: &Address, envelope: Envelope, amount: i128, 
     );
     balances.set(index, current - amount);
     inst.set(&DataKey::Balances, &balances);
-    Spend {
+    Withdraw {
         caller: caller.clone(),
         envelope,
         amount,
@@ -1281,7 +1282,7 @@ impl SobreContract {
         // Groceries + Tuition always credit the envelope cache directly.
         // Savings routes through USDY when Earn is enabled — the envelope
         // cache stays at its current value (usually 0 post-migration) so
-        // spending logic uses `ensure_envelope_liquidity` to auto-redeem.
+        // withdraw logic uses `ensure_envelope_liquidity` to auto-redeem.
         let earn_on = is_earn_enabled(&env);
         let new_savings_cache = if earn_on && savings > 0 {
             balances.get(2).unwrap()
@@ -1386,31 +1387,14 @@ impl SobreContract {
         .publish(&env);
     }
 
-    /// Member self-spend. Balance check + transfer to caller + emit. The
-    /// approval gate (daily limit, per-tx threshold, protected envelopes)
-    /// lives off-chain — the frontend checks Supabase policy before deciding
-    /// whether to call this directly or stage an admin-approval request.
-    pub fn spend(env: Env, caller: Address, envelope: Envelope, amount: i128, memo: String) {
+    /// Member pulls USDC out of an envelope into their own wallet. The
+    /// only downstream path is the PDAX cashout flow — this contract
+    /// doesn't concern itself with what the wallet does with the funds
+    /// after that. Balance check + transfer + emit.
+    pub fn withdraw(env: Env, caller: Address, envelope: Envelope, amount: i128, memo: String) {
         caller.require_auth();
         require_member(&env, &caller);
-        execute_spend(&env, &caller, envelope, amount, &memo);
-    }
-
-    /// Admin-signed release of an approved spend request. The Spend event is
-    /// emitted with `member` as the caller topic so the activity feed shows
-    /// the request's originator. Tokens land in the member's wallet exactly
-    /// as if they had self-spent; from there they complete the cashout
-    /// (PDAX) on their own time.
-    pub fn spend_on_behalf(
-        env: Env,
-        member: Address,
-        envelope: Envelope,
-        amount: i128,
-        memo: String,
-    ) {
-        require_admin_auth(&env);
-        require_member(&env, &member);
-        execute_spend(&env, &member, envelope, amount, &memo);
+        execute_withdraw(&env, &caller, envelope, amount, &memo);
     }
 
     /// Admin mints a sub-account invite. Same sha256-of-plaintext shape as
@@ -1500,14 +1484,14 @@ impl SobreContract {
 
     /// Admin tops up a sub-account from a specific envelope. Internal ledger
     /// transfer: debits the envelope, credits the sub. No token leaves the
-    /// contract — custody stays here until the sub-account holder spends.
+    /// contract — custody stays here until the sub-account holder withdraws.
     pub fn fund_subaccount(env: Env, envelope: Envelope, recipient: Address, amount: i128) {
         require_admin_auth(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         // Auto-redeems from USDY when the envelope is Savings and its
-        // cache is short — same transparent-Earn magic as `execute_spend`.
+        // cache is short — same transparent-Earn magic as `execute_withdraw`.
         let mut balances = ensure_envelope_liquidity(&env, envelope, amount);
         let inst = env.storage().instance();
         let idx = envelope.index();
@@ -1532,10 +1516,10 @@ impl SobreContract {
         .publish(&env);
     }
 
-    /// Sub-account holder self-spend. Refuses if admin has locked them.
-    /// Transfers tokens to caller's wallet; cashout (PDAX) completes from
-    /// there, same shape as `spend` for members.
-    pub fn spend_from_subaccount(env: Env, caller: Address, amount: i128, memo: String) {
+    /// Sub-account holder pulls funds out of their tracked balance into
+    /// their own wallet. Refuses if admin has locked them. Cashout (PDAX)
+    /// completes from there, same shape as `withdraw` for members.
+    pub fn withdraw_subaccount(env: Env, caller: Address, amount: i128, memo: String) {
         caller.require_auth();
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
@@ -1560,7 +1544,7 @@ impl SobreContract {
         sub.balance -= amount;
         subs.set(sub_idx, sub);
         inst.set(&DataKey::SubAccounts, &subs);
-        SubAccountSpent {
+        SubAccountWithdraw {
             caller,
             amount,
             memo,
@@ -1631,7 +1615,7 @@ impl SobreContract {
 
     /// Admin explicitly moves `amount` USDC stroops from `envelope`'s cache
     /// into USDY. Normally callers don't reach for this — Savings gets
-    /// auto-supplied on deposit and auto-redeemed on spend — but it's kept
+    /// auto-supplied on deposit and auto-redeemed on withdraw — but it's kept
     /// as an escape hatch for Groceries/Tuition or for post-hoc migration.
     pub fn earn_supply(env: Env, envelope: Envelope, amount: i128) {
         require_admin_auth(&env);
@@ -1657,7 +1641,7 @@ impl SobreContract {
 
     /// Admin explicitly pulls `amount` USDC stroops back from USDY into
     /// `envelope`'s cache. Escape hatch — auto-redeem already covers the
-    /// Savings spend path.
+    /// Savings withdraw path.
     pub fn earn_withdraw(env: Env, envelope: Envelope, amount: i128) {
         require_admin_auth(&env);
         if amount <= 0 {

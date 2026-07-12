@@ -54,13 +54,19 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "deposit",
+              "function_name": "deposit_with_split",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "1000000000"
+                  "i128": "500000000"
+                },
+                {
+                  "i128": "300000000"
+                },
+                {
+                  "i128": "200000000"
                 }
               ]
             }
@@ -97,10 +103,10 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "create_invite",
+              "function_name": "create_subaccount_invite",
               "args": [
                 {
-                  "bytes": "4bb06f8e4e3a7715d201d573d0aa423762e55dabd61a2c02278fa56cc6d294e0"
+                  "bytes": "de1349c105ffe29ab10b68492986aa6c081672d045b02d474570fbf5bda3a40d"
                 },
                 {
                   "u32": 1000
@@ -119,13 +125,13 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "join_wallet",
+              "function_name": "join_as_subaccount",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "bytes": "0707070707070707070707070707070707070707070707070707070707070707"
+                  "bytes": "2121212121212121212121212121212121212121212121212121212121212121"
                 }
               ]
             }
@@ -141,52 +147,20 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "apply_settings",
+              "function_name": "fund_subaccount",
               "args": [
                 {
                   "vec": [
                     {
-                      "vec": [
-                        {
-                          "symbol": "Policy"
-                        },
-                        {
-                          "map": [
-                            {
-                              "key": {
-                                "symbol": "daily_limit"
-                              },
-                              "val": "void"
-                            },
-                            {
-                              "key": {
-                                "symbol": "per_tx_threshold"
-                              },
-                              "val": {
-                                "i128": "100000000"
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "protected_envelopes"
-                              },
-                              "val": {
-                                "vec": []
-                              }
-                            },
-                            {
-                              "key": {
-                                "symbol": "require_all_sigs"
-                              },
-                              "val": {
-                                "bool": false
-                              }
-                            }
-                          ]
-                        }
-                      ]
+                      "symbol": "Groceries"
                     }
                   ]
+                },
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                },
+                {
+                  "i128": "100000000"
                 }
               ]
             }
@@ -202,23 +176,16 @@
           "function": {
             "contract_fn": {
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "function_name": "spend",
+              "function_name": "withdraw_subaccount",
               "args": [
                 {
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
                 },
                 {
-                  "vec": [
-                    {
-                      "symbol": "Groceries"
-                    }
-                  ]
+                  "i128": "50000000"
                 },
                 {
-                  "i128": "100000000"
-                },
-                {
-                  "string": "exactly at threshold"
+                  "string": "snack"
                 }
               ]
             }
@@ -227,6 +194,7 @@
         }
       ]
     ],
+    [],
     []
   ],
   "ledger": {
@@ -367,36 +335,6 @@
             "contract_data": {
               "ext": "v0",
               "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
-              "key": {
-                "vec": [
-                  {
-                    "symbol": "DailySpent"
-                  },
-                  {
-                    "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                  },
-                  {
-                    "u64": "0"
-                  }
-                ]
-              },
-              "durability": "persistent",
-              "val": {
-                "i128": "100000000"
-              }
-            }
-          },
-          "ext": "v0"
-        },
-        "live_until": 4095
-      },
-      {
-        "entry": {
-          "last_modified_ledger_seq": 0,
-          "data": {
-            "contract_data": {
-              "ext": "v0",
-              "contract": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "key": "ledger_key_contract_instance",
               "durability": "persistent",
               "val": {
@@ -472,18 +410,6 @@
                                 }
                               }
                             ]
-                          },
-                          {
-                            "map": [
-                              {
-                                "key": {
-                                  "symbol": "address"
-                                },
-                                "val": {
-                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
-                                }
-                              }
-                            ]
                           }
                         ]
                       }
@@ -504,63 +430,39 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Percents"
+                            "symbol": "SubAccounts"
                           }
                         ]
                       },
                       "val": {
                         "vec": [
                           {
-                            "u32": 50
-                          },
-                          {
-                            "u32": 30
-                          },
-                          {
-                            "u32": 20
-                          }
-                        ]
-                      }
-                    },
-                    {
-                      "key": {
-                        "vec": [
-                          {
-                            "symbol": "Policy"
-                          }
-                        ]
-                      },
-                      "val": {
-                        "map": [
-                          {
-                            "key": {
-                              "symbol": "daily_limit"
-                            },
-                            "val": "void"
-                          },
-                          {
-                            "key": {
-                              "symbol": "per_tx_threshold"
-                            },
-                            "val": {
-                              "i128": "100000000"
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "protected_envelopes"
-                            },
-                            "val": {
-                              "vec": []
-                            }
-                          },
-                          {
-                            "key": {
-                              "symbol": "require_all_sigs"
-                            },
-                            "val": {
-                              "bool": false
-                            }
+                            "map": [
+                              {
+                                "key": {
+                                  "symbol": "address"
+                                },
+                                "val": {
+                                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMDR4"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "balance"
+                                },
+                                "val": {
+                                  "i128": "50000000"
+                                }
+                              },
+                              {
+                                "key": {
+                                  "symbol": "locked"
+                                },
+                                "val": {
+                                  "bool": false
+                                }
+                              }
+                            ]
                           }
                         ]
                       }
@@ -691,7 +593,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "900000000"
+                      "i128": "950000000"
                     }
                   },
                   {
@@ -743,7 +645,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "100000000"
+                      "i128": "50000000"
                     }
                   },
                   {

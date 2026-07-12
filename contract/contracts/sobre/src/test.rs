@@ -496,11 +496,11 @@ fn deposit_with_split_rejects_negative_envelope() {
 }
 
 #[test]
-fn spend_deducts_from_envelope_and_returns_tokens() {
+fn withdraw_deducts_from_envelope_and_returns_tokens() {
     let (f, member) = Fixture::funded_with_member();
     let amount = 10 * STROOPS_PER_TOKEN;
     let memo = String::from_str(&f.env, "coffee");
-    f.client().spend(&member, &Envelope::Groceries, &amount, &memo);
+    f.client().withdraw(&member, &Envelope::Groceries, &amount, &memo);
     let state = f.client().get_state();
     assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
     assert_eq!(f.token().balance(&member), amount);
@@ -508,10 +508,10 @@ fn spend_deducts_from_envelope_and_returns_tokens() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #7)")]
-fn spend_rejects_non_member() {
+fn withdraw_rejects_non_member() {
     let f = Fixture::funded();
     let nobody = Address::generate(&f.env);
-    f.client().spend(
+    f.client().withdraw(
         &nobody,
         &Envelope::Groceries,
         &(1 * STROOPS_PER_TOKEN),
@@ -521,9 +521,9 @@ fn spend_rejects_non_member() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #8)")]
-fn spend_rejects_insufficient_balance() {
+fn withdraw_rejects_insufficient_balance() {
     let f = Fixture::funded();
-    f.client().spend(
+    f.client().withdraw(
         &f.admin,
         &Envelope::Groceries,
         &(1_000 * STROOPS_PER_TOKEN),
@@ -533,9 +533,9 @@ fn spend_rejects_insufficient_balance() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
-fn spend_rejects_zero() {
+fn withdraw_rejects_zero() {
     let f = Fixture::funded();
-    f.client().spend(
+    f.client().withdraw(
         &f.admin,
         &Envelope::Groceries,
         &0,
@@ -544,61 +544,20 @@ fn spend_rejects_zero() {
 }
 
 #[test]
-fn spend_works_across_envelopes_independently() {
+fn withdraw_works_across_envelopes_independently() {
     let f = Fixture::funded();
     let memo = String::from_str(&f.env, "x");
     f.client()
-        .spend(&f.admin, &Envelope::Groceries, &(10 * STROOPS_PER_TOKEN), &memo);
+        .withdraw(&f.admin, &Envelope::Groceries, &(10 * STROOPS_PER_TOKEN), &memo);
     f.client()
-        .spend(&f.admin, &Envelope::Tuition, &(5 * STROOPS_PER_TOKEN), &memo);
+        .withdraw(&f.admin, &Envelope::Tuition, &(5 * STROOPS_PER_TOKEN), &memo);
     f.client()
-        .spend(&f.admin, &Envelope::Savings, &(2 * STROOPS_PER_TOKEN), &memo);
+        .withdraw(&f.admin, &Envelope::Savings, &(2 * STROOPS_PER_TOKEN), &memo);
     let state = f.client().get_state();
     assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
     assert_eq!(state.balances.get(1).unwrap(), 25 * STROOPS_PER_TOKEN);
     assert_eq!(state.balances.get(2).unwrap(), 18 * STROOPS_PER_TOKEN);
     assert_eq!(f.token().balance(&f.admin), 900 * STROOPS_PER_TOKEN + 17 * STROOPS_PER_TOKEN);
-}
-
-#[test]
-fn spend_on_behalf_credits_member_wallet() {
-    let (f, member) = Fixture::funded_with_member();
-    let amount = 10 * STROOPS_PER_TOKEN;
-    let memo = String::from_str(&f.env, "release");
-    f.client().spend_on_behalf(
-        &member,
-        &Envelope::Tuition,
-        &amount,
-        &memo,
-    );
-    let state = f.client().get_state();
-    assert_eq!(state.balances.get(1).unwrap(), 20 * STROOPS_PER_TOKEN);
-    assert_eq!(f.token().balance(&member), amount);
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #7)")]
-fn spend_on_behalf_rejects_non_member() {
-    let f = Fixture::funded();
-    let nobody = Address::generate(&f.env);
-    f.client().spend_on_behalf(
-        &nobody,
-        &Envelope::Groceries,
-        &(1 * STROOPS_PER_TOKEN),
-        &String::from_str(&f.env, "x"),
-    );
-}
-
-#[test]
-#[should_panic(expected = "Error(Contract, #8)")]
-fn spend_on_behalf_rejects_insufficient_balance() {
-    let (f, member) = Fixture::funded_with_member();
-    f.client().spend_on_behalf(
-        &member,
-        &Envelope::Groceries,
-        &(1_000 * STROOPS_PER_TOKEN),
-        &String::from_str(&f.env, "x"),
-    );
 }
 
 // ─── Sub-account tests ────────────────────────────────────────────────────
@@ -698,13 +657,13 @@ fn fund_subaccount_rejects_zero() {
 }
 
 #[test]
-fn spend_from_subaccount_transfers_tokens_to_caller() {
+fn withdraw_subaccount_transfers_tokens_to_caller() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
         .fund_subaccount(&Envelope::Groceries, &kid, &(2 * amount));
     f.client()
-        .spend_from_subaccount(&kid, &amount, &String::from_str(&f.env, "snack"));
+        .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "snack"));
     let state = f.client().get_state();
     assert_eq!(state.subaccounts.get(0).unwrap().balance, amount);
     assert_eq!(f.token().balance(&kid), amount);
@@ -712,32 +671,32 @@ fn spend_from_subaccount_transfers_tokens_to_caller() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #16)")]
-fn spend_from_subaccount_rejects_when_locked() {
+fn withdraw_subaccount_rejects_when_locked() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
         .fund_subaccount(&Envelope::Groceries, &kid, &(2 * amount));
     f.client().lock_subaccount(&kid);
     f.client()
-        .spend_from_subaccount(&kid, &amount, &String::from_str(&f.env, "x"));
+        .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "x"));
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #15)")]
-fn spend_from_subaccount_rejects_unknown_caller() {
+fn withdraw_subaccount_rejects_unknown_caller() {
     let f = Fixture::funded();
     let stranger = Address::generate(&f.env);
     f.client()
-        .spend_from_subaccount(&stranger, &(1 * STROOPS_PER_TOKEN), &String::from_str(&f.env, "x"));
+        .withdraw_subaccount(&stranger, &(1 * STROOPS_PER_TOKEN), &String::from_str(&f.env, "x"));
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #8)")]
-fn spend_from_subaccount_rejects_over_balance() {
+fn withdraw_subaccount_rejects_over_balance() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client()
         .fund_subaccount(&Envelope::Groceries, &kid, &(2 * STROOPS_PER_TOKEN));
-    f.client().spend_from_subaccount(
+    f.client().withdraw_subaccount(
         &kid,
         &(3 * STROOPS_PER_TOKEN),
         &String::from_str(&f.env, "x"),
@@ -746,14 +705,14 @@ fn spend_from_subaccount_rejects_over_balance() {
 
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
-fn spend_from_subaccount_rejects_zero() {
+fn withdraw_subaccount_rejects_zero() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client()
-        .spend_from_subaccount(&kid, &0, &String::from_str(&f.env, "x"));
+        .withdraw_subaccount(&kid, &0, &String::from_str(&f.env, "x"));
 }
 
 #[test]
-fn lock_then_unlock_restores_spend_ability() {
+fn lock_then_unlock_restores_withdraw_ability() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
@@ -761,7 +720,7 @@ fn lock_then_unlock_restores_spend_ability() {
     f.client().lock_subaccount(&kid);
     f.client().unlock_subaccount(&kid);
     f.client()
-        .spend_from_subaccount(&kid, &amount, &String::from_str(&f.env, "ok"));
+        .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "ok"));
     assert_eq!(f.token().balance(&kid), amount);
 }
 
@@ -1030,12 +989,12 @@ fn deposit_with_split_auto_supplies_savings_when_earn_on() {
 }
 
 #[test]
-fn spend_savings_auto_withdraws_from_usdy_when_short() {
+fn withdraw_savings_auto_withdraws_from_usdy_when_short() {
     let ef = UsdyFixture::new();
     ef.enable_earn();
-    // Savings cache = 0, USDY principal = 20. Spend 5 XLM from Savings —
+    // Savings cache = 0, USDY principal = 20. Withdraw 5 XLM from Savings —
     // ensure_envelope_liquidity should auto-redeem to make it work.
-    ef.sobre.client().spend(
+    ef.sobre.client().withdraw(
         &ef.sobre.admin,
         &Envelope::Savings,
         &(5 * STROOPS_PER_TOKEN),
@@ -1050,11 +1009,11 @@ fn spend_savings_auto_withdraws_from_usdy_when_short() {
 }
 
 #[test]
-fn spend_groceries_does_not_touch_usdy() {
+fn withdraw_groceries_does_not_touch_usdy() {
     let ef = UsdyFixture::new();
     ef.enable_earn();
     let g_before = ef.position(Envelope::Groceries);
-    ef.sobre.client().spend(
+    ef.sobre.client().withdraw(
         &ef.sobre.admin,
         &Envelope::Groceries,
         &(5 * STROOPS_PER_TOKEN),
@@ -1062,7 +1021,7 @@ fn spend_groceries_does_not_touch_usdy() {
     );
     let g_after = ef.position(Envelope::Groceries);
     // Non-Savings envelopes never route through USDY, so principal
-    // (which was 0) stays 0 after a spend.
+    // (which was 0) stays 0 after a withdraw.
     assert_eq!(g_before.principal, 0);
     assert_eq!(g_after.principal, 0);
 }
