@@ -58,7 +58,7 @@ const PENDING_MESSAGES = [
 ];
 
 const FUNDED_MESSAGES = [
-  "Buying XLM…",
+  "Almost there…",
   "Locking in the rate…",
   "Sending to your wallet…",
 ];
