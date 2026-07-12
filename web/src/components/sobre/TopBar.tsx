@@ -34,6 +34,7 @@ export function TopBar({
 
   return (
     <SiteHeader
+      showBrand={false}
       center={
         walletState && contractId ? (
           <WalletNamePill

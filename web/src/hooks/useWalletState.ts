@@ -16,7 +16,6 @@ import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 export interface Member {
   address: string;
   name: string;
-  emoji: string;
   /** Google profile picture URL when the member has signed in via OAuth,
    *  else null — Avatar falls back to initials on a name-hashed colour. */
   avatarUrl: string | null;
@@ -102,7 +101,7 @@ export interface WalletState {
   envelope_names: string[];
   /** Per-envelope split percentages (Supabase). Indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
-  /** On-chain members. Joined with Supabase display data (name + emoji + walletDbId). */
+  /** On-chain members. Joined with Supabase display data (name + avatarUrl + walletDbId). */
   members: Member[];
   /** On-chain envelope balances in stroops. */
   balances: bigint[];
@@ -171,7 +170,7 @@ interface OnChainState {
  * Polls the contract's `get_state` for the on-chain truth (admin, members'
  * addresses, balances) and joins it with the Supabase-resident display +
  * family-rule state from useFamilyDisplay (wallet name, envelope labels,
- * percents, policy, member name/emoji).
+ * percents, policy, member name/avatar).
  */
 export function useWalletState(
   userAddress: string | null,
@@ -253,7 +252,6 @@ export function useWalletState(
       return {
         address: m.address,
         name: d?.name ?? "",
-        emoji: d?.emoji ?? "",
         avatarUrl: d?.avatarUrl ?? null,
         walletDbId: d?.walletDbId ?? null,
         role,

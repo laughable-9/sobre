@@ -44,7 +44,7 @@ export function PendingRequestsPanel({
     (addr: string): string => {
       const m = memberByAddress.get(addr);
       if (!m) return shortenAddress(addr);
-      return m.emoji ? `${m.emoji} ${m.name}` : m.name || shortenAddress(addr);
+      return m.name || shortenAddress(addr);
     },
     [memberByAddress],
   );

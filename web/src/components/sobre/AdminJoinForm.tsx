@@ -56,7 +56,7 @@ export function AdminJoinForm({
     setError(null);
     try {
       if (!alreadyMember) {
-        await joinWallet(displayName, "", inviteToken);
+        await joinWallet(displayName, inviteToken);
         // Wait for the wallet-state poll to catch the new chain member row
         // before the RPC checks membership. Refresh triggers it now
         // instead of waiting up to 3s.

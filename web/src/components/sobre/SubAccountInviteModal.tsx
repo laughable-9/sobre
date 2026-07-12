@@ -7,7 +7,10 @@ import { Sheet } from "@/components/sobre/Sheet";
 import { INVITE_TTL_MINUTES } from "@/hooks/useCreateInvite";
 import { useCreateSubaccountInvite } from "@/hooks/useCreateSubaccountInvite";
 
-import { EmojiPicker, SOBRE_EMOJIS } from "./EmojiPicker";
+/** Sub-account holders (kids without Google) get an emoji sticker as their
+ *  identity. The main app uses OAuth avatars everywhere else, so this
+ *  picker only ships to this one modal. */
+const SUBACCOUNT_EMOJIS = ["🥭", "🌴", "🌺", "💰", "⭐", "☀️"] as const;
 
 interface Props {
   walletName: string;
@@ -29,7 +32,7 @@ export function SubAccountInviteModal({
   onClose,
 }: Props) {
   const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[0]);
+  const [emoji, setEmoji] = useState<string>(SUBACCOUNT_EMOJIS[0]);
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -136,8 +139,36 @@ export function SubAccountInviteModal({
             >
               Avatar
             </div>
-            <div style={{ marginBottom: 18 }}>
-              <EmojiPicker value={emoji} onChange={setEmoji} />
+            <div className="flex gap-2 flex-wrap" style={{ marginBottom: 18 }}>
+              {SUBACCOUNT_EMOJIS.map((e) => {
+                const active = e === emoji;
+                return (
+                  <button
+                    key={e}
+                    type="button"
+                    onClick={() => setEmoji(e)}
+                    className="grid place-items-center text-[24px] transition-all"
+                    style={{
+                      width: 48,
+                      height: 48,
+                      borderRadius: 12,
+                      background: active
+                        ? "var(--sobre-primary)"
+                        : "var(--surface-alt)",
+                      border: active
+                        ? "1.5px solid var(--sobre-primary)"
+                        : "1.5px solid var(--border)",
+                      cursor: "pointer",
+                      boxShadow: active
+                        ? "0 4px 12px rgba(232, 146, 60, 0.3)"
+                        : "none",
+                    }}
+                    aria-pressed={active}
+                  >
+                    {e}
+                  </button>
+                );
+              })}
             </div>
 
             <p className="text-[13px] mb-4" style={{ color: "var(--text-3)" }}>

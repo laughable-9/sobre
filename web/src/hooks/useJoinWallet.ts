@@ -12,7 +12,6 @@ export interface UseJoinWalletResult {
    *  base64url-decoded by the caller. */
   joinWallet: (
     name: string,
-    emoji: string,
     inviteToken: Uint8Array,
   ) => Promise<string>;
   pending: boolean;
@@ -25,10 +24,11 @@ export interface UseJoinWalletResult {
  * `sha256(invite_token)` was previously registered via `create_invite` by
  * the admin, hasn't expired, and hasn't already been redeemed.
  *
- * Display name + emoji are NOT sent to the contract anymore; we record them
- * in Supabase right after the on-chain join lands. This keeps cosmetic
+ * Display name is NOT sent to the contract anymore; we record it in
+ * Supabase right after the on-chain join lands. This keeps cosmetic
  * renames free (no chain tx) and matches how create_sobre seeds admin
- * display data.
+ * display data. Avatar images come from the joiner's Google OAuth profile
+ * on the wallets row — no per-member picture is stored on family_members.
  */
 export function useJoinWallet(
   userAddress: string | null,
@@ -40,7 +40,6 @@ export function useJoinWallet(
   const joinWallet = useCallback(
     async (
       name: string,
-      emoji: string,
       inviteToken: Uint8Array,
     ): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
@@ -63,9 +62,9 @@ export function useJoinWallet(
         // mutation that justifies it.
         rememberJoinedSobre(userAddress, contractId);
 
-        // Off-chain: insert a family_members row so display name + emoji
-        // surface in dashboards and PDAX routes (requireFamilyMember)
-        // recognise this user.
+        // Off-chain: insert a family_members row so display name surfaces
+        // in dashboards and PDAX routes (requireFamilyMember) recognise
+        // this user.
         //
         // The "Recipients can self-join via invite" RLS policy gates the
         // insert: role must be 'recipient' and wallet_id must be the
@@ -103,7 +102,6 @@ export function useJoinWallet(
               wallet_id: (walletQ.data as { id: string }).id,
               role: "recipient",
               name,
-              emoji,
             },
             { onConflict: "family_wallet_id,wallet_id" },
           );

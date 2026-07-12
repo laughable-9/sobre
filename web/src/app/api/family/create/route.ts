@@ -37,7 +37,6 @@ interface PostBody {
   display_name: string;
   percents: [number, number, number];
   admin_name: string;
-  admin_emoji: string;
   envelope_names: [string, string, string];
   // Onboarding metadata — off-chain only, all optional (columns are nullable).
   household_type?: HouseholdType | null;
@@ -66,9 +65,7 @@ function isValidBody(b: unknown): b is PostBody {
     return false;
   }
   if (typeof o.display_name !== "string") return false;
-  if (typeof o.admin_name !== "string" || typeof o.admin_emoji !== "string") {
-    return false;
-  }
+  if (typeof o.admin_name !== "string") return false;
   if (
     !Array.isArray(o.percents) ||
     o.percents.length !== 3 ||
@@ -111,7 +108,7 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Invalid body. Expect { contract_id, display_name, percents:[3], admin_name, admin_emoji, envelope_names:[3] } with percents summing to 100.",
+          "Invalid body. Expect { contract_id, display_name, percents:[3], admin_name, envelope_names:[3] } with percents summing to 100.",
       },
       { status: 400 },
     );
@@ -185,7 +182,7 @@ export async function POST(req: Request) {
   const [memberRes, namesRes] = await Promise.all([
     admin
       .from("family_members")
-      .update({ name: body.admin_name, emoji: body.admin_emoji })
+      .update({ name: body.admin_name })
       .eq("family_wallet_id", familyWalletId)
       .eq("wallet_id", ctx.memberId),
     admin.from("family_envelope_names").insert([

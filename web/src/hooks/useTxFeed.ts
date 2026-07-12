@@ -48,7 +48,6 @@ export type FeedEvent =
       kind: "MemberJoined";
       member: string;
       name: string;
-      emoji: string;
     })
   | (FeedEventBase & {
       kind: "MemberRemoved";
@@ -579,7 +578,6 @@ function parseRawEvents(
         kind: "MemberJoined",
         member: String(topics[1]),
         name: String(data.name ?? ""),
-        emoji: String(data.emoji ?? ""),
       });
     } else if (kind === "member_removed") {
       out.push({

@@ -19,7 +19,7 @@ import {
  *   1. Load the factory contract's spec from chain (one network round-trip).
  *   2. Build an AssembledTransaction for `create_sobre(admin, payment_token,
  *      percents)` with the caller's smart wallet C-address as admin. Display
- *      fields (wallet name, envelope names, admin display name/emoji) are NO
+ *      fields (wallet name, envelope names, admin display name) are NO
  *      LONGER passed on-chain — they live in Supabase, written in step 6.
  *   3. Sign auth entries with the user's passkey via passkey-kit. The FaceID
  *      prompt fires inside this step.
@@ -33,7 +33,7 @@ import {
  *      insert a `public.family_wallets` row (carries the wallet display name).
  *      The `bootstrap_family_admin` trigger auto-inserts the matching
  *      `public.family_members` row with `role = 'admin'`. We then UPDATE that
- *      row with the admin's display name + emoji, and seed the three
+ *      row with the admin's display name, and seed the three
  *      `family_envelope_names` rows with the chosen labels.
  *
  * Untyped indexed access on the Client is deliberate: `Client.from` returns a
@@ -51,7 +51,6 @@ export interface CreateFamilyArgs {
   /** Display name written to family_wallets.display_name. */
   walletName: string;
   adminName: string;
-  adminEmoji: string;
   /** Onboarding metadata — off-chain, optional. Omitted by the dashboard
    *  create path; supplied by the creator onboarding flow. */
   householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
@@ -185,7 +184,6 @@ export async function createFamilyWallet(
     displayName: args.walletName,
     percents: args.percents,
     adminName: args.adminName,
-    adminEmoji: args.adminEmoji,
     envelopeNames: args.envelopeNames,
     householdType: args.householdType ?? null,
     budgetMin: args.budgetMin ?? null,
@@ -206,7 +204,6 @@ export async function mirrorFamilyCreate(args: {
   displayName: string;
   percents: readonly [number, number, number];
   adminName: string;
-  adminEmoji: string;
   envelopeNames: readonly [string, string, string];
   /** Onboarding metadata — off-chain, all optional. Validated + stored by the
    *  route; omit for the non-onboarding (dashboard) create path. */
@@ -222,7 +219,6 @@ export async function mirrorFamilyCreate(args: {
       display_name: args.displayName,
       percents: [...args.percents],
       admin_name: args.adminName,
-      admin_emoji: args.adminEmoji,
       envelope_names: [...args.envelopeNames],
       // Only include when provided so the route sees `undefined` (→ NULL) not
       // a spurious value on the dashboard create path.

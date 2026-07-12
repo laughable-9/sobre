@@ -11,7 +11,6 @@ export interface FamilyMemberDisplay {
   contractId: string;
   walletDbId: string;
   name: string;
-  emoji: string;
   /** Google profile picture URL (populated on OAuth sign-in). Null when the
    *  member hasn't signed in yet or their Google account has no picture. */
   avatarUrl: string | null;
@@ -90,7 +89,7 @@ function normalizePercents(raw: number[] | null): [number, number, number] {
 
 /**
  * Family-level Supabase state — wallet name, envelope display labels, split
- * percents, spend policy, and per-member display data (name/emoji/role).
+ * percents, spend policy, and per-member display data (name/avatar/role).
  * The dashboard joins this with on-chain truth in useWalletState.
  */
 export function useFamilyDisplay(
@@ -156,7 +155,7 @@ export function useFamilyDisplay(
         supabase
           .from("family_members")
           .select(
-            "wallet_id, role, name, emoji, wallets(contract_id, avatar_url)",
+            "wallet_id, role, name, wallets(contract_id, avatar_url)",
           )
           .eq("family_wallet_id", row.id),
       ]);
@@ -200,7 +199,6 @@ export function useFamilyDisplay(
         wallet_id: string;
         role: "admin" | "recipient";
         name: string | null;
-        emoji: string | null;
         wallets: WalletJoined | WalletJoined[] | null;
       };
       for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
@@ -210,7 +208,6 @@ export function useFamilyDisplay(
           contractId: wallets.contract_id,
           walletDbId: m.wallet_id,
           name: m.name ?? "",
-          emoji: m.emoji ?? "",
           avatarUrl: wallets.avatar_url ?? null,
           role: m.role,
         });

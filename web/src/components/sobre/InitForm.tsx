@@ -3,7 +3,6 @@
 import { useState } from "react";
 
 import { useCreateSobre } from "@/hooks/useCreateSobre";
-import { SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
 import {
   DEFAULT_ENVELOPE_NAMES,
   EnvelopeNamesEditor,
@@ -20,18 +19,18 @@ import { getProfile } from "@/lib/profile";
 
 export function InitForm({
   userAddress,
+  displayName,
   onSuccess,
 }: {
   userAddress: string;
+  /** Google display name from the OAuth session — used when no local profile
+   *  is saved yet. Falls back to any saved profile name inside the component. */
+  displayName?: string;
   /** Called with the freshly-deployed Sobre's contract address. */
   onSuccess: (contractId: string) => void;
 }) {
-  // The user has already set their name + icon during the first-connect
-  // profile setup; reuse those silently so this form only asks for the one
-  // thing that's per-Sobre — the wallet name.
-  const profile = getProfile(userAddress);
-  const adminName = profile?.name ?? "";
-  const adminEmoji = profile?.emoji ?? SOBRE_EMOJIS[0];
+  const savedProfile = getProfile(userAddress);
+  const adminName = savedProfile?.name ?? displayName ?? "";
 
   const [walletName, setWalletName] = useState("");
   const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
@@ -56,7 +55,6 @@ export function InitForm({
       const newContractId = await createSobre({
         walletName: walletName.trim(),
         adminName,
-        adminEmoji,
         percents: split,
         envelopeNames: trimmed,
       });
@@ -71,44 +69,6 @@ export function InitForm({
       onSubmit={handleSubmit}
       className="text-left space-y-4 mt-6 w-full"
     >
-      {profile ? (
-        <div
-          className="rounded-[10px] p-3 flex items-center gap-3"
-          style={{
-            background: "var(--surface-alt)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <div
-            className="grid place-items-center"
-            style={{
-              width: 36,
-              height: 36,
-              borderRadius: 10,
-              background: "var(--surface)",
-              border: "1px solid var(--border)",
-              fontSize: 20,
-            }}
-          >
-            {adminEmoji}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div
-              className="text-[11px] uppercase tracking-wider"
-              style={{ color: "var(--text-3)", fontWeight: 600 }}
-            >
-              You&apos;ll join as
-            </div>
-            <div
-              className="text-[14px] font-medium truncate"
-              style={{ color: "var(--text-1)" }}
-            >
-              {adminName}
-            </div>
-          </div>
-        </div>
-      ) : null}
-
       <div className="sobre-input-group">
         <label htmlFor="wallet-name">Sobre name</label>
         <input

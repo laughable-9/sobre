@@ -54,7 +54,6 @@ export function useSobreSummary(
           ? (raw.members as Record<string, unknown>[]).map((m) => ({
               address: String(m.address),
               name: String(m.name ?? ""),
-              emoji: String(m.emoji ?? ""),
               avatarUrl: null,
               walletDbId: null,
               role: "recipient",

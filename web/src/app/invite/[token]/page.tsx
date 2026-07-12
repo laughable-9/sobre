@@ -172,6 +172,8 @@ function Landing({ token }: { token: string }) {
           state={state}
           contractId={contractId}
           inviteToken={inviteToken}
+          displayName={wallet.user?.name ?? undefined}
+          avatarUrl={wallet.wallet?.avatar_url ?? null}
           onSuccess={() => {
             setRedeeming(true);
             router.replace(`/dashboard/${contractId}`);

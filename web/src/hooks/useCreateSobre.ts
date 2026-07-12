@@ -11,7 +11,6 @@ import { mirrorFamilyCreate } from "@/lib/familyWallets";
 export interface CreateSobreArgs {
   walletName: string;
   adminName: string;
-  adminEmoji: string;
   percents?: [number, number, number];
   envelopeNames?: [string, string, string];
 }
@@ -39,7 +38,6 @@ export function useCreateSobre(
     async ({
       walletName,
       adminName,
-      adminEmoji,
       percents = [50, 30, 20],
       envelopeNames = ["Groceries", "Tuition", "Savings"],
     }: CreateSobreArgs): Promise<string> => {
@@ -62,7 +60,6 @@ export function useCreateSobre(
         displayName: walletName,
         percents,
         adminName,
-        adminEmoji,
         envelopeNames,
       });
       return newContractId;

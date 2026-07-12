@@ -1,18 +1,12 @@
 /**
- * Per-browser, per-address default profile (name + emoji). When a user first
- * connects a wallet we ask them once, store it here, and reuse it as the
- * pre-filled defaults for every Sobre they open or join later.
- *
- * Per-Sobre Members on chain can still diverge from this (an admin might
- * pick a different emoji for the family wallet) — this is just the "what
- * should we call you" default, not the source of truth.
+ * Per-browser, per-address default profile. When a user first connects a
+ * wallet we ask them once and reuse the display name as the pre-filled
+ * default for every Sobre they open or join later. Identity images come
+ * from Google OAuth (see WalletMenu / Avatar), not stored here.
  */
-
-import { SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
 
 export interface UserProfile {
   name: string;
-  emoji: string;
 }
 
 function key(address: string): string {
@@ -35,13 +29,8 @@ export function getProfile(address: string): UserProfile | null {
     const raw = storage.getItem(key(address));
     if (!raw) return null;
     const parsed = JSON.parse(raw);
-    if (
-      typeof parsed?.name !== "string" ||
-      typeof parsed?.emoji !== "string"
-    ) {
-      return null;
-    }
-    return { name: parsed.name, emoji: parsed.emoji };
+    if (typeof parsed?.name !== "string") return null;
+    return { name: parsed.name };
   } catch {
     return null;
   }
@@ -55,8 +44,4 @@ export function setProfile(address: string, profile: UserProfile): void {
   } catch {
     // quota or refused; skip
   }
-}
-
-export function defaultEmoji(): string {
-  return SOBRE_EMOJIS[0];
 }

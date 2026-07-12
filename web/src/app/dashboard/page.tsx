@@ -7,17 +7,17 @@ import { useRouter } from "next/navigation";
 import {
   CaretRightIcon,
   PlusCircleIcon,
-  SparkleIcon,
   UsersIcon,
 } from "@phosphor-icons/react";
 
+import { Avatar } from "@/components/sobre/Avatar";
 import { BackLink } from "@/components/sobre/BackLink";
 
 import { InitForm } from "@/components/sobre/InitForm";
 import { JoinByLinkForm } from "@/components/sobre/JoinByLinkForm";
 import { ProfileSetupScreen } from "@/components/sobre/ProfileSetupScreen";
 import { SobreCardSkeleton } from "@/components/sobre/Skeletons";
-import { TopBar } from "@/components/sobre/TopBar";
+import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Button } from "@/components/ui/button";
 
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
@@ -72,7 +72,6 @@ export default function MySobresPage() {
   if (!address) {
     return (
       <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} />
         <main className="flex-1 grid place-items-center px-6">
           {wallet.status === "signed-out" ? (
             <div className="text-center max-w-md">
@@ -118,11 +117,10 @@ export default function MySobresPage() {
 
   // ─── First-connect profile setup ────────────────────────────────────
   // Auto-shown once per address when there's no saved profile yet. This
-  // pre-fills name + emoji for every Sobre the user later opens or joins.
+  // pre-fills the display name for every Sobre the user later opens or joins.
   if (hasProfile === false) {
     return (
       <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} />
         <ProfileSetupScreen
           address={address}
           defaultName={wallet.user?.name}
@@ -136,7 +134,6 @@ export default function MySobresPage() {
   if (mode === "new") {
     return (
       <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} />
         <main className="flex-1 flex flex-col items-center px-4 py-6 sm:py-10">
           <div className="w-full max-w-md">
             <BackLink onClick={() => setMode("list")} className="mb-4" />
@@ -181,6 +178,7 @@ export default function MySobresPage() {
 
               <InitForm
                 userAddress={address}
+                displayName={wallet.user?.name ?? undefined}
                 onSuccess={(newContractId) => {
                   router.push(`/dashboard/${newContractId}`);
                 }}
@@ -196,7 +194,6 @@ export default function MySobresPage() {
   if (mode === "join") {
     return (
       <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} />
         <JoinByLinkForm
           onValid={(id) => {
             router.push(`/dashboard/${id}?join=${id}`);
@@ -219,11 +216,13 @@ export default function MySobresPage() {
 
   return (
     <div className="sobre-app sobre-v2">
-      <TopBar wallet={wallet} />
       <main
         className="flex-1 mx-auto w-full px-7 py-12"
         style={{ maxWidth: 1100 }}
       >
+        <div className="flex justify-end mb-2">
+          <WalletMenu wallet={wallet} />
+        </div>
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
             <h1 className="font-serif text-[36px] font-semibold mb-2">
@@ -279,25 +278,16 @@ export default function MySobresPage() {
           </div>
         ) : allRows.length === 0 ? (
           <div
-            className="text-center py-16 px-6"
-            style={{
-              background: "var(--surface)",
-              border: "1.5px dashed var(--border-strong)",
-              borderRadius: 16,
-            }}
+            className="text-center py-16 px-6 sobre-card-flat"
+            style={{ boxShadow: "none" }}
           >
-            <div
-              className="grid place-items-center mx-auto mb-4"
-              style={{
-                width: 48,
-                height: 48,
-                borderRadius: 12,
-                background: "var(--surface-alt)",
-                color: "var(--text-3)",
-              }}
-            >
-              <SparkleIcon weight="fill" size={20} />
-            </div>
+            <Image
+              src="/sobre-logo2.svg"
+              alt=""
+              width={48}
+              height={48}
+              className="mx-auto mb-4 opacity-70"
+            />
             <h2
               className="font-serif"
               style={{ fontSize: 22, fontWeight: 600, marginBottom: 8 }}
@@ -379,29 +369,15 @@ function SobreCard({
     summary !== null ? Number(summary.totalStroops) / STROOPS_PER_USDC : 0;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 
+  const walletName = summary?.walletName || "Family Wallet";
+
   return (
     <Link
       href={`/dashboard/${contractId}`}
       className="sobre-card-link block"
     >
       <div className="flex items-start gap-3 mb-4">
-        <div
-          className="grid place-items-center shrink-0"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: "var(--surface-alt)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          <Image
-            src="/sobre-logo2.svg"
-            alt=""
-            width={28}
-            height={28}
-          />
-        </div>
+        <Avatar name={walletName} size={44} />
         <div className="flex-1 min-w-0">
           <h3
             className="font-serif truncate"
@@ -412,12 +388,8 @@ function SobreCard({
               lineHeight: 1.2,
             }}
           >
-            {loading
-              ? "Loading…"
-              : summary?.walletName || "Family Wallet"}
+            {loading ? "Loading…" : walletName}
           </h3>
-          {/* One hue (board): both roles ride Green 50 / Green 700 — the
-              label copy carries the distinction, not a color. */}
           <span
             className="sobre-pill mt-1.5 inline-flex"
             style={{
@@ -436,9 +408,6 @@ function SobreCard({
         />
       </div>
 
-      {/* Same type ramp as the BalanceHero: sobre-label caps, Manrope 800
-          amount with 0.55em cents, Geist Mono numerals (via .tabular) on
-          the sub-line — only the surface differs (neutral, not green). */}
       <div
         className="rounded-[10px] p-3 mb-3"
         style={{ background: "var(--surface-alt)" }}
@@ -482,22 +451,11 @@ function SobreCard({
           <div className="flex items-center gap-1 min-w-0 flex-1">
             <div className="flex items-center gap-1">
               {summary.members.map((m) => (
-                <span
+                <Avatar
                   key={m.address}
-                  title={m.name || m.address}
-                  className="grid place-items-center"
-                  style={{
-                    width: 22,
-                    height: 22,
-                    borderRadius: "50%",
-                    background: "var(--surface)",
-                    border: "1px solid var(--border)",
-                    fontSize: 12,
-                    lineHeight: 1,
-                  }}
-                >
-                  {m.emoji || m.address.slice(1, 3).toUpperCase()}
-                </span>
+                  name={m.name || m.address.slice(1, 3)}
+                  size={22}
+                />
               ))}
             </div>
             <span className="truncate ml-1">
