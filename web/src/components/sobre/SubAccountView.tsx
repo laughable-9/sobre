@@ -21,6 +21,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
+import { Reveal } from "./Reveal";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
 import { SupplementarySummary } from "./SupplementarySummary";
 
@@ -93,7 +94,8 @@ export function SubAccountView({
   return (
     <>
       {tab === "home" ? (
-        <div
+        <Reveal
+          as="div"
           className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
           style={{ maxWidth: 460 }}
         >
@@ -273,11 +275,12 @@ export function SubAccountView({
               )}
             </div>
           </section>
-        </div>
+        </Reveal>
       ) : null}
 
       {tab === "user" ? (
-        <div
+        <Reveal
+          as="div"
           className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12 space-y-5"
           style={{ maxWidth: 460 }}
         >
@@ -291,14 +294,13 @@ export function SubAccountView({
             canInvite={false}
             canEditCap={false}
           />
-          <SupplementarySummary
+          <PeerSupplementaryList
             rows={peerRows}
             onChain={state.subaccounts}
             events={events}
             envelopeNames={state.envelope_names}
-            currency="PHP"
           />
-        </div>
+        </Reveal>
       ) : null}
 
       <SubAccountDock
@@ -328,6 +330,54 @@ export function SubAccountView({
         />
       ) : null}
     </>
+  );
+}
+
+/** Peer-supplementary list on the sub-account User tab. Wraps
+ *  SupplementarySummary in a section header so it stays visible even
+ *  when the caller is the only supplementary in the family — an empty
+ *  state that would otherwise render nothing at all. */
+function PeerSupplementaryList({
+  rows,
+  onChain,
+  events,
+  envelopeNames,
+}: {
+  rows: FamilySubaccountRow[];
+  onChain: SubAccount[];
+  events: FeedEvent[];
+  envelopeNames: string[];
+}) {
+  const active = rows.filter((r) => !r.invitePending && r.walletAddress);
+  if (active.length > 0) {
+    return (
+      <SupplementarySummary
+        rows={rows}
+        onChain={onChain}
+        events={events}
+        envelopeNames={envelopeNames}
+        currency="PHP"
+      />
+    );
+  }
+  return (
+    <section className="sobre-envs-section" aria-label="Supplementary">
+      <div className="sobre-envs-section-head">
+        <h3>Supplementary</h3>
+      </div>
+      <div
+        style={{
+          padding: "16px 14px",
+          textAlign: "center",
+          fontSize: 13,
+          color: "var(--sobre-text-3)",
+          border: "1px dashed var(--sobre-border)",
+          borderRadius: 14,
+        }}
+      >
+        Just you here so far.
+      </div>
+    </section>
   );
 }
 
