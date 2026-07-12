@@ -82,8 +82,6 @@ export function InitForm({
       onSubmit={handleSubmit}
       className="text-left space-y-4 mt-6 w-full"
     >
-      <StepIndicator current={step} />
-
       {step === 0 ? (
         <>
           <div className="sobre-input-group">
@@ -102,19 +100,15 @@ export function InitForm({
 
           <div className="sobre-input-group">
             <label>Envelope names</label>
-            <p
-              className="text-[12px] -mt-1 mb-3"
-              style={{ color: "var(--text-3)" }}
-            >
-              What you call each envelope (e.g., Rent, School, Vacation).
-            </p>
-            <EnvelopeNamesEditor
-              value={envelopeNames}
-              icons={envelopeIcons}
-              onChange={setEnvelopeNames}
-              onIconsChange={setEnvelopeIcons}
-              disabled={pending}
-            />
+            <div className="mt-2">
+              <EnvelopeNamesEditor
+                value={envelopeNames}
+                icons={envelopeIcons}
+                onChange={setEnvelopeNames}
+                onIconsChange={setEnvelopeIcons}
+                disabled={pending}
+              />
+            </div>
           </div>
 
           <button
@@ -188,32 +182,37 @@ export function InitForm({
           </div>
         </>
       )}
+
+      <StepDots current={step} total={2} />
     </form>
   );
 }
 
-function StepIndicator({ current }: { current: 0 | 1 }) {
+function StepDots({ current, total }: { current: number; total: number }) {
   return (
-    <div className="flex items-center gap-2" aria-hidden>
-      {[0, 1].map((i) => (
-        <span
-          key={i}
-          style={{
-            flex: 1,
-            height: 4,
-            borderRadius: 999,
-            background:
-              i <= current ? "var(--sobre-primary)" : "var(--surface-alt)",
-            transition: "background 180ms ease",
-          }}
-        />
-      ))}
-      <span
-        className="text-[11px] font-semibold tabular"
-        style={{ color: "var(--text-3)", marginLeft: 4 }}
-      >
-        Step {current + 1} of 2
-      </span>
+    <div
+      className="flex items-center justify-center gap-2 pt-2"
+      role="status"
+      aria-label={`Step ${current + 1} of ${total}`}
+    >
+      {Array.from({ length: total }).map((_, i) => {
+        const active = i === current;
+        return (
+          <span
+            key={i}
+            aria-hidden
+            style={{
+              width: active ? 20 : 6,
+              height: 6,
+              borderRadius: 999,
+              background: active
+                ? "var(--sobre-primary)"
+                : "var(--border-strong)",
+              transition: "width 220ms ease, background 220ms ease",
+            }}
+          />
+        );
+      })}
     </div>
   );
 }
