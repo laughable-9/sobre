@@ -11,6 +11,7 @@ import {
 import { useActiveSubaccountCashouts } from "@/hooks/useActiveSubaccountCashouts";
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
+import { useSubaccounts } from "@/hooks/useSubaccounts";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
 import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
@@ -21,6 +22,7 @@ import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
+import { SupplementarySummary } from "./SupplementarySummary";
 
 interface Props {
   userAddress: string;
@@ -59,6 +61,12 @@ export function SubAccountView({
   );
 
   const myRow = useOwnSubaccountRow();
+  // Peers list uses the same subaccounts hook the admin panel uses.
+  // RLS was widened to allow sub-account holders to SELECT peer rows in
+  // their own family — see migration subaccount_can_read_peer_subaccounts.
+  const { subaccounts: peerRows } = useSubaccounts(
+    myRow?.familyWalletId ?? null,
+  );
 
   const { active: pendingCashouts } = useActiveSubaccountCashouts(
     myRow?.walletDbId ?? null,
@@ -282,6 +290,13 @@ export function SubAccountView({
             familyWalletId={null}
             canInvite={false}
             canEditCap={false}
+          />
+          <SupplementarySummary
+            rows={peerRows}
+            onChain={state.subaccounts}
+            events={events}
+            envelopeNames={state.envelope_names}
+            currency="PHP"
           />
         </div>
       ) : null}
