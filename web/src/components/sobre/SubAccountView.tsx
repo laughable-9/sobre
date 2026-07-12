@@ -11,6 +11,7 @@ import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
+import { Avatar } from "./Avatar";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
 
 interface Props {
@@ -68,20 +69,7 @@ export function SubAccountView({
       style={{ maxWidth: 460 }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <div
-          style={{
-            width: 56,
-            height: 56,
-            borderRadius: "50%",
-            background: "var(--accent-soft)",
-            display: "grid",
-            placeItems: "center",
-            fontSize: 30,
-            flexShrink: 0,
-          }}
-        >
-          {myRow?.emoji ?? "🎒"}
-        </div>
+        <Avatar src={null} name={myRow?.displayName ?? "Allowance"} size={56} />
         <div style={{ minWidth: 0 }}>
           <div
             style={{
@@ -367,7 +355,7 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
     void supabase
       .from("family_subaccounts")
       .select(
-        "id, family_wallet_id, wallet_id, wallet_address, display_name, emoji, created_at",
+        "id, family_wallet_id, wallet_id, wallet_address, display_name, created_at",
       )
       .maybeSingle()
       .then(({ data }) => {
@@ -378,7 +366,6 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
           wallet_id: string | null;
           wallet_address: string | null;
           display_name: string;
-          emoji: string;
           created_at: string;
         };
         setRow({
@@ -387,7 +374,6 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
           walletDbId: r.wallet_id,
           walletAddress: r.wallet_address,
           displayName: r.display_name,
-          emoji: r.emoji,
           invitePending: r.wallet_id === null,
           createdAt: r.created_at,
         });

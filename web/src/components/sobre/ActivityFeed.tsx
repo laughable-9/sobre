@@ -60,8 +60,8 @@ interface ActivityFeedProps {
   /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
   members: Member[];
   /** Same shape as members but for sub-account holders, so SubAccount* events
-   *  render with the kid's display name + emoji instead of a raw C-address. */
-  subaccounts?: { address: string; name: string; emoji: string }[];
+   *  render with the kid's display name instead of a raw C-address. */
+  subaccounts?: { address: string; name: string }[];
   envelopeNames: string[];
   /** Non-terminal deposit rows surfaced as "pending" affordances at the top
    *  of the feed. The Resume button reopens the deposit modal at whatever

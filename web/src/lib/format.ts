@@ -90,6 +90,22 @@ export function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+/** "Nov 8, 3:42 PM" — short absolute timestamp used by activity rows in
+ *  the sub-account panels. Falls back to "" on unparseable input so a
+ *  broken ledger timestamp doesn't blow up the render. */
+export function formatShortDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-PH", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
 /** "47h 12m 3s" / "5m 3s" / "0s" — future-tense sibling to relativeTime, for
  *  countdown surfaces (Grow request unlock timers). Skips zero hour/minute
  *  fields when they'd read as noise ("3s" not "0h 0m 3s"), keeps them when

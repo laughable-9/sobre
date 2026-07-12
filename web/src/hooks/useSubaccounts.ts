@@ -15,7 +15,6 @@ export interface FamilySubaccountRow {
    *  family_members policy). */
   walletAddress: string | null;
   displayName: string;
-  emoji: string;
   invitePending: boolean;
   createdAt: string;
 }
@@ -33,7 +32,6 @@ interface RawRow {
   wallet_id: string | null;
   wallet_address: string | null;
   display_name: string;
-  emoji: string;
   created_at: string;
 }
 
@@ -62,7 +60,7 @@ export function useSubaccounts(
       const { data, error: fetchErr } = await supabase
         .from("family_subaccounts")
         .select(
-          "id, family_wallet_id, wallet_id, wallet_address, display_name, emoji, created_at",
+          "id, family_wallet_id, wallet_id, wallet_address, display_name, created_at",
         )
         .eq("family_wallet_id", familyWalletId)
         .order("created_at", { ascending: true });
@@ -78,7 +76,6 @@ export function useSubaccounts(
           walletDbId: r.wallet_id,
           walletAddress: r.wallet_address,
           displayName: r.display_name,
-          emoji: r.emoji,
           invitePending: r.wallet_id === null,
           createdAt: r.created_at,
         }),

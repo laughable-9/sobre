@@ -180,6 +180,9 @@ export async function POST(req: Request) {
       // only and can't be widened — see the wallets_read_family_peers
       // backout migration).
       wallet_address: ctx.contractId,
+      // Overwrite the "Awaiting sign-in" placeholder set at invite time
+      // with the joiner's Google display name.
+      display_name: ctx.fullName,
     })
     .eq("id", r.id)
     .is("wallet_id", null)

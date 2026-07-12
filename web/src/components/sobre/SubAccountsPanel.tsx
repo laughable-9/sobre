@@ -8,7 +8,6 @@ import {
   Lock,
   LockOpen,
   Send,
-  UserPlus,
 } from "lucide-react";
 
 import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
@@ -25,8 +24,10 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { formatShortDateTime } from "@/lib/format";
 import { routeSpend } from "@/lib/policy";
 
+import { Avatar } from "./Avatar";
 import { Sheet } from "./Sheet";
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
 
@@ -84,57 +85,32 @@ export function SubAccountsPanel({
   if (!isAdmin && merged.length === 0) return null;
 
   return (
-    <section
-      className="mx-auto w-full px-4 sm:px-7 pb-12 pt-4"
-      style={{ maxWidth: 1320 }}
-    >
-      <header className="flex items-end justify-between mb-5">
-        <div>
-          <h2
-            style={{
-              fontFamily: "var(--serif)",
-              fontSize: 22,
-              fontWeight: 600,
-              letterSpacing: "-0.01em",
-              margin: 0,
-            }}
-          >
-            Supplementary accounts
-          </h2>
-          <p
-            style={{
-              fontSize: 13,
-              color: "var(--text-2)",
-              margin: "4px 0 0",
-            }}
-          >
-            Top up from any envelope. Lock to freeze their spending instantly.
-          </p>
-        </div>
+    <section className="sobre-envs-section" aria-label="Supplementary">
+      <div className="sobre-envs-section-head">
+        <h3>Supplementary</h3>
         {isAdmin ? (
           <button
             type="button"
+            className="sobre-envs-section-action"
             onClick={() => setInviteOpen(true)}
-            className="sobre-btn sobre-btn-soft"
-            style={{ fontSize: 12, padding: "8px 12px" }}
           >
-            <UserPlus size={14} strokeWidth={2.2} />
-            New supplementary
+            Add
           </button>
         ) : null}
-      </header>
+      </div>
 
       {merged.length === 0 ? (
         <div
-          className="sobre-card-flat"
           style={{
-            padding: "18px 16px",
+            padding: "16px 14px",
             textAlign: "center",
             fontSize: 13,
-            color: "var(--text-3)",
+            color: "var(--sobre-text-3)",
+            border: "1px dashed var(--sobre-border)",
+            borderRadius: 14,
           }}
         >
-          No supplementary accounts yet. Invite someone to add one.
+          No supplementary accounts yet.
         </div>
       ) : (
         merged.map((m) => (
@@ -175,7 +151,6 @@ export function SubAccountsPanel({
 
       {inviteOpen ? (
         <SubAccountInviteModal
-          walletName={state.wallet_name}
           contractId={contractId}
           familyWalletId={familyWalletId}
           onClose={() => setInviteOpen(false)}
@@ -252,19 +227,7 @@ function SubCard({
     <div className="sobre-card-flat" style={{ padding: 0, marginBottom: 10 }}>
       <div style={{ padding: "14px 16px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: "50%",
-              background: "var(--accent-soft)",
-              display: "grid",
-              placeItems: "center",
-              fontSize: 22,
-            }}
-          >
-            {row.emoji}
-          </div>
+          <Avatar src={null} name={row.displayName} size={40} />
           <div style={{ flex: 1, minWidth: 0 }}>
             <div
               style={{
@@ -429,7 +392,7 @@ function SubCard({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600 }}>{h.label}</div>
                   <div style={{ color: "var(--text-3)", fontSize: 11 }}>
-                    {formatRel(h.whenIso)}
+                    {formatShortDateTime(h.whenIso)}
                   </div>
                 </div>
                 <div
@@ -568,9 +531,7 @@ function SendSubAccountModal({
 
   return (
     <Sheet onClose={onClose} ariaLabel="Send to sub-account">
-        <h2>
-          Send to {target.row.displayName} {target.row.emoji}
-        </h2>
+        <h2>Send to {target.row.displayName}</h2>
         <p className="sub">
           Money leaves an envelope and lands in their spendable balance.
         </p>
@@ -703,20 +664,6 @@ function SendSubAccountModal({
         </div>
     </Sheet>
   );
-}
-
-function formatRel(iso: string): string {
-  try {
-    const d = new Date(iso);
-    return d.toLocaleString("en-PH", {
-      month: "short",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
-  } catch {
-    return "";
-  }
 }
 
 const CHIP_BASE: React.CSSProperties = {

@@ -92,7 +92,6 @@ export type DashboardSkeletonTab =
   | "envelopes"
   | "activity"
   | "settings"
-  | "subaccounts"
   | "profile";
 
 /** Route to the tab-shaped skeleton so refresh preserves the same layout the
@@ -127,8 +126,6 @@ function tabSkeleton(tab: DashboardSkeletonTab) {
       return <ActivitySkeleton />;
     case "envelopes":
       return <EnvelopesSkeleton />;
-    case "subaccounts":
-      return <StackedCardsSkeleton title="Sub-accounts" />;
     case "settings":
       return <StackedCardsSkeleton title="Settings" cards={4} />;
     case "profile":

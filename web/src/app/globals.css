@@ -3586,3 +3586,65 @@ body { overflow-x: clip; min-width: 320px; }
     animation: sobre-sheet-down 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
   }
 }
+
+/* ─── Supplementary detail sheet (Envelopes tab → row tap) ────────────── */
+.sobre-supp-detail-head {
+  display: flex; align-items: center; gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--sobre-border);
+  margin-bottom: 18px;
+}
+.sobre-supp-detail-head .who { flex: 1; min-width: 0; }
+.sobre-supp-detail-head .name {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 16px; font-weight: 600; color: var(--sobre-text-1);
+}
+.sobre-supp-detail-head .name .lock-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sobre-danger);
+  background: rgba(220,38,38,0.10);
+}
+.sobre-supp-detail-head .balance {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+  margin-top: 2px;
+}
+.sobre-supp-detail-head .label {
+  font-size: 11px; color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-supp-detail-history .head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin-bottom: 10px;
+}
+.sobre-supp-detail-history .empty {
+  font-size: 13px; color: var(--sobre-text-3);
+  padding: 12px 0;
+}
+.sobre-supp-detail-history .row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 0;
+  border-bottom: 1px dashed var(--sobre-border);
+}
+.sobre-supp-detail-history .row:last-child { border-bottom: 0; }
+.sobre-supp-detail-history .row .who { flex: 1; min-width: 0; }
+.sobre-supp-detail-history .row .who .label {
+  font-size: 13px; font-weight: 600; color: var(--sobre-text-1);
+}
+.sobre-supp-detail-history .row .who .when {
+  font-size: 11px; color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-supp-detail-history .row .amount {
+  font-size: 13px; font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-supp-detail-history .row .amount[data-direction="in"] {
+  color: var(--sobre-accent);
+}

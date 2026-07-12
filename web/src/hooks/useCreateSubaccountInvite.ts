@@ -18,10 +18,7 @@ import {
 } from "@/hooks/useCreateInvite";
 
 export interface UseCreateSubaccountInviteResult {
-  createInvite: (
-    displayName: string,
-    emoji: string,
-  ) => Promise<CreateInviteResult>;
+  createInvite: () => Promise<CreateInviteResult>;
   pending: boolean;
   error: string | null;
 }
@@ -48,15 +45,9 @@ export function useCreateSubaccountInvite(
   const [error, setError] = useState<string | null>(null);
 
   const createInvite = useCallback(
-    async (
-      displayName: string,
-      emoji: string,
-    ): Promise<CreateInviteResult> => {
+    async (): Promise<CreateInviteResult> => {
       if (!contractId) throw new Error("No wallet selected.");
       if (!familyWalletId) throw new Error("Family wallet record missing.");
-      const trimmed = displayName.trim();
-      if (!trimmed) throw new Error("Display name is required.");
-      if (!emoji) throw new Error("Pick an emoji.");
       setPending(true);
       setError(null);
       try {
@@ -78,8 +69,9 @@ export function useCreateSubaccountInvite(
           .from("family_subaccounts")
           .insert({
             family_wallet_id: familyWalletId,
-            display_name: trimmed,
-            emoji,
+            // Placeholder until the joiner claims — /api/subaccount/join
+            // overwrites with their Google display name at claim time.
+            display_name: "Awaiting sign-in",
             invite_token_hash: tokenHashHex,
           });
         if (insertErr) {

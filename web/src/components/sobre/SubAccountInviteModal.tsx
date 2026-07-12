@@ -7,32 +7,23 @@ import { Sheet } from "@/components/sobre/Sheet";
 import { INVITE_TTL_MINUTES } from "@/hooks/useCreateInvite";
 import { useCreateSubaccountInvite } from "@/hooks/useCreateSubaccountInvite";
 
-/** Sub-account holders (kids without Google) get an emoji sticker as their
- *  identity. The main app uses OAuth avatars everywhere else, so this
- *  picker only ships to this one modal. */
-const SUBACCOUNT_EMOJIS = ["🥭", "🌴", "🌺", "💰", "⭐", "☀️"] as const;
-
 interface Props {
-  walletName: string;
   contractId: string;
   familyWalletId: string | null;
   onClose: () => void;
 }
 
 /**
- * Two-step modal: admin sets the sub-account's display name + emoji, then
- * generates the share link. The on-chain `create_subaccount_invite` and the
- * Supabase row insert both happen on "Generate", so the URL ships with the
- * display data already in place.
+ * Generate a share link for a new supplementary account. The joiner signs
+ * in with Google, so their name comes from OAuth — no admin-side name
+ * picker. One passkey prompt for the on-chain invite mint; Supabase row
+ * insert happens in the same call so the URL ships ready to redeem.
  */
 export function SubAccountInviteModal({
-  walletName,
   contractId,
   familyWalletId,
   onClose,
 }: Props) {
-  const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState<string>(SUBACCOUNT_EMOJIS[0]);
   const [url, setUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
 
@@ -41,12 +32,9 @@ export function SubAccountInviteModal({
     familyWalletId,
   );
 
-  const trimmed = name.trim();
-  const canGenerate = trimmed.length > 0 && !pending;
-
   const generate = async () => {
     try {
-      const result = await createInvite(trimmed, emoji);
+      const result = await createInvite();
       setUrl(result.url);
       setCopied(false);
     } catch {
@@ -66,159 +54,89 @@ export function SubAccountInviteModal({
 
   return (
     <Sheet onClose={onClose} ariaLabel="Open a supplementary account">
-        <h2>Open a supplementary account</h2>
-        <p className="sub">
-          For a family member who only needs their own spendable balance.
-          They get a stripped view of {walletName}. Just their balance and
-          Cash out.
-        </p>
+      <h2>Open a supplementary account</h2>
+      <p className="sub">
+        For a family member who only needs their own spendable balance.
+      </p>
 
-        {url ? (
-          <>
-            <div
-              className="rounded-[10px] p-3 flex items-center gap-3 mb-3"
-              style={{
-                background: "var(--surface-alt)",
-                border: "1.5px dashed var(--border-strong)",
-              }}
-            >
-              <Link2
-                size={18}
-                strokeWidth={2}
-                style={{ color: "var(--sobre-accent)", flexShrink: 0 }}
-              />
-              <code
-                className="text-[12px] break-all flex-1"
-                style={{ color: "var(--text-1)" }}
-              >
-                {url}
-              </code>
-            </div>
-            <div
-              className="flex items-center gap-1.5 text-[12px] mb-4"
-              style={{ color: "var(--text-2)" }}
-            >
-              <Clock size={13} strokeWidth={2} />
-              Expires in {INVITE_TTL_MINUTES} minutes.
-            </div>
-          </>
-        ) : (
-          <>
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--text-3)",
-                marginBottom: 6,
-              }}
-            >
-              Their name
-            </div>
-            <div className="sobre-input-wrap" style={{ marginBottom: 14 }}>
-              <input
-                type="text"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="sobre-input"
-                maxLength={32}
-                style={{ fontSize: 16 }}
-              />
-            </div>
-
-            <div
-              style={{
-                fontSize: 11,
-                fontWeight: 700,
-                letterSpacing: "0.06em",
-                textTransform: "uppercase",
-                color: "var(--text-3)",
-                marginBottom: 6,
-              }}
-            >
-              Avatar
-            </div>
-            <div className="flex gap-2 flex-wrap" style={{ marginBottom: 18 }}>
-              {SUBACCOUNT_EMOJIS.map((e) => {
-                const active = e === emoji;
-                return (
-                  <button
-                    key={e}
-                    type="button"
-                    onClick={() => setEmoji(e)}
-                    className="grid place-items-center text-[24px] transition-all"
-                    style={{
-                      width: 48,
-                      height: 48,
-                      borderRadius: 12,
-                      background: active
-                        ? "var(--sobre-primary)"
-                        : "var(--surface-alt)",
-                      border: active
-                        ? "1.5px solid var(--sobre-primary)"
-                        : "1.5px solid var(--border)",
-                      cursor: "pointer",
-                      boxShadow: active
-                        ? "0 4px 12px rgba(232, 146, 60, 0.3)"
-                        : "none",
-                    }}
-                    aria-pressed={active}
-                  >
-                    {e}
-                  </button>
-                );
-              })}
-            </div>
-
-            <p className="text-[13px] mb-4" style={{ color: "var(--text-3)" }}>
-              You&apos;ll be asked to confirm with your passkey.
-            </p>
-          </>
-        )}
-
-        {error ? (
-          <p
-            className="text-xs break-all mb-3"
-            style={{ color: "var(--sobre-danger)" }}
+      {url ? (
+        <>
+          <div
+            className="rounded-[10px] p-3 flex items-center gap-3 mb-3"
+            style={{
+              background: "var(--surface-alt)",
+              border: "1.5px dashed var(--border-strong)",
+            }}
           >
-            {error}
-          </p>
-        ) : null}
+            <Link2
+              size={18}
+              strokeWidth={2}
+              style={{ color: "var(--sobre-accent)", flexShrink: 0 }}
+            />
+            <code
+              className="text-[12px] break-all flex-1"
+              style={{ color: "var(--text-1)" }}
+            >
+              {url}
+            </code>
+          </div>
+          <div
+            className="flex items-center gap-1.5 text-[12px] mb-4"
+            style={{ color: "var(--text-2)" }}
+          >
+            <Clock size={13} strokeWidth={2} />
+            Expires in {INVITE_TTL_MINUTES} minutes.
+          </div>
+        </>
+      ) : (
+        <p className="text-[13px] mb-4" style={{ color: "var(--text-3)" }}>
+          They&apos;ll sign in with Google to redeem. You&apos;ll confirm this
+          invite with your passkey.
+        </p>
+      )}
 
-        <div className="sobre-modal-actions">
-          <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
-            Done
+      {error ? (
+        <p
+          className="text-xs break-all mb-3"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {error}
+        </p>
+      ) : null}
+
+      <div className="sobre-modal-actions">
+        <button className="sobre-btn sobre-btn-soft" onClick={onClose}>
+          Done
+        </button>
+        {url ? (
+          <button
+            className="sobre-btn sobre-btn-primary"
+            onClick={() => void copy(url)}
+          >
+            {copied ? (
+              <>
+                <Check size={14} strokeWidth={2.5} />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy size={14} strokeWidth={2} />
+                Copy link
+              </>
+            )}
           </button>
-          {url ? (
-            <button
-              className="sobre-btn sobre-btn-primary"
-              onClick={() => void copy(url)}
-            >
-              {copied ? (
-                <>
-                  <Check size={14} strokeWidth={2.5} />
-                  Copied!
-                </>
-              ) : (
-                <>
-                  <Copy size={14} strokeWidth={2} />
-                  Copy link
-                </>
-              )}
-            </button>
-          ) : (
-            <button
-              className="sobre-btn sobre-btn-primary"
-              onClick={() => void generate()}
-              disabled={!canGenerate}
-              style={{ opacity: canGenerate ? 1 : 0.55 }}
-            >
-              <Send size={14} strokeWidth={2} />
-              {pending ? "Generating…" : "Generate invite link"}
-            </button>
-          )}
-        </div>
+        ) : (
+          <button
+            className="sobre-btn sobre-btn-primary"
+            onClick={() => void generate()}
+            disabled={pending}
+            style={{ opacity: pending ? 0.55 : 1 }}
+          >
+            <Send size={14} strokeWidth={2} />
+            {pending ? "Generating…" : "Generate invite link"}
+          </button>
+        )}
+      </div>
     </Sheet>
   );
 }

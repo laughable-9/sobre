@@ -16,7 +16,7 @@ import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
-import { CardsSection } from "@/components/sobre/CardsSection";
+import { SupplementarySummary } from "@/components/sobre/SupplementarySummary";
 import { EarnGrowSummary } from "@/components/sobre/EarnGrowSummary";
 import { EarnInfoModal } from "@/components/sobre/EarnInfoModal";
 import { EarnPanel } from "@/components/sobre/EarnPanel";
@@ -60,7 +60,6 @@ import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import {
-  EARN_APY_LABEL,
   ENVELOPE_LABELS,
   STROOPS_PER_USDC,
   displayEnvelopeName,
@@ -76,7 +75,6 @@ import { envelopeTotalStroops } from "@/lib/walletTotals";
 // state is loading. Aliased locally as `Tab` to keep call sites terse.
 type Tab = DashboardSkeletonTab;
 const SETTINGS_HASH = "#settings";
-const SUBACCOUNTS_HASH = "#subaccounts";
 const ENVELOPES_HASH = "#envelopes";
 const ACTIVITY_HASH = "#activity";
 const PROFILE_HASH = "#profile";
@@ -84,11 +82,9 @@ const PROFILE_HASH = "#profile";
 /** Collapse the dashboard's fine-grained tabs onto the dock's four visible
  *  slots. Settings is reached from the Envelopes-tab gear, so its dock
  *  home stays "envelopes" — the highlight matches the parent surface the
- *  user came from and back-nav feels honest. Sub-accounts nests under
- *  Envelopes for the same reason. */
+ *  user came from and back-nav feels honest. */
 function dockActive(tab: Tab): DockTab {
-  if (tab === "envelopes" || tab === "subaccounts" || tab === "settings")
-    return "envelopes";
+  if (tab === "envelopes" || tab === "settings") return "envelopes";
   if (tab === "activity") return "activity";
   if (tab === "profile") return "profile";
   return "home";
@@ -129,7 +125,6 @@ function tabFromHash(hash?: string): DashboardSkeletonTab {
   const h =
     hash ?? (typeof window !== "undefined" ? window.location.hash : "");
   if (h === SETTINGS_HASH) return "settings";
-  if (h === SUBACCOUNTS_HASH) return "subaccounts";
   if (h === ENVELOPES_HASH) return "envelopes";
   if (h === ACTIVITY_HASH) return "activity";
   if (h === PROFILE_HASH) return "profile";
@@ -302,15 +297,13 @@ function Dashboard({ contractId }: { contractId: string }) {
     const hash =
       next === "settings"
         ? SETTINGS_HASH
-        : next === "subaccounts"
-          ? SUBACCOUNTS_HASH
-          : next === "envelopes"
-            ? ENVELOPES_HASH
-            : next === "activity"
-              ? ACTIVITY_HASH
-              : next === "profile"
-                ? PROFILE_HASH
-                : "";
+        : next === "envelopes"
+          ? ENVELOPES_HASH
+          : next === "activity"
+            ? ACTIVITY_HASH
+            : next === "profile"
+              ? PROFILE_HASH
+              : "";
     history.replaceState(
       null,
       "",
@@ -583,11 +576,9 @@ function Dashboard({ contractId }: { contractId: string }) {
           bottom dock; wallet name + currency toggle now live inside the
           balance hero header, and the Profile dock tab owns identity. */}
 
-      {/* Back affordance for nested sub-views. Both subaccounts and settings
-          are reached from the Envelopes tab (settings via the gear, sub-
-          accounts via a Cards row), so back-nav should return there — not
-          to Home, which is a peer tab, not a parent. */}
-      {tab === "subaccounts" || tab === "settings" ? (
+      {/* Back affordance for the settings sub-view — reached from the
+          Envelopes-tab gear, so back-nav returns there. */}
+      {tab === "settings" ? (
         <div
           className="mx-auto w-full px-4 sm:px-7 pt-5"
           style={{ maxWidth: 1320 }}
@@ -714,7 +705,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             .map((r) => ({
               address: r.walletAddress as string,
               name: r.displayName,
-              emoji: r.emoji,
             }))}
           envelopeNames={state.envelope_names}
           pendingDeposits={activeDeposits.deposits.filter(
@@ -817,10 +807,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                 (p) => p.envelope === envName,
               );
               const earnStrip = earnPos
-                ? {
-                    interestEarnedStroops: earnPos.interestEarned,
-                    apyLabel: EARN_APY_LABEL,
-                  }
+                ? { interestEarnedStroops: earnPos.interestEarned }
                 : undefined;
               return (
                 <EnvelopeCard
@@ -834,7 +821,6 @@ function Dashboard({ contractId }: { contractId: string }) {
                   envelopeIcons={state.envelope_icons}
                   currency={currency}
                   earn={earnStrip}
-                  onEarnInfo={() => setEarnInfoOpen(true)}
                 />
               );
             })}
@@ -862,39 +848,45 @@ function Dashboard({ contractId }: { contractId: string }) {
               />
             ) : null}
 
-            <MembersSection
-              members={state.members}
-              adminAddress={state.admin}
-              adminCount={state.admin_count}
-              adminCap={state.admin_cap}
-              familyWalletId={familyWalletId}
-              canInvite={isAdmin && state.members.length < state.admin_cap}
-              canEditCap={isAdmin}
-              onInvite={() => setInviteOpen(true)}
-              onCapChanged={({ cancelledHints }) => {
-                void walletState.refreshDisplay();
-                if (cancelledHints > 0) {
-                  flash(
-                    `Cap lowered. Cancelled ${cancelledHints} pending admin invite${cancelledHints === 1 ? "" : "s"}.`,
-                    "warn",
-                  );
-                } else {
-                  flash("Admin cap updated", "ok");
-                }
-              }}
-            />
-
-            <CardsSection
+            <SupplementarySummary
               rows={subRows}
-              canManage={isAdmin}
-              onManage={() => switchTab("subaccounts")}
+              onChain={state.subaccounts}
+              events={txFeed.events}
+              envelopeNames={state.envelope_names}
+              currency={currency}
             />
           </div>
         </Reveal>
       ) : null}
 
-      {tab === "subaccounts" ? (
-        <Reveal as="div">
+      {tab === "profile" ? (
+        <Reveal
+          as="div"
+          className="mx-auto w-full px-4 sm:px-7 pb-12 pt-6 space-y-5"
+          style={{ maxWidth: 480 }}
+        >
+          <ProfileSheet wallet={wallet} />
+          <MembersSection
+            members={state.members}
+            adminAddress={state.admin}
+            adminCount={state.admin_count}
+            adminCap={state.admin_cap}
+            familyWalletId={familyWalletId}
+            canInvite={isAdmin && state.members.length < state.admin_cap}
+            canEditCap={isAdmin}
+            onInvite={() => setInviteOpen(true)}
+            onCapChanged={({ cancelledHints }) => {
+              void walletState.refreshDisplay();
+              if (cancelledHints > 0) {
+                flash(
+                  `Cap lowered. Cancelled ${cancelledHints} pending admin invite${cancelledHints === 1 ? "" : "s"}.`,
+                  "warn",
+                );
+              } else {
+                flash("Admin cap updated", "ok");
+              }
+            }}
+          />
           <SubAccountsPanel
             userAddress={address}
             contractId={contractId}
@@ -906,16 +898,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             onFlash={flash}
             onChange={refreshAll}
           />
-        </Reveal>
-      ) : null}
-
-      {tab === "profile" ? (
-        <Reveal
-          as="div"
-          className="mx-auto w-full px-4 sm:px-7 pb-12 pt-6"
-          style={{ maxWidth: 480 }}
-        >
-          <ProfileSheet wallet={wallet} />
         </Reveal>
       ) : null}
 

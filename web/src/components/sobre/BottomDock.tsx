@@ -59,7 +59,7 @@ export function BottomDock({
           Icon={ClockCounterClockwiseIcon}
         />
         <DockTabBtn
-          label="Profile"
+          label="User"
           active={active === "profile"}
           onClick={() => onTab("profile")}
           Icon={UserIcon}
