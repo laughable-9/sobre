@@ -472,19 +472,31 @@ function Dashboard({ contractId }: { contractId: string }) {
     // network flake). Surface it so the user isn't stuck on the skeleton
     // forever — with retry + a way back to the wallet list.
     if (walletState.error) {
+      // Recognise the two "contract is on old wasm" flavours and show a
+      // clearer message than raw simulation output. Common causes:
+      //   - WasmVm InvalidAction + UnreachableCodeReached (contract panic)
+      //   - MissingValue (get_state field missing from stored state)
+      const needsUpgrade =
+        walletState.error.includes("UnreachableCodeReached") ||
+        walletState.error.includes("WasmVm, InvalidAction") ||
+        walletState.error.includes("MissingValue");
       return (
         <div className="sobre-app sobre-v2">
           <TopBar wallet={wallet} />
           <main className="flex-1 grid place-items-center px-6">
             <div className="text-center max-w-md">
               <h1 className="font-serif text-[24px] font-semibold mb-3">
-                Can&apos;t load this Sobre
+                {needsUpgrade
+                  ? "This Sobre is on an older version"
+                  : "Can't load this Sobre"}
               </h1>
               <p
-                className="text-[13px] break-all mb-5"
+                className="text-[13px] mb-5"
                 style={{ color: "var(--text-2)" }}
               >
-                {walletState.error}
+                {needsUpgrade
+                  ? "The on-chain contract can't be read by the current app. The admin needs to call upgrade() to bring it to the latest wasm."
+                  : walletState.error}
               </p>
               <div className="flex gap-2 justify-center">
                 <button

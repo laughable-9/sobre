@@ -408,16 +408,31 @@ function SobreCard({
           >
             {loading ? "Loading…" : walletName}
           </h3>
-          <span
-            className="sobre-pill mt-1.5 inline-flex"
-            style={{
-              background: "var(--accent-soft)",
-              color: "var(--sobre-accent)",
-              fontSize: 10,
-            }}
-          >
-            {role === "admin" ? "Admin" : "Member"}
-          </span>
+          <div className="mt-1.5 flex items-center gap-1.5 flex-wrap">
+            <span
+              className="sobre-pill inline-flex"
+              style={{
+                background: "var(--accent-soft)",
+                color: "var(--sobre-accent)",
+                fontSize: 10,
+              }}
+            >
+              {role === "admin" ? "Admin" : "Member"}
+            </span>
+            {summary?.chainFailed ? (
+              <span
+                className="sobre-pill inline-flex"
+                style={{
+                  background: "rgba(220,38,38,0.07)",
+                  color: "var(--sobre-danger)",
+                  fontSize: 10,
+                }}
+                title="On-chain call to get_state trapped. Wasm probably needs an upgrade."
+              >
+                Needs upgrade
+              </span>
+            ) : null}
+          </div>
         </div>
         <CaretRightIcon
           weight="bold"

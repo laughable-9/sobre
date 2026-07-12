@@ -15,6 +15,10 @@ export interface SobreSummary {
    *  `family_wallets` row (typically an orphan from a create where the DB
    *  mirror failed). Consumers can hide these from the list. */
   isOrphan: boolean;
+  /** True when the on-chain get_state simulation failed. The Supabase
+   *  side of the summary is still populated so the list can render a real
+   *  name; clicking through will hit the wallet dashboard's error branch. */
+  chainFailed: boolean;
 }
 
 export interface UseSobreSummaryResult {
@@ -27,10 +31,11 @@ export interface UseSobreSummaryResult {
  * One-shot fetch of a Sobre's state for the "My Sobres" cards. Cheaper than
  * useWalletState which polls every 3s — these cards just need a snapshot.
  *
- * The wallet display name lives in Supabase (family_wallets.display_name),
- * not on chain, so we read it from there and combine with the chain-side
- * balances + member list. If no Supabase row exists we mark the summary as
- * an orphan; the /dashboard list filters those out.
+ * Reads the display name from Supabase (family_wallets.display_name), the
+ * balances + members from on-chain get_state. Tolerates chain failures by
+ * still returning a Supabase-only summary — an older wasm whose get_state
+ * traps still renders as a card with its real name and a "chainFailed"
+ * flag the dashboard can use to badge it.
  */
 export function useSobreSummary(
   contractId: string,
@@ -59,38 +64,48 @@ export function useSobreSummary(
         ]);
         if (cancelled) return;
 
-        if (rawSettled.status === "rejected") {
-          throw rawSettled.reason instanceof Error
-            ? rawSettled.reason
-            : new Error(String(rawSettled.reason));
-        }
-        const raw = rawSettled.value;
         const familyRow =
           familySettled.status === "fulfilled" && !familySettled.value.error
             ? (familySettled.value.data as { display_name: string | null } | null)
             : null;
         const supabaseName = familyRow?.display_name ?? null;
 
-        const members: Member[] = Array.isArray(raw.members)
-          ? (raw.members as Record<string, unknown>[]).map((m) => ({
-              address: String(m.address),
-              name: String(m.name ?? ""),
-              avatarUrl: null,
-              walletDbId: null,
-              role: "recipient",
-            }))
-          : [];
-        const balances = (raw.balances as bigint[] | undefined) ?? [];
-        const totalStroops = balances.reduce((acc, b) => acc + b, 0n);
+        let members: Member[] = [];
+        let totalStroops = 0n;
+        let chainWalletName = "";
+        let chainFailed = false;
+        if (rawSettled.status === "fulfilled") {
+          const raw = rawSettled.value;
+          members = Array.isArray(raw.members)
+            ? (raw.members as Record<string, unknown>[]).map((m) => ({
+                address: String(m.address),
+                name: String(m.name ?? ""),
+                avatarUrl: null,
+                walletDbId: null,
+                role: "recipient",
+              }))
+            : [];
+          const balances = (raw.balances as bigint[] | undefined) ?? [];
+          totalStroops = balances.reduce((acc, b) => acc + b, 0n);
+          chainWalletName = String(raw.wallet_name ?? "");
+        } else {
+          chainFailed = true;
+          setError(
+            rawSettled.reason instanceof Error
+              ? rawSettled.reason.message
+              : String(rawSettled.reason),
+          );
+        }
+
         setSummary({
-          walletName:
-            supabaseName ?? String(raw.wallet_name ?? "") ?? "Family Wallet",
+          walletName: supabaseName || chainWalletName || "Family Wallet",
           members,
           totalStroops,
           isClosed: false,
           isOrphan: familyRow === null,
+          chainFailed,
         });
-        setError(null);
+        if (!chainFailed) setError(null);
       } catch (e) {
         if (cancelled) return;
         setError(e instanceof Error ? e.message : String(e));
