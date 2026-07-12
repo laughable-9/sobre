@@ -3,7 +3,7 @@
 import { PlantIcon, ShieldCheckIcon } from "@phosphor-icons/react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { EARN_APY_LABEL, STROOPS_PER_USDC } from "@/lib/config";
+import { EARN_APY_LABEL, GROW_APY_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import { formatCurrencyLocale } from "@/lib/format";
@@ -86,7 +86,7 @@ export function EarnGrowSummary({
                 }}
                 title="Tap for how yield works"
               >
-                {EARN_APY_LABEL}
+                {GROW_APY_LABEL}
               </button>
               <span className="sobre-yield-badge">
                 {state.grow_requests.length > 0
