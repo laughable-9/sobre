@@ -649,6 +649,12 @@ function Dashboard({ contractId }: { contractId: string }) {
             events={txFeed.events}
             loading={txFeed.loading}
             members={state.members}
+            subaccounts={subRows
+              .filter((r) => r.walletAddress)
+              .map((r) => ({
+                address: r.walletAddress as string,
+                name: r.displayName,
+              }))}
             envelopeNames={state.envelope_names}
             onSeeAll={() => switchTab("activity")}
           />
