@@ -103,23 +103,29 @@ export async function GET(
         { status: 500 },
       );
     }
-    // Only phase 2 needs the smart-wallet C-address — fetching it during
-    // the pending stretch (which can run for 30-120s while the user pays
-    // InstaPay) is wasted work.
-    const { data: wallet } = await admin
-      .from("wallets")
-      .select("contract_id")
-      .eq("id", r.member_id)
+    // Phase 2 targets the family Sobre contract directly — `deposit_from_xlm`
+    // runs there and credits envelopes atomically, no user-signed follow-up.
+    // Only fetch during phase 2 so the pending stretch (which can run
+    // 30-120s while the user pays InstaPay) doesn't do the work early.
+    const { data: family } = await admin
+      .from("family_wallets")
+      .select("contract_id, percents")
+      .eq("id", r.family_wallet_id)
       .single();
-    if (!wallet) {
+    if (!family) {
       return NextResponse.json(
-        { error: "Member wallet not found" },
+        { error: "Family wallet not found" },
         { status: 404 },
       );
     }
+    const fam = family as {
+      contract_id: string;
+      percents: [number, number, number];
+    };
     return await advanceFromFunded({
       identifier,
-      destinationAddress: (wallet as { contract_id: string }).contract_id,
+      familyContractId: fam.contract_id,
+      percents: fam.percents,
       expectedNetAmount: r.amount_usdc,
       kickedOffAt: r.created_at,
     });
@@ -245,14 +251,15 @@ async function advanceFromPending(args: {
 
 async function advanceFromFunded(args: {
   identifier: string;
-  destinationAddress: string;
+  familyContractId: string;
+  percents: readonly [number, number, number];
   expectedNetAmount: number;
   kickedOffAt: string;
 }): Promise<Response> {
   const admin = getSupabaseAdmin();
-  // Atomic claim with TTL: a handler that dies between claim and SAC
-  // transfer doesn't deadlock the row — a later tick can steal a stale
-  // claim via acquireDepositClaim's path B.
+  // Atomic claim with TTL: a handler that dies between claim and
+  // `deposit_from_xlm` doesn't deadlock the row — a later tick can steal
+  // a stale claim via acquireDepositClaim's path B.
   let phase2Claim: string | null = null;
   const claimSacTransfer = async (): Promise<boolean> => {
     phase2Claim = await acquireDepositClaim(admin, args.identifier, "funded");
@@ -261,7 +268,8 @@ async function advanceFromFunded(args: {
   try {
     const result = await tryCompleteWithdrawAndTransfer({
       identifier: args.identifier,
-      destinationAddress: args.destinationAddress,
+      familyContractId: args.familyContractId,
+      percents: args.percents,
       expectedNetAmount: args.expectedNetAmount,
       kickedOffAt: args.kickedOffAt,
       claimSacTransfer,

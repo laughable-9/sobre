@@ -5,16 +5,11 @@ import { Check, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { Sheet } from "@/components/sobre/Sheet";
-import { useDeposit } from "@/hooks/useDeposit";
 import { usePdaxDeposit, type DepositStatus } from "@/hooks/usePdaxDeposit";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
-import {
-  ENVELOPE_LABELS,
-  STROOPS_PER_TOKEN,
-  displayEnvelopeName,
-} from "@/lib/config";
+import { ENVELOPE_LABELS, displayEnvelopeName } from "@/lib/config";
 
 // First pill is the PDAX cash-in minimum (₱200). Anything below is rejected
 // at the /trade/quote step — don't surface it as a one-tap option.
@@ -27,11 +22,9 @@ const QUICK_PHP = [200, 500, 1000, 5000];
  *   input    → user types PHP amount + taps Generate
  *   awaiting → checkout URL minted; user pays via InstaPay; we watch the
  *              row tick from pending → funded (PHP received by PDAX) →
- *              credited (the payment token — XLM today, USDC once PDAX UAT
- *              fixes its USDCXLM bucket — withdrawn to user's smart wallet)
- *   confirm  → the token has landed; user taps Confirm to fire the on-chain
- *              deposit() that splits across envelopes
- *   done     → split lands on chain; close modal, dashboard refreshes
+ *              credited (contract's `deposit_from_xlm` swapped USDC and
+ *              credited envelopes atomically)
+ *   done     → server credited envelopes; close modal, dashboard refreshes
  *   failed   → any step errored; show the reason + a Close
  */
 type Phase =
@@ -39,8 +32,6 @@ type Phase =
   | "preparing"
   | "awaiting"
   | "celebrating"
-  | "confirm"
-  | "splitting"
   | "done"
   | "failed"
   | "cancelling";
@@ -78,28 +69,17 @@ function rotatingTitlesFor(status: DepositStatus): string[] {
   }
 }
 
-/** Title shown during the on-chain split step. Two sub-phases:
- *  - checking_balance: polling the SAC `balance()` until the relay's
- *    transfer to the smart wallet has propagated. Surfaces as a distinct
- *    title so the user knows we're waiting on the chain, not stuck.
- *  - depositing: the passkey prompt is up and we're submitting deposit(). */
-const SPLIT_STEP_TITLE: Record<
-  "idle" | "checking_balance" | "depositing",
-  string
-> = {
-  idle: "Splitting across envelopes…",
-  checking_balance: "Waiting for funds to settle…",
-  depositing: "Splitting across envelopes…",
-};
-
 function phaseFromStatus(status: DepositStatus | undefined): Phase {
   switch (status) {
     case "pending":
     case "funded":
       return "awaiting";
     case "credited":
-      return "confirm";
     case "split":
+      // 2026-07-12 pivot: server-side `deposit_from_xlm` credits envelopes
+      // directly, so `credited` is already the terminal successful state.
+      // `split` maps here too for pre-pivot rows that used the old two-step
+      // flow (credited → user signs deposit_with_split → split).
       return "done";
     case "failed":
       return "failed";
@@ -153,19 +133,9 @@ export function PdaxDepositModal({
   const {
     initiate,
     row,
-    markSplit,
     pending: pdaxPending,
     error: pdaxError,
   } = usePdaxDeposit(contractId, resumeIdentifier);
-
-  const {
-    deposit,
-    pending: depositPending,
-    step: depositStep,
-    error: depositError,
-  } = useDeposit(userAddress, contractId);
-
-  const [splitting, setSplitting] = useState(false);
   // "preparing" covers the gap between "user clicked Continue" and "PDAX
   // returned a checkout URL". The /fiat/deposit call takes 1-3s; without
   // this flag the modal stays on the input step with a frozen-looking
@@ -257,15 +227,13 @@ export function PdaxDepositModal({
   else if ((preparing || hydrating) && !row) phase = "preparing";
   else if (!row) phase = "input";
   else if (celebration) phase = "celebrating";
-  else if (splitting) phase = "splitting";
   else phase = phaseFromStatus(row.status);
 
   // One close path for the inline "Cancel this checkout" button AND the
   // backdrop/escape close. Safety rails:
-  // - LOCKED (refuses to close): celebrating, splitting, confirm, and
-  //   awaiting once status is past pending. Closing while money is at
-  //   PDAX or sitting in the smart wallet would strand funds where the
-  //   user can't easily recover them mid-demo.
+  // - LOCKED (refuses to close): celebrating, and awaiting once status
+  //   is past pending. Closing while money is at PDAX would strand funds
+  //   where the user can't easily recover them mid-demo.
   // - Terminal / pre-start (input, done, failed): plain close, no
   //   cancel call needed.
   // - After 409 (alreadyPaidNotice set): plain close too — we already
@@ -280,8 +248,6 @@ export function PdaxDepositModal({
   const attemptCancel = async () => {
     const lockedPhase =
       phase === "celebrating" ||
-      phase === "splitting" ||
-      phase === "confirm" ||
       (phase === "awaiting" && row?.status !== "pending");
     if (lockedPhase) return;
 
@@ -358,7 +324,7 @@ export function PdaxDepositModal({
     }
   }, [cancelling, row?.identifier, preparing, onAttemptCancel, onClose]);
 
-  const error = pdaxError ?? depositError;
+  const error = pdaxError;
 
   const handleGenerate = async () => {
     if (!validAmount) return;
@@ -371,21 +337,6 @@ export function PdaxDepositModal({
       await initiate(amountPhp);
     } catch {
       setPreparing(false);
-    }
-  };
-
-  const handleConfirmSplit = async () => {
-    if (!row || row.amount_usdc === null) return;
-    setSplitting(true);
-    try {
-      const stroops = BigInt(
-        Math.round(row.amount_usdc * STROOPS_PER_TOKEN),
-      );
-      const txHash = await deposit(stroops, state.percents);
-      await markSplit(txHash);
-      onSuccess({ usdc: row.amount_usdc, stroops });
-    } catch {
-      setSplitting(false);
     }
   };
 
@@ -452,24 +403,6 @@ export function PdaxDepositModal({
                 ? "Payment confirmed!"
                 : "Funds arrived!"
             }
-          />
-        ) : null}
-
-        {phase === "confirm" && row ? (
-          <ConfirmStep
-            amountToken={row.amount_usdc ?? expectedToken}
-            phpPerToken={phpPerToken}
-            state={state}
-            pending={depositPending || pdaxPending}
-            onConfirm={() => void handleConfirmSplit()}
-            error={error}
-          />
-        ) : null}
-
-        {phase === "splitting" ? (
-          <CenteredCopy
-            icon={<Loader2 size={28} className="animate-spin" />}
-            title={SPLIT_STEP_TITLE[depositStep]}
           />
         ) : null}
 
@@ -730,63 +663,6 @@ function AwaitingStep({
         ) : undefined
       }
     />
-  );
-}
-
-function ConfirmStep({
-  amountToken,
-  phpPerToken,
-  state,
-  pending,
-  onConfirm,
-  error,
-}: {
-  amountToken: number;
-  phpPerToken: number;
-  state: WalletState;
-  pending: boolean;
-  onConfirm: () => void;
-  error: string | null;
-}) {
-  const amountPhp = amountToken * phpPerToken;
-  return (
-    <>
-      <h2>Funds arrived</h2>
-      <p className="sub">
-        ₱{amountPhp.toLocaleString("en-PH", { minimumFractionDigits: 2 })} is
-        in your wallet. Confirm to split it across envelopes.
-      </p>
-
-      <SplitPreview
-        title="Split preview"
-        amountToken={amountToken}
-        phpPerToken={phpPerToken}
-        state={state}
-      />
-
-      {error ? (
-        <p
-          className="text-xs break-all mb-3"
-          style={{ color: "var(--sobre-danger)" }}
-        >
-          {error}
-        </p>
-      ) : null}
-
-      <div
-        className="sobre-modal-actions"
-        style={{ justifyContent: "center" }}
-      >
-        <button
-          className="sobre-btn sobre-btn-primary"
-          onClick={onConfirm}
-          disabled={pending}
-          style={pending ? { opacity: 0.5 } : {}}
-        >
-          {pending ? "Splitting…" : "Confirm split"}
-        </button>
-      </div>
-    </>
   );
 }
 

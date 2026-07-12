@@ -57,7 +57,7 @@ export type PaymentToken = "XLM" | "USDC";
  *  "USDC" don't trip TS2367 ("comparison appears unintentional"). The
  *  ternary below should remain meaningful — flipping the literal here
  *  cascades to PAYMENT_TOKEN_SAC_ID without touching call sites. */
-export const PAYMENT_TOKEN = "XLM" as PaymentToken;
+export const PAYMENT_TOKEN = "USDC" as PaymentToken;
 
 /** The SAC contract ID passed to every new family wallet's `init` as
  *  `payment_token`. Drives `deposit` / `spend` / SAC `transfer`. */
@@ -82,33 +82,65 @@ export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
 export const MAX_ADMIN_CAP = 5;
 
 /**
- * Blend Protocol v2 TestnetV2 pool + asset addresses for the Earn feature.
- * When admin enables Earn, these get passed to `earn_enable(pool, asset)`.
+ * Blend Protocol v2 TestnetV2 pool + XLM reserve asset for the **Grow**
+ * feature. When admin enables Grow, these get passed to
+ * `grow_enable(pool, xlm_asset, soroswap_router)` alongside Soroswap.
+ *
+ * Grow's flow: the Sobre contract holds USDC (payment token), but Blend's
+ * testnet pool's XLM reserve is what has liquidity — Grow supply swaps
+ * USDC→XLM via Soroswap first, then supplies XLM to Blend. Withdraw
+ * reverses. See earn-grow-research.md § "Blend Protocol" and the
+ * 2026-07-12 pivot in feature-backlog.md for the reasoning.
  *
  * Pool sourced from `github.com/blend-capital/blend-utils/blob/main/testnet.contracts.json`
  * (the `TestnetV2` entry). If Blend rotates the pool, update here.
- * Asset is Sobre's payment token — XLM native SAC on testnet — which is
- * a live reserve on the TestnetV2 pool at reserve index 0.
  *
- * For mainnet promotion: use the mainnet USDC-oriented pool from
- * `docs.blend.capital/mainnet-deployments` and switch the asset to the
- * mainnet USDC SAC (once the PDAX↔USDC path lands per project_payment_token_usdc).
+ * For mainnet promotion: on mainnet, Blend's USDC reserve accepts Circle
+ * USDC (same issuer as Sobre's payment token), so the Soroswap sandwich
+ * may become unnecessary — supply Circle USDC directly to Blend USDC
+ * reserve. Verify at cut time. See feature-backlog.md "Mainnet promotion".
  */
 export const BLEND_POOL_ID: string =
   "CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF";
 export const BLEND_ASSET_ID: string = XLM_SAC_ID;
 
 /**
- * User-facing APY pill copy for both Savings (Earn) and Grow. Both use
- * the same Blend pool today so the underlying rate is identical; Grow's
- * differentiator is the 48-hour wait, not a rate premium. Do not add a
- * distinct GROW_APY_LABEL without a real on-chain mechanism to back it
- * up (a higher-yield pool, BLND rewards compounding, or forfeit-on-
- * cancel that funds the differential). Live-computed APYs against
- * Blend's rate model wait for the mainnet rate flip; testnet spikes
- * make hardcoded aspirational text the honest choice for the demo.
+ * Soroswap router contract on testnet. Used by Grow (in-contract) to
+ * swap USDC↔XLM around the Blend supply/withdraw legs. Real testnet pool
+ * has ~$450K USDC + 3.6M XLM depth at mainnet-ish price (0.123 USDC/XLM
+ * as of 2026-07-12) — enough for hundreds of demo deposits.
+ *
+ * Mainnet path: swap for Soroswap mainnet router if we keep the sandwich,
+ * or drop entirely if Blend USDC reserve accepts Circle USDC directly.
  */
-export const EARN_APY_LABEL = "up to 3.5% p.a.";
+export const SOROSWAP_ROUTER_ID: string =
+  "CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD";
+
+/**
+ * MockUSDY contract on testnet. Sobre's Earn envelope calls this contract's
+ * `deposit` / `redeem` / `balance_of`. Interface matches Ondo's real USDY
+ * so mainnet swap is a single address change.
+ *
+ * Deployed 2026-07-12 with wasm hash
+ * `9f543de035faaad0bc85f6071b1c8917aa8739e9ea69580876e0e140efaf81d6`
+ * and initialised with Circle testnet USDC as underlying.
+ */
+export const MOCK_USDY_ID: string =
+  "CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA";
+
+/**
+ * User-facing APY pill copies. Earn (USDY) and Grow (Blend lending) have
+ * different risk/rate profiles per the PM's SEC-disclosure ask — never
+ * label both with a single "APY". Blend rates fluctuate with pool
+ * utilization; USDY tracks a short-term US Treasuries basket via Ondo.
+ *
+ * These are aspirational-but-honest copy for the demo. Once real yield
+ * feeds land (Blend rate model live via RPC, Ondo USDY on Stellar), swap
+ * for computed values. Do NOT use "guaranteed" / "fixed" language —
+ * that's a compliance flag for a Philippine fintech.
+ */
+export const EARN_APY_LABEL = "~5% p.a.";
+export const GROW_APY_LABEL = "variable";
 
 export const NETWORK = {
   /** Name returned by Freighter's getNetwork(). */

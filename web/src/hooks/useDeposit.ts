@@ -5,6 +5,7 @@ import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
 import { invokeWrite, simulateRead } from "@/lib/contract";
+import { splitAmount } from "@/lib/split";
 
 export interface UseDepositResult {
   /** `percents` is admin's latest split (Supabase-resident); the caller
@@ -85,21 +86,6 @@ export function useDeposit(
   );
 
   return { deposit, pending, step, error, lastHash };
-}
-
-/** Total = groceries + tuition + savings. Rounding remainder lands in
- *  savings so the integer sum exactly matches `amountStroops`. */
-export function splitAmount(
-  amountStroops: bigint,
-  percents: [number, number, number],
-): { groceries: bigint; tuition: bigint; savings: bigint } {
-  if (percents[0] + percents[1] + percents[2] !== 100) {
-    throw new Error("Split percentages must sum to 100.");
-  }
-  const groceries = (amountStroops * BigInt(percents[0])) / 100n;
-  const tuition = (amountStroops * BigInt(percents[1])) / 100n;
-  const savings = amountStroops - groceries - tuition;
-  return { groceries, tuition, savings };
 }
 
 async function waitForSacBalance(

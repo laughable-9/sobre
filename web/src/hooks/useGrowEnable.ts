@@ -1,7 +1,9 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { Address } from "@stellar/stellar-sdk";
 
+import { BLEND_POOL_ID, SOROSWAP_ROUTER_ID, XLM_SAC_ID } from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
 
 export interface UseGrowEnableResult {
@@ -12,8 +14,12 @@ export interface UseGrowEnableResult {
 }
 
 /**
- * Wraps `grow_enable()`. One-shot per wallet — the contract rejects a
- * second call. Admin auth required.
+ * Wraps `grow_enable(pool, xlm_asset, soroswap_router)` — v9 signature.
+ * Pins the Blend pool, XLM SAC (Blend's reserve asset), and Soroswap
+ * router the contract will use for the USDC↔XLM swap sandwich around
+ * every Grow supply/withdraw. Also required by `deposit_from_xlm`
+ * (server-side PDAX ramp) — a wallet must have Grow enabled before its
+ * first PDAX deposit will succeed. One-shot per wallet.
  */
 export function useGrowEnable(
   userAddress: string | null,
@@ -29,7 +35,12 @@ export function useGrowEnable(
     setPending(true);
     setError(null);
     try {
-      const { hash } = await invokeWrite(contractId, "grow_enable", []);
+      const args = [
+        Address.fromString(BLEND_POOL_ID).toScVal(),
+        Address.fromString(XLM_SAC_ID).toScVal(),
+        Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+      ];
+      const { hash } = await invokeWrite(contractId, "grow_enable", args);
       setLastHash(hash);
       return hash;
     } catch (e) {

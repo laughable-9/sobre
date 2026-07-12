@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
-import { BLEND_ASSET_ID, BLEND_POOL_ID } from "@/lib/config";
+import { MOCK_USDY_ID } from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
 
 export interface UseEarnEnableResult {
@@ -14,10 +14,13 @@ export interface UseEarnEnableResult {
 }
 
 /**
- * Wraps `earn_enable(pool, asset)`. One-shot per wallet — the contract
- * rejects a second call. Admin auth required (contract enforces via
- * require_admin_auth). Pool and asset are hardcoded per the demo network
- * config; a future USDC-yield promotion updates them in `lib/config.ts`.
+ * Wraps `earn_enable(usdy_contract)` — v9 signature. Admin points the
+ * wallet at a USDY-shaped token contract (MockUSDY on testnet, real Ondo
+ * USDY once it ships on Stellar). One-shot per wallet — the contract
+ * rejects a second call.
+ *
+ * The USDY contract's `underlying()` must equal the wallet's payment
+ * token; a mismatch traps here rather than at the first supply.
  */
 export function useEarnEnable(
   userAddress: string | null,
@@ -33,10 +36,7 @@ export function useEarnEnable(
     setPending(true);
     setError(null);
     try {
-      const args = [
-        Address.fromString(BLEND_POOL_ID).toScVal(),
-        Address.fromString(BLEND_ASSET_ID).toScVal(),
-      ];
+      const args = [Address.fromString(MOCK_USDY_ID).toScVal()];
       const { hash } = await invokeWrite(contractId, "earn_enable", args);
       setLastHash(hash);
       return hash;

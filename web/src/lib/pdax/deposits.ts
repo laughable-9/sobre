@@ -7,7 +7,11 @@ import "server-only";
 
 import { NETWORK, PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
 import { pdaxFetch } from "@/lib/pdax/client";
-import { getRelayPublicKey, transferFromRelay } from "@/lib/relay";
+import {
+  depositFromXlmToSobre,
+  getRelayPublicKey,
+} from "@/lib/relay";
+import { splitAmount } from "@/lib/split";
 
 /** PDAX `POST /fiat/deposit` response (relevant fields). */
 export interface PdaxFiatDepositResponse {
@@ -207,7 +211,14 @@ export async function kickOffPdaxWithdraw(args: {
  */
 export async function tryCompleteWithdrawAndTransfer(args: {
   identifier: string;
-  destinationAddress: string;
+  /** Family Sobre contract's C-address. `deposit_from_xlm` runs on this
+   *  contract — envelopes get credited directly, no user-signed follow-up
+   *  step. */
+  familyContractId: string;
+  /** Family percentages `[groceries, tuition, savings]` summing to 100.
+   *  Server splits the Soroswap payout by these to compute per-envelope
+   *  USDC totals passed to the contract. */
+  percents: readonly [number, number, number];
   expectedNetAmount: number;
   /** ISO timestamp from the pdax_deposits row. Used as the lower bound
    *  when searching Horizon for the incoming payment — prevents matching
@@ -215,9 +226,9 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   kickedOffAt: string;
   /** Atomic claim. Caller flips withdraw_tx_hash from NULL to a sentinel
    *  on the row; returns true if THIS poll won the race, false if another
-   *  concurrent poll already claimed and is mid-SAC-transfer. Without
-   *  this guard the modal's 1s polling can double-send because the SAC
-   *  transfer itself takes ~5s to confirm. */
+   *  concurrent poll already claimed and is mid-invoke. Without this
+   *  guard the modal's 1s polling can double-send because the
+   *  deposit_from_xlm tx itself takes ~5s to confirm. */
   claimSacTransfer: () => Promise<boolean>;
 }): Promise<
   | { state: "still_pending" }
@@ -232,11 +243,22 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   const won = await args.claimSacTransfer();
   if (!won) return { state: "still_pending" };
 
-  const stroops = BigInt(Math.round(horizonHit.amount * STROOPS_PER_TOKEN));
-  const sacTransferHash = await transferFromRelay(
-    args.destinationAddress,
-    stroops,
+  const xlmStroops = BigInt(Math.round(horizonHit.amount * STROOPS_PER_TOKEN));
+  // Split the expected USDC total by family percentages. The contract
+  // will validate the sum against Soroswap's actual payout; if the
+  // swap under-delivers, the invocation traps and this claim rolls back
+  // on the next poll. A small safety margin isn't applied here — the
+  // 2% Soroswap slippage floor inside the contract is enough for
+  // normal-mainnet-ish rate movement.
+  const totalUsdcStroops = BigInt(
+    Math.round(args.expectedNetAmount * STROOPS_PER_TOKEN),
   );
+  const split = splitAmount(totalUsdcStroops, args.percents);
+  const sacTransferHash = await depositFromXlmToSobre({
+    familyContractId: args.familyContractId,
+    relayXlmStroops: xlmStroops,
+    split,
+  });
   return {
     state: "completed",
     sacTransferHash,
