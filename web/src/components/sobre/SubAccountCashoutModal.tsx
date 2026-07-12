@@ -1,8 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowDownToLine, Loader2 } from "lucide-react";
 
+import { CenteredCopy } from "@/components/sobre/CenteredCopy";
+import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
@@ -13,6 +15,7 @@ import {
   PHP_PER_USDC,
   STROOPS_PER_USDC,
 } from "@/lib/config";
+import { useCurrency } from "@/lib/currency";
 
 /**
  * Sub-account PDAX cashout. Mirrors PdaxWithdrawModal but tailored to the
@@ -192,10 +195,21 @@ export function SubAccountCashoutModal({
   // amountStroops > balanceStroops, which spend_from_subaccount then
   // rejects with InsufficientBalance.
   const rate = phpPerToken ?? PHP_PER_USDC;
-  const balancePhp = (Number(balanceStroops) / STROOPS_PER_USDC) * rate;
-  const parsedPhp = Number(amountStr);
-  const validAmount =
-    Number.isFinite(parsedPhp) && parsedPhp > 0 && parsedPhp <= balancePhp;
+  const { currency } = useCurrency();
+  const symbol = currency === "USD" ? "$" : "₱";
+  const balanceToken = Number(balanceStroops) / STROOPS_PER_USDC;
+  const balancePhp = balanceToken * rate;
+  const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
+  const balanceLocale = currency === "USD" ? "en-US" : "en-PH";
+  const parsedAmount = Number(amountStr);
+  const amountToken =
+    Number.isFinite(parsedAmount) && parsedAmount > 0
+      ? currency === "USD"
+        ? parsedAmount
+        : parsedAmount / rate
+      : 0;
+  const amountPhp = amountToken * rate;
+  const validAmount = amountToken > 0 && amountToken <= balanceToken;
 
   const submitBank = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -230,7 +244,6 @@ export function SubAccountCashoutModal({
     if (!validAmount || !bank) return;
     setErrMsg(null);
     setPhase("signing");
-    const amountToken = parsedPhp / rate;
     let amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_USDC));
     // Final guard against sub-peso rounding pushing us above the on-chain
     // balance. Cap at the holder's actual stroops — the cashout PHP value
@@ -240,7 +253,7 @@ export function SubAccountCashoutModal({
       const { relayG } = await initiate({
         subaccountId,
         amountToken,
-        amountPhp: parsedPhp,
+        amountPhp,
         bankCode: bank.bank_code,
         accountName: bank.account_name,
         accountNumber: bank.account_number,
@@ -293,7 +306,10 @@ export function SubAccountCashoutModal({
   return (
     <Sheet onClose={close} ariaLabel="Cash out">
         {phase === "loading_bank" ? (
-          <CenteredSpinner label="Loading…" />
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title="Loading…"
+          />
         ) : null}
 
         {phase === "bank_setup" ? (
@@ -414,38 +430,89 @@ export function SubAccountCashoutModal({
 
         {phase === "input" && bank ? (
           <>
-            <h2>Cash out</h2>
+            <div className="flex items-start justify-between gap-3 mb-2">
+              <h2 style={{ margin: 0 }}>Cash out to your bank</h2>
+              <CurrencyToggle />
+            </div>
             <p className="sub">
-              Lands in your {bankName(bank.bank_code)} account · ••
-              {bank.account_number.slice(-4)}
+              Pull money from your spendable balance to your registered bank
+              account via InstaPay. Usually lands in under a minute.
             </p>
+
             <div className="sobre-input-group">
-              <label htmlFor="sub-cashout-amt">Amount in pesos</label>
+              <label htmlFor="sub-cashout-amt">
+                Amount in {currency === "USD" ? "dollars" : "pesos"}
+              </label>
               <div className="sobre-input-wrap">
-                <span className="prefix">₱</span>
+                <span className="prefix">{symbol}</span>
                 <input
                   id="sub-cashout-amt"
                   className="sobre-input has-prefix tabular"
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  step="1"
+                  step={currency === "USD" ? "0.01" : "1"}
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
+                  disabled={pdaxPending || signPending}
                   autoFocus
                 />
               </div>
               <div
-                style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}
+                className="mt-2 text-[12px]"
+                style={{ color: "var(--text-3)" }}
               >
-                You have ₱
-                {balancePhp.toLocaleString("en-PH", {
+                Available: {symbol}
+                {balanceInCurrency.toLocaleString(balanceLocale, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })}{" "}
-                available.
+                })}
               </div>
             </div>
+
+            <div
+              className="flex items-center justify-between p-3 rounded-[10px] mb-4"
+              style={{ background: "var(--surface-alt)" }}
+            >
+              <div className="flex items-center gap-3">
+                <ArrowDownToLine
+                  size={18}
+                  strokeWidth={2}
+                  style={{ color: "var(--sobre-accent)" }}
+                />
+                <div>
+                  <div
+                    className="text-[13px] font-medium"
+                    style={{ color: "var(--text-1)" }}
+                  >
+                    {bank.account_name}
+                  </div>
+                  <div
+                    className="text-[11px] tabular"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    {bankName(bank.bank_code)} · ••
+                    {bank.account_number.slice(-4)}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhase("bank_setup")}
+                disabled={pdaxPending || signPending}
+                className="text-[12px]"
+                style={{
+                  color: "var(--sobre-accent)",
+                  background: "transparent",
+                  border: "none",
+                  cursor:
+                    pdaxPending || signPending ? "not-allowed" : "pointer",
+                }}
+              >
+                Change
+              </button>
+            </div>
+
             {errMsg ? (
               <p
                 className="text-xs break-all mb-3"
@@ -454,11 +521,13 @@ export function SubAccountCashoutModal({
                 {errMsg}
               </p>
             ) : null}
+
             <div className="sobre-modal-actions">
               <button
                 type="button"
                 className="sobre-btn sobre-btn-soft"
                 onClick={close}
+                disabled={pdaxPending || signPending}
               >
                 Cancel
               </button>
@@ -468,19 +537,22 @@ export function SubAccountCashoutModal({
                 disabled={!validAmount || pdaxPending || signPending}
                 onClick={() => void submitCashout()}
                 style={{
-                  opacity: !validAmount || pdaxPending || signPending ? 0.55 : 1,
+                  opacity:
+                    !validAmount || pdaxPending || signPending ? 0.55 : 1,
                 }}
               >
-                Cash out ₱
-                {validAmount ? parsedPhp.toLocaleString("en-PH") : "0"}
+                {pdaxPending || signPending
+                  ? "Preparing…"
+                  : "Confirm cashout"}
               </button>
             </div>
           </>
         ) : null}
 
         {phase === "signing" ? (
-          <CenteredSpinner
-            label={
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title={
               signStep === "spending"
                 ? "Confirm in your passkey (1 of 2)"
                 : signStep === "forwarding"
@@ -491,8 +563,9 @@ export function SubAccountCashoutModal({
         ) : null}
 
         {phase === "awaiting" ? (
-          <CenteredSpinner
-            label={
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title={
               row?.status === "spent"
                 ? "Sending to PDAX…"
                 : row?.status === "transferred"
@@ -511,7 +584,7 @@ export function SubAccountCashoutModal({
             <h2>Cashed out</h2>
             <p className="sub">
               ₱
-              {(row?.amount_php ?? parsedPhp).toLocaleString("en-PH", {
+              {(row?.amount_php ?? amountPhp).toLocaleString("en-PH", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
@@ -550,25 +623,3 @@ export function SubAccountCashoutModal({
   );
 }
 
-function CenteredSpinner({ label }: { label: string }) {
-  return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 14,
-        padding: "24px 0",
-      }}
-    >
-      <Loader2
-        size={28}
-        className="animate-spin"
-        style={{ color: "var(--sobre-accent)" }}
-      />
-      <div style={{ fontSize: 14, color: "var(--text-2)", textAlign: "center" }}>
-        {label}
-      </div>
-    </div>
-  );
-}
