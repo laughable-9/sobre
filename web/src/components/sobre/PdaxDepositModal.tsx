@@ -476,11 +476,6 @@ function InputStep({
   return (
     <>
       <h2>Add money via PDAX</h2>
-      <p className="sub">
-        Pay in pesos via InstaPay (any bank or e-wallet). PDAX credits your
-        Sobre wallet automatically. The contract splits across envelopes when
-        you confirm.
-      </p>
 
       <div className="sobre-input-group">
         <label htmlFor="pdax-amount">Amount in pesos</label>
