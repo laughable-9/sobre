@@ -242,6 +242,8 @@ export default function MySobresPage() {
     : [];
   const combinedRows = [...adminRows, ...memberRows];
   const allRows = combinedRows.filter((r) => !hiddenIds.has(r.id));
+  const listLoading = adminSobres.loading || mirroredIds.loading;
+  const showEmptyState = !listLoading && allRows.length === 0;
 
   return (
     <div className="sobre-app sobre-v2">
@@ -257,32 +259,38 @@ export default function MySobresPage() {
             <h1 className="font-serif text-[36px] font-semibold mb-2">
               My Sobres
             </h1>
-            <p
-              className="text-[15px]"
-              style={{ color: "var(--text-2)" }}
-            >
-              Open a new one or join an existing one via invite link.
-            </p>
+            {showEmptyState ? null : (
+              <p
+                className="text-[15px]"
+                style={{ color: "var(--text-2)" }}
+              >
+                {allRows.length === 1
+                  ? "Your household wallet."
+                  : `${allRows.length} household wallets.`}
+              </p>
+            )}
           </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setMode("join")}
-              className="sobre-btn sobre-btn-soft"
-              style={{ padding: "12px 18px", fontSize: 14 }}
-            >
-              Join via invite link
-            </button>
-            <button
-              type="button"
-              onClick={() => setMode("new")}
-              className="sobre-btn sobre-btn-primary"
-              style={{ padding: "12px 18px", fontSize: 14 }}
-            >
-              <PlusCircleIcon weight="bold" size={16} />
-              Open a new Sobre
-            </button>
-          </div>
+          {showEmptyState ? null : (
+            <div className="flex gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setMode("join")}
+                className="sobre-btn sobre-btn-soft"
+                style={{ padding: "12px 18px", fontSize: 14 }}
+              >
+                Join via invite link
+              </button>
+              <button
+                type="button"
+                onClick={() => setMode("new")}
+                className="sobre-btn sobre-btn-primary"
+                style={{ padding: "12px 18px", fontSize: 14 }}
+              >
+                <PlusCircleIcon weight="bold" size={16} />
+                Open a new Sobre
+              </button>
+            </div>
+          )}
         </header>
 
         {adminSobres.error ? (
@@ -294,7 +302,7 @@ export default function MySobresPage() {
           </p>
         ) : null}
 
-        {(adminSobres.loading || mirroredIds.loading) && allRows.length === 0 ? (
+        {listLoading && allRows.length === 0 ? (
           <div
             className="grid gap-4"
             style={{
@@ -349,8 +357,8 @@ export default function MySobresPage() {
               }}
             >
               A shared wallet for your family. Every deposit splits
-              automatically across the envelopes you set — Groceries, Tuition,
-              Savings.
+              automatically across the envelopes you set: Groceries,
+              Tuition, Savings.
             </p>
             <div className="flex gap-2 flex-wrap justify-center">
               <button
