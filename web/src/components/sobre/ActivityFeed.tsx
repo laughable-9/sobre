@@ -260,7 +260,7 @@ export function ActivityFeed({
         ) : null}
 
         {!error &&
-        events.length === 0 &&
+        ordered.length === 0 &&
         !pendingDeposits?.length &&
         !pendingCashouts?.length ? (
           loading ? (
