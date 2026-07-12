@@ -5,7 +5,7 @@
 
 import "server-only";
 
-import { NETWORK, PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
+import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
 import { pdaxFetch } from "@/lib/pdax/client";
 import {
   depositFromXlmToSobre,
@@ -138,9 +138,15 @@ export async function kickOffPdaxWithdraw(args: {
   amountToken: number;
   netAmount: number;
   pdaxWithdrawTxId: number;
-  currency: "XLM" | "USDC";
+  currency: "XLM";
 }> {
-  const currency = PAYMENT_TOKEN;
+  // Always trade + withdraw XLM regardless of Sobre's on-chain payment
+  // token. The on-chain `deposit_from_xlm` swaps XLM → payment token via
+  // Soroswap after the relay receives the XLM. PDAX UAT can't buy
+  // USDCXLM directly (OT010016 "Asset unavailable" on `quote_currency=USDCXLM`),
+  // and USDC via PDAX credits a Circle-ERC20 bucket with the wrong step
+  // size for the network we settle on. Hardcoded XLM sidesteps both.
+  const currency = "XLM" as const;
   const relayG = getRelayPublicKey();
 
   const quote = await pdaxFetch<PdaxQuoteResponse>(
@@ -183,8 +189,9 @@ export async function kickOffPdaxWithdraw(args: {
       },
     },
   );
-  // Net = trade amount - PDAX fee (0.02 XLM flat for XLM). The relay
-  // receives this exact amount; we forward it onward in phase 2.
+  // Net = trade amount - PDAX's 0.02 XLM flat withdraw fee. The relay
+  // receives this exact amount; the on-chain swap in phase 2 turns it
+  // into USDC.
   const netAmount = withdraw.amount !== undefined
     ? Number(withdraw.amount)
     : amountToken;
