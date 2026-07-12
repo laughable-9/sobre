@@ -1,9 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
+import {
+  CaretLeftIcon,
+  CaretRightIcon,
+  CheckCircleIcon,
+  CircleNotchIcon,
+} from "@phosphor-icons/react";
 
-import { useCreateSobre } from "@/hooks/useCreateSobre";
+import { useCreateSobre, type CreateSobrePhase } from "@/hooks/useCreateSobre";
 import {
   DEFAULT_ENVELOPE_ICONS,
   DEFAULT_ENVELOPE_NAMES,
@@ -55,6 +60,7 @@ export function InitForm({
     DEFAULT_ENVELOPE_ICONS,
   );
   const [split, setSplit] = useState<Split>([50, 30, 20]);
+  const [phase, setPhase] = useState<CreateSobrePhase>("idle");
   const { createSobre, pending, error } = useCreateSobre(userAddress);
 
   const step1Valid =
@@ -76,10 +82,12 @@ export function InitForm({
         percents: split,
         envelopeNames: trimmed,
         envelopeIcons,
+        onPhase: setPhase,
       });
       onSuccess(newContractId);
     } catch {
-      // error on hook
+      // error surfaces via hook; reset the checklist so a retry starts fresh
+      setPhase("idle");
     }
   };
 
@@ -166,31 +174,35 @@ export function InitForm({
             </p>
           ) : null}
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setStep(0)}
-              disabled={pending}
-              className="sobre-btn sobre-btn-soft justify-center"
-              style={{ padding: "14px 18px", fontSize: 15 }}
-            >
-              <CaretLeftIcon weight="bold" size={16} />
-              Back
-            </button>
-            <button
-              type="submit"
-              disabled={!allValid || pending}
-              className="sobre-btn sobre-btn-primary flex-1 justify-center"
-              style={{
-                padding: "14px 22px",
-                fontSize: 15,
-                opacity: !allValid || pending ? 0.5 : 1,
-                cursor: !allValid || pending ? "not-allowed" : "pointer",
-              }}
-            >
-              {pending ? "Opening your Sobre…" : "Open this Sobre"}
-            </button>
-          </div>
+          {pending ? (
+            <CreateProgress phase={phase} />
+          ) : (
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setStep(0)}
+                disabled={pending}
+                className="sobre-btn sobre-btn-soft justify-center"
+                style={{ padding: "14px 18px", fontSize: 15 }}
+              >
+                <CaretLeftIcon weight="bold" size={16} />
+                Back
+              </button>
+              <button
+                type="submit"
+                disabled={!allValid || pending}
+                className="sobre-btn sobre-btn-primary flex-1 justify-center"
+                style={{
+                  padding: "14px 22px",
+                  fontSize: 15,
+                  opacity: !allValid || pending ? 0.5 : 1,
+                  cursor: !allValid || pending ? "not-allowed" : "pointer",
+                }}
+              >
+                Open this Sobre
+              </button>
+            </div>
+          )}
         </>
       )}
       </div>
@@ -225,6 +237,125 @@ function StepDots({ current, total }: { current: number; total: number }) {
           />
         );
       })}
+    </div>
+  );
+}
+
+const CREATE_STEPS: {
+  key: Exclude<CreateSobrePhase, "idle" | "done">;
+  label: string;
+  hint: string;
+}[] = [
+  {
+    key: "deploying",
+    label: "Deploying your Sobre on Stellar",
+    hint: "You'll be asked to confirm with Face ID.",
+  },
+  {
+    key: "enabling-grow",
+    label: "Enabling auto-savings",
+    hint: "One more Face ID prompt so deposits earn from day one.",
+  },
+  {
+    key: "mirroring",
+    label: "Saving your settings",
+    hint: "Almost done.",
+  },
+];
+
+const PHASE_ORDER: CreateSobrePhase[] = [
+  "idle",
+  "deploying",
+  "enabling-grow",
+  "mirroring",
+  "done",
+];
+
+function CreateProgress({ phase }: { phase: CreateSobrePhase }) {
+  const currentIndex = PHASE_ORDER.indexOf(phase);
+  return (
+    <div
+      className="rounded-[12px] p-4"
+      style={{
+        background: "var(--surface-alt)",
+        border: "1px solid var(--border)",
+      }}
+      aria-live="polite"
+    >
+      <div
+        className="text-[13px] font-semibold mb-3"
+        style={{ color: "var(--text-1)" }}
+      >
+        Opening your Sobre
+      </div>
+      <ol className="space-y-2.5 m-0 p-0">
+        {CREATE_STEPS.map((s) => {
+          const stepIndex = PHASE_ORDER.indexOf(s.key);
+          const isDone = currentIndex > stepIndex;
+          const isActive = phase === s.key;
+          return (
+            <li
+              key={s.key}
+              className="flex items-start gap-3"
+              style={{ listStyle: "none" }}
+            >
+              <span
+                aria-hidden
+                style={{
+                  width: 18,
+                  height: 18,
+                  flexShrink: 0,
+                  color: isDone
+                    ? "var(--sobre-accent)"
+                    : isActive
+                      ? "var(--sobre-primary)"
+                      : "var(--text-3)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                {isDone ? (
+                  <CheckCircleIcon weight="fill" size={18} />
+                ) : isActive ? (
+                  <CircleNotchIcon
+                    weight="bold"
+                    size={16}
+                    style={{ animation: "sobre-spin 0.8s linear infinite" }}
+                  />
+                ) : (
+                  <span
+                    style={{
+                      width: 10,
+                      height: 10,
+                      borderRadius: 999,
+                      background: "var(--border-strong)",
+                    }}
+                  />
+                )}
+              </span>
+              <span className="flex-1 min-w-0">
+                <span
+                  className="text-[13px] font-medium"
+                  style={{
+                    color: isActive || isDone ? "var(--text-1)" : "var(--text-3)",
+                  }}
+                >
+                  {s.label}
+                </span>
+                {isActive ? (
+                  <span
+                    className="block text-[11px] mt-0.5"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    {s.hint}
+                  </span>
+                ) : null}
+              </span>
+            </li>
+          );
+        })}
+      </ol>
     </div>
   );
 }
