@@ -534,7 +534,8 @@ function Dashboard({ contractId }: { contractId: string }) {
   if (isSubaccount) {
     return (
       <div className="sobre-app sobre-v2">
-        <TopBar wallet={wallet} walletState={state} contractId={contractId} />
+        {/* No TopBar here — matches the main wallet view. Identity /
+            sign-out affordances live inside SubAccountView. */}
         <SubAccountView
           userAddress={address}
           contractId={contractId}
