@@ -16,6 +16,11 @@ export interface FamilySubaccountRow {
   walletAddress: string | null;
   displayName: string;
   invitePending: boolean;
+  /** sha256 hex of the plaintext invite token. Populated on `create_
+   *  subaccount_invite` and needed by `cancel_subaccount_invite` to look
+   *  up the on-chain storage entry. Null on rows redeemed before the
+   *  column existed. */
+  inviteTokenHash: string | null;
   createdAt: string;
 }
 
@@ -32,6 +37,7 @@ interface RawRow {
   wallet_id: string | null;
   wallet_address: string | null;
   display_name: string;
+  invite_token_hash: string | null;
   created_at: string;
 }
 
@@ -60,7 +66,7 @@ export function useSubaccounts(
       const { data, error: fetchErr } = await supabase
         .from("family_subaccounts")
         .select(
-          "id, family_wallet_id, wallet_id, wallet_address, display_name, created_at",
+          "id, family_wallet_id, wallet_id, wallet_address, display_name, invite_token_hash, created_at",
         )
         .eq("family_wallet_id", familyWalletId)
         .order("created_at", { ascending: true });
@@ -77,6 +83,7 @@ export function useSubaccounts(
           walletAddress: r.wallet_address,
           displayName: r.display_name,
           invitePending: r.wallet_id === null,
+          inviteTokenHash: r.invite_token_hash,
           createdAt: r.created_at,
         }),
       );

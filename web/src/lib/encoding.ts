@@ -54,6 +54,24 @@ export function bytesToHex(bytes: Uint8Array): string {
   return out;
 }
 
+/** Inverse of `bytesToHex`. Throws on odd length or non-hex chars so a
+ *  Supabase-supplied invite_token_hash that got mangled somewhere in
+ *  transit fails loud instead of quietly zeroing out. */
+export function hexToBytes(hex: string): Uint8Array {
+  if (hex.length % 2 !== 0) {
+    throw new Error(`hexToBytes: odd-length input (${hex.length})`);
+  }
+  const out = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < out.length; i++) {
+    const byte = Number.parseInt(hex.slice(i * 2, i * 2 + 2), 16);
+    if (Number.isNaN(byte)) {
+      throw new Error(`hexToBytes: non-hex byte at offset ${i}`);
+    }
+    out[i] = byte;
+  }
+  return out;
+}
+
 /** Postgres bytea literal string — `\x` prefix followed by lowercase hex.
  *  PostgREST accepts this shape for bytea column inserts and RPC bytea
  *  arguments; use it wherever a Uint8Array (typically a sha256 digest)

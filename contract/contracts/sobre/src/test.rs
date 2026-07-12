@@ -337,6 +337,54 @@ fn create_invite_rejects_past_expiry() {
 }
 
 #[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn cancel_invite_removes_hash_and_blocks_future_redeem() {
+    // Admin mints an invite, then cancels before the joiner shows up.
+    // The subsequent join_wallet attempt with the SAME plaintext token
+    // must trap with InviteNotFound — the on-chain hash is gone.
+    let f = Fixture::new();
+    let token = BytesN::from_array(&f.env, &[7u8; 32]);
+    let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token.clone())).into();
+    let expires = f.env.ledger().sequence() + 1000;
+    f.client().create_invite(&hash, &expires);
+    f.client().cancel_invite(&hash);
+    let maria = Address::generate(&f.env);
+    f.client().join_wallet(&maria, &token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn cancel_invite_rejects_unknown_hash() {
+    // Never-created hash trips InviteNotFound instead of silently
+    // no-oping — reduces the surface for admin dashboards firing this
+    // against stale rows they thought were live.
+    let f = Fixture::new();
+    let bogus = BytesN::from_array(&f.env, &[0xEEu8; 32]);
+    f.client().cancel_invite(&bogus);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn cancel_subaccount_invite_removes_hash_and_blocks_future_redeem() {
+    let f = Fixture::new();
+    let token = BytesN::from_array(&f.env, &[0x51u8; 32]);
+    let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token.clone())).into();
+    let expires = f.env.ledger().sequence() + 1000;
+    f.client().create_subaccount_invite(&hash, &expires);
+    f.client().cancel_subaccount_invite(&hash);
+    let kid = Address::generate(&f.env);
+    f.client().join_as_subaccount(&kid, &token);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #13)")]
+fn cancel_subaccount_invite_rejects_unknown_hash() {
+    let f = Fixture::new();
+    let bogus = BytesN::from_array(&f.env, &[0xEFu8; 32]);
+    f.client().cancel_subaccount_invite(&bogus);
+}
+
+#[test]
 fn remove_member_drops_member_and_emits_event() {
     let (f, member) = Fixture::funded_with_member();
     f.client().remove_member(&member);

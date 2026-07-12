@@ -380,6 +380,26 @@ pub struct SubAccountInviteCreated {
     pub expires_at_ledger: u32,
 }
 
+/// Emitted by admin-triggered `cancel_invite` — the plaintext token was
+/// lost / mis-shared / socially compromised, so admin nukes the on-chain
+/// hash entry to make the invite unredeemable before its natural expiry.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct InviteCancelled {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+}
+
+/// Same as `InviteCancelled` for the sub-account invite storage bucket.
+/// Kept as a distinct event so indexers can filter "cancelled a member
+/// invite" vs "cancelled a supplementary invite" without walking storage.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct SubAccountInviteCancelled {
+    #[topic]
+    pub invite_hash: BytesN<32>,
+}
+
 #[contractevent]
 #[derive(Clone, Debug)]
 pub struct SubAccountJoined {
@@ -1043,6 +1063,23 @@ impl SobreContract {
         .publish(&env);
     }
 
+    /// Admin-only. Removes the on-chain hash entry so the invite can't be
+    /// redeemed even if someone still holds the plaintext. Traps if the
+    /// hash isn't present (already redeemed or already expired-and-swept
+    /// on a prior read).
+    pub fn cancel_invite(env: Env, token_hash: BytesN<32>) {
+        require_admin_auth(&env);
+        let key = DataKey::Invite(token_hash.clone());
+        if !env.storage().persistent().has(&key) {
+            panic_with_error!(&env, Error::InviteNotFound);
+        }
+        env.storage().persistent().remove(&key);
+        InviteCancelled {
+            invite_hash: token_hash,
+        }
+        .publish(&env);
+    }
+
     pub fn join_wallet(env: Env, caller: Address, invite_token: BytesN<32>) {
         caller.require_auth();
         if !env.storage().instance().has(&DataKey::Admin) {
@@ -1393,6 +1430,20 @@ impl SobreContract {
         SubAccountInviteCreated {
             invite_hash: token_hash,
             expires_at_ledger,
+        }
+        .publish(&env);
+    }
+
+    /// Sub-account equivalent of `cancel_invite`.
+    pub fn cancel_subaccount_invite(env: Env, token_hash: BytesN<32>) {
+        require_admin_auth(&env);
+        let key = DataKey::SubAccountInvite(token_hash.clone());
+        if !env.storage().persistent().has(&key) {
+            panic_with_error!(&env, Error::InviteNotFound);
+        }
+        env.storage().persistent().remove(&key);
+        SubAccountInviteCancelled {
+            invite_hash: token_hash,
         }
         .publish(&env);
     }

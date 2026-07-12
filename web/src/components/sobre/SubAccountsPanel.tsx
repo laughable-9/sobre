@@ -1,20 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import {
-  Activity,
-  ChevronDown,
-  ChevronUp,
-  Lock,
-  LockOpen,
-  Send,
-} from "lucide-react";
+import { Activity, Lock, LockOpen, Send, XCircle } from "lucide-react";
 
+import { useCancelSubaccountInvite } from "@/hooks/useCancelSubaccountInvite";
 import { useCreatePendingRequest } from "@/hooks/useCreatePendingRequest";
 import { useFundSubaccount } from "@/hooks/useFundSubaccount";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import { useToggleSubaccountLock } from "@/hooks/useToggleSubaccountLock";
-import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
 import {
@@ -24,12 +17,12 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
-import { formatShortDateTime } from "@/lib/format";
 import { routeSpend } from "@/lib/policy";
 
 import { Avatar } from "./Avatar";
 import { Sheet } from "./Sheet";
 import { SubAccountInviteModal } from "./SubAccountInviteModal";
+import { SupplementaryDetailModal } from "./SupplementaryDetailModal";
 
 interface PanelProps {
   userAddress: string;
@@ -71,7 +64,7 @@ export function SubAccountsPanel({
   onChange,
 }: PanelProps) {
   const [sendTarget, setSendTarget] = useState<MergedSub | null>(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<MergedSub | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
 
   const merged = useMemo(
@@ -117,14 +110,9 @@ export function SubAccountsPanel({
           <SubCard
             key={m.row.id}
             sub={m}
-            envelopeNames={state.envelope_names}
-            events={events}
-            expanded={expandedId === m.row.id}
             canAct={isAdmin}
-            onToggleExpand={() =>
-              setExpandedId((cur) => (cur === m.row.id ? null : m.row.id))
-            }
             onSend={() => setSendTarget(m)}
+            onHistory={() => setHistoryTarget(m)}
             userAddress={userAddress}
             contractId={contractId}
             onFlash={onFlash}
@@ -132,6 +120,17 @@ export function SubAccountsPanel({
           />
         ))
       )}
+
+      {historyTarget ? (
+        <SupplementaryDetailModal
+          row={historyTarget.row}
+          chain={historyTarget.chain}
+          events={events}
+          envelopeNames={state.envelope_names}
+          currency="PHP"
+          onClose={() => setHistoryTarget(null)}
+        />
+      ) : null}
 
       {sendTarget && sendTarget.chain && sendTarget.row.walletAddress ? (
         <SendSubAccountModal
@@ -162,12 +161,9 @@ export function SubAccountsPanel({
 
 interface CardProps {
   sub: MergedSub;
-  envelopeNames: string[];
-  events: FeedEvent[];
-  expanded: boolean;
   canAct: boolean;
-  onToggleExpand: () => void;
   onSend: () => void;
+  onHistory: () => void;
   userAddress: string;
   contractId: string;
   onFlash: (msg: string, kind?: "ok" | "warn") => void;
@@ -176,12 +172,9 @@ interface CardProps {
 
 function SubCard({
   sub,
-  envelopeNames,
-  events,
-  expanded,
   canAct,
-  onToggleExpand,
   onSend,
+  onHistory,
   userAddress,
   contractId,
   onFlash,
@@ -191,6 +184,8 @@ function SubCard({
     userAddress,
     contractId,
   );
+  const { cancel: cancelInvite, pending: cancelPending } =
+    useCancelSubaccountInvite(contractId);
   const { row, chain } = sub;
   // Pending = the invite hasn't been redeemed in Supabase yet (wallet_id
   // is null). Don't conflate this with "chain match missing": once the row
@@ -204,14 +199,6 @@ function SubCard({
   const balancePhp =
     (Number(balanceStroops) / STROOPS_PER_USDC) * PHP_PER_USDC;
 
-  const history = useMemo(
-    () =>
-      subaccountActivity(events, row.walletAddress, envelopeNames, {
-        limit: 6,
-      }),
-    [events, row.walletAddress, envelopeNames],
-  );
-
   const handleToggle = async () => {
     if (!row.walletAddress) return;
     try {
@@ -220,6 +207,30 @@ function SubCard({
       onChange();
     } catch {
       // surfaced via the lock hook error state
+    }
+  };
+
+  const handleCancelInvite = async () => {
+    if (!row.inviteTokenHash) {
+      onFlash(
+        "This invite predates the cancel feature. Delete the row manually or wait for it to expire.",
+        "warn",
+      );
+      return;
+    }
+    if (
+      !window.confirm(
+        "Cancel this invite? The share link becomes unredeemable and the pending row disappears.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await cancelInvite(row.inviteTokenHash);
+      onFlash("Invite cancelled");
+      onChange();
+    } catch (e) {
+      onFlash(e instanceof Error ? e.message : String(e), "warn");
     }
   };
 
@@ -274,7 +285,34 @@ function SubCard({
           </div>
         </div>
 
-        {canAct ? (
+        {canAct && isPending ? (
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr",
+              gap: 6,
+              marginTop: 12,
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => void handleCancelInvite()}
+              disabled={cancelPending}
+              className="sobre-btn sobre-btn-soft"
+              style={{
+                justifyContent: "center",
+                padding: "10px 8px",
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--sobre-danger)",
+                opacity: cancelPending ? 0.6 : 1,
+              }}
+            >
+              <XCircle size={12} strokeWidth={2.4} />
+              {cancelPending ? "Cancelling…" : "Cancel invite"}
+            </button>
+          </div>
+        ) : canAct ? (
           <div
             style={{
               display: "grid",
@@ -286,15 +324,12 @@ function SubCard({
             <button
               type="button"
               onClick={onSend}
-              disabled={isPending}
               className="sobre-btn sobre-btn-primary"
               style={{
                 justifyContent: "center",
                 padding: "10px 8px",
                 fontSize: 12,
                 fontWeight: 600,
-                opacity: isPending ? 0.45 : 1,
-                cursor: isPending ? "not-allowed" : "pointer",
               }}
             >
               <Send size={12} strokeWidth={2.4} />
@@ -303,14 +338,14 @@ function SubCard({
             <button
               type="button"
               onClick={handleToggle}
-              disabled={isPending || lockPending}
+              disabled={lockPending}
               className="sobre-btn sobre-btn-soft"
               style={{
                 justifyContent: "center",
                 padding: "10px 8px",
                 fontSize: 12,
                 fontWeight: 600,
-                opacity: isPending || lockPending ? 0.6 : 1,
+                opacity: lockPending ? 0.6 : 1,
                 color: isLocked ? "var(--sobre-accent)" : "var(--sobre-danger)",
               }}
             >
@@ -328,7 +363,7 @@ function SubCard({
             </button>
             <button
               type="button"
-              onClick={onToggleExpand}
+              onClick={onHistory}
               className="sobre-btn sobre-btn-soft"
               style={{
                 justifyContent: "center",
@@ -339,83 +374,10 @@ function SubCard({
             >
               <Activity size={12} strokeWidth={2.4} />
               History
-              {expanded ? (
-                <ChevronUp size={12} strokeWidth={2.4} />
-              ) : (
-                <ChevronDown size={12} strokeWidth={2.4} />
-              )}
             </button>
           </div>
         ) : null}
       </div>
-
-      {expanded ? (
-        <div
-          style={{
-            borderTop: "1px solid var(--border)",
-            background: "var(--bg)",
-            padding: "12px 16px",
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.08em",
-              textTransform: "uppercase",
-              color: "var(--text-3)",
-              marginBottom: 8,
-            }}
-          >
-            Recent activity
-          </div>
-          {history.length === 0 ? (
-            <div style={{ fontSize: 12, color: "var(--text-3)" }}>
-              Nothing yet.
-            </div>
-          ) : (
-            history.map((h, i) => (
-              <div
-                key={`${h.txHash}:${i}`}
-                style={{
-                  display: "flex",
-                  justifyContent: "space-between",
-                  gap: 12,
-                  padding: "6px 0",
-                  fontSize: 12,
-                  borderBottom:
-                    i === history.length - 1
-                      ? "none"
-                      : "1px dashed var(--border)",
-                }}
-              >
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 600 }}>{h.label}</div>
-                  <div style={{ color: "var(--text-3)", fontSize: 11 }}>
-                    {formatShortDateTime(h.whenIso)}
-                  </div>
-                </div>
-                <div
-                  className="tabular"
-                  style={{
-                    fontWeight: 600,
-                    color:
-                      h.direction === "in"
-                        ? "var(--sobre-accent)"
-                        : "var(--text-1)",
-                  }}
-                >
-                  {h.direction === "in" ? "+" : "-"}₱
-                  {h.php.toLocaleString("en-PH", {
-                    minimumFractionDigits: 2,
-                    maximumFractionDigits: 2,
-                  })}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      ) : null}
     </div>
   );
 }

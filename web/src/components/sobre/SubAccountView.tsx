@@ -355,7 +355,7 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
     void supabase
       .from("family_subaccounts")
       .select(
-        "id, family_wallet_id, wallet_id, wallet_address, display_name, created_at",
+        "id, family_wallet_id, wallet_id, wallet_address, display_name, invite_token_hash, created_at",
       )
       .maybeSingle()
       .then(({ data }) => {
@@ -366,6 +366,7 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
           wallet_id: string | null;
           wallet_address: string | null;
           display_name: string;
+          invite_token_hash: string | null;
           created_at: string;
         };
         setRow({
@@ -375,6 +376,7 @@ function useOwnSubaccountRow(): FamilySubaccountRow | null {
           walletAddress: r.wallet_address,
           displayName: r.display_name,
           invitePending: r.wallet_id === null,
+          inviteTokenHash: r.invite_token_hash,
           createdAt: r.created_at,
         });
       });
