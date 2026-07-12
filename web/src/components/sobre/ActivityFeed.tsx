@@ -22,6 +22,7 @@ import {
 import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
 import { ActivityRowsSkeleton } from "@/components/sobre/Skeletons";
 import { Avatar } from "@/components/sobre/Avatar";
+import { Sheet } from "@/components/sobre/Sheet";
 import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
 import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
@@ -329,61 +330,139 @@ export function ActivityFeed({
   );
 }
 
-/** Terminal failed deposit row. Renders the failure reason inline so the
- *  user gets a clear audit trail instead of the row silently disappearing
- *  the moment status flipped to `failed`. */
+/** Terminal failed deposit row. Compact one-liner; the raw failure_reason
+ *  (often a multi-KB HostError log) opens in an error modal on demand
+ *  instead of dumping into the feed. */
 function FailedDepositRow({ deposit }: { deposit: ActiveDepositRow }) {
-  const time = fmtTime(deposit.created_at);
   return (
-    <div
-      className="sobre-activity-item outflow"
-      style={{ background: "var(--surface-alt)" }}
-    >
-      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
-        <AlertTriangle size={16} strokeWidth={2} />
-      </div>
-      <div className="body">
-        <div className="who">
-          Deposit didn&apos;t complete{" "}
-          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
-            ₱{Number(deposit.amount_php).toLocaleString("en-PH")}
-          </span>
-        </div>
-        {deposit.failure_reason ? (
-          <div className="where">{deposit.failure_reason}</div>
-        ) : null}
-        <div className="meta">{time}</div>
-      </div>
-    </div>
+    <FailureRow
+      title="Deposit didn't complete"
+      amountPhp={Number(deposit.amount_php)}
+      createdAt={deposit.created_at}
+      failureReason={deposit.failure_reason ?? null}
+    />
   );
 }
 
-/** Terminal failed cashout row. The PDAX failure reason (from the
- *  webhook or poll-status) lands in failure_reason — surface it inline
- *  so the demo viewer sees what actually broke. */
+/** Terminal failed cashout row. Same compact treatment as deposits. */
 function FailedCashoutRow({ cashout }: { cashout: ActiveCashoutRow }) {
-  const time = fmtTime(cashout.created_at);
   return (
-    <div
-      className="sobre-activity-item outflow"
-      style={{ background: "var(--surface-alt)" }}
-    >
-      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
-        <AlertTriangle size={16} strokeWidth={2} />
-      </div>
-      <div className="body">
-        <div className="who">
-          Cashout didn&apos;t complete{" "}
-          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
-            ₱{Number(cashout.amount_php ?? 0).toLocaleString("en-PH")}
-          </span>
+    <FailureRow
+      title="Cashout didn't complete"
+      amountPhp={Number(cashout.amount_php ?? 0)}
+      createdAt={cashout.created_at}
+      failureReason={cashout.failure_reason ?? null}
+    />
+  );
+}
+
+/** Shared failure-row visual: warning icon, one-line summary, small
+ *  "Show error" button that pops the raw failure text in a modal. */
+function FailureRow({
+  title,
+  amountPhp,
+  createdAt,
+  failureReason,
+}: {
+  title: string;
+  amountPhp: number;
+  createdAt: string;
+  failureReason: string | null;
+}) {
+  const [errorOpen, setErrorOpen] = useState(false);
+  const time = fmtTime(createdAt);
+  return (
+    <>
+      <div
+        className="sobre-activity-item outflow"
+        style={{ background: "var(--surface-alt)" }}
+      >
+        <div className="ic" style={{ color: "var(--sobre-danger)" }}>
+          <AlertTriangle size={16} strokeWidth={2} />
         </div>
-        {cashout.failure_reason ? (
-          <div className="where">{cashout.failure_reason}</div>
-        ) : null}
-        <div className="meta">{time}</div>
+        <div className="body">
+          <div className="who">
+            {title}{" "}
+            <span className="amt tabular" style={{ color: "var(--text-2)" }}>
+              ₱{amountPhp.toLocaleString("en-PH")}
+            </span>
+          </div>
+          <div className="meta flex items-center gap-2 flex-wrap">
+            <span>{time}</span>
+            {failureReason ? (
+              <>
+                <span aria-hidden style={{ opacity: 0.4 }}>·</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorOpen(true)}
+                  className="sobre-btn-inline-link"
+                  style={{
+                    color: "var(--sobre-danger)",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    padding: 0,
+                    background: "transparent",
+                    border: 0,
+                    cursor: "pointer",
+                  }}
+                >
+                  Show error
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
       </div>
-    </div>
+      {errorOpen && failureReason ? (
+        <Sheet
+          onClose={() => setErrorOpen(false)}
+          ariaLabel={`${title} error`}
+        >
+          <h2>{title}</h2>
+          <p className="sub">
+            The full error returned by the provider or the on-chain
+            simulation. Copy and share with support if you need help.
+          </p>
+          <pre
+            className="tabular"
+            style={{
+              maxHeight: "50vh",
+              overflow: "auto",
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: "var(--surface-alt)",
+              border: "1px solid var(--border)",
+              fontSize: 12,
+              lineHeight: 1.55,
+              color: "var(--text-2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              margin: "12px 0 4px",
+            }}
+          >
+            {failureReason}
+          </pre>
+          <div className="sobre-modal-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(failureReason);
+              }}
+              className="sobre-btn sobre-btn-soft"
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={() => setErrorOpen(false)}
+              className="sobre-btn sobre-btn-soft"
+            >
+              Close
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
+    </>
   );
 }
 
