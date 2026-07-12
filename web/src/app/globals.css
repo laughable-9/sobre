@@ -635,6 +635,46 @@
   background: var(--sobre-cream);
   color: var(--sobre-warning);
 }
+.sobre-celebration .body {
+  min-width: 0;
+}
+.sobre-celebration .more {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sobre-primary);
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.sobre-celebration .more:hover { color: var(--sobre-primary-hover); }
+/* Long-message layout: drop the pill radius, allow the body to wrap and
+ * clamp to two lines with a Show more toggle. The animation window is
+ * still 2.4s, so friendlyError() should catch most cases upstream —
+ * this is a safety net for anything unmapped. */
+.sobre-celebration[data-long] {
+  border-radius: 14px;
+  align-items: flex-start;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  animation-duration: 6s;
+}
+.sobre-celebration[data-long] .body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.sobre-celebration[data-long][data-expanded] .body {
+  -webkit-line-clamp: unset;
+  display: block;
+  max-height: 40vh;
+  overflow-y: auto;
+}
 
 .sobre-card-flat {
   background: var(--surface);
@@ -871,6 +911,7 @@
   border: 1px solid var(--border);
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   color: var(--text-1);
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
@@ -1750,18 +1791,6 @@ body { overflow-x: clip; min-width: 320px; }
     padding: 24px 20px calc(24px + var(--safe-bottom));
     max-height: 92vh;
     animation: sobre-sheet-up .28s cubic-bezier(.2, .8, .25, 1);
-  }
-  /* Shared grab-bar for every mobile-sized modal that ISN'T managing its
-     own draggable handle. Any modal that renders its own handle (see
-     ActivityDetailModal) opts out with the .has-own-handle class so the
-     bars don't stack. */
-  .sobre-modal:not(.has-own-handle)::before {
-    content: "";
-    display: block;
-    width: 40px; height: 4px;
-    border-radius: 999px;
-    background: var(--border-strong);
-    margin: -6px auto 14px;
   }
   .sobre-modal-actions {
     flex-direction: column-reverse;
@@ -3534,20 +3563,6 @@ body { overflow-x: clip; min-width: 320px; }
 }
 .sobre-activity-detail-explorer:hover { text-decoration: underline; }
 
-/* Shared bottom-sheet drag handle — used by <Sheet> to render an
-   interactive grab bar at the top of the mobile sheet. Hidden on
-   desktop (no drag interaction on a centered dialog). */
-.sobre-sheet-handle-strip {
-  display: none;
-}
-.sobre-sheet-handle {
-  width: 40px;
-  height: 4px;
-  border-radius: 999px;
-  background: var(--sobre-border-strong, #d6d3d0);
-  margin: 0 auto;
-}
-
 /* Universal exit animations — mirror the existing sobre-fade-in on the
    backdrop and sobre-sheet-up on the mobile sheet, so every modal that
    goes through <Sheet>'s closing state exits with the reverse glide.
@@ -3565,24 +3580,11 @@ body { overflow-x: clip; min-width: 320px; }
   animation: sobre-fade-out 0.22s ease forwards;
 }
 
-/* ─── Responsive — bottom sheet on narrow viewports ─────────────────────
- * Centered dialog anywhere >= 640px, bottom-anchored sheet with a
- * grab-handle strip and drag-to-close pointer capture below that. Uses
- * dvh so the mobile URL bar retracting doesn't cut the sheet mid-scroll.
- * Rules target `.has-own-handle` because that class is added by every
- * Sheet-managed modal — the base .sobre-modal mobile rules further up
- * still handle the shared-handle path for any legacy modal.
- * ------------------------------------------------------------------- */
+/* Mobile bottom-sheet exit — slide down on close. Base up-slide is
+ * declared alongside the mobile sheet block further up. Uses dvh so
+ * the mobile URL bar retracting doesn't cut the sheet mid-scroll. */
 @media (max-width: 640px) {
-  .sobre-sheet-handle-strip {
-    display: block;
-    padding: 8px 0 12px;
-    margin: -8px -20px 0;
-    touch-action: none;
-    cursor: grab;
-  }
-  .sobre-sheet-handle-strip:active { cursor: grabbing; }
-  .sobre-modal.has-own-handle.closing {
+  .sobre-modal.closing {
     animation: sobre-sheet-down 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
   }
 }

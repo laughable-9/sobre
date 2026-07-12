@@ -21,6 +21,11 @@ interface Props {
   events: FeedEvent[];
   onFlash: (msg: string, kind?: "ok" | "warn") => void;
   onChange: () => void;
+  /** Google display name from the OAuth session. Preferred over the DB
+   *  row's display_name because pre-migration rows had the admin-picked
+   *  name frozen at invite time; the Google name is always the joiner's
+   *  actual identity. */
+  preferredDisplayName?: string | null;
 }
 
 /**
@@ -35,6 +40,7 @@ export function SubAccountView({
   events,
   onFlash,
   onChange,
+  preferredDisplayName,
 }: Props) {
   const mySelf: SubAccount | null = useMemo(
     () => state.subaccounts.find((s) => s.address === userAddress) ?? null,
@@ -63,13 +69,16 @@ export function SubAccountView({
     [events, userAddress, state.envelope_names],
   );
 
+  const displayName =
+    preferredDisplayName ?? myRow?.displayName ?? "Allowance";
+
   return (
     <div
       className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
       style={{ maxWidth: 460 }}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-        <Avatar src={null} name={myRow?.displayName ?? "Allowance"} size={56} />
+        <Avatar src={null} name={displayName} size={56} />
         <div style={{ minWidth: 0 }}>
           <div
             style={{
@@ -80,7 +89,7 @@ export function SubAccountView({
               lineHeight: 1.1,
             }}
           >
-            {myRow?.displayName ?? "Allowance"}
+            {displayName}
           </div>
           <div
             style={{

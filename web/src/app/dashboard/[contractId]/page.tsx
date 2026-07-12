@@ -44,7 +44,11 @@ import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
 import { backdropClose } from "@/lib/ui";
 import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
-import { Celebration, HeroPulse } from "@/components/sobre/Overlays";
+import {
+  Celebration,
+  HeroPulse,
+  TRUNCATE_CHAR_LIMIT,
+} from "@/components/sobre/Overlays";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
 import { SpendModal } from "@/components/sobre/SpendModal";
 import { SubAccountsPanel } from "@/components/sobre/SubAccountsPanel";
@@ -345,7 +349,11 @@ function Dashboard({ contractId }: { contractId: string }) {
 
   const flash = (msg: string, kind: "ok" | "warn" = "ok") => {
     setCelebration({ msg, kind });
-    setTimeout(() => setCelebration(null), 2400);
+    // Give long messages more read time — the truncate-with-expand toast
+    // needs a beat for the user to tap "Show more". Short toasts stay
+    // snappy at the historical 2.4s.
+    const dwell = msg.length > TRUNCATE_CHAR_LIMIT ? 6000 : 2400;
+    setTimeout(() => setCelebration(null), dwell);
   };
 
   const triggerHeroAnimation = () => {
@@ -534,6 +542,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           events={txFeed.events}
           onFlash={flash}
           onChange={refreshAll}
+          preferredDisplayName={wallet.user?.name ?? null}
         />
         {heroPulse ? <HeroPulse /> : null}
         {celebration ? (
@@ -830,6 +839,14 @@ function Dashboard({ contractId }: { contractId: string }) {
               );
             })}
 
+            <SupplementarySummary
+              rows={subRows}
+              onChain={state.subaccounts}
+              events={txFeed.events}
+              envelopeNames={state.envelope_names}
+              currency={currency}
+            />
+
             {address ? (
               <EarnPanel
                 userAddress={address}
@@ -852,14 +869,6 @@ function Dashboard({ contractId }: { contractId: string }) {
                 onEarnInfo={() => setEarnInfoOpen(true)}
               />
             ) : null}
-
-            <SupplementarySummary
-              rows={subRows}
-              onChain={state.subaccounts}
-              events={txFeed.events}
-              envelopeNames={state.envelope_names}
-              currency={currency}
-            />
           </div>
         </Reveal>
       ) : null}
