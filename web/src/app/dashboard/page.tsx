@@ -26,7 +26,7 @@ import { useSobreSummary } from "@/hooks/useSobreSummary";
 import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
-import { getProfile } from "@/lib/profile";
+import { getProfile, setProfile } from "@/lib/profile";
 import {
   PAYMENT_TOKEN_LABEL,
   PHP_PER_USDC,
@@ -70,8 +70,23 @@ export default function MySobresPage() {
       return;
     }
     setJoined(getJoinedSobres(address));
-    setHasProfile(getProfile(address) !== null);
-  }, [address]);
+    const existing = getProfile(address);
+    if (existing) {
+      setHasProfile(true);
+      return;
+    }
+    // First connect. Google's OAuth already gave us a display name, so
+    // silently seed the profile with it instead of forcing the user
+    // through a "What should we call you?" screen. Only fall back to the
+    // manual screen when Google didn't return a usable name.
+    const oauthName = wallet.user?.name?.trim();
+    if (oauthName) {
+      setProfile(address, { name: oauthName });
+      setHasProfile(true);
+    } else {
+      setHasProfile(false);
+    }
+  }, [address, wallet.user?.name]);
 
   useEffect(() => {
     const all = new Set<string>();
