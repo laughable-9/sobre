@@ -44,10 +44,10 @@ const SWAP_DEADLINE_SECS: u64 = 5 * 60;
 
 // ─── Cross-contract clients (Soroswap router, MockUSDY-shaped token) ───────
 
-/// Minimal Soroswap router client. We only call the exact-in and exact-out
-/// swap entries plus the two view helpers used to size a swap before it
-/// runs. Router address is passed to `grow_enable` and pinned on the wallet
-/// so a router migration doesn't invalidate a live Grow position.
+/// Minimal Soroswap router client. Swap entries + view helpers, plus
+/// `router_pair_for` — the pair address is what the router actually
+/// pulls the input token to on a swap, so pre-authorizing the SAC
+/// transfer requires resolving it first.
 #[contractclient(name = "SoroswapRouterClient")]
 pub trait SoroswapRouter {
     fn swap_exact_tokens_for_tokens(
@@ -71,6 +71,8 @@ pub trait SoroswapRouter {
     fn router_get_amounts_in(env: Env, amount_out: i128, path: Vec<Address>) -> Vec<i128>;
 
     fn router_get_amounts_out(env: Env, amount_in: i128, path: Vec<Address>) -> Vec<i128>;
+
+    fn router_pair_for(env: Env, token_a: Address, token_b: Address) -> Address;
 }
 
 /// USDY token surface Sobre calls. Interface is intentionally the shape
@@ -851,12 +853,17 @@ fn do_soroswap_swap_xlm_to_usdc(env: &Env, xlm_in: i128) -> i128 {
     let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
     let xlm_asset: Address = inst.get(&DataKey::GrowXlmAsset).unwrap();
     let router: Address = inst.get(&DataKey::GrowSoroswapRouter).unwrap();
-    let path: Vec<Address> = vec![env, xlm_asset.clone(), payment_token];
+    let path: Vec<Address> = vec![env, xlm_asset.clone(), payment_token.clone()];
     let router_client = SoroswapRouterClient::new(env, &router);
     let quoted = router_client.router_get_amounts_out(&xlm_in, &path);
     let expected_out = quoted.get(quoted.len() - 1).unwrap_or(0);
     let min_out = (expected_out * 98) / 100;
-    authorize_token_pull(env, &xlm_asset, &router, xlm_in);
+    // Pre-auth the token pull with the ACTUAL destination: Soroswap's
+    // swap internally does `token.transfer(&to, &pair, amount)`, and the
+    // pair is where reserves live (not the router). Authorizing the
+    // router as target trips `Error(Auth, InvalidAction)` at submit.
+    let pair = router_client.router_pair_for(&xlm_asset, &payment_token);
+    authorize_token_pull(env, &xlm_asset, &pair, xlm_in);
     let deadline = env.ledger().timestamp() + SWAP_DEADLINE_SECS;
     let self_addr = env.current_contract_address();
     let received =
@@ -865,22 +872,21 @@ fn do_soroswap_swap_xlm_to_usdc(env: &Env, xlm_in: i128) -> i128 {
 }
 
 /// Swaps `usdc_in` USDC stroops → XLM stroops via Soroswap, exact-in
-/// direction. Pre-authorizes the router's `token.transfer(self → router,
+/// direction. Pre-authorizes the SAC's `token.transfer(self → pair,
 /// usdc_in)` pull. Uses a 2%-below-quote floor as the `amount_out_min`
-/// slippage guard — Soroswap trap on slippage rather than deliver less
-/// XLM than expected.
+/// slippage guard.
 fn do_soroswap_swap_usdc_to_xlm(env: &Env, usdc_in: i128) -> i128 {
     let inst = env.storage().instance();
     let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
     let xlm_asset: Address = inst.get(&DataKey::GrowXlmAsset).unwrap();
     let router: Address = inst.get(&DataKey::GrowSoroswapRouter).unwrap();
-    let path: Vec<Address> = vec![env, payment_token.clone(), xlm_asset];
+    let path: Vec<Address> = vec![env, payment_token.clone(), xlm_asset.clone()];
     let router_client = SoroswapRouterClient::new(env, &router);
     let quoted = router_client.router_get_amounts_out(&usdc_in, &path);
     let expected_out = quoted.get(quoted.len() - 1).unwrap_or(0);
-    // 2% slippage floor: `expected_out * 98 / 100`.
     let min_out = (expected_out * 98) / 100;
-    authorize_token_pull(env, &payment_token, &router, usdc_in);
+    let pair = router_client.router_pair_for(&payment_token, &xlm_asset);
+    authorize_token_pull(env, &payment_token, &pair, usdc_in);
     let deadline = env.ledger().timestamp() + SWAP_DEADLINE_SECS;
     let self_addr = env.current_contract_address();
     let received =
@@ -898,7 +904,7 @@ fn do_soroswap_swap_xlm_to_usdc_exact_out(env: &Env, usdc_out: i128) -> i128 {
     let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
     let xlm_asset: Address = inst.get(&DataKey::GrowXlmAsset).unwrap();
     let router: Address = inst.get(&DataKey::GrowSoroswapRouter).unwrap();
-    let path: Vec<Address> = vec![env, xlm_asset.clone(), payment_token];
+    let path: Vec<Address> = vec![env, xlm_asset.clone(), payment_token.clone()];
     let router_client = SoroswapRouterClient::new(env, &router);
     let quoted = router_client.router_get_amounts_in(&usdc_out, &path);
     let expected_in = quoted.get(0).unwrap_or(0);
@@ -912,7 +918,8 @@ fn do_soroswap_swap_xlm_to_usdc_exact_out(env: &Env, usdc_out: i128) -> i128 {
     // guarantee this is exactly what the router will consume. `max_in` is
     // still passed as the router's own slippage guard.
     let max_in = (expected_in * 102) / 100;
-    authorize_token_pull(env, &xlm_asset, &router, expected_in);
+    let pair = router_client.router_pair_for(&xlm_asset, &payment_token);
+    authorize_token_pull(env, &xlm_asset, &pair, expected_in);
     let deadline = env.ledger().timestamp() + SWAP_DEADLINE_SECS;
     let self_addr = env.current_contract_address();
     let consumed = router_client.swap_tokens_for_exact_tokens(
@@ -1258,58 +1265,53 @@ impl SobreContract {
         .publish(&env);
     }
 
-    /// PDAX-ramp entry point: the relay G-address delivers raw XLM to the
-    /// contract, contract swaps to USDC via Soroswap, then credits the
-    /// per-envelope split. Server-side computes the split before calling
-    /// so the family's Supabase-stored percentages stay off-chain.
+    /// PDAX-ramp entry point: the relay G-address delivers raw XLM, the
+    /// contract swaps to USDC via Soroswap, then splits by the caller-
+    /// specified percentages. Interface takes percentages (0-100 summing
+    /// to 100) instead of pre-computed USDC amounts because the server
+    /// has no reliable way to know the actual swap payout before the
+    /// swap runs — Soroswap's rate is live at execute time. Passing
+    /// percentages lets the contract split the ACTUAL payout, so a
+    /// pre-quote mismatch can't leave envelopes short.
     ///
-    /// Requires Grow to be enabled (Grow's stored `GrowSoroswapRouter` +
-    /// `GrowXlmAsset` are what this call reads). If a family creates a
-    /// wallet without enabling Grow, PDAX deposits panic here — the
-    /// frontend gates Grow-enable behind a required onboarding step so
-    /// this never surfaces to a user in practice.
-    ///
-    /// `from` is the relay (server-signed tx). `xlm_amount` is what the
-    /// relay actually holds after PDAX's withdraw fee. The
-    /// (groceries, tuition, savings) split is denominated in **USDC**
-    /// stroops the CALLER expects to credit — Sobre validates the sum
-    /// against the actual Soroswap payout and traps if slippage would
-    /// leave envelopes short.
+    /// Rounding remainder from the integer divisions lands in Savings so
+    /// the sum of credited envelopes exactly matches the payout stroops.
+    /// Groceries + Tuition credit the cache; Savings routes through
+    /// USDY when Earn is enabled.
     pub fn deposit_from_xlm(
         env: Env,
         from: Address,
         xlm_amount: i128,
-        groceries: i128,
-        tuition: i128,
-        savings: i128,
+        groceries_pct: u32,
+        tuition_pct: u32,
+        savings_pct: u32,
     ) {
         from.require_auth();
         require_grow_enabled(&env);
-        if groceries < 0 || tuition < 0 || savings < 0 {
+        if xlm_amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
-        let expected_total = groceries + tuition + savings;
-        if expected_total <= 0 || xlm_amount <= 0 {
+        if groceries_pct + tuition_pct + savings_pct != 100 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         let inst = env.storage().instance();
         let xlm_asset: Address = inst.get(&DataKey::GrowXlmAsset).unwrap();
-        // Pull the raw XLM from the relay into the contract.
         token::Client::new(&env, &xlm_asset).transfer(
             &from,
             &env.current_contract_address(),
             &xlm_amount,
         );
-        // Swap XLM → USDC. Soroswap enforces the 2% floor internally
-        // (via `min_out` inside the helper); the payout landing below
-        // `expected_total` means the caller mis-quoted the split.
         let usdc_received = do_soroswap_swap_xlm_to_usdc(&env, xlm_amount);
-        if usdc_received < expected_total {
-            panic_with_error!(&env, Error::InsufficientBalance);
+        if usdc_received <= 0 {
+            panic_with_error!(&env, Error::InvalidAmount);
         }
-        // Credit envelopes from the caller-specified split. Groceries +
-        // Tuition go straight into the cache; Savings routes through
-        // USDY when Earn is on, otherwise into the cache too.
+        // Split the actual payout by the caller's percentages. Integer
+        // math; Savings absorbs the rounding remainder so the sum
+        // matches usdc_received exactly.
+        let groceries = (usdc_received * (groceries_pct as i128)) / 100;
+        let tuition = (usdc_received * (tuition_pct as i128)) / 100;
+        let savings = usdc_received - groceries - tuition;
+
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
         let earn_on = is_earn_enabled(&env);
         let new_savings_cache = if earn_on && savings > 0 {
@@ -1329,9 +1331,6 @@ impl SobreContract {
         if earn_on && savings > 0 {
             do_usdy_deposit(&env, Envelope::Savings, savings);
         }
-        // Emit Deposit with `usdc_received` as `amount` so the audit
-        // feed matches the split's USDC denomination (not the raw XLM
-        // that came in from PDAX).
         Deposit {
             from,
             amount: usdc_received,

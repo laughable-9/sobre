@@ -122,6 +122,14 @@ mod mock_soroswap {
             amounts
         }
 
+        /// Mock resolves the pair address as the mock's own contract
+        /// address — it holds both token reserves itself. Real Soroswap
+        /// resolves to a separate pair contract per token pair, but the
+        /// mock collapses them into one for test simplicity.
+        pub fn router_pair_for(env: Env, _token_a: Address, _token_b: Address) -> Address {
+            env.current_contract_address()
+        }
+
         pub fn swap_tokens_for_exact_tokens(
             env: Env,
             amount_out: i128,
@@ -1380,36 +1388,34 @@ fn grow_execute_after_multiple_requests_only_clears_target() {
 
 #[test]
 fn deposit_from_xlm_swaps_and_splits_when_grow_on() {
-    // Fresh wallet (no envelope funding yet) with Grow enabled so
-    // deposit_from_xlm can read the Soroswap config out of Grow storage.
+    // Fresh wallet with Grow enabled. Simulate PDAX crediting 100 XLM to
+    // relay, then relay invoking the ramp entry point with a 40/30/30
+    // percentage split. Mock rate: 100 XLM in → 12.5 USDC out (1:8).
     let gf = GrowFixture::new_unfunded();
     gf.enable_grow();
-    // Simulate PDAX crediting 100 XLM to relay, then relay invoking the
-    // ramp entry point. Mock rate: 100 XLM in → 12.5 USDC out (rate 1:8).
     let relay = Address::generate(&gf.sobre().env);
     let xlm_in = 100 * STROOPS_PER_TOKEN;
     token::StellarAssetClient::new(&gf.sobre().env, &gf.xlm_asset)
         .mint(&relay, &xlm_in);
-    let split = 12 * STROOPS_PER_TOKEN + 5_000_000; // 12.5 USDC
-    let groceries = 5 * STROOPS_PER_TOKEN;
-    let tuition = 5 * STROOPS_PER_TOKEN;
-    let savings = split - groceries - tuition; // 2.5 USDC
     gf.sobre().client().deposit_from_xlm(
         &relay,
         &xlm_in,
-        &groceries,
-        &tuition,
-        &savings,
+        &40,
+        &30,
+        &30,
     );
     let state = gf.sobre().client().get_state();
-    assert_eq!(state.balances.get(0).unwrap(), groceries);
-    assert_eq!(state.balances.get(1).unwrap(), tuition);
-    assert_eq!(state.balances.get(2).unwrap(), savings);
-    // XLM was consumed by the swap; USDC balance on the contract equals
-    // the split total (Soroswap's payout of 12.5 USDC).
+    let usdc_received = 12 * STROOPS_PER_TOKEN + 5_000_000; // 12.5 USDC
+    let groceries_expected = (usdc_received * 40) / 100; // 5 USDC
+    let tuition_expected = (usdc_received * 30) / 100; // 3.75 USDC
+    let savings_expected = usdc_received - groceries_expected - tuition_expected; // 3.75 USDC
+    assert_eq!(state.balances.get(0).unwrap(), groceries_expected);
+    assert_eq!(state.balances.get(1).unwrap(), tuition_expected);
+    assert_eq!(state.balances.get(2).unwrap(), savings_expected);
+    // XLM was consumed by the swap; USDC balance equals the payout.
     assert_eq!(
         gf.sobre().token().balance(&gf.sobre().contract_id),
-        split
+        usdc_received
     );
 }
 
@@ -1422,36 +1428,29 @@ fn deposit_from_xlm_routes_savings_to_usdy_when_earn_on() {
     let xlm_in = 100 * STROOPS_PER_TOKEN;
     token::StellarAssetClient::new(&gf.sobre().env, &gf.xlm_asset)
         .mint(&relay, &xlm_in);
-    let savings = 5 * STROOPS_PER_TOKEN;
-    gf.sobre().client().deposit_from_xlm(
-        &relay,
-        &xlm_in,
-        &0,
-        &0,
-        &savings,
-    );
-    // Savings cache stays at 0 (auto-supplied to USDY).
+    // 100% to Savings; expect the whole 12.5 USDC payout to route to USDY.
+    gf.sobre().client().deposit_from_xlm(&relay, &xlm_in, &0, &0, &100);
+    let usdc_received = 12 * STROOPS_PER_TOKEN + 5_000_000;
     let state = gf.sobre().client().get_state();
     assert_eq!(state.balances.get(2).unwrap(), 0);
     let pos = gf.usdy.position(Envelope::Savings);
-    assert_eq!(pos.principal, savings);
-    assert_eq!(pos.supplied_total, savings);
+    assert_eq!(pos.principal, usdc_received);
+    assert_eq!(pos.supplied_total, usdc_received);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
 fn deposit_from_xlm_rejects_when_grow_disabled() {
-    // Grow-disabled wallets have no Soroswap config to swap through, so
-    // the ramp entry point traps up-front.
     let f = Fixture::funded();
     let relay = Address::generate(&f.env);
     f.client()
-        .deposit_from_xlm(&relay, &(100 * STROOPS_PER_TOKEN), &0, &0, &(5 * STROOPS_PER_TOKEN));
+        .deposit_from_xlm(&relay, &(100 * STROOPS_PER_TOKEN), &0, &0, &100);
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
 fn deposit_from_xlm_rejects_zero_split() {
+    // Percentages summing to zero fails the 100-sum check.
     let gf = GrowFixture::new_unfunded();
     gf.enable_grow();
     let relay = Address::generate(&gf.sobre().env);
@@ -1469,27 +1468,23 @@ fn deposit_from_xlm_rejects_zero_xlm() {
     let gf = GrowFixture::new_unfunded();
     gf.enable_grow();
     let relay = Address::generate(&gf.sobre().env);
-    gf.sobre()
-        .client()
-        .deposit_from_xlm(&relay, &0, &(5 * STROOPS_PER_TOKEN), &0, &0);
+    gf.sobre().client().deposit_from_xlm(&relay, &0, &0, &0, &100);
 }
 
 #[test]
-#[should_panic(expected = "Error(Contract, #8)")]
-fn deposit_from_xlm_rejects_split_over_swap_payout() {
-    // Caller claims a split totaling MORE than the Soroswap payout can
-    // cover — contract traps with InsufficientBalance rather than
-    // credit envelopes with money that isn't there.
+#[should_panic(expected = "Error(Contract, #6)")]
+fn deposit_from_xlm_rejects_percents_not_summing_to_100() {
+    // 50 + 30 + 10 = 90 — reject rather than silently orphan 10% of the
+    // swap payout as unallocated contract balance.
     let gf = GrowFixture::new_unfunded();
     gf.enable_grow();
     let relay = Address::generate(&gf.sobre().env);
-    let xlm_in = 8 * STROOPS_PER_TOKEN; // rate 1:8 → 1 USDC out
+    let xlm_in = 100 * STROOPS_PER_TOKEN;
     token::StellarAssetClient::new(&gf.sobre().env, &gf.xlm_asset)
         .mint(&relay, &xlm_in);
-    // Claim 5 USDC split — but only 1 USDC swaps out.
     gf.sobre()
         .client()
-        .deposit_from_xlm(&relay, &xlm_in, &(5 * STROOPS_PER_TOKEN), &0, &0);
+        .deposit_from_xlm(&relay, &xlm_in, &50, &30, &10);
 }
 
 #[test]
