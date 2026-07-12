@@ -11,7 +11,6 @@ import {
   EyeIcon,
   LockIcon,
   ShieldIcon,
-  TrendUpIcon,
 } from "@phosphor-icons/react";
 
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
@@ -760,13 +759,6 @@ function SavingsVisual() {
             204.43 XLM
           </div>
         </div>
-        <span
-          className="sobre-pill sobre-pill-soft-green"
-          style={{ padding: "7px 12px", fontSize: 12, fontWeight: 700, flexShrink: 0 }}
-        >
-          <TrendUpIcon weight="bold" size={12} />
-          Est. 4.5% APY
-        </span>
       </div>
       <svg
         viewBox="0 0 400 120"
