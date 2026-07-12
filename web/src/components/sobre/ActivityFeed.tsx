@@ -491,9 +491,12 @@ function PendingDepositRow({
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
-    funded: "Buying XLM",
+    funded: "Almost there",
+    // credited/split/failed shouldn't reach this row anymore — the
+    // /active route excludes them from the pending bucket. Kept as
+    // fallback strings so a stale client bundle never renders "undefined".
     credited: "Ready to split",
-    split: "Split",
+    split: "Done",
     failed: "Failed",
   };
   const canCancel = deposit.status === "pending" && Boolean(onCancel);

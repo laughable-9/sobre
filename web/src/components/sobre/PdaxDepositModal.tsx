@@ -229,11 +229,20 @@ export function PdaxDepositModal({
   else if (celebration) phase = "celebrating";
   else phase = phaseFromStatus(row.status);
 
+  // Phases where a backdrop click, drag, or programmatic close must NOT
+  // dismiss the modal — payment is either mid-processing (`awaiting`
+  // after status leaves `pending`, `cancelling`) or in a brief animation
+  // the user shouldn't interrupt (`celebrating`). Sheet's `canClose`
+  // gate ignores backdrop clicks during these phases; attemptCancel
+  // early-returns for the same reason.
+  const lockedPhase =
+    phase === "celebrating" ||
+    phase === "cancelling" ||
+    (phase === "awaiting" && row?.status !== "pending");
+
   // One close path for the inline "Cancel this checkout" button AND the
   // backdrop/escape close. Safety rails:
-  // - LOCKED (refuses to close): celebrating, and awaiting once status
-  //   is past pending. Closing while money is at PDAX would strand funds
-  //   where the user can't easily recover them mid-demo.
+  // - LOCKED (refuses to close): see `lockedPhase` above.
   // - Terminal / pre-start (input, done, failed): plain close, no
   //   cancel call needed.
   // - After 409 (alreadyPaidNotice set): plain close too — we already
@@ -246,9 +255,6 @@ export function PdaxDepositModal({
   //   funded → credited. Otherwise we close after the parent's cancel
   //   + refresh resolves.
   const attemptCancel = async () => {
-    const lockedPhase =
-      phase === "celebrating" ||
-      (phase === "awaiting" && row?.status !== "pending");
     if (lockedPhase) return;
 
     const cleanClose =
@@ -343,6 +349,7 @@ export function PdaxDepositModal({
   return (
     <Sheet
       onClose={() => void attemptCancel()}
+      canClose={!lockedPhase}
       draggable={false}
       ariaLabel="Add money"
     >

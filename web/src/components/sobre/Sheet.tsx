@@ -19,6 +19,7 @@ import { backdropClose } from "@/lib/ui";
  */
 export function Sheet({
   onClose,
+  canClose = true,
   children,
   className,
   draggable = true,
@@ -28,6 +29,11 @@ export function Sheet({
   /** Called after the exit animation runs. Wire in any guard here (e.g.
    *  PdaxDepositModal's "don't close while paying"). */
   onClose: () => void;
+  /** When false, backdrop clicks and drag-to-close do nothing — the modal
+   *  can only be dismissed by a caller-owned button or when the phase
+   *  gate flips. Prevents "half-closed" state where the exit animation
+   *  runs but the parent's onClose returns early on a locked phase. */
+  canClose?: boolean;
   children: React.ReactNode;
   /** Extra className on the inner `.sobre-modal` — for size overrides
    *  or per-modal styling hooks. */
@@ -55,6 +61,7 @@ export function Sheet({
   }, [closing, onClose]);
 
   const beginClose = () => {
+    if (!canClose) return;
     if (!closing) setClosing(true);
   };
 

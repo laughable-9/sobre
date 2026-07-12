@@ -2,13 +2,13 @@
  * GET /api/pdax/deposits/active?contract_id=<C>
  *
  * Returns the signed-in member's non-terminal deposit rows for a family
- * wallet. Drives the dashboard's "pending deposits" surface so a user who
- * closed the modal mid-flow (most importantly while the row was at
- * `credited` — XLM in their smart wallet, envelopes still empty) can
- * see and resume the deposit from the activity feed.
+ * wallet. Drives the dashboard's "pending deposits" surface so a user
+ * who closed the modal mid-InstaPay can see and resume from the feed.
  *
- * Non-terminal = status in {pending, funded, credited}. `split` and
- * `failed` are excluded because they're done from the modal's POV.
+ * Non-terminal = status in {pending, funded}. `credited` is terminal
+ * now that the server invokes deposit_from_xlm atomically (2026-07-12
+ * pivot) — envelopes are credited on-chain, no user-signed follow-up.
+ * `split` and `failed` are terminal too.
  */
 
 import { NextResponse } from "next/server";
@@ -98,7 +98,7 @@ export async function GET(req: Request) {
     )
     .eq("family_wallet_id", familyWalletId)
     .eq("member_id", memberId)
-    .in("status", ["pending", "funded", "credited"])
+    .in("status", ["pending", "funded"])
     .order("created_at", { ascending: false });
   if (error) {
     return NextResponse.json(
