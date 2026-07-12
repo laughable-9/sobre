@@ -13,6 +13,7 @@ export interface CreateSobreArgs {
   adminName: string;
   percents?: [number, number, number];
   envelopeNames?: [string, string, string];
+  envelopeIcons?: [string | null, string | null, string | null];
 }
 
 export interface UseCreateSobreResult {
@@ -40,6 +41,7 @@ export function useCreateSobre(
       adminName,
       percents = [50, 30, 20],
       envelopeNames = ["Groceries", "Tuition", "Savings"],
+      envelopeIcons,
     }: CreateSobreArgs): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       const args = [
@@ -61,6 +63,7 @@ export function useCreateSobre(
         percents,
         adminName,
         envelopeNames,
+        envelopeIcons,
       });
       return newContractId;
     },

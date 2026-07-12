@@ -38,6 +38,9 @@ interface PostBody {
   percents: [number, number, number];
   admin_name: string;
   envelope_names: [string, string, string];
+  /** Per-envelope icon key; null slots fall back to the default. Optional
+   *  so older callers (that don't customise icons) still work. */
+  envelope_icons?: [string | null, string | null, string | null];
   // Onboarding metadata — off-chain only, all optional (columns are nullable).
   household_type?: HouseholdType | null;
   budget_min?: number | null;
@@ -80,6 +83,15 @@ function isValidBody(b: unknown): b is PostBody {
     o.envelope_names.some((n) => typeof n !== "string")
   ) {
     return false;
+  }
+  if (o.envelope_icons !== undefined) {
+    if (
+      !Array.isArray(o.envelope_icons) ||
+      o.envelope_icons.length !== 3 ||
+      o.envelope_icons.some((k) => k !== null && typeof k !== "string")
+    ) {
+      return false;
+    }
   }
   // Onboarding metadata (all optional). Validate shape when present.
   if (
@@ -179,6 +191,7 @@ export async function POST(req: Request) {
   const familyWalletId = (family as { id: string }).id;
 
   const [g, t, s] = body.envelope_names;
+  const icons = body.envelope_icons ?? [null, null, null];
   const [memberRes, namesRes] = await Promise.all([
     admin
       .from("family_members")
@@ -186,9 +199,9 @@ export async function POST(req: Request) {
       .eq("family_wallet_id", familyWalletId)
       .eq("wallet_id", ctx.memberId),
     admin.from("family_envelope_names").insert([
-      { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g },
-      { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t },
-      { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s },
+      { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g, icon: icons[0] },
+      { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t, icon: icons[1] },
+      { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s, icon: icons[2] },
     ]),
   ]);
   if (memberRes.error) {

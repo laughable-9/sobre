@@ -47,6 +47,8 @@ export interface CreateFamilyArgs {
   /** Supabase `public.wallets.id` for the same wallet (created_by FK). */
   myWalletDbId: string;
   envelopeNames: readonly [string, string, string];
+  /** Per-envelope icon key; null slots take the built-in default. */
+  envelopeIcons?: readonly [string | null, string | null, string | null];
   percents: readonly [number, number, number];
   /** Display name written to family_wallets.display_name. */
   walletName: string;
@@ -185,6 +187,7 @@ export async function createFamilyWallet(
     percents: args.percents,
     adminName: args.adminName,
     envelopeNames: args.envelopeNames,
+    envelopeIcons: args.envelopeIcons,
     householdType: args.householdType ?? null,
     budgetMin: args.budgetMin ?? null,
     budgetMax: args.budgetMax ?? null,
@@ -205,6 +208,7 @@ export async function mirrorFamilyCreate(args: {
   percents: readonly [number, number, number];
   adminName: string;
   envelopeNames: readonly [string, string, string];
+  envelopeIcons?: readonly [string | null, string | null, string | null];
   /** Onboarding metadata — off-chain, all optional. Validated + stored by the
    *  route; omit for the non-onboarding (dashboard) create path. */
   householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
@@ -220,6 +224,9 @@ export async function mirrorFamilyCreate(args: {
       percents: [...args.percents],
       admin_name: args.adminName,
       envelope_names: [...args.envelopeNames],
+      ...(args.envelopeIcons
+        ? { envelope_icons: [...args.envelopeIcons] }
+        : {}),
       // Only include when provided so the route sees `undefined` (→ NULL) not
       // a spurious value on the dashboard create path.
       ...(args.householdType != null

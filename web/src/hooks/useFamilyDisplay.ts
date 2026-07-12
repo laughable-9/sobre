@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import type { SpendPolicyShape } from "@/lib/contract";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
+import { DEFAULT_ICON_KEY_BY_SLOT } from "@/lib/envelopeIcons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { firstJoined } from "@/lib/supabase/utils";
 
@@ -22,6 +23,9 @@ export interface FamilyDisplayState {
   familyWalletId: string | null;
   walletName: string;
   envelopeNames: [string, string, string];
+  /** Per-envelope icon key (see lib/envelopeIcons.tsx). Null means the
+   *  family hasn't customised that slot; UI falls back to the slot default. */
+  envelopeIcons: [string, string, string];
   /** Per-envelope split percentages, indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
   /** Family-level spend policy. Defaults are "no gate, nobody protected". */
@@ -47,6 +51,11 @@ const DEFAULT_NAMES: [string, string, string] = [
   ENVELOPE_LABELS[0],
   ENVELOPE_LABELS[1],
   ENVELOPE_LABELS[2],
+];
+const DEFAULT_ICONS: [string, string, string] = [
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[0]],
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[1]],
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[2]],
 ];
 const DEFAULT_PERCENTS: [number, number, number] = [50, 30, 20];
 const DEFAULT_POLICY: SpendPolicyShape = {
@@ -99,6 +108,8 @@ export function useFamilyDisplay(
   const [walletName, setWalletName] = useState<string>("");
   const [envelopeNames, setEnvelopeNames] =
     useState<[string, string, string]>(DEFAULT_NAMES);
+  const [envelopeIcons, setEnvelopeIcons] =
+    useState<[string, string, string]>(DEFAULT_ICONS);
   const [percents, setPercents] =
     useState<[number, number, number]>(DEFAULT_PERCENTS);
   const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
@@ -138,6 +149,7 @@ export function useFamilyDisplay(
         setFamilyWalletId(null);
         setWalletName("");
         setEnvelopeNames(DEFAULT_NAMES);
+        setEnvelopeIcons(DEFAULT_ICONS);
         setPercents(DEFAULT_PERCENTS);
         setPolicy(DEFAULT_POLICY);
         setSavingsLockAllAdmins(false);
@@ -150,7 +162,7 @@ export function useFamilyDisplay(
       const [namesQ, membersQ] = await Promise.all([
         supabase
           .from("family_envelope_names")
-          .select("envelope_key, display_name")
+          .select("envelope_key, display_name, icon")
           .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
@@ -183,15 +195,24 @@ export function useFamilyDisplay(
       );
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
+      const nextIcons: [string, string, string] = [...DEFAULT_ICONS];
+      const slotFor = (key: string): 0 | 1 | 2 | null =>
+        key === "Groceries" ? 0 :
+        key === "Tuition" ? 1 :
+        key === "Savings" ? 2 :
+        null;
       for (const n of (namesQ.data as Array<{
         envelope_key: string;
         display_name: string;
+        icon: string | null;
       }> | null) ?? []) {
-        if (n.envelope_key === "Groceries") nextNames[0] = n.display_name;
-        else if (n.envelope_key === "Tuition") nextNames[1] = n.display_name;
-        else if (n.envelope_key === "Savings") nextNames[2] = n.display_name;
+        const slot = slotFor(n.envelope_key);
+        if (slot === null) continue;
+        nextNames[slot] = n.display_name;
+        if (n.icon) nextIcons[slot] = n.icon;
       }
       setEnvelopeNames(nextNames);
+      setEnvelopeIcons(nextIcons);
 
       const map = new Map<string, FamilyMemberDisplay>();
       type WalletJoined = { contract_id: string; avatar_url: string | null };
@@ -268,6 +289,7 @@ export function useFamilyDisplay(
       familyWalletId,
       walletName,
       envelopeNames,
+      envelopeIcons,
       percents,
       policy,
       savingsLockAllAdmins,
@@ -281,6 +303,7 @@ export function useFamilyDisplay(
       familyWalletId,
       walletName,
       envelopeNames,
+      envelopeIcons,
       percents,
       policy,
       savingsLockAllAdmins,

@@ -1,12 +1,6 @@
 "use client";
 
-import {
-  CaretRightIcon,
-  GraduationCapIcon,
-  LockIcon,
-  PlantIcon,
-  ShoppingCartIcon,
-} from "@phosphor-icons/react";
+import { CaretRightIcon, LockIcon } from "@phosphor-icons/react";
 
 import {
   ENVELOPE_LABELS,
@@ -15,18 +9,9 @@ import {
   type EnvelopeName,
 } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
+import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
 import { formatCurrencyLocale } from "@/lib/format";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
-
-/** Shared envelope icon lookup — used by EnvelopeCard, EnvelopeNamesEditor,
- *  SplitEditor, and any other surface that needs to render the icon for a
- *  slot. Keyed off the canonical `EnvelopeName` labels from lib/config so
- *  new envelope slots stay in sync. */
-export const ENVELOPE_ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
-  Groceries: <ShoppingCartIcon weight="fill" size={18} />,
-  Tuition: <GraduationCapIcon weight="fill" size={18} />,
-  Savings: <PlantIcon weight="fill" size={18} />,
-};
 
 /**
  * One-row envelope entry on the Envelopes tab: icon · name · amount ·
@@ -47,6 +32,7 @@ export function EnvelopeCard({
   onSpend,
   approvalRequired,
   envelopeNames,
+  envelopeIcons,
   currency = "PHP",
   earn,
   onEarnInfo,
@@ -58,6 +44,9 @@ export function EnvelopeCard({
   /** True when require_all_sigs is on OR this envelope is in protected_envelopes. */
   approvalRequired: boolean;
   envelopeNames: string[];
+  /** Per-envelope icon keys — see lib/envelopeIcons. Falls back to slot
+   *  defaults for missing/unknown keys. */
+  envelopeIcons?: string[];
   /** Display currency for the balance. */
   currency?: "PHP" | "USD";
   earn?: {
@@ -69,6 +58,7 @@ export function EnvelopeCard({
 }) {
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
+  const iconKey = envelopeIcons?.[index];
   const usd = Number(balanceStroops) / STROOPS_PER_USDC;
   const php = usd * PHP_PER_USDC;
   const showUsd = currency === "USD";
@@ -78,7 +68,7 @@ export function EnvelopeCard({
   return (
     <div className="sobre-env-row-wrap">
       <button type="button" onClick={onSpend} className="sobre-env-row-btn">
-        <span className="ic">{ENVELOPE_ICON_BY_NAME[slot]}</span>
+        <span className="ic">{renderEnvelopeIcon(iconKey, slot, 18)}</span>
         <span className="body">
           <span className="name">{name}</span>
           <span className="sub">

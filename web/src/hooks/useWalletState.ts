@@ -99,6 +99,9 @@ export interface WalletState {
   wallet_name: string;
   /** Envelope display labels (Supabase). */
   envelope_names: string[];
+  /** Envelope icon keys (Supabase). See lib/envelopeIcons.tsx for lookup;
+   *  null means the family hasn't customised that slot. */
+  envelope_icons: string[];
   /** Per-envelope split percentages (Supabase). Indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
   /** On-chain members. Joined with Supabase display data (name + avatarUrl + walletDbId). */
@@ -262,6 +265,7 @@ export function useWalletState(
       payment_token: onChain.payment_token,
       wallet_name: display.walletName,
       envelope_names: display.envelopeNames,
+      envelope_icons: display.envelopeIcons,
       percents: display.percents,
       members,
       balances: onChain.balances,

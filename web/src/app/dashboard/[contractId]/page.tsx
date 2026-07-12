@@ -785,6 +785,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                   onSpend={() => setSpendOpen(envName)}
                   approvalRequired={approvalRequired}
                   envelopeNames={state.envelope_names}
+                  envelopeIcons={state.envelope_icons}
                   currency={currency}
                   earn={earnStrip}
                   onEarnInfo={() => setEarnInfoOpen(true)}
@@ -909,15 +910,16 @@ function Dashboard({ contractId }: { contractId: string }) {
           </div>
 
           <div className="sobre-admin-section sobre-card-flat">
-            <h3>Envelope names</h3>
+            <h3>Envelope names &amp; icons</h3>
             <EnvelopeNamesForm
               userAddress={address}
               familyWalletId={familyWalletId}
               isAdmin={isAdmin}
               current={state.envelope_names}
+              currentIcons={state.envelope_icons}
               onSuccess={() => {
                 refresh();
-                flash("Envelope names saved", "ok");
+                flash("Envelope changes saved", "ok");
               }}
             />
           </div>

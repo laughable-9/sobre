@@ -4,7 +4,7 @@ import { ENVELOPE_LABELS } from "@/lib/config";
 import {
   BAR_COLORS,
 } from "@/components/sobre/EnvelopeSplitCard";
-import { ENVELOPE_ICON_BY_NAME } from "@/components/sobre/EnvelopeCard";
+import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
 
 export type Split = [number, number, number];
 
@@ -34,12 +34,16 @@ export function SplitEditor({
   onChange,
   disabled,
   labels,
+  icons,
 }: {
   value: Split;
   onChange: (next: Split) => void;
   disabled?: boolean;
   /** Row labels — defaults to the contract-side enum names. */
   labels?: readonly [string, string, string];
+  /** Per-envelope icon key. When absent, each row falls back to the slot
+   *  default in renderEnvelopeIcon. */
+  icons?: readonly [string, string, string];
 }) {
   const sum = value[0] + value[1] + value[2];
   const ok = sum === 100;
@@ -96,7 +100,7 @@ export function SplitEditor({
             }}
             aria-hidden
           >
-            {ENVELOPE_ICON_BY_NAME[ENVELOPE_LABELS[i]]}
+            {renderEnvelopeIcon(icons?.[i], ENVELOPE_LABELS[i], 16)}
           </span>
           <div
             className="flex-1 text-[14px] font-medium truncate"

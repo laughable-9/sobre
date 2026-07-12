@@ -1,9 +1,5 @@
 "use client";
 
-import {
-  EnvelopeSimpleIcon,
-} from "@phosphor-icons/react";
-
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
@@ -12,6 +8,7 @@ import {
   displayEnvelopeName,
 } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
+import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 /** Categorical envelope colors. Kept HUE-distinct on purpose — the earlier
@@ -71,7 +68,11 @@ export function EnvelopeSplitCard({
           >
             <span className="top">
               <span className="chip">
-                <EnvelopeSimpleIcon weight="fill" size={15} />
+                {renderEnvelopeIcon(
+                  state.envelope_icons?.[i],
+                  ENVELOPE_LABELS[i],
+                  15,
+                )}
               </span>
               <span className="name">{name}</span>
               <span className="amt tabular">

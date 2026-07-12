@@ -34,6 +34,7 @@ const PREVIEW_STATE: WalletState = {
   payment_token: "",
   wallet_name: "Sample family",
   envelope_names: [],
+  envelope_icons: [],
   percents: [50, 30, 20],
   members: [],
   balances: [5000, 3000, 2000].map((php) =>

@@ -4,10 +4,12 @@ import { useState } from "react";
 
 import { useCreateSobre } from "@/hooks/useCreateSobre";
 import {
+  DEFAULT_ENVELOPE_ICONS,
   DEFAULT_ENVELOPE_NAMES,
   EnvelopeNamesEditor,
   isValidEnvelopeNames,
   lockSavings,
+  type EnvelopeIcons,
   type EnvelopeNames,
 } from "@/components/sobre/EnvelopeNamesEditor";
 import {
@@ -36,6 +38,9 @@ export function InitForm({
   const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
     DEFAULT_ENVELOPE_NAMES,
   );
+  const [envelopeIcons, setEnvelopeIcons] = useState<EnvelopeIcons>(
+    DEFAULT_ENVELOPE_ICONS,
+  );
   const [split, setSplit] = useState<Split>([50, 30, 20]);
   const { createSobre, pending, error } = useCreateSobre(userAddress);
 
@@ -57,6 +62,7 @@ export function InitForm({
         adminName,
         percents: split,
         envelopeNames: trimmed,
+        envelopeIcons,
       });
       onSuccess(newContractId);
     } catch {
@@ -93,7 +99,9 @@ export function InitForm({
         </p>
         <EnvelopeNamesEditor
           value={envelopeNames}
+          icons={envelopeIcons}
           onChange={setEnvelopeNames}
+          onIconsChange={setEnvelopeIcons}
           disabled={pending}
         />
       </div>
@@ -111,6 +119,7 @@ export function InitForm({
           onChange={setSplit}
           disabled={pending}
           labels={envelopeNames}
+          icons={envelopeIcons}
         />
       </div>
 
@@ -134,9 +143,7 @@ export function InitForm({
           cursor: !valid || pending ? "not-allowed" : "pointer",
         }}
       >
-        {pending
-          ? "Opening your Sobre…"
-          : `Open this Sobre (${split[0]} / ${split[1]} / ${split[2]})`}
+        {pending ? "Opening your Sobre…" : "Open this Sobre"}
       </button>
     </form>
   );
