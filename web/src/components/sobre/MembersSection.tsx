@@ -75,19 +75,45 @@ export function MembersSection({
         ) : null}
       </div>
       {members.map((m) => (
-        <div key={m.address} className="sobre-member-row">
-          <Avatar
-            src={null}
-            name={m.name || shortenAddress(m.address)}
-            size={36}
-          />
-          <div className="who">
-            <span className="name">
-              {m.name || shortenAddress(m.address)}
-            </span>
-            <span className="role">
-              {m.address === adminAddress ? "Admin" : "Member"}
-            </span>
+        <div
+          key={m.address}
+          className="sobre-card-flat"
+          style={{ padding: "14px 16px", marginBottom: 10 }}
+        >
+          <div
+            style={{ display: "flex", alignItems: "center", gap: 12 }}
+          >
+            <Avatar
+              src={m.avatarUrl}
+              name={m.name || shortenAddress(m.address)}
+              size={40}
+            />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  fontSize: 15,
+                  fontWeight: 600,
+                  color: "var(--text-1)",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {m.name || shortenAddress(m.address)}
+              </div>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-3)",
+                  marginTop: 2,
+                  textTransform: "uppercase",
+                  letterSpacing: "0.06em",
+                  fontWeight: 600,
+                }}
+              >
+                {m.address === adminAddress ? "Admin" : "Member"}
+              </div>
+            </div>
           </div>
         </div>
       ))}
