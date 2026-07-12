@@ -77,15 +77,29 @@ export interface PdaxCryptoTransactionsResponse {
  *  the active payment currency. Returns the G-address + memo_id ("tag" in
  *  PDAX's response). Cached at module load; the address is stable across
  *  the institution's lifetime. */
+// PDAX tickers deposits by asset-network pair, not by bare symbol. Stellar
+// USDC is "USDCXLM"; USDC on other rails (Ethereum, Base, etc.) live at
+// different endpoints and don't return a memo tag. Passing our bare
+// PAYMENT_TOKEN = "USDC" made /crypto/deposit resolve to one of those
+// non-Stellar buckets and the response came back without a memo — the
+// caller correctly refused to fire a classic payment blind, so cashout
+// bombed with "PDAX /crypto/deposit returned no memo tag". Map to the
+// Stellar-specific ticker per docs/pdax-api-reference.md §Funding.
+const PDAX_STELLAR_CURRENCY: Record<string, string> = {
+  USDC: "USDCXLM",
+  XLM: "XLM",
+};
+
 let cachedDepositAddr: { address: string; memo: string } | null = null;
 export async function getPdaxCryptoDepositAddr(): Promise<{
   address: string;
   memo: string;
 }> {
   if (cachedDepositAddr) return cachedDepositAddr;
+  const currency = PDAX_STELLAR_CURRENCY[PAYMENT_TOKEN] ?? PAYMENT_TOKEN;
   const resp = await pdaxFetch<PdaxCryptoDepositAddrResponse>(
     "/pdax-institution/v1/crypto/deposit",
-    { query: { currency: PAYMENT_TOKEN } },
+    { query: { currency } },
   );
   const memo = resp.data.tag;
   if (!memo) {
