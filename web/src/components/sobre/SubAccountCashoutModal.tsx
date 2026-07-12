@@ -12,6 +12,7 @@ import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import { BANKS, bankName } from "@/lib/banks";
 import {
+  PDAX_INSTAPAY_FEE_PHP,
   PHP_PER_USDC,
   STROOPS_PER_USDC,
 } from "@/lib/config";
@@ -201,14 +202,27 @@ export function SubAccountCashoutModal({
   const balancePhp = balanceToken * rate;
   const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
   const balanceLocale = currency === "USD" ? "en-US" : "en-PH";
+  // Fee handling (Option 2): the amount the user types is what lands at
+  // the bank. PDAX's InstaPay service fee is added on top and the total
+  // has to be covered by the on-chain USDC spend, so their bank payout
+  // stays exactly what they asked for.
   const parsedAmount = Number(amountStr);
-  const amountToken =
+  const payoutPhp =
     Number.isFinite(parsedAmount) && parsedAmount > 0
       ? currency === "USD"
-        ? parsedAmount
-        : parsedAmount / rate
+        ? parsedAmount * rate
+        : parsedAmount
       : 0;
-  const amountPhp = amountToken * rate;
+  const feePhp = PDAX_INSTAPAY_FEE_PHP;
+  const totalPhp = payoutPhp + feePhp;
+  // On-chain spend covers the total (payout + fee) so PDAX's fee comes
+  // out of the USDC the user just sold. Bank leg still receives payoutPhp
+  // exactly. amountPhp stored on the row stays "what lands in the bank"
+  // — the fee is tracked in service_fee_php.
+  const amountToken = totalPhp / rate;
+  const amountPhp = payoutPhp;
+  const totalInCurrency = currency === "USD" ? totalPhp / rate : totalPhp;
+  const feeInCurrency = currency === "USD" ? feePhp / rate : feePhp;
   const validAmount = amountToken > 0 && amountToken <= balanceToken;
 
   const submitBank = async (e: React.FormEvent) => {
@@ -462,6 +476,45 @@ export function SubAccountCashoutModal({
                 })}
               </div>
             </div>
+
+            {payoutPhp > 0 ? (
+              <div
+                className="rounded-[10px] px-3 py-2 mb-4 text-[12px]"
+                style={{
+                  background: "var(--surface-alt)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-2)",
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span>InstaPay fee</span>
+                  <span className="tabular">
+                    {symbol}
+                    {feeInCurrency.toLocaleString(balanceLocale, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between mt-1 pt-2"
+                  style={{
+                    borderTop: "1px dashed var(--border)",
+                    color: "var(--text-1)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>Total deducted</span>
+                  <span className="tabular">
+                    {symbol}
+                    {totalInCurrency.toLocaleString(balanceLocale, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
 
             <div
               className="flex items-center justify-between p-3 rounded-[10px] mb-4"

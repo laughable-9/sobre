@@ -190,6 +190,16 @@ export const PHP_PER_TOKEN_FALLBACK: Record<"XLM" | "USDC", number> = {
  *  prefer the live rate from `useTokenRate()`. */
 export const PHP_PER_USDC = PHP_PER_TOKEN_FALLBACK[PAYMENT_TOKEN];
 
+/** InstaPay service fee PDAX charges per fiat withdraw. Observed as ₱15
+ *  flat on UAT (₱100 payout, ₱115 debited from institutional PHP
+ *  balance). We surface this on the cashout modal and cover it by
+ *  increasing the on-chain USDC spend, so the amount the user typed is
+ *  what actually lands in their bank. Mainnet may tier by bank —
+ *  pull the production fee schedule at cut time and swap this const
+ *  (or convert to a function of bank_code). See docs/feature-backlog.md
+ *  §"InstaPay service fee on cashouts". */
+export const PDAX_INSTAPAY_FEE_PHP = 15;
+
 export const ENVELOPE_LABELS = ["Groceries", "Tuition", "Savings"] as const;
 export type EnvelopeName = (typeof ENVELOPE_LABELS)[number];
 

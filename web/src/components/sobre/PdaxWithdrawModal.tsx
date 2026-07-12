@@ -28,6 +28,7 @@ import { BANKS } from "@/lib/banks";
 import {
   ENVELOPE_LABELS,
   PAYMENT_TOKEN_LABEL,
+  PDAX_INSTAPAY_FEE_PHP,
   STROOPS_PER_TOKEN,
   displayEnvelopeName,
   type EnvelopeName,
@@ -331,16 +332,27 @@ export function PdaxWithdrawModal({
 
   const amountEntered = Number(amountStr);
   const validAmount = Number.isFinite(amountEntered) && amountEntered > 0;
-  // 1 USDC = 1 USD (stablecoin peg), so amount-in-currency → token is a
-  // straight identity in USD mode and a divide-by-rate in PHP mode.
-  const amountToken = validAmount
+  // The amount the user types is what lands at their bank. PDAX's
+  // InstaPay service fee sits on top and is covered by a larger
+  // on-chain USDC spend, so the payout is exact. amountPhp stored on
+  // the row = payout (user-typed); amount_usdc on-chain covers the
+  // total (payout + fee). service_fee_php is written server-side from
+  // config so the client can't lie.
+  const payoutToken = validAmount
     ? currency === "USD"
       ? amountEntered
       : amountEntered / phpPerToken
     : 0;
-  const amountPhp = amountToken * phpPerToken;
+  const payoutPhp = payoutToken * phpPerToken;
+  const feePhp = PDAX_INSTAPAY_FEE_PHP;
+  const totalPhp = payoutPhp + feePhp;
+  const totalToken = totalPhp / phpPerToken;
+  const amountToken = totalToken;
+  const amountPhp = payoutPhp;
   const amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_TOKEN));
   const overspend = amountStroops > balanceStroops;
+  const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
+  const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
   // ─── Action handlers ──────────────────────────────────────────────────
   const handleConfirm = async () => {
@@ -516,6 +528,9 @@ export function PdaxWithdrawModal({
             validAmount={validAmount}
             overspend={overspend}
             balanceInCurrency={balanceInCurrency}
+            payoutPositive={payoutPhp > 0}
+            feeInCurrency={feeInCurrency}
+            totalInCurrency={totalInCurrency}
             bank={bank}
             onChangeBank={() => setLocalPhase("register_bank")}
             onCancel={handleClose}
@@ -587,6 +602,9 @@ function InputStep({
   validAmount,
   overspend,
   balanceInCurrency,
+  payoutPositive,
+  feeInCurrency,
+  totalInCurrency,
   bank,
   onChangeBank,
   onCancel,
@@ -606,6 +624,9 @@ function InputStep({
   validAmount: boolean;
   overspend: boolean;
   balanceInCurrency: number;
+  payoutPositive: boolean;
+  feeInCurrency: number;
+  totalInCurrency: number;
   bank: BankRecord;
   onChangeBank: () => void;
   onCancel: () => void;
@@ -707,6 +728,45 @@ function InputStep({
           {balanceInCurrency.toLocaleString(balanceLocale, balanceLocaleOpts)}
         </div>
       </div>
+
+      {payoutPositive ? (
+        <div
+          className="rounded-[10px] px-3 py-2 mb-4 text-[12px]"
+          style={{
+            background: "var(--surface-alt)",
+            border: "1px solid var(--border)",
+            color: "var(--text-2)",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span>InstaPay fee</span>
+            <span className="tabular">
+              {symbol}
+              {feeInCurrency.toLocaleString(balanceLocale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
+          <div
+            className="flex items-center justify-between mt-1 pt-2"
+            style={{
+              borderTop: "1px dashed var(--border)",
+              color: "var(--text-1)",
+              fontWeight: 600,
+            }}
+          >
+            <span>Total deducted</span>
+            <span className="tabular">
+              {symbol}
+              {totalInCurrency.toLocaleString(balanceLocale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {overspend && validAmount ? (
         <div
