@@ -45,7 +45,7 @@ export function EarnPanel({
   const runEnable = async () => {
     try {
       await enable();
-      onFlash(`Earn enabled. ${savingsDisplayName} is now earning.`, "ok");
+      onFlash("Earn enabled", "ok");
       onChange();
     } catch (e) {
       onFlash(e instanceof Error ? e.message : String(e), "warn");

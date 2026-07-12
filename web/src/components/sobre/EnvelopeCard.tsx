@@ -19,11 +19,10 @@ import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
  * Detail (spend history, approval policy specifics) lives inside that
  * modal, not on this list.
  *
- * `earn` — optional Blend-yield context surfaced inline on the balance
- * row (currently only the Savings envelope hydrates it). Shows the
- * lifetime interest earned and the "up to X% p.a." pill; balance
- * passed in already includes the Blend underlying so the number the
- * user sees is unified.
+ * `earn` — optional Blend-yield context. Balance passed in already
+ * includes the Blend underlying so the number the user sees is unified;
+ * the row also shows lifetime interest earned once it's non-zero. The
+ * APY pill lives on the Grow card, not here, to avoid stacking pills.
  */
 export function EnvelopeCard({
   index,
@@ -35,7 +34,6 @@ export function EnvelopeCard({
   envelopeIcons,
   currency = "PHP",
   earn,
-  onEarnInfo,
 }: {
   index: number;
   balanceStroops: bigint;
@@ -51,10 +49,7 @@ export function EnvelopeCard({
   currency?: "PHP" | "USD";
   earn?: {
     interestEarnedStroops: bigint;
-    apyLabel: string;
   };
-  /** Fires when the user taps the APY pill. Opens EarnInfoModal. */
-  onEarnInfo?: () => void;
 }) {
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
@@ -108,7 +103,7 @@ export function EnvelopeCard({
           aria-hidden
         />
       </button>
-      {earn ? (
+      {earn && earn.interestEarnedStroops > 0n ? (
         <div className="sobre-env-earn-strip">
           <span className="sobre-env-earn-interest">
             Interest earned{" "}
@@ -116,18 +111,6 @@ export function EnvelopeCard({
               {formatCurrencyLocale(earn.interestEarnedStroops, currency)}
             </span>
           </span>
-          <button
-            type="button"
-            className="sobre-env-earn-apy"
-            onClick={(e) => {
-              e.stopPropagation();
-              onEarnInfo?.();
-            }}
-            title="Tap for how yield works"
-            aria-label={`${earn.apyLabel}. Tap for explanation.`}
-          >
-            {earn.apyLabel}
-          </button>
         </div>
       ) : null}
     </div>
