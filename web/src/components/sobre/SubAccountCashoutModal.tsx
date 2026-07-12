@@ -595,23 +595,75 @@ export function SubAccountCashoutModal({
         ) : null}
 
         {phase === "error" ? (
-          <>
-            <h2>Something went wrong</h2>
-            <p className="sub">
-              {errMsg ?? pdaxError ?? signError ?? "Cashout couldn't complete."}
-            </p>
-            <div className="sobre-modal-actions">
-              <button
-                type="button"
-                className="sobre-btn sobre-btn-soft"
-                onClick={close}
-              >
-                Close
-              </button>
-            </div>
-          </>
+          <ErrorPhase
+            reason={
+              errMsg ?? pdaxError ?? signError ?? "Cashout couldn't complete."
+            }
+            onClose={close}
+          />
         ) : null}
     </Sheet>
   );
 }
 
+/** Error phase for the cashout modal. Renders a short friendly title,
+ *  the sanitized reason as a scrollable copyable block (matches the
+ *  activity feed's FailureRow sheet so support screenshots have the
+ *  same shape), and a Copy button so a user can send it to support
+ *  without hand-transcribing a HostError. */
+function ErrorPhase({
+  reason,
+  onClose,
+}: {
+  reason: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <>
+      <h2>Something went wrong</h2>
+      <p className="sub">
+        Copy this and send it to support if you need help.
+      </p>
+      <pre
+        className="tabular"
+        style={{
+          maxHeight: "45vh",
+          overflow: "auto",
+          padding: "12px 14px",
+          borderRadius: 10,
+          background: "var(--surface-alt)",
+          border: "1px solid var(--border)",
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "var(--text-2)",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          margin: "0 0 12px",
+        }}
+      >
+        {reason}
+      </pre>
+      <div className="sobre-modal-actions">
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard.writeText(reason);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1400);
+          }}
+          className="sobre-btn sobre-btn-soft"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="sobre-btn sobre-btn-primary"
+        >
+          Close
+        </button>
+      </div>
+    </>
+  );
+}
