@@ -3,6 +3,7 @@
 import { Lock } from "lucide-react";
 
 import { ENVELOPE_LABELS } from "@/lib/config";
+import { ENVELOPE_ICON_BY_NAME } from "@/components/sobre/EnvelopeCard";
 
 export type EnvelopeNames = [string, string, string];
 export const MAX_ENVELOPE_NAME_LEN = 24;
@@ -68,14 +69,17 @@ export function EnvelopeNamesEditor({
         return (
           <div key={i} className="flex items-center gap-3">
             <div
-              className="text-[11px] uppercase tracking-wider"
+              className="grid place-items-center shrink-0"
               style={{
-                color: "var(--text-3)",
-                fontWeight: 600,
-                width: 28,
+                width: 32,
+                height: 32,
+                borderRadius: 10,
+                background: "var(--accent-soft)",
+                color: "var(--sobre-accent)",
               }}
+              aria-hidden
             >
-              #{i + 1}
+              {ENVELOPE_ICON_BY_NAME[ENVELOPE_LABELS[i]]}
             </div>
             <div className="sobre-input-wrap flex-1">
               <input

@@ -18,7 +18,11 @@ import { PHP_PER_USDC } from "@/lib/config";
 import { formatCurrencyLocale } from "@/lib/format";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
-const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
+/** Shared envelope icon lookup — used by EnvelopeCard, EnvelopeNamesEditor,
+ *  SplitEditor, and any other surface that needs to render the icon for a
+ *  slot. Keyed off the canonical `EnvelopeName` labels from lib/config so
+ *  new envelope slots stay in sync. */
+export const ENVELOPE_ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
   Groceries: <ShoppingCartIcon weight="fill" size={18} />,
   Tuition: <GraduationCapIcon weight="fill" size={18} />,
   Savings: <PlantIcon weight="fill" size={18} />,
@@ -74,7 +78,7 @@ export function EnvelopeCard({
   return (
     <div className="sobre-env-row-wrap">
       <button type="button" onClick={onSpend} className="sobre-env-row-btn">
-        <span className="ic">{ICON_BY_NAME[slot]}</span>
+        <span className="ic">{ENVELOPE_ICON_BY_NAME[slot]}</span>
         <span className="body">
           <span className="name">{name}</span>
           <span className="sub">
