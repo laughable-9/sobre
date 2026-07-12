@@ -20,6 +20,7 @@ import { SobreCardSkeleton } from "@/components/sobre/Skeletons";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Button } from "@/components/ui/button";
 
+import { useFamilyWalletContractIds } from "@/hooks/useFamilyWalletContractIds";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useSobreSummary } from "@/hooks/useSobreSummary";
 import { useSobresOfAdmin } from "@/hooks/useSobresOfAdmin";
@@ -39,6 +40,7 @@ export default function MySobresPage() {
   const { address } = wallet;
   const router = useRouter();
   const adminSobres = useSobresOfAdmin(address);
+  const mirroredIds = useFamilyWalletContractIds();
   const [joined, setJoined] = useState<string[]>([]);
   const [mode, setMode] = useState<Mode>("list");
   // null = still hydrating (avoids SSR/client localStorage divergence).
@@ -205,13 +207,25 @@ export default function MySobresPage() {
   }
 
   // ─── "My Sobres" listing ─────────────────────────────────────────────
+  // Intersect the on-chain admin list with Supabase-mirrored Sobres so
+  // orphan chain contracts (creates whose DB mirror failed) don't render
+  // as identical "Family Wallet" placeholders. Before Supabase resolves
+  // we render nothing rather than risk showing orphans mid-load.
+  const mirroredSet = mirroredIds.contractIds;
   const adminSet = new Set(adminSobres.sobres);
-  const adminRows = adminSobres.sobres
-    .filter((id) => !closedSet.has(id))
-    .map((id) => ({ id, role: "admin" as const }));
-  const memberRows = joined
-    .filter((id) => !adminSet.has(id) && !closedSet.has(id))
-    .map((id) => ({ id, role: "member" as const }));
+  const adminRows = mirroredSet
+    ? adminSobres.sobres
+        .filter((id) => mirroredSet.has(id) && !closedSet.has(id))
+        .map((id) => ({ id, role: "admin" as const }))
+    : [];
+  const memberRows = mirroredSet
+    ? joined
+        .filter(
+          (id) =>
+            mirroredSet.has(id) && !adminSet.has(id) && !closedSet.has(id),
+        )
+        .map((id) => ({ id, role: "member" as const }))
+    : [];
   const allRows = [...adminRows, ...memberRows];
 
   return (
@@ -265,7 +279,7 @@ export default function MySobresPage() {
           </p>
         ) : null}
 
-        {adminSobres.loading && allRows.length === 0 ? (
+        {(adminSobres.loading || mirroredIds.loading) && allRows.length === 0 ? (
           <div
             className="grid gap-4"
             style={{
