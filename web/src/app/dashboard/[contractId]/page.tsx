@@ -533,9 +533,10 @@ function Dashboard({ contractId }: { contractId: string }) {
   // branch fires only for kids whose wallet is in state.subaccounts.
   if (isSubaccount) {
     return (
-      <div className="sobre-app sobre-v2">
-        {/* No TopBar here — matches the main wallet view. Identity /
-            sign-out affordances live inside SubAccountView. */}
+      <div className="sobre-app sobre-v2 has-dock">
+        {/* No TopBar here — matches the main wallet view. Identity + sign
+            out live inside the User tab; primary Cash-out lives on the
+            dock fab. */}
         <SubAccountView
           userAddress={address}
           contractId={contractId}
@@ -543,6 +544,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           events={txFeed.events}
           onFlash={flash}
           onChange={refreshAll}
+          wallet={wallet}
           preferredDisplayName={wallet.user?.name ?? null}
         />
         {heroPulse ? <HeroPulse /> : null}

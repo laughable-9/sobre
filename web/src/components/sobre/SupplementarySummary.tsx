@@ -1,13 +1,14 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CaretRightIcon, LockIcon, UserCircleIcon } from "@phosphor-icons/react";
+import { CaretRightIcon, LockIcon } from "@phosphor-icons/react";
 
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import type { SubAccount } from "@/hooks/useWalletState";
 import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
+import { Avatar } from "@/components/sobre/Avatar";
 import { SupplementaryDetailModal } from "@/components/sobre/SupplementaryDetailModal";
 
 /**
@@ -94,8 +95,8 @@ function SupplementaryRow({
   const isLocked = chain?.locked ?? false;
   return (
     <button type="button" onClick={onOpen} className="sobre-env-row-btn">
-      <span className="ic">
-        <UserCircleIcon weight="fill" size={22} />
+      <span className="ic" style={{ background: "transparent", padding: 0 }}>
+        <Avatar src={null} name={row.displayName} size={40} />
       </span>
       <span className="body">
         <span className="name">{row.displayName}</span>
