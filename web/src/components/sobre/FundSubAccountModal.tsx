@@ -12,6 +12,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 import { Avatar } from "./Avatar";
 import { Sheet } from "./Sheet";
@@ -87,8 +88,11 @@ export function FundSubAccountModal({
   }, [subRows, state.subaccounts]);
 
   const envelopeIndex = ENVELOPE_LABELS.indexOf(envelope);
+  // Total includes the envelope's USDY position — the contract's
+  // fund_subaccount auto-redeems from USDY via ensure_envelope_liquidity,
+  // so the cache-only view understates spendable when Earn is enabled.
   const envelopeBalancePhp =
-    (Number(state.balances[envelopeIndex] ?? 0n) / STROOPS_PER_USDC) *
+    (Number(envelopeTotalStroops(state, envelopeIndex)) / STROOPS_PER_USDC) *
     PHP_PER_USDC;
 
   const parsed = Number(amount);
@@ -185,7 +189,7 @@ export function FundSubAccountModal({
           <div className="grid grid-cols-3 gap-2 mt-1">
             {ENVELOPE_LABELS.map((e, i) => {
               const bal =
-                (Number(state.balances[i] ?? 0n) / STROOPS_PER_USDC) *
+                (Number(envelopeTotalStroops(state, i)) / STROOPS_PER_USDC) *
                 PHP_PER_USDC;
               const active = envelope === e;
               return (
