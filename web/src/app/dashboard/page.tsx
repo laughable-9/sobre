@@ -255,7 +255,22 @@ export default function MySobresPage() {
         )
         .map((id) => ({ id, role: "member" as const }))
     : [];
-  const combinedRows = [...adminRows, ...memberRows];
+  // Sobres the caller can SELECT via RLS but isn't the admin of and
+  // hasn't tracked in localStorage-joined — the only way to reach that
+  // set is by being a sub-account holder in that family (the
+  // "Subaccount can read own family wallet" policy). Falling out of
+  // localStorage (new device, cleared storage) would otherwise leave a
+  // supplementary holder with an empty My Sobres — this recovers those.
+  const joinedSet = new Set(joined);
+  const subaccountRows = mirroredSet
+    ? Array.from(mirroredSet)
+        .filter(
+          (id) =>
+            !adminSet.has(id) && !joinedSet.has(id) && !closedSet.has(id),
+        )
+        .map((id) => ({ id, role: "subaccount" as const }))
+    : [];
+  const combinedRows = [...adminRows, ...memberRows, ...subaccountRows];
   const allRows = combinedRows.filter((r) => !hiddenIds.has(r.id));
   const listLoading = adminSobres.loading || mirroredIds.loading;
   const showEmptyState = !listLoading && allRows.length === 0;
@@ -435,7 +450,7 @@ function SobreCard({
   onNotAMember,
 }: {
   contractId: string;
-  role: "admin" | "member";
+  role: "admin" | "member" | "subaccount";
   callerAddress: string;
   /** Called once when this card decides not to render — parent uses it to
    *  drop the row from allRows so the empty state can trigger. */
@@ -450,10 +465,14 @@ function SobreCard({
   // Only trust the on-chain membership list when get_state actually worked.
   // If it trapped (chainFailed) the members array is empty by default, and
   // treating that as "you got kicked" would hide the card wrongly.
+  // Sub-accounts live in a separate on-chain list (state.subaccounts), so
+  // they check that instead of members.
   const stillAMember =
     summary === null ||
     summary.chainFailed ||
-    summary.members.some((m) => m.address === callerAddress);
+    (role === "subaccount"
+      ? summary.subaccounts.some((s) => s.address === callerAddress)
+      : summary.members.some((m) => m.address === callerAddress));
   useEffect(() => {
     if (summary && !stillAMember && onNotAMember) {
       onNotAMember();
@@ -503,7 +522,11 @@ function SobreCard({
               fontSize: 10,
             }}
           >
-            {role === "admin" ? "Admin" : "Member"}
+            {role === "admin"
+              ? "Admin"
+              : role === "subaccount"
+                ? "Supplementary"
+                : "Member"}
           </span>
         </div>
         <CaretRightIcon
