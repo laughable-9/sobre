@@ -90,6 +90,40 @@ export function relativeTime(iso: string): string {
   return `${Math.floor(hrs / 24)}d ago`;
 }
 
+// Hoisted so the RegExp isn't recompiled on every catch. Match order
+// matters — the WebAuthn "not allowed" line is the biggest offender we
+// want to normalize before any tail URL cleanup fires.
+const RX_WEBAUTHN =
+  /NotAllowedError|operation either timed out or was not allowed|webauthn/i;
+const RX_ABORT = /AbortError/i;
+const RX_INVALID_STATE = /InvalidStateError/i;
+const RX_NETWORK = /NetworkError|Failed to fetch/i;
+const RX_TRAILING_SEE_URL = /\s*See:\s*https?:\/\/\S+\s*$/i;
+const RX_TRAILING_URL = /\s+https?:\/\/\S+\s*$/i;
+
+/** Map raw browser / passkey errors to a message a non-technical family
+ *  admin can act on. Accepts either the caught `unknown` or a
+ *  pre-extracted string. WebAuthn errors are the biggest offender — they
+ *  include a spec URL that reads as spam in a toast. Anything unmatched
+ *  falls through with its own message strip-cleaned of trailing spec
+ *  URLs so the truncation strategy on the toast has less to hide. */
+export function friendlyError(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : String(err);
+  const s = raw.trim();
+  if (RX_WEBAUTHN.test(s)) return "Face ID was cancelled or timed out";
+  if (RX_ABORT.test(s)) return "Cancelled";
+  if (RX_INVALID_STATE.test(s)) {
+    return "This device isn't set up for this passkey";
+  }
+  if (RX_NETWORK.test(s)) return "Network hiccup. Try again in a moment.";
+  return s.replace(RX_TRAILING_SEE_URL, "").replace(RX_TRAILING_URL, "");
+}
+
 /** "Nov 8, 3:42 PM" — short absolute timestamp used by activity rows in
  *  the sub-account panels. Falls back to "" on unparseable input so a
  *  broken ledger timestamp doesn't blow up the render. */

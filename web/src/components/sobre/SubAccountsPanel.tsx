@@ -17,6 +17,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { friendlyError } from "@/lib/format";
 import { routeSpend } from "@/lib/policy";
 
 import { Avatar } from "./Avatar";
@@ -231,7 +232,7 @@ function SubCard({
       setConfirmingCancel(false);
       onChange();
     } catch (e) {
-      onFlash(e instanceof Error ? e.message : String(e), "warn");
+      onFlash(friendlyError(e), "warn");
       setConfirmingCancel(false);
     }
   };

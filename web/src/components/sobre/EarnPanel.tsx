@@ -5,6 +5,7 @@ import { TrendUpIcon } from "@phosphor-icons/react";
 import { useEarnEnable } from "@/hooks/useEarnEnable";
 import type { WalletState } from "@/hooks/useWalletState";
 import { displayEnvelopeName } from "@/lib/config";
+import { friendlyError } from "@/lib/format";
 
 /**
  * The Earn panel is now enable-only. When Earn is enabled, the Savings
@@ -48,7 +49,7 @@ export function EarnPanel({
       onFlash("Earn enabled", "ok");
       onChange();
     } catch (e) {
-      onFlash(e instanceof Error ? e.message : String(e), "warn");
+      onFlash(friendlyError(e), "warn");
     }
   };
 

@@ -13,6 +13,7 @@ import type {
   WalletState,
 } from "@/hooks/useWalletState";
 import { EARN_APY_LABEL, displayEnvelopeName } from "@/lib/config";
+import { friendlyError } from "@/lib/format";
 import { useCurrency } from "@/lib/currency";
 import {
   formatCountdown,
@@ -132,7 +133,7 @@ export function GrowPanel({
       onFlash(successMessage, "ok");
       onChange();
     } catch (e) {
-      onFlash(e instanceof Error ? e.message : String(e), "warn");
+      onFlash(friendlyError(e), "warn");
     }
   };
 
