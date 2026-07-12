@@ -95,6 +95,7 @@ export function GrowPanel({
   const busy = enabling || transferring || requesting || executing || cancelling;
 
   const [withdrawPhpStr, setWithdrawPhpStr] = useState("");
+  const [depositPhpStr, setDepositPhpStr] = useState("");
   // Force a re-render every second so unlock countdowns tick without
   // waiting on the 3s wallet-state poll. Only runs when there's a live
   // countdown to render — otherwise the panel would re-render every
@@ -126,12 +127,13 @@ export function GrowPanel({
   };
 
   const runEnable = () => runAction(enable, "Grow enabled");
-  const runTransferAll = () => {
-    if (savingsAvailable <= 0n) return;
-    return runAction(
-      () => transfer(savingsAvailable),
-      `Moved ${savingsDisplayName} into Grow`,
-    );
+  const runDeposit = () => {
+    const stroops = phpToStroops(depositPhpStr);
+    if (stroops <= 0n) return;
+    return runAction(async () => {
+      await transfer(stroops);
+      setDepositPhpStr("");
+    }, `Moved ${formatCurrencyLocale(stroops, currency)} into Grow`);
   };
   const runRequest = () => {
     const stroops = phpToStroops(withdrawPhpStr);
@@ -157,6 +159,9 @@ export function GrowPanel({
   const withdrawStroops = phpToStroops(withdrawPhpStr);
   const canRequest =
     withdrawStroops > 0n && withdrawStroops <= availableForRequest;
+  const depositStroops = phpToStroops(depositPhpStr);
+  const canDeposit =
+    depositStroops > 0n && depositStroops <= savingsAvailable;
 
   return (
     <section className="sobre-envs-section" aria-label="Grow">
@@ -243,18 +248,33 @@ export function GrowPanel({
               </p>
             ) : null}
 
-            {isAdmin ? (
-              <div className="sobre-earn-actions">
-                <button
-                  type="button"
-                  className="sobre-earn-secondary-btn"
-                  onClick={runTransferAll}
-                  disabled={busy || savingsAvailable <= 0n}
-                >
-                  {transferring
-                    ? "Moving…"
-                    : `Move ${savingsDisplayName} to Grow`}
-                </button>
+            {isAdmin && savingsAvailable > 0n ? (
+              <div className="sobre-grow-request-row">
+                <label className="sobre-grow-request-label" htmlFor="grow-dep-amount">
+                  Move {savingsDisplayName} to Grow
+                </label>
+                <div className="sobre-grow-request-input-row">
+                  <span className="sobre-grow-request-currency">₱</span>
+                  <input
+                    id="grow-dep-amount"
+                    type="text"
+                    inputMode="decimal"
+                    value={depositPhpStr}
+                    onChange={(e) =>
+                      setDepositPhpStr(sanitizePhpInput(e.target.value))
+                    }
+                    className="sobre-grow-request-input tabular"
+                    disabled={busy}
+                  />
+                  <button
+                    type="button"
+                    className="sobre-earn-secondary-btn"
+                    onClick={runDeposit}
+                    disabled={busy || !canDeposit}
+                  >
+                    {transferring ? "Moving…" : "Move"}
+                  </button>
+                </div>
               </div>
             ) : null}
 
