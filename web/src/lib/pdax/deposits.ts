@@ -11,7 +11,6 @@ import {
   depositFromXlmToSobre,
   getRelayPublicKey,
 } from "@/lib/relay";
-import { splitAmount } from "@/lib/split";
 
 /** PDAX `POST /fiat/deposit` response (relevant fields). */
 export interface PdaxFiatDepositResponse {
@@ -251,20 +250,13 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   if (!won) return { state: "still_pending" };
 
   const xlmStroops = BigInt(Math.round(horizonHit.amount * STROOPS_PER_TOKEN));
-  // Split the expected USDC total by family percentages. The contract
-  // will validate the sum against Soroswap's actual payout; if the
-  // swap under-delivers, the invocation traps and this claim rolls back
-  // on the next poll. A small safety margin isn't applied here — the
-  // 2% Soroswap slippage floor inside the contract is enough for
-  // normal-mainnet-ish rate movement.
-  const totalUsdcStroops = BigInt(
-    Math.round(args.expectedNetAmount * STROOPS_PER_TOKEN),
-  );
-  const split = splitAmount(totalUsdcStroops, args.percents);
+  // Pass percentages straight through — the contract splits the actual
+  // Soroswap payout so we don't need to pre-compute USDC amounts here
+  // (which would need a live rate quote and risks mismatch).
   const sacTransferHash = await depositFromXlmToSobre({
     familyContractId: args.familyContractId,
     relayXlmStroops: xlmStroops,
-    split,
+    percents: args.percents,
   });
   return {
     state: "completed",

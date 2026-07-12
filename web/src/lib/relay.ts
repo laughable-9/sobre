@@ -51,22 +51,21 @@ export function getRelayPublicKey(): string {
 /**
  * PDAX-ramp entry: the relay G-address invokes the family Sobre contract's
  * `deposit_from_xlm` with the XLM it just received from PDAX + the
- * per-envelope split (in USDC stroops) the caller has already computed
- * from the family's Supabase-stored percentages.
+ * family's envelope percentages. The contract does the XLM→USDC swap
+ * via Soroswap internally, then splits the ACTUAL swap payout by the
+ * given percentages — the server doesn't need to pre-compute USDC
+ * amounts, so a live-rate mismatch can't leave envelopes short.
  *
- * The Sobre contract does the Soroswap XLM→USDC swap internally, then
- * credits envelopes. No trustlines needed on the relay (XLM is native)
- * and no user-signed follow-up step (the whole flow is server-side).
+ * No trustlines needed on the relay (XLM is native) and no user-signed
+ * follow-up step (the whole flow is server-side).
  *
  * Returns the tx hash on Horizon-confirmed success. Throws on
- * submit/timeout failures. Throws with contract error 8 (InsufficientBalance)
- * when the caller's expected split total exceeds what Soroswap actually
- * delivers — caller should shrink the split or accept a smaller USDC total.
+ * submit/timeout failures.
  */
 export async function depositFromXlmToSobre(args: {
   familyContractId: string;
   relayXlmStroops: bigint;
-  split: { groceries: bigint; tuition: bigint; savings: bigint };
+  percents: readonly [number, number, number];
 }): Promise<string> {
   const server = getServer();
   const kp = getRelayKeypair();
@@ -83,9 +82,9 @@ export async function depositFromXlmToSobre(args: {
         "deposit_from_xlm",
         Address.fromString(kp.publicKey()).toScVal(),
         nativeToScVal(args.relayXlmStroops, { type: "i128" }),
-        nativeToScVal(args.split.groceries, { type: "i128" }),
-        nativeToScVal(args.split.tuition, { type: "i128" }),
-        nativeToScVal(args.split.savings, { type: "i128" }),
+        nativeToScVal(args.percents[0], { type: "u32" }),
+        nativeToScVal(args.percents[1], { type: "u32" }),
+        nativeToScVal(args.percents[2], { type: "u32" }),
       ),
     )
     .setTimeout(30)
