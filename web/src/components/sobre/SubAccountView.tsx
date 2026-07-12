@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock } from "lucide-react";
+import { Clock, Trash2 } from "lucide-react";
 import {
   ArrowSquareOutIcon,
   HouseIcon,
@@ -78,6 +78,41 @@ export function SubAccountView({
 
   const [cashoutOpen, setCashoutOpen] = useState(false);
   const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
+  const [cancellingCashoutId, setCancellingCashoutId] = useState<string | null>(
+    null,
+  );
+
+  const cancelPendingCashout = async (identifier: string) => {
+    if (cancellingCashoutId) return;
+    setCancellingCashoutId(identifier);
+    try {
+      const res = await fetch(
+        `/api/pdax/withdrawals/${identifier}/cancel`,
+        { method: "POST" },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+        };
+        if (j.code === "already_spent") {
+          onFlash(
+            "The on-chain spend already landed — resume this to finish it.",
+            "warn",
+          );
+        } else {
+          onFlash(j.error ?? "Couldn't cancel the cashout.", "warn");
+        }
+        return;
+      }
+      onFlash("Cashout cancelled");
+      onChange();
+    } catch (e) {
+      onFlash(e instanceof Error ? e.message : String(e), "warn");
+    } finally {
+      setCancellingCashoutId(null);
+    }
+  };
 
   const balanceStroops = mySelf?.balance ?? 0n;
   const balanceToken = Number(balanceStroops) / STROOPS_PER_USDC;
@@ -156,62 +191,109 @@ export function SubAccountView({
                 >
                   Pending
                 </div>
-                {pendingCashouts.map((c) => (
-                  <button
-                    key={c.identifier}
-                    type="button"
-                    onClick={() => {
-                      setResumeCashoutId(c.identifier);
-                      setCashoutOpen(true);
-                    }}
-                    style={{
-                      display: "flex",
-                      width: "100%",
-                      alignItems: "center",
-                      gap: 12,
-                      padding: "12px 14px",
-                      marginBottom: 8,
-                      background: "var(--accent-soft)",
-                      border: "1px solid var(--border)",
-                      borderRadius: 12,
-                      cursor: "pointer",
-                      textAlign: "left",
-                    }}
-                  >
+                {pendingCashouts.map((c) => {
+                  // "pending" is the only status where the spend hasn't
+                  // moved money on chain yet. If the row is actually a
+                  // rare recoverable case (spend landed, forward didn't)
+                  // the server-side cancel returns 409 with
+                  // code=already_spent and the caller shows a warn toast.
+                  const cancellable = c.status === "pending";
+                  const openResume = () => {
+                    setResumeCashoutId(c.identifier);
+                    setCashoutOpen(true);
+                  };
+                  return (
                     <div
+                      key={c.identifier}
+                      role="button"
+                      tabIndex={0}
+                      onClick={openResume}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" || e.key === " ") {
+                          e.preventDefault();
+                          openResume();
+                        }
+                      }}
                       style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: "50%",
-                        background: "var(--surface)",
-                        display: "grid",
-                        placeItems: "center",
-                        color: "var(--sobre-accent)",
-                        flexShrink: 0,
+                        display: "flex",
+                        width: "100%",
+                        alignItems: "center",
+                        gap: 12,
+                        padding: "12px 14px",
+                        marginBottom: 8,
+                        background: "var(--accent-soft)",
+                        border: "1px solid var(--border)",
+                        borderRadius: 12,
+                        cursor: "pointer",
+                        textAlign: "left",
                       }}
                     >
-                      <Clock size={16} strokeWidth={2} />
-                    </div>
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: 13, fontWeight: 600 }}>
-                        Pending cashout ₱
-                        {(c.amount_php ?? 0).toLocaleString("en-PH", {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </div>
                       <div
                         style={{
-                          fontSize: 11,
-                          color: "var(--text-2)",
-                          marginTop: 2,
+                          width: 32,
+                          height: 32,
+                          borderRadius: "50%",
+                          background: "var(--surface)",
+                          display: "grid",
+                          placeItems: "center",
+                          color: "var(--sobre-accent)",
+                          flexShrink: 0,
                         }}
                       >
-                        {labelForStatus(c.status)} · tap to resume
+                        <Clock size={16} strokeWidth={2} />
                       </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: 13, fontWeight: 600 }}>
+                          Pending cashout ₱
+                          {(c.amount_php ?? 0).toLocaleString("en-PH", {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </div>
+                        <div
+                          style={{
+                            fontSize: 11,
+                            color: "var(--text-2)",
+                            marginTop: 2,
+                          }}
+                        >
+                          {labelForStatus(c.status)} · tap to resume
+                        </div>
+                      </div>
+                      {cancellable ? (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            void cancelPendingCashout(c.identifier);
+                          }}
+                          disabled={cancellingCashoutId === c.identifier}
+                          aria-label="Cancel cashout"
+                          title="Cancel"
+                          style={{
+                            width: 30,
+                            height: 30,
+                            borderRadius: 8,
+                            display: "grid",
+                            placeItems: "center",
+                            background: "transparent",
+                            border: "none",
+                            color: "var(--text-3)",
+                            cursor:
+                              cancellingCashoutId === c.identifier
+                                ? "not-allowed"
+                                : "pointer",
+                            flexShrink: 0,
+                            opacity:
+                              cancellingCashoutId === c.identifier ? 0.4 : 1,
+                          }}
+                        >
+                          <Trash2 size={15} strokeWidth={2} />
+                        </button>
+                      ) : null}
                     </div>
-                  </button>
-                ))}
+                  );
+                })}
               </div>
             ) : null}
 
