@@ -15,11 +15,13 @@ import { useSubaccounts } from "@/hooks/useSubaccounts";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
 import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
+import { useCurrency } from "@/lib/currency";
 import { formatShortDateTime } from "@/lib/format";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { BankAccountSection } from "./BankAccountSection";
+import { CurrencyToggle } from "./CurrencyToggle";
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
 import { Reveal } from "./Reveal";
@@ -78,9 +80,14 @@ export function SubAccountView({
   const [resumeCashoutId, setResumeCashoutId] = useState<string | null>(null);
 
   const balanceStroops = mySelf?.balance ?? 0n;
-  const balancePhp =
-    (Number(balanceStroops) / STROOPS_PER_USDC) * PHP_PER_USDC;
+  const balanceToken = Number(balanceStroops) / STROOPS_PER_USDC;
+  const balancePhp = balanceToken * PHP_PER_USDC;
   const locked = mySelf?.locked ?? false;
+  const { currency } = useCurrency();
+  const showUsd = currency === "USD";
+  const balanceDisplay = showUsd ? balanceToken : balancePhp;
+  const balanceSymbol = showUsd ? "$" : "₱";
+  const balanceLocale = showUsd ? "en-US" : "en-PH";
 
   const history = useMemo(
     () => subaccountActivity(events, userAddress, state.envelope_names),
@@ -110,13 +117,14 @@ export function SubAccountView({
                   {state.wallet_name || "Sobre family"}
                 </span>
               </div>
+              <CurrencyToggle />
             </div>
             <div className="label">Spendable balance</div>
             <div className="amount">
-              ₱
-              {Math.floor(balancePhp).toLocaleString("en-PH")}
+              {balanceSymbol}
+              {Math.floor(balanceDisplay).toLocaleString(balanceLocale)}
               <span className="cents">
-                .{Math.abs(balancePhp).toFixed(2).split(".")[1]}
+                .{Math.abs(balanceDisplay).toFixed(2).split(".")[1]}
               </span>
             </div>
           </section>

@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine, Loader2 } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
-import { CurrencyToggle } from "@/components/sobre/CurrencyToggle";
 import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
@@ -430,10 +429,7 @@ export function SubAccountCashoutModal({
 
         {phase === "input" && bank ? (
           <>
-            <div className="flex items-start justify-between gap-3 mb-2">
-              <h2 style={{ margin: 0 }}>Cash out to your bank</h2>
-              <CurrencyToggle />
-            </div>
+            <h2>Cash out to your bank</h2>
             <p className="sub">
               Pull money from your spendable balance to your registered bank
               account via InstaPay. Usually lands in under a minute.
