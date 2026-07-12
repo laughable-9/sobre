@@ -100,8 +100,17 @@ export function useSubaccounts(
   useEffect(() => {
     if (!familyWalletId) return;
     const supabase = getSupabaseBrowserClient();
+    // Supabase caches channels by name; two hook instances subscribing
+    // to the same familyWalletId (e.g. SubAccountsPanel + SubAccountView)
+    // would collide and the second `.on()` would throw "cannot add
+    // postgres_changes callbacks after subscribe()". Add a per-instance
+    // suffix so each hook gets its own channel.
+    const suffix =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
     const channel = supabase
-      .channel(`family-subaccounts:${familyWalletId}`)
+      .channel(`family-subaccounts:${familyWalletId}:${suffix}`)
       .on(
         "postgres_changes" as never,
         {
