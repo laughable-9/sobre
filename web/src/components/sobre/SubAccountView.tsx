@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Lock } from "lucide-react";
+import { Clock } from "lucide-react";
 import {
   ArrowSquareOutIcon,
   HouseIcon,
@@ -18,7 +18,6 @@ import { formatShortDateTime } from "@/lib/format";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-import { Avatar } from "./Avatar";
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
 import { SubAccountCashoutModal } from "./SubAccountCashoutModal";
@@ -33,11 +32,6 @@ interface Props {
   /** Wallet connection carrying the Google OAuth session — used to sign
    *  out from the User tab. */
   wallet: WalletConnectionState;
-  /** Google display name from the OAuth session. Preferred over the DB
-   *  row's display_name because pre-migration rows had the admin-picked
-   *  name frozen at invite time; the Google name is always the joiner's
-   *  actual identity. */
-  preferredDisplayName?: string | null;
 }
 
 type SubTab = "home" | "user";
@@ -56,7 +50,6 @@ export function SubAccountView({
   onFlash,
   onChange,
   wallet,
-  preferredDisplayName,
 }: Props) {
   const [tab, setTab] = useState<SubTab>("home");
 
@@ -84,10 +77,6 @@ export function SubAccountView({
     [events, userAddress, state.envelope_names],
   );
 
-  const displayName =
-    preferredDisplayName ?? myRow?.displayName ?? "Allowance";
-  const avatarUrl = wallet.wallet?.avatar_url ?? null;
-
   // Always open the modal — the modal itself renders a friendly empty
   // state when the balance is zero or the account is locked, so the fab
   // never feels dead.
@@ -100,59 +89,9 @@ export function SubAccountView({
           className="mx-auto w-full px-4 sm:px-7 pt-7 pb-12"
           style={{ maxWidth: 460 }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <Avatar src={avatarUrl} name={displayName} size={56} />
-            <div style={{ minWidth: 0 }}>
-              <div
-                style={{
-                  fontFamily: "var(--serif)",
-                  fontSize: 24,
-                  fontWeight: 600,
-                  letterSpacing: "-0.01em",
-                  lineHeight: 1.1,
-                }}
-              >
-                {displayName}
-              </div>
-              <div
-                style={{
-                  fontSize: 13,
-                  color: "var(--text-2)",
-                  marginTop: 4,
-                  display: "inline-flex",
-                  alignItems: "center",
-                  gap: 6,
-                }}
-              >
-                <span>Supplementary account</span>
-                {locked ? (
-                  <span
-                    style={{
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: 3,
-                      fontSize: 10,
-                      fontWeight: 700,
-                      color: "var(--sobre-danger)",
-                      background: "#fbe9e6",
-                      padding: "2px 7px",
-                      borderRadius: 999,
-                      textTransform: "uppercase",
-                      letterSpacing: "0.06em",
-                    }}
-                  >
-                    <Lock size={9} strokeWidth={2.6} />
-                    Locked
-                  </span>
-                ) : null}
-              </div>
-            </div>
-          </div>
-
           <section
             className="sobre-v2 sobre-v2-hero"
             aria-label="Spendable balance"
-            style={{ marginTop: 22 }}
           >
             <div className="hero-title-row">
               <div className="hero-title-left">

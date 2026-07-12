@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import {
   GearSixIcon,
@@ -10,8 +10,6 @@ import {
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
-import { PendingRequestsPanel } from "@/components/PendingRequestsPanel";
-import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
@@ -49,8 +47,9 @@ import {
   HeroPulse,
   TRUNCATE_CHAR_LIMIT,
 } from "@/components/sobre/Overlays";
+import { EnvelopeActionsSheet } from "@/components/sobre/EnvelopeActionsSheet";
+import { FundSubAccountModal } from "@/components/sobre/FundSubAccountModal";
 import { SignInPanel } from "@/components/sobre/SignInPanel";
-import { SpendModal } from "@/components/sobre/SpendModal";
 import { SubAccountsPanel } from "@/components/sobre/SubAccountsPanel";
 import { SubAccountView } from "@/components/sobre/SubAccountView";
 import { TopBar } from "@/components/sobre/TopBar";
@@ -58,20 +57,13 @@ import { TopBar } from "@/components/sobre/TopBar";
 import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
-import { usePendingSpendRequests } from "@/hooks/usePendingSpendRequests";
 import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
-import {
-  ENVELOPE_LABELS,
-  STROOPS_PER_USDC,
-  displayEnvelopeName,
-  type EnvelopeName,
-} from "@/lib/config";
+import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
-import { PHP_PER_USDC } from "@/lib/config";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 // Sourced from Skeletons so the shared shape stays a single truth — the
@@ -142,7 +134,6 @@ function Dashboard({ contractId }: { contractId: string }) {
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
   const familyWalletId = walletState.familyWalletId;
-  const pendingRequests = usePendingSpendRequests(familyWalletId);
   const splitProposals = useSplitProposals(
     familyWalletId,
     wallet.wallet?.id ?? null,
@@ -237,7 +228,21 @@ function Dashboard({ contractId }: { contractId: string }) {
       void row; // reserved for surfacing failure_reason later
     },
   });
-  const [spendOpen, setSpendOpen] = useState<EnvelopeName | null>(null);
+  // Envelope-scoped action sheet + its two downstream modals. All three
+  // states are envelope-anchored: which envelope did the user tap to
+  // reach the action; if they chose Cash out, that envelope pre-selects
+  // in PdaxWithdrawModal; if they chose Send, that envelope pre-selects
+  // in FundSubAccountModal. Null means the modal is closed.
+  const [envActionsFor, setEnvActionsFor] = useState<EnvelopeName | null>(
+    null,
+  );
+  const [cashoutInitialEnvelope, setCashoutInitialEnvelope] =
+    useState<EnvelopeName | undefined>(undefined);
+  const [sendToSubFor, setSendToSubFor] = useState<EnvelopeName | null>(null);
+  // Set when the OpenSobreSheet "Send" tile fires (no envelope preselected).
+  // Distinct from `sendToSubFor` so the modal knows to render the envelope
+  // picker instead of pinning to a specific envelope.
+  const [sendToSubOpen, setSendToSubOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
   // "Log expense" quick-action tile → the off-chain note field in a modal.
   const [logExpenseOpen, setLogExpenseOpen] = useState(false);
@@ -361,47 +366,10 @@ function Dashboard({ contractId }: { contractId: string }) {
     setTimeout(() => setHeroPulse(false), 1500);
   };
 
-  const dailySpent = useMemo(() => {
-    if (!address) return 0n;
-    const now = new Date();
-    const todayKey = `${now.getUTCFullYear()}-${now.getUTCMonth()}-${now.getUTCDate()}`;
-    let sum = 0n;
-    for (const ev of txFeed.events) {
-      if (ev.kind !== "Spend") continue;
-      if (ev.caller !== address) continue;
-      const d = new Date(ev.ledgerClosedAt);
-      const key = `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
-      if (key === todayKey) sum += ev.amount;
-    }
-    return sum;
-  }, [txFeed.events, address]);
-
   const handleDepositSuccess = (usdcDeposited: number) => {
     setDepositOpen(false);
     triggerHeroAnimation();
     flash(`+ ${usdcDeposited.toFixed(2)} USDC auto-split across envelopes`, "ok");
-    refreshAll();
-  };
-
-  const handleSpendSuccess = (info: {
-    willGoPending: boolean;
-    amount: bigint;
-    envelope: EnvelopeName;
-  }) => {
-    setSpendOpen(null);
-    const php = (Number(info.amount) / STROOPS_PER_USDC) * PHP_PER_USDC;
-    const fmtPhp = `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-    const envLabel = state
-      ? displayEnvelopeName(info.envelope, state.envelope_names)
-      : info.envelope;
-    if (info.willGoPending) {
-      flash(
-        `Withdrawal request for ${fmtPhp} from ${envLabel} sent for approval`,
-        "warn",
-      );
-    } else {
-      flash(`Spent ${fmtPhp} from ${envLabel}`, "ok");
-    }
     refreshAll();
   };
 
@@ -545,7 +513,6 @@ function Dashboard({ contractId }: { contractId: string }) {
           onFlash={flash}
           onChange={refreshAll}
           wallet={wallet}
-          preferredDisplayName={wallet.user?.name ?? null}
         />
         {heroPulse ? <HeroPulse /> : null}
         {celebration ? (
@@ -685,22 +652,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             onSeeAll={() => switchTab("activity")}
           />
 
-          {pendingRequests.pending.length > 0 ? (
-            <div className="sobre-admin-section sobre-card-flat">
-              <h3>Pending approvals ({pendingRequests.pending.length})</h3>
-              <PendingRequestsPanel
-                userAddress={address}
-                contractId={contractId}
-                isAdmin={isAdmin}
-                pending={pendingRequests.pending}
-                members={state.members}
-                subaccounts={state.subaccounts}
-                adminCount={state.admin_count}
-                envelopeNames={state.envelope_names}
-                onSuccess={refreshAll}
-              />
-            </div>
-          ) : null}
         </Reveal>
       </div>
       ) : null}
@@ -817,9 +768,6 @@ function Dashboard({ contractId }: { contractId: string }) {
 
             {state.balances.map((_, i) => {
               const envName = ENVELOPE_LABELS[i];
-              const approvalRequired =
-                state.policy.requireAllSigs ||
-                state.policy.protectedEnvelopes.includes(envName);
               const earnPos = state.earn?.positions.find(
                 (p) => p.envelope === envName,
               );
@@ -832,8 +780,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                   index={i}
                   balanceStroops={envelopeTotalStroops(state, i)}
                   percent={state.percents[i] ?? 0}
-                  onSpend={() => setSpendOpen(envName)}
-                  approvalRequired={approvalRequired}
+                  onOpen={() => setEnvActionsFor(envName)}
                   envelopeNames={state.envelope_names}
                   envelopeIcons={state.envelope_icons}
                   currency={currency}
@@ -938,23 +885,6 @@ function Dashboard({ contractId }: { contractId: string }) {
           }}
         >
           <div className="sobre-admin-section sobre-card-flat">
-            <h3>Spending policy</h3>
-            <PolicySettingsForm
-              userAddress={address}
-              familyWalletId={familyWalletId}
-              isAdmin={isAdmin}
-              current={state.policy}
-              savingsLockAllAdmins={state.savings_lock_all_admins}
-              adminCount={state.admin_count}
-              envelopeNames={state.envelope_names}
-              onSuccess={() => {
-                refresh();
-                flash("Spending rules saved", "ok");
-              }}
-            />
-          </div>
-
-          <div className="sobre-admin-section sobre-card-flat">
             <h3>Envelope names &amp; icons</h3>
             <EnvelopeNamesForm
               userAddress={address}
@@ -1053,13 +983,12 @@ function Dashboard({ contractId }: { contractId: string }) {
           onClose={() => setSobreSheetOpen(false)}
           onAddMoney={() => setDepositOpen(true)}
           onLogExpense={() => setLogExpenseOpen(true)}
-          onCashOut={() => setCashoutOpen(true)}
-          onSend={() => {
-            const first = state.balances.findIndex((b) => b > 0n);
-            if (first >= 0) setSpendOpen(ENVELOPE_LABELS[first]);
-            else switchTab("envelopes");
+          onCashOut={() => {
+            setCashoutInitialEnvelope(undefined);
+            setCashoutOpen(true);
           }}
-          disableSend={state.balances.every((b) => b === 0n)}
+          onSend={() => setSendToSubOpen(true)}
+          disableSend={!isAdmin || state.balances.every((b) => b === 0n)}
         />
       ) : null}
 
@@ -1147,6 +1076,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           contractId={contractId}
           resumeIdentifier={resumeCashoutId ?? undefined}
           onActiveIdentifierChange={setActiveCashoutId}
+          initialEnvelope={cashoutInitialEnvelope}
           onClose={() => {
             // Modal closes while the row may still be transferred /
             // converted / processing. The activity feed picks it up and
@@ -1177,16 +1107,47 @@ function Dashboard({ contractId }: { contractId: string }) {
         />
       ) : null}
 
-      {spendOpen ? (
-        <SpendModal
+      {envActionsFor ? (
+        <EnvelopeActionsSheet
+          envelope={envActionsFor}
+          envelopeIndex={ENVELOPE_LABELS.indexOf(envActionsFor)}
+          balanceStroops={envelopeTotalStroops(
+            state,
+            ENVELOPE_LABELS.indexOf(envActionsFor),
+          )}
+          envelopeNames={state.envelope_names}
+          envelopeIcons={state.envelope_icons}
+          isAdmin={isAdmin}
+          onClose={() => setEnvActionsFor(null)}
+          onCashOut={() => {
+            setCashoutInitialEnvelope(envActionsFor);
+            setEnvActionsFor(null);
+            setCashoutOpen(true);
+          }}
+          onSendToSub={() => {
+            setSendToSubFor(envActionsFor);
+            setEnvActionsFor(null);
+          }}
+        />
+      ) : null}
+
+      {sendToSubFor || sendToSubOpen ? (
+        <FundSubAccountModal
           userAddress={address}
-          state={state}
           contractId={contractId}
-          familyWalletId={familyWalletId}
-          envelope={spendOpen}
-          dailySpent={dailySpent}
-          onClose={() => setSpendOpen(null)}
-          onSuccess={handleSpendSuccess}
+          state={state}
+          subRows={subRows}
+          initialEnvelope={sendToSubFor ?? undefined}
+          onClose={() => {
+            setSendToSubFor(null);
+            setSendToSubOpen(false);
+          }}
+          onSuccess={() => {
+            setSendToSubFor(null);
+            setSendToSubOpen(false);
+            refreshAll();
+          }}
+          onFlash={flash}
         />
       ) : null}
 
