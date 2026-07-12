@@ -10,6 +10,7 @@ import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
 import { ENVELOPE_LABELS, displayEnvelopeName } from "@/lib/config";
+import { useCurrency, type Currency } from "@/lib/currency";
 
 // First pill is the PDAX cash-in minimum (₱200). Anything below is rejected
 // at the /trade/quote step — don't surface it as a one-tap option.
@@ -135,8 +136,9 @@ export function PdaxDepositModal({
    *  show up in two places at once. */
   onActiveIdentifierChange?: (identifier: string | null) => void;
 }) {
-  const [amountStr, setAmountStr] = useState("500");
+  const [amountStr, setAmountStr] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { currency } = useCurrency();
 
   const {
     initiate,
@@ -214,15 +216,23 @@ export function PdaxDepositModal({
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
-  const amountPhp = Number(amountStr);
+  // User enters an amount in whichever currency the home toggle is set
+  // to. PDAX always trades PHP → USDC on its side, so we convert USD
+  // input to PHP before validation and before firing /fiat/deposit.
+  // 1 USDC = 1 USD (stablecoin), so USD → USDC is identity, and
+  // USD → PHP = usd * phpPerToken.
+  const amountEntered = Number(amountStr);
+  const amountPhp =
+    Number.isFinite(amountEntered) && amountEntered > 0
+      ? currency === "USD"
+        ? amountEntered * phpPerToken
+        : amountEntered
+      : 0;
   const belowMin =
-    Number.isFinite(amountPhp) && amountPhp > 0 && amountPhp < PDAX_DEPOSIT_MIN_PHP;
-  const aboveMax =
-    Number.isFinite(amountPhp) && amountPhp > PDAX_DEPOSIT_MAX_PHP;
+    Number.isFinite(amountEntered) && amountEntered > 0 && amountPhp < PDAX_DEPOSIT_MIN_PHP;
+  const aboveMax = amountPhp > PDAX_DEPOSIT_MAX_PHP;
   const validAmount =
-    Number.isFinite(amountPhp) &&
-    amountPhp >= PDAX_DEPOSIT_MIN_PHP &&
-    amountPhp <= PDAX_DEPOSIT_MAX_PHP;
+    amountPhp >= PDAX_DEPOSIT_MIN_PHP && amountPhp <= PDAX_DEPOSIT_MAX_PHP;
   const expectedToken = amountPhp / phpPerToken;
 
   // When the modal opens via "Resume", row is null for one paint while the
@@ -386,6 +396,7 @@ export function PdaxDepositModal({
             aboveMax={aboveMax}
             expectedToken={expectedToken}
             phpPerToken={phpPerToken}
+            currency={currency}
             state={state}
             onCancel={() => void attemptCancel()}
             onGenerate={() => void handleGenerate()}
@@ -475,6 +486,7 @@ function InputStep({
   aboveMax,
   expectedToken,
   phpPerToken,
+  currency,
   state,
   onCancel,
   onGenerate,
@@ -489,42 +501,68 @@ function InputStep({
   aboveMax: boolean;
   expectedToken: number;
   phpPerToken: number;
+  currency: Currency;
   state: WalletState;
   onCancel: () => void;
   onGenerate: () => void;
   error: string | null;
 }) {
-  const rangeHint = `Between ₱${PDAX_DEPOSIT_MIN_PHP.toLocaleString("en-PH")} and ₱${PDAX_DEPOSIT_MAX_PHP.toLocaleString("en-PH")} per deposit.`;
+  const isUsd = currency === "USD";
+  const symbol = isUsd ? "$" : "₱";
+  const locale = isUsd ? "en-US" : "en-PH";
+  // PDAX enforces PHP bounds; the input operates in the user's currency
+  // so convert to display terms for both the range hint and the pill
+  // labels. USDC = USD 1:1, so USD = PHP / phpPerToken. Round the min
+  // UP and the max DOWN so the hint never lies about what will actually
+  // pass validation.
+  const inputMin = isUsd
+    ? Math.ceil(PDAX_DEPOSIT_MIN_PHP / phpPerToken)
+    : PDAX_DEPOSIT_MIN_PHP;
+  const inputMax = isUsd
+    ? Math.floor(PDAX_DEPOSIT_MAX_PHP / phpPerToken)
+    : PDAX_DEPOSIT_MAX_PHP;
+  const fmt = (n: number) =>
+    n.toLocaleString(locale, {
+      minimumFractionDigits: isUsd ? 2 : 0,
+      maximumFractionDigits: isUsd ? 2 : 0,
+    });
+  const rangeHint = `Between ${symbol}${fmt(inputMin)} and ${symbol}${fmt(inputMax)} per deposit.`;
   const validationMsg = belowMin
-    ? `PDAX minimum is ₱${PDAX_DEPOSIT_MIN_PHP.toLocaleString("en-PH")}.`
+    ? `PDAX minimum is ${symbol}${fmt(inputMin)}.`
     : aboveMax
-      ? `InstaPay caps single deposits at ₱${PDAX_DEPOSIT_MAX_PHP.toLocaleString("en-PH")}. Split across multiple deposits for larger amounts.`
+      ? `InstaPay caps single deposits at ${symbol}${fmt(inputMax)}. Split across multiple deposits for larger amounts.`
       : null;
+  // Quick-pill amounts in the display currency. In PHP mode the historical
+  // 200 / 500 / 1000 / 5000 stays; in USD mode we translate through the
+  // live rate and snap to sensible round values so the pills read cleanly.
+  const quickAmounts = isUsd ? [5, 10, 20, 100] : QUICK_PHP;
 
   return (
     <>
       <h2>Add money via PDAX</h2>
 
       <div className="sobre-input-group">
-        <label htmlFor="pdax-amount">Amount in pesos</label>
+        <label htmlFor="pdax-amount">
+          Amount in {isUsd ? "dollars" : "pesos"}
+        </label>
         <div className="sobre-input-wrap">
-          <span className="prefix">₱</span>
+          <span className="prefix">{symbol}</span>
           <input
             id="pdax-amount"
             ref={inputRef}
             className="sobre-input has-prefix tabular"
             type="number"
             inputMode="decimal"
-            min={PDAX_DEPOSIT_MIN_PHP}
-            max={PDAX_DEPOSIT_MAX_PHP}
-            step="1"
+            min={inputMin}
+            max={inputMax}
+            step={isUsd ? "0.01" : "1"}
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
             disabled={pending}
           />
         </div>
         <div className="sobre-quick-amts">
-          {QUICK_PHP.map((q) => (
+          {quickAmounts.map((q) => (
             <button
               key={q}
               type="button"
@@ -532,7 +570,8 @@ function InputStep({
               onClick={() => setAmountStr(String(q))}
               disabled={pending}
             >
-              ₱{q.toLocaleString()}
+              {symbol}
+              {q.toLocaleString()}
             </button>
           ))}
         </div>
@@ -551,6 +590,7 @@ function InputStep({
           title="Auto-split preview"
           amountToken={expectedToken}
           phpPerToken={phpPerToken}
+          currency={currency}
           state={state}
         />
       ) : null}
@@ -708,13 +748,18 @@ function SplitPreview({
   title,
   amountToken,
   phpPerToken,
+  currency,
   state,
 }: {
   title: string;
   amountToken: number;
   phpPerToken: number;
+  currency: Currency;
   state: WalletState;
 }) {
+  const isUsd = currency === "USD";
+  const symbol = isUsd ? "$" : "₱";
+  const locale = isUsd ? "en-US" : "en-PH";
   return (
     <div
       className="rounded-[10px] p-[14px_16px] mb-[18px]"
@@ -722,7 +767,8 @@ function SplitPreview({
     >
       <div className="sobre-label mb-2.5">{title}</div>
       {ENVELOPE_LABELS.map((env, i) => {
-        const portionPhp = ((amountToken * state.percents[i]) / 100) * phpPerToken;
+        const portionToken = (amountToken * state.percents[i]) / 100;
+        const portion = isUsd ? portionToken : portionToken * phpPerToken;
         const label = displayEnvelopeName(env, state.envelope_names);
         return (
           <div
@@ -744,8 +790,8 @@ function SplitPreview({
                     : "var(--text-1)",
               }}
             >
-              + ₱
-              {portionPhp.toLocaleString("en-PH", {
+              + {symbol}
+              {portion.toLocaleString(locale, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}
