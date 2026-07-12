@@ -1528,6 +1528,28 @@ body { overflow-x: clip; min-width: 320px; }
   html { scroll-behavior: auto; }
 }
 
+/* Wizard step swap — the child is re-mounted via key change; this class
+   plays a fade + slide from the direction the user is moving. Forward
+   (Next) slides in from the right; back slides in from the left. */
+@keyframes sobre-step-in-forward {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sobre-step-in-back {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sobre-step-panel {
+  animation: sobre-step-in-forward .28s cubic-bezier(.2,.7,.2,1) both;
+  will-change: opacity, transform;
+}
+.sobre-step-panel[data-direction="back"] {
+  animation-name: sobre-step-in-back;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-step-panel { animation: none; }
+}
+
 /* ─── App-first hero (phone/tablet) ─────────────────────────────────────
    Lead with the product, not a wall of copy: the split card moves up under a
    tighter headline, the inline CTA is dropped (the sticky bottom bar carries

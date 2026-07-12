@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CaretLeftIcon, CaretRightIcon } from "@phosphor-icons/react";
 
 import { useCreateSobre } from "@/hooks/useCreateSobre";
@@ -41,6 +41,12 @@ export function InitForm({
   const adminName = savedProfile?.name ?? displayName ?? "";
 
   const [step, setStep] = useState<0 | 1>(0);
+  // Track the last-seen step so the mount animation knows which direction to
+  // slide from. "forward" = coming in from the right, "back" = from the left.
+  const prevStepRef = useRef<0 | 1>(0);
+  const direction: "forward" | "back" =
+    step >= prevStepRef.current ? "forward" : "back";
+  prevStepRef.current = step;
   const [walletName, setWalletName] = useState("");
   const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
     DEFAULT_ENVELOPE_NAMES,
@@ -82,6 +88,11 @@ export function InitForm({
       onSubmit={handleSubmit}
       className="text-left space-y-4 mt-6 w-full"
     >
+      <div
+        key={step}
+        className="sobre-step-panel"
+        data-direction={direction}
+      >
       {step === 0 ? (
         <>
           <div className="sobre-input-group">
@@ -182,6 +193,7 @@ export function InitForm({
           </div>
         </>
       )}
+      </div>
 
       <StepDots current={step} total={2} />
     </form>
