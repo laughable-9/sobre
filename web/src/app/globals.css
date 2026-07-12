@@ -921,10 +921,18 @@
   border-color: var(--border-strong);
 }
 .sobre-wallet-menu-pill .addr {
+  display: block;
+  line-height: 1;
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-weight: 600;
 }
-.sobre-wallet-menu-pill .chev { color: var(--text-3); }
+/* Chevron: lucide renders it as inline SVG. `display: block` drops the
+ * baseline-anchored inline layout so flex centers it by geometric
+ * center — matches the avatar and text spans. */
+.sobre-wallet-menu-pill .chev {
+  display: block;
+  color: var(--text-3);
+}
 
 .sobre-wallet-menu-panel {
   position: absolute;
