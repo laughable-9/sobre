@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowDownToLine, Loader2 } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
+import { STATUS_LABELS } from "@/components/sobre/PdaxWithdrawModal";
 import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
@@ -558,15 +559,7 @@ export function SubAccountCashoutModal({
           <CenteredCopy
             icon={<Loader2 size={28} className="animate-spin" />}
             title={
-              row?.status === "spent"
-                ? "Sending to PDAX…"
-                : row?.status === "transferred"
-                  ? "Selling for pesos…"
-                  : row?.status === "converted"
-                    ? "Sending to your bank…"
-                    : row?.status === "processing"
-                      ? "Waiting on your bank…"
-                      : "Working on it…"
+              row?.status ? STATUS_LABELS[row.status] : "Preparing…"
             }
           />
         ) : null}

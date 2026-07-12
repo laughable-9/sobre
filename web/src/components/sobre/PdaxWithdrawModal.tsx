@@ -88,7 +88,7 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
  *  Honest labels at every stage — "paying out" doesn't claim the bank
  *  has it yet; "settling at your bank" matches the real wait while
  *  InstaPay actually moves the money. */
-const STATUS_LABELS: Record<WithdrawStatus, string> = {
+export const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
   spent: "Forwarding to PDAX…",
   transferred: "Converting to pesos…",
