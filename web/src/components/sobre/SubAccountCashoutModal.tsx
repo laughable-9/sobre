@@ -430,10 +430,6 @@ export function SubAccountCashoutModal({
         {phase === "input" && bank ? (
           <>
             <h2>Cash out to your bank</h2>
-            <p className="sub">
-              Pull money from your spendable balance to your registered bank
-              account via InstaPay. Usually lands in under a minute.
-            </p>
 
             <div className="sobre-input-group">
               <label htmlFor="sub-cashout-amt">
