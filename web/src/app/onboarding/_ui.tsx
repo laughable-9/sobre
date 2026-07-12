@@ -2,8 +2,7 @@
 
 /**
  * Small presentational helpers for the onboarding flow. Token-only (no raw
- * hex) per the sobre-design-system skill. Ported from the /mockup/setup
- * prototype's inline pieces, cleaned up to use CSS variables + Tailwind.
+ * hex) per the sobre-design-system skill.
  */
 
 export function Eyebrow({ children }: { children: React.ReactNode }) {

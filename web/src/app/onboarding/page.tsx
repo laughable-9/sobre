@@ -5,15 +5,15 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import type { Session } from "@supabase/supabase-js";
 import {
-  ArrowRight,
-  Check,
-  Home,
-  Plane,
-  Plus,
-  Send,
-  Sparkles,
-  Trash2,
-} from "lucide-react";
+  AirplaneIcon,
+  ArrowRightIcon,
+  CheckIcon,
+  HouseIcon,
+  PaperPlaneTiltIcon,
+  PlusIcon,
+  SparkleIcon,
+  TrashIcon,
+} from "@phosphor-icons/react";
 
 import {
   SplitEditor,
@@ -39,7 +39,7 @@ import {
   type WalletRow,
 } from "@/lib/wallets";
 
-import { MobileScreen, PrimaryCta } from "../mockup/_shared";
+import { MobileScreen, PrimaryCta } from "./_shell";
 import {
   BigTitle,
   Eyebrow,
@@ -53,7 +53,7 @@ import {
 } from "./_ui";
 
 /**
- * Creator onboarding — the real flow (promoted from /mockup/setup).
+ * Creator onboarding — the real flow.
  *
  *   1  Google sign-in       → Supabase session → passkey smart wallet
  *   2  Household type        → off-chain family_wallets.household_type
@@ -274,7 +274,6 @@ export default function OnboardingFlow() {
         percents: split,
         walletName: walletName.trim(),
         adminName,
-        adminEmoji: "🌴",
         householdType,
         budgetMin,
         budgetMax,
@@ -351,27 +350,27 @@ export default function OnboardingFlow() {
         cta={
           <PrimaryCta onClick={next}>
             Continue
-            <ArrowRight size={16} strokeWidth={2.5} />
+            <ArrowRightIcon weight="bold" size={16} />
           </PrimaryCta>
         }
       >
         <Question>What best describes your household?</Question>
         <ChoiceCard
-          icon={<Home size={20} strokeWidth={2} />}
+          icon={<HouseIcon size={20} />}
           title="Supporting family at home"
           sub="Worker abroad + family in PH"
           selected={householdType === "family-at-home"}
           onClick={() => setHouseholdType("family-at-home")}
         />
         <ChoiceCard
-          icon={<Plane size={20} strokeWidth={2} />}
+          icon={<AirplaneIcon size={20} />}
           title="Both working abroad"
           sub="Two workers, family back home"
           selected={householdType === "both-abroad"}
           onClick={() => setHouseholdType("both-abroad")}
         />
         <ChoiceCard
-          icon={<Sparkles size={20} strokeWidth={2} />}
+          icon={<SparkleIcon size={20} />}
           title="Start from scratch"
           sub="Build your own structure"
           selected={householdType === "scratch"}
@@ -392,7 +391,7 @@ export default function OnboardingFlow() {
         cta={
           <PrimaryCta onClick={budgetValid ? next : () => undefined}>
             Continue
-            <ArrowRight size={16} strokeWidth={2.5} />
+            <ArrowRightIcon weight="bold" size={16} />
           </PrimaryCta>
         }
       >
@@ -473,7 +472,7 @@ export default function OnboardingFlow() {
         cta={
           <PrimaryCta onClick={next}>
             {members.length > 0 ? "Done, continue" : "Skip for now"}
-            <ArrowRight size={16} strokeWidth={2.5} />
+            <ArrowRightIcon weight="bold" size={16} />
           </PrimaryCta>
         }
       >
@@ -542,7 +541,7 @@ export default function OnboardingFlow() {
         cta={
           <PrimaryCta onClick={envelopesOk ? next : () => undefined}>
             Confirm envelopes
-            <ArrowRight size={16} strokeWidth={2.5} />
+            <ArrowRightIcon weight="bold" size={16} />
           </PrimaryCta>
         }
       >
@@ -590,7 +589,7 @@ export default function OnboardingFlow() {
               "Creating your family wallet…"
             ) : (
               <>
-                <Send size={16} strokeWidth={2.5} />
+                <PaperPlaneTiltIcon weight="bold" size={16} />
                 Create wallet
               </>
             )}
@@ -820,7 +819,7 @@ function ChoiceCard({
         </div>
       </div>
       {selected && (
-        <Check size={18} strokeWidth={2.5} color="var(--sobre-primary)" />
+        <CheckIcon weight="bold" size={18} color="var(--sobre-primary)" />
       )}
     </div>
   );
@@ -910,7 +909,7 @@ function MemberEditRow({
               color: "var(--sobre-danger)",
             }}
           >
-            <Trash2 size={15} strokeWidth={2} />
+            <TrashIcon size={15} />
           </button>
         </div>
       </div>
@@ -945,7 +944,7 @@ function AddRow({ label, onClick }: { label: string; onClick: () => void }) {
         background: "transparent",
       }}
     >
-      <Plus size={16} strokeWidth={2} />
+      <PlusIcon size={16} />
       {label}
     </button>
   );
