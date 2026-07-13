@@ -27,6 +27,7 @@ import { PAYMENT_TOKEN, PDAX_INSTAPAY_FEE_PHP } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxErrorToResponse, PdaxError } from "@/lib/pdax/client";
 import { getPdaxCryptoDepositAddr } from "@/lib/pdax/withdrawals";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getRelayPublicKey } from "@/lib/relay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -114,6 +115,16 @@ export async function POST(req: Request) {
     : await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
+
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_fiat_withdraw",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 10,
+    perFamily: 30,
+  });
+  if (rate) return rate;
 
   // When this is a sub-account cashout, verify the caller is actually the
   // owner of that sub-account row. Without this any participant could pass

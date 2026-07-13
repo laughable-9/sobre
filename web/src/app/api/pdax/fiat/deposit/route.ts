@@ -26,6 +26,7 @@ import {
   buildFiatDepositBody,
   type PdaxFiatDepositResponse,
 } from "@/lib/pdax/deposits";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -76,6 +77,16 @@ export async function POST(req: Request) {
   const ctx = await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId, fullName } = ctx;
+
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_fiat_deposit",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 20,
+    perFamily: 50,
+  });
+  if (rate) return rate;
 
   const identifier = crypto.randomUUID();
   const { error: insertErr } = await admin.from("pdax_deposits").insert({

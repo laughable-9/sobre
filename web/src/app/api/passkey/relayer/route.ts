@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 
 /**
  * Server-side proxy from passkey-kit's `PasskeyServer` (which wraps the
@@ -24,6 +25,10 @@ import { requireWallet } from "@/lib/auth/familyMember";
 export const runtime = "nodejs";
 
 const CHANNELS_ENDPOINT = "https://channels.openzeppelin.com/testnet";
+/** Hard body-size ceiling. A signed Soroban tx envelope is ~2 KB; padding
+ *  128 KB leaves headroom without letting an attacker push megabytes
+ *  through our upstream fetch. */
+const MAX_BODY_BYTES = 128 * 1024;
 
 export async function POST(req: NextRequest) {
   const ctx = await requireWallet();
@@ -37,7 +42,23 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const rate = await enforceDailyLimit({
+    endpoint: "passkey_relayer",
+    walletId: ctx.memberId,
+    familyWalletId: null,
+    callerEmail: ctx.email,
+    perUser: 200,
+    perFamily: 500,
+  });
+  if (rate) return rate;
+
   const body = await req.text();
+  if (body.length > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: `Body too large. Max ${MAX_BODY_BYTES} bytes.` },
+      { status: 413 },
+    );
+  }
 
   const upstream = await fetch(CHANNELS_ENDPOINT, {
     method: "POST",

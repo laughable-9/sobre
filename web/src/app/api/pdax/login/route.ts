@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { requireWallet } from "@/lib/auth/familyMember";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxFetch, resetPdaxTokens, PdaxError } from "@/lib/pdax/client";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -19,6 +20,17 @@ export async function POST() {
   // session) and read back institutional balances.
   const ctx = await requireWallet();
   if (ctx instanceof NextResponse) return ctx;
+
+  // Tight cap: this is a debug route. Real usage is ~0/day.
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_login",
+    walletId: ctx.memberId,
+    familyWalletId: null,
+    callerEmail: ctx.email,
+    perUser: 5,
+    perFamily: 20,
+  });
+  if (rate) return rate;
 
   const env = pdaxEnv();
   if (env.mock) {

@@ -21,6 +21,7 @@ import {
   type PdaxFiatTransaction,
 } from "@/lib/pdax/deposits";
 import { mintClaim } from "@/lib/pdax/depositClaim";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -52,6 +53,18 @@ export async function GET(req: Request) {
   const ctx = await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
+
+  // Client heartbeats this every 30s while the dashboard is open (~2880
+  // ticks/day). Cap needs generous headroom or an idle tab 429s itself.
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_deposits_active",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 6000,
+    perFamily: 12000,
+  });
+  if (rate) return rate;
 
   // GrabPay/PayMongo source URLs hard-expire; once they do, PDAX never
   // flips the corresponding /fiat/transactions row to COMPLETED and our

@@ -32,6 +32,7 @@ import { Address, rpc, scValToNative } from "@stellar/stellar-sdk";
 import { requireFamilyMember } from "@/lib/auth/familyMember";
 import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
 import { envelopeNameFromScNative } from "@/lib/format";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -91,6 +92,18 @@ export async function GET(req: Request) {
   const ctx = await requireFamilyMember(familyWalletId);
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
+
+  // useActiveCashouts polls this every 8s while the dashboard is open
+  // (~10800 ticks/day). Cap needs generous headroom or the modal 429s.
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_withdrawals_recoverable",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 15000,
+    perFamily: 30000,
+  });
+  if (rate) return rate;
 
   // Look up the member's smart-wallet contract address. The Spend event's
   // caller topic equals this address.
