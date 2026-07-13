@@ -1,6 +1,11 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+/** Load-more page size for the activity feed. Rows are cheap to render,
+ *  but a fresh dashboard doesn't need 300 rows painted before the first
+ *  paint; the "Show more" button unlocks 30 more per click. */
+const PAGE_SIZE = 30;
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -32,9 +37,22 @@ import { STROOPS_PER_TOKEN, displayEnvelopeName } from "@/lib/config";
 import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 
-function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
+/** Bucket key = YYYY-MM-DD (PH-local calendar day). Today and yesterday get
+ *  friendly labels ("TODAY" / "YESTERDAY") at render time; every older date
+ *  keeps its own bucket so the reader sees actual dates instead of a giant
+ *  "EARLIER" pile. */
+function bucket(closedAtIso: string): string {
+  const d = new Date(closedAtIso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dayHeader(key: string): string {
   const now = new Date();
-  const ev = new Date(closedAtIso);
+  const [y, m, d] = key.split("-").map(Number);
+  const ev = new Date(y, m - 1, d);
   const sameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -43,7 +61,12 @@ function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(ev, yesterday)) return "YESTERDAY";
-  return "EARLIER";
+  // Include the year when the bucket is in a different calendar year.
+  const opts: Intl.DateTimeFormatOptions =
+    ev.getFullYear() === now.getFullYear()
+      ? { month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" };
+  return ev.toLocaleDateString("en-PH", opts).toUpperCase();
 }
 
 function fmtTime(closedAtIso: string): string {
@@ -62,7 +85,7 @@ interface ActivityFeedProps {
   members: Member[];
   /** Same shape as members but for sub-account holders, so SubAccount* events
    *  render with the kid's display name instead of a raw C-address. */
-  subaccounts?: { address: string; name: string }[];
+  subaccounts?: { address: string; name: string; avatarUrl?: string | null }[];
   envelopeNames: string[];
   /** Non-terminal deposit rows surfaced as "pending" affordances at the top
    *  of the feed. The Resume button reopens the deposit modal at whatever
@@ -87,6 +110,17 @@ interface ActivityFeedProps {
   /** Fires after the receipt-detail delete button removes an ExpenseLog
    *  row. Parent refreshes the expense-log hook so the feed re-renders. */
   onExpenseDeleted?: () => void;
+  /** Suppress the TODAY / YESTERDAY / EARLIER bucket labels. Used when
+   *  the feed is embedded inside a narrower surface (e.g. the Expenses
+   *  view under a range chip) where the day headers add noise. */
+  hideDayLabels?: boolean;
+  /** Suppress the "Activity" heading. Same use case as hideDayLabels —
+   *  Expenses view already has its own hero card / title context. */
+  hideTitle?: boolean;
+  /** Cap the total rows rendered. Used by RecentActivityPreview to embed
+   *  the same row primitive but only show the top N. Load-more is hidden
+   *  when set. */
+  maxRows?: number;
   /** Terminal failed rows (~last 7 days) — rendered as warning entries
    *  in the appropriate day bucket so the user has an honest trail of
    *  cashouts/deposits that didn't go through. */
@@ -111,6 +145,9 @@ export function ActivityFeed({
   pendingCashouts,
   onResumeCashout,
   onExpenseDeleted,
+  hideDayLabels,
+  hideTitle,
+  maxRows,
   failedDeposits,
   failedCashouts,
   completedCashouts,
@@ -121,8 +158,7 @@ export function ActivityFeed({
       out.set(m.address, { name: m.name, avatarUrl: m.avatarUrl });
     }
     for (const s of subaccounts ?? []) {
-      // Sub-accounts don't have OAuth pictures — fall back to initials.
-      out.set(s.address, { name: s.name, avatarUrl: null });
+      out.set(s.address, { name: s.name, avatarUrl: s.avatarUrl ?? null });
     }
     return out;
   }, [members, subaccounts]);
@@ -186,49 +222,84 @@ export function ActivityFeed({
         data: ActiveCashoutRow;
       };
   const groups = useMemo(() => {
-    const out: Record<"TODAY" | "YESTERDAY" | "EARLIER", FeedEntry[]> = {
-      TODAY: [],
-      YESTERDAY: [],
-      EARLIER: [],
+    const out = new Map<string, FeedEntry[]>();
+    const push = (key: string, entry: FeedEntry) => {
+      const bucketList = out.get(key);
+      if (bucketList) bucketList.push(entry);
+      else out.set(key, [entry]);
     };
     for (const ev of events) {
-      out[bucket(ev.ledgerClosedAt)].push({
+      push(bucket(ev.ledgerClosedAt), {
         kind: "event",
         when: ev.ledgerClosedAt,
         data: ev,
       });
     }
     for (const d of failedDeposits ?? []) {
-      out[bucket(d.created_at)].push({
+      push(bucket(d.created_at), {
         kind: "failed_deposit",
         when: d.created_at,
         data: d,
       });
     }
     for (const c of failedCashouts ?? []) {
-      out[bucket(c.created_at)].push({
+      push(bucket(c.created_at), {
         kind: "failed_cashout",
         when: c.created_at,
         data: c,
       });
     }
-    for (const day of ["TODAY", "YESTERDAY", "EARLIER"] as const) {
-      out[day].sort(
+    for (const list of out.values()) {
+      list.sort(
         (a, b) => new Date(b.when).getTime() - new Date(a.when).getTime(),
       );
     }
     return out;
   }, [events, failedDeposits, failedCashouts]);
 
-  const ordered = (["TODAY", "YESTERDAY", "EARLIER"] as const).filter(
-    (day) => groups[day].length > 0,
+  // Bucket keys ordered newest-first (they're YYYY-MM-DD strings so
+  // reverse-lex sort matches reverse-chronological).
+  const ordered = useMemo(
+    () => Array.from(groups.keys()).sort((a, b) => b.localeCompare(a)),
+    [groups],
   );
+
+  const [visibleCount, setVisibleCount] = useState(
+    maxRows !== undefined ? maxRows : PAGE_SIZE,
+  );
+  const totalEntries =
+    events.length +
+    (failedDeposits?.length ?? 0) +
+    (failedCashouts?.length ?? 0);
+  const isEmpty = totalEntries === 0;
+  // Reset pagination when the events set changes drastically so a filter
+  // switch (Feed → Expenses) doesn't leave you deep-paged into nothing.
+  // When maxRows is set (RecentActivityPreview), stay pinned to that cap
+  // instead of jumping back to PAGE_SIZE.
+  useEffect(() => {
+    setVisibleCount(maxRows !== undefined ? maxRows : PAGE_SIZE);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isEmpty, maxRows]);
+  const visibleGroups = useMemo(() => {
+    let remaining = visibleCount;
+    const out: Array<{ day: string; entries: FeedEntry[] }> = [];
+    for (const day of ordered) {
+      if (remaining <= 0) break;
+      const entries = (groups.get(day) ?? []).slice(0, remaining);
+      out.push({ day, entries });
+      remaining -= entries.length;
+    }
+    return out;
+  }, [ordered, groups, visibleCount]);
+  const hasMore = maxRows === undefined && visibleCount < totalEntries;
 
   return (
     <aside className="sobre-activity">
-      <div className="head">
-        <h3>Activity</h3>
-      </div>
+      {hideTitle ? null : (
+        <div className="head">
+          <h3>Activity</h3>
+        </div>
+      )}
       <div className="list">
         {error ? (
           <p
@@ -281,10 +352,12 @@ export function ActivityFeed({
           )
         ) : null}
 
-        {ordered.map((day) => (
+        {visibleGroups.map(({ day, entries }) => (
           <div key={day}>
-            <div className="sobre-day">{day}</div>
-            {groups[day].map((entry) => {
+            {hideDayLabels ? null : (
+              <div className="sobre-day">{dayHeader(day)}</div>
+            )}
+            {entries.map((entry) => {
               if (entry.kind === "event") {
                 const ev = entry.data;
                 return (
@@ -316,6 +389,27 @@ export function ActivityFeed({
             })}
           </div>
         ))}
+        {hasMore ? (
+          <button
+            type="button"
+            onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+            style={{
+              display: "block",
+              width: "100%",
+              margin: "12px auto 0",
+              padding: "10px 16px",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              color: "var(--text-2)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Show more · {totalEntries - visibleCount} left
+          </button>
+        ) : null}
       </div>
       {openEvent ? (
         <ActivityDetailModal
@@ -711,7 +805,6 @@ function ActivityRow({
       );
     case "ExpenseLog": {
       const headline = ev.vendor ?? ev.note;
-      const cats = ev.category ?? [];
       return wrap(
         "outflow",
         <Receipt size={16} strokeWidth={2} />,
@@ -720,40 +813,6 @@ function ActivityRow({
             {labelFor(ev.caller)} logged{" "}
             {ev.amount !== null ? <>{amt(ev.amount)} at </> : null}
             <b>{headline}</b>
-            {cats.length > 0 ? (
-              <span
-                style={{
-                  marginLeft: 6,
-                  display: "inline-flex",
-                  flexWrap: "wrap",
-                  gap: 4,
-                  verticalAlign: "middle",
-                }}
-              >
-                {cats.slice(0, 2).map((c) => (
-                  <span
-                    key={c}
-                    style={{
-                      fontSize: 10,
-                      fontWeight: 700,
-                      letterSpacing: "0.04em",
-                      textTransform: "uppercase",
-                      color: "var(--sobre-accent)",
-                      background: "var(--accent-soft)",
-                      padding: "2px 6px",
-                      borderRadius: 4,
-                    }}
-                  >
-                    {c}
-                  </span>
-                ))}
-                {cats.length > 2 ? (
-                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>
-                    +{cats.length - 2}
-                  </span>
-                ) : null}
-              </span>
-            ) : null}
           </>,
         ),
       );
