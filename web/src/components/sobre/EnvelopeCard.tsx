@@ -1,202 +1,102 @@
 "use client";
 
-import {
-  GraduationCap,
-  Lock,
-  ShoppingCart,
-  Sprout,
-  TrendingUp,
-} from "lucide-react";
+import { CaretRightIcon } from "@phosphor-icons/react";
 
-import type { FeedEvent } from "@/hooks/useTxFeed";
-import type { Member } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
   STROOPS_PER_USDC,
   displayEnvelopeName,
-  type EnvelopeName,
 } from "@/lib/config";
-import { formatPhpLocale, shortenAddress } from "@/lib/format";
 import { PHP_PER_USDC } from "@/lib/config";
+import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
+import { formatCurrencyLocale } from "@/lib/format";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
-const ICON_BY_NAME: Record<EnvelopeName, React.ReactNode> = {
-  Groceries: <ShoppingCart size={20} strokeWidth={2} />,
-  Tuition: <GraduationCap size={20} strokeWidth={2} />,
-  Savings: <Sprout size={20} strokeWidth={2} />,
-};
-
+/**
+ * One-row envelope entry on the Envelopes tab: icon · name · amount ·
+ * chevron. Tapping opens the envelope action sheet (Cash out / Send to
+ * family member); the action sheet owns whichever downstream modal fires.
+ *
+ * `earn` — optional yield context. Balance passed in already includes
+ * any USDY underlying so the number the user sees is unified; the row
+ * also shows lifetime interest earned once it's non-zero.
+ */
 export function EnvelopeCard({
   index,
   balanceStroops,
   percent,
-  pulsing,
-  onSpend,
-  approvalRequired,
-  events,
-  members,
+  onOpen,
   envelopeNames,
+  envelopeIcons,
+  currency = "PHP",
+  earn,
 }: {
   index: number;
   balanceStroops: bigint;
   percent: number;
-  pulsing: boolean;
-  onSpend: () => void;
-  /** True when require_all_sigs is on OR this envelope is in protected_envelopes. */
-  approvalRequired: boolean;
-  /** Activity feed used to derive "spent this month" + "last activity". */
-  events: FeedEvent[];
-  /** Used to render the actor's name on the last-activity blurb. */
-  members: Member[];
+  onOpen: () => void;
   envelopeNames: string[];
+  /** Per-envelope icon keys — see lib/envelopeIcons. Falls back to slot
+   *  defaults for missing/unknown keys. */
+  envelopeIcons?: string[];
+  /** Display currency for the balance. */
+  currency?: "PHP" | "USD";
+  earn?: {
+    interestEarnedStroops: bigint;
+  };
 }) {
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
-  const usdc = Number(balanceStroops) / STROOPS_PER_USDC;
-  const php = usdc * PHP_PER_USDC;
-  const isSavings = slot === "Savings";
-  const isEmpty = balanceStroops === 0n;
-
-  const { spentThisMonthStroops, lastActivity } = useEnvelopeStats(
-    events,
-    slot,
-    members,
-  );
+  const iconKey = envelopeIcons?.[index];
+  const usd = Number(balanceStroops) / STROOPS_PER_USDC;
+  const php = usd * PHP_PER_USDC;
+  const showUsd = currency === "USD";
+  const value = showUsd ? usd : php;
+  const symbol = showUsd ? "$" : "₱";
 
   return (
-    <div
-      className={[
-        "sobre-envelope",
-        isSavings ? "green-env" : "",
-        pulsing ? "pulse" : "",
-        isEmpty ? "empty" : "",
-      ]
-        .filter(Boolean)
-        .join(" ")}
-    >
-      <div className="row1">
-        <div className="ic">{ICON_BY_NAME[slot]}</div>
-        <h3>{name}</h3>
-        <div className="meta-right">
-          {approvalRequired ? (
-            <span
-              className="sobre-pill"
-              style={{
-                background: "#fdf3d8",
-                color: "#b88b1c",
-              }}
-              title="Spends from this envelope need admin approval"
-            >
-              <Lock size={11} strokeWidth={2.5} />
-              Approval required
-            </span>
-          ) : null}
-          {isSavings ? (
-            <span className="sobre-pill sobre-pill-soft-green">
-              <TrendingUp size={12} strokeWidth={2} />
-              4.5% APY
-            </span>
-          ) : null}
-          <span className="sobre-pill sobre-pill-cream">{percent}% split</span>
-        </div>
-      </div>
-
-      <div className="sobre-env-amount">
-        <AnimatedNumber
-          value={php}
-          format={(n) => {
-            const whole = Math.floor(n).toLocaleString("en-PH");
-            const cents = Math.abs(n).toFixed(2).split(".")[1];
-            return (
-              <>
-                ₱ {whole}
-                <span style={{ fontSize: 24, color: "var(--text-2)" }}>
-                  .{cents}
-                </span>
-              </>
-            );
-          }}
+    <div className="sobre-env-row-wrap">
+      <button type="button" onClick={onOpen} className="sobre-env-row-btn">
+        <span className="ic">{renderEnvelopeIcon(iconKey, slot, 18)}</span>
+        <span className="body">
+          <span className="name">{name}</span>
+          <span className="sub">
+            <span className="pct">{percent}%</span>
+          </span>
+        </span>
+        <span className="amount tabular">
+          <AnimatedNumber
+            value={value}
+            format={(n) => {
+              const whole = Math.floor(n).toLocaleString("en-PH");
+              const cents = Math.abs(n).toFixed(2).split(".")[1];
+              return (
+                <>
+                  {symbol}
+                  {whole}
+                  <span className="cents">.{cents}</span>
+                </>
+              );
+            }}
+          />
+        </span>
+        <CaretRightIcon
+          weight="bold"
+          size={14}
+          className="chev"
+          aria-hidden
         />
-      </div>
-
-      <div className="sobre-env-usdc tabular">{usdc.toFixed(4)} USDC</div>
-
-      <div className="sobre-env-meta">
-        <div className="sobre-env-row">
-          <span style={{ color: "var(--text-2)" }}>Spent this month</span>
-          <b className="tabular" style={{ color: "var(--text-1)" }}>
-            {formatPhpLocale(spentThisMonthStroops)}
-          </b>
-        </div>
-        <div className="sobre-env-row last">
-          <span style={{ color: "var(--text-3)" }}>
-            {lastActivity ?? "No activity yet"}
+      </button>
+      {earn && earn.interestEarnedStroops > 0n ? (
+        <div className="sobre-env-earn-strip">
+          <span className="sobre-env-earn-interest">
+            Interest earned{" "}
+            <span className="tabular">
+              {formatCurrencyLocale(earn.interestEarnedStroops, currency)}
+            </span>
           </span>
         </div>
-      </div>
-
-      <div
-        className="sobre-env-foot"
-        style={{ marginTop: 14, justifyContent: "flex-end" }}
-      >
-        <button
-          className="sobre-btn sobre-btn-primary"
-          onClick={onSpend}
-          disabled={isEmpty}
-          style={isEmpty ? { opacity: 0.5, cursor: "not-allowed" } : {}}
-        >
-          Spend
-        </button>
-      </div>
+      ) : null}
     </div>
   );
-}
-
-function useEnvelopeStats(
-  events: FeedEvent[],
-  envelope: EnvelopeName,
-  members: Member[],
-): { spentThisMonthStroops: bigint; lastActivity: string | null } {
-  const now = new Date();
-  const monthKey = `${now.getUTCFullYear()}-${now.getUTCMonth()}`;
-
-  let spent = 0n;
-  let last: FeedEvent | null = null;
-  for (const ev of events) {
-    if (ev.kind !== "Spend" || ev.envelope !== envelope) continue;
-    const d = new Date(ev.ledgerClosedAt);
-    if (`${d.getUTCFullYear()}-${d.getUTCMonth()}` === monthKey) {
-      spent += ev.amount;
-    }
-    if (!last) last = ev;
-  }
-
-  if (!last) {
-    return { spentThisMonthStroops: spent, lastActivity: null };
-  }
-
-  const profile = members.find((m) => m.address === last!.caller);
-  const who = profile
-    ? profile.emoji
-      ? `${profile.emoji} ${profile.name}`
-      : profile.name
-    : shortenAddress(last.caller);
-  const phpFmt = formatPhpLocale(last.amount);
-  const when = relativeTime(last.ledgerClosedAt);
-  const lastActivity = `Last: ${who} spent ${phpFmt} · ${when}`;
-
-  return { spentThisMonthStroops: spent, lastActivity };
-}
-
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const secs = Math.max(0, Math.floor((now - then) / 1000));
-  if (secs < 60) return "just now";
-  const mins = Math.floor(secs / 60);
-  if (mins < 60) return `${mins}m ago`;
-  const hrs = Math.floor(mins / 60);
-  if (hrs < 24) return `${hrs}h ago`;
-  const days = Math.floor(hrs / 24);
-  return `${days}d ago`;
 }

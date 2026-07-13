@@ -27,6 +27,7 @@ import type { WalletState } from "@/hooks/useWalletState";
 import { BANKS } from "@/lib/banks";
 import {
   ENVELOPE_LABELS,
+  PDAX_INSTAPAY_FEE_PHP,
   STROOPS_PER_TOKEN,
   displayEnvelopeName,
   type EnvelopeName,
@@ -35,10 +36,10 @@ import {
   readCashoutRecovery,
   type CashoutRecoverySnapshot,
 } from "@/lib/cashoutRecovery";
+import { useCurrency, type Currency } from "@/lib/currency";
 import { maskAccountNumber } from "@/lib/format";
-import { backdropClose } from "@/lib/ui";
-
-const QUICK_PHP = [100, 500, 1000, 5000];
+import { envelopeTotalStroops } from "@/lib/walletTotals";
+import { Sheet } from "@/components/sobre/Sheet";
 
 const ICONS: Record<EnvelopeName, React.ReactNode> = {
   Groceries: <ShoppingCart size={18} strokeWidth={2} />,
@@ -87,7 +88,7 @@ function phaseFromStatus(status: WithdrawStatus | undefined): Phase | null {
  *  Honest labels at every stage — "paying out" doesn't claim the bank
  *  has it yet; "settling at your bank" matches the real wait while
  *  InstaPay actually moves the money. */
-const STATUS_LABELS: Record<WithdrawStatus, string> = {
+export const STATUS_LABELS: Record<WithdrawStatus, string> = {
   pending: "Preparing…",
   spent: "Forwarding to PDAX…",
   transferred: "Converting to pesos…",
@@ -102,32 +103,36 @@ export function PdaxWithdrawModal({
   state,
   contractId,
   onClose,
-  onCancelMidFlight,
   onSuccess,
   resumeIdentifier,
   onActiveIdentifierChange,
+  initialEnvelope,
 }: {
   userAddress: string;
   state: WalletState;
   contractId: string;
   onClose: () => void;
-  /** Legacy callback kept for prop compatibility, never fires now that
-   *  the modal locks itself closed during every in-flight phase. */
-  onCancelMidFlight?: () => void;
   onSuccess: (info: { php: number }) => void;
   /** Re-open the modal at the awaiting view for an existing cashout. */
   resumeIdentifier?: string;
   /** Same contract as the deposit modal — surfaces the active row id so
    *  the dashboard can filter it out of the PENDING bucket while open. */
   onActiveIdentifierChange?: (identifier: string | null) => void;
+  /** Pre-select the envelope the cashout draws from. Set when the modal
+   *  is entered from a specific envelope card; leave undefined for the
+   *  dock's "Cash out" FAB, which lets the user pick. */
+  initialEnvelope?: EnvelopeName;
 }) {
   const [localPhase, setLocalPhase] = useState<LocalPhase>("loading_bank");
   const [bank, setBank] = useState<BankRecord | null>(null);
-  const [envelope, setEnvelope] = useState<EnvelopeName>("Groceries");
-  const [amountStr, setAmountStr] = useState("500");
+  const [envelope, setEnvelope] = useState<EnvelopeName>(
+    initialEnvelope ?? "Groceries",
+  );
+  const [amountStr, setAmountStr] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   const { phpPerToken } = useTokenRate();
+  const { currency } = useCurrency();
   const {
     initiate,
     confirmSigned,
@@ -311,15 +316,38 @@ export function PdaxWithdrawModal({
   }, [phase, row?.amount_php]);
 
   const envIdx = ENVELOPE_LABELS.indexOf(envelope);
-  const balanceStroops = state.balances[envIdx] ?? 0n;
+  // envelopeTotalStroops folds any USDY position under Savings back into
+  // the balance — the contract auto-redeems from USDY inside `withdraw`
+  // via `ensure_envelope_liquidity`, so the real spendable ceiling is the
+  // envelope cache plus its Earn position, not the cache alone.
+  const balanceStroops = envelopeTotalStroops(state, envIdx);
   const balanceToken = Number(balanceStroops) / STROOPS_PER_TOKEN;
   const balancePhp = balanceToken * phpPerToken;
+  const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
 
-  const amountPhp = Number(amountStr);
-  const validAmount = Number.isFinite(amountPhp) && amountPhp > 0;
-  const amountToken = validAmount ? amountPhp / phpPerToken : 0;
+  const amountEntered = Number(amountStr);
+  const validAmount = Number.isFinite(amountEntered) && amountEntered > 0;
+  // The amount the user types is what lands at their bank. PDAX's
+  // InstaPay service fee sits on top and is covered by a larger
+  // on-chain USDC spend, so the payout is exact. amountPhp stored on
+  // the row = payout (user-typed); amount_usdc on-chain covers the
+  // total (payout + fee). service_fee_php is written server-side from
+  // config so the client can't lie.
+  const payoutToken = validAmount
+    ? currency === "USD"
+      ? amountEntered
+      : amountEntered / phpPerToken
+    : 0;
+  const payoutPhp = payoutToken * phpPerToken;
+  const feePhp = PDAX_INSTAPAY_FEE_PHP;
+  const totalPhp = payoutPhp + feePhp;
+  const totalToken = totalPhp / phpPerToken;
+  const amountToken = totalToken;
+  const amountPhp = payoutPhp;
   const amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_TOKEN));
   const overspend = amountStroops > balanceStroops;
+  const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
+  const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
   // ─── Action handlers ──────────────────────────────────────────────────
   const handleConfirm = async () => {
@@ -432,8 +460,7 @@ export function PdaxWithdrawModal({
   const error = pdaxError ?? signError;
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(handleClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={handleClose} ariaLabel="Cash out">
         {/* See PdaxDepositModal for the rationale on key={phase} + the
             entry animation classes. */}
         <div
@@ -487,15 +514,18 @@ export function PdaxWithdrawModal({
             envelope={envelope}
             setEnvelope={setEnvelope}
             envelopeNames={state.envelope_names}
-            balances={state.balances}
+            state={state}
             phpPerToken={phpPerToken}
+            currency={currency}
             amountStr={amountStr}
             setAmountStr={setAmountStr}
             inputRef={inputRef}
             validAmount={validAmount}
             overspend={overspend}
-            balancePhp={balancePhp}
-            amountToken={amountToken}
+            balanceInCurrency={balanceInCurrency}
+            payoutPositive={payoutPhp > 0}
+            feeInCurrency={feeInCurrency}
+            totalInCurrency={totalInCurrency}
             bank={bank}
             onChangeBank={() => setLocalPhase("register_bank")}
             onCancel={handleClose}
@@ -550,8 +580,7 @@ export function PdaxWithdrawModal({
           />
         ) : null}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -559,15 +588,18 @@ function InputStep({
   envelope,
   setEnvelope,
   envelopeNames,
-  balances,
+  state,
   phpPerToken,
+  currency,
   amountStr,
   setAmountStr,
   inputRef,
   validAmount,
   overspend,
-  balancePhp,
-  amountToken,
+  balanceInCurrency,
+  payoutPositive,
+  feeInCurrency,
+  totalInCurrency,
   bank,
   onChangeBank,
   onCancel,
@@ -578,15 +610,18 @@ function InputStep({
   envelope: EnvelopeName;
   setEnvelope: (e: EnvelopeName) => void;
   envelopeNames: string[];
-  balances: readonly bigint[];
+  state: WalletState;
   phpPerToken: number;
+  currency: Currency;
   amountStr: string;
   setAmountStr: (s: string) => void;
   inputRef: React.RefObject<HTMLInputElement | null>;
   validAmount: boolean;
   overspend: boolean;
-  balancePhp: number;
-  amountToken: number;
+  balanceInCurrency: number;
+  payoutPositive: boolean;
+  feeInCurrency: number;
+  totalInCurrency: number;
   bank: BankRecord;
   onChangeBank: () => void;
   onCancel: () => void;
@@ -604,12 +639,18 @@ function InputStep({
     [bank.bank_code],
   );
   const maskedAcct = maskAccountNumber(bank.account_number);
+  const symbol = currency === "USD" ? "$" : "₱";
+  const balanceLocaleOpts =
+    currency === "USD"
+      ? { maximumFractionDigits: 2 }
+      : { maximumFractionDigits: 2 };
+  const balanceLocale = currency === "USD" ? "en-US" : "en-PH";
 
   return (
     <>
       <h2>Cash out to your bank</h2>
       <p className="sub">
-        Pull pesos from an envelope to your registered bank account via
+        Pull money from an envelope to your registered bank account via
         InstaPay. Usually lands in under a minute.
       </p>
 
@@ -617,8 +658,9 @@ function InputStep({
         <label>Envelope</label>
         <div className="grid grid-cols-3 gap-2 mt-1">
           {ENVELOPE_LABELS.map((env, i) => {
-            const bal =
-              (Number(balances[i] ?? 0n) / STROOPS_PER_TOKEN) * phpPerToken;
+            const stroops = envelopeTotalStroops(state, i);
+            const token = Number(stroops) / STROOPS_PER_TOKEN;
+            const bal = currency === "USD" ? token : token * phpPerToken;
             const active = env === envelope;
             return (
               <button
@@ -648,7 +690,8 @@ function InputStep({
                   {displayEnvelopeName(env, envelopeNames)}
                 </div>
                 <div className="text-[11px] tabular" style={{ color: "var(--text-3)" }}>
-                  ₱{bal.toLocaleString("en-PH", { maximumFractionDigits: 0 })}
+                  {symbol}
+                  {bal.toLocaleString(balanceLocale, { maximumFractionDigits: currency === "USD" ? 2 : 0 })}
                 </div>
               </button>
             );
@@ -657,9 +700,11 @@ function InputStep({
       </div>
 
       <div className="sobre-input-group">
-        <label htmlFor="cashout-amount">Amount in pesos</label>
+        <label htmlFor="cashout-amount">
+          Amount in {currency === "USD" ? "dollars" : "pesos"}
+        </label>
         <div className="sobre-input-wrap">
-          <span className="prefix">₱</span>
+          <span className="prefix">{symbol}</span>
           <input
             id="cashout-amount"
             ref={inputRef}
@@ -667,53 +712,56 @@ function InputStep({
             type="number"
             inputMode="decimal"
             min="0"
-            step="1"
+            step={currency === "USD" ? "0.01" : "1"}
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
             disabled={pending}
           />
         </div>
-        <div className="sobre-quick-amts">
-          {QUICK_PHP.map((q) => {
-            const disabled = pending || q > balancePhp;
-            return (
-              <button
-                key={q}
-                type="button"
-                className={amountStr === String(q) ? "active" : ""}
-                onClick={() => setAmountStr(String(q))}
-                disabled={disabled}
-                style={
-                  disabled
-                    ? {
-                        opacity: 0.4,
-                        cursor: "not-allowed",
-                        textDecoration:
-                          q > balancePhp ? "line-through" : undefined,
-                      }
-                    : undefined
-                }
-                title={
-                  q > balancePhp
-                    ? `Only ₱${balancePhp.toFixed(0)} available in this envelope`
-                    : undefined
-                }
-              >
-                ₱{q.toLocaleString()}
-              </button>
-            );
-          })}
-        </div>
         <div className="mt-2 text-[12px]" style={{ color: "var(--text-3)" }}>
-          Available: ₱{balancePhp.toLocaleString("en-PH", { maximumFractionDigits: 2 })}
-          {amountToken > 0 ? (
-            <>
-              {" · "}
-              <span className="tabular">{amountToken.toFixed(4)} XLM</span>
-            </>
-          ) : null}
+          Available: {symbol}
+          {balanceInCurrency.toLocaleString(balanceLocale, balanceLocaleOpts)}
         </div>
       </div>
+
+      {payoutPositive ? (
+        <div
+          className="rounded-[10px] px-3 py-2 mb-4 text-[12px]"
+          style={{
+            background: "var(--surface-alt)",
+            border: "1px solid var(--border)",
+            color: "var(--text-2)",
+          }}
+        >
+          <div className="flex items-center justify-between">
+            <span>InstaPay fee</span>
+            <span className="tabular">
+              {symbol}
+              {feeInCurrency.toLocaleString(balanceLocale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
+          <div
+            className="flex items-center justify-between mt-1 pt-2"
+            style={{
+              borderTop: "1px dashed var(--border)",
+              color: "var(--text-1)",
+              fontWeight: 600,
+            }}
+          >
+            <span>Total deducted</span>
+            <span className="tabular">
+              {symbol}
+              {totalInCurrency.toLocaleString(balanceLocale, {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}
+            </span>
+          </div>
+        </div>
+      ) : null}
 
       {overspend && validAmount ? (
         <div
@@ -1010,7 +1058,6 @@ function RegisterBankStep({
           id="cashout-acct-name"
           className="sobre-input"
           type="text"
-          placeholder="Juan Dela Cruz"
           value={accountName}
           onChange={(e) => setAccountName(e.target.value)}
           disabled={saving}
@@ -1025,7 +1072,6 @@ function RegisterBankStep({
           className="sobre-input tabular"
           type="text"
           inputMode="numeric"
-          placeholder="123456789012"
           value={accountNumber}
           onChange={(e) => setAccountNumber(e.target.value.replace(/[^0-9]/g, ""))}
           disabled={saving}

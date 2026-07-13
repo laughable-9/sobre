@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { AlertTriangle, ArrowLeft, Check } from "lucide-react";
+import { AlertTriangle, Check } from "lucide-react";
+
+import { BackLink } from "@/components/sobre/BackLink";
 
 /** Stellar contract addresses are 56 chars, base32, starting with C. */
 const CONTRACT_ADDRESS_RE = /^C[A-Z2-7]{55}$/;
@@ -58,7 +60,10 @@ export function JoinByLinkForm({
   // Auto-navigate as soon as the input parses to a valid invite link. Reset
   // the latch when the input is cleared so a second valid paste still works.
   useEffect(() => {
+    // Effect derives status from link + fires a side effect (onValid).
+    // Splitting these would just move complexity around.
     const next = parseLink(link);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus(next);
     if (next.kind === "valid" && !navigatedRef.current) {
       navigatedRef.current = true;
@@ -72,15 +77,7 @@ export function JoinByLinkForm({
   return (
     <main className="flex-1 grid place-items-center px-6 py-12">
       <div className="w-full" style={{ maxWidth: 480 }}>
-        <button
-          type="button"
-          onClick={onBack}
-          className="inline-flex items-center gap-1.5 text-[13px] mb-6"
-          style={{ color: "var(--text-2)" }}
-        >
-          <ArrowLeft size={14} />
-          Back
-        </button>
+        <BackLink onClick={onBack} className="mb-6" />
 
         <h1
           className="font-serif"
@@ -102,7 +99,6 @@ export function JoinByLinkForm({
             id="invite-link"
             className="sobre-input"
             type="url"
-            placeholder="https://sobre.app/dashboard?join=…"
             value={link}
             onChange={(e) => setLink(e.target.value)}
             autoFocus
@@ -126,7 +122,7 @@ export function JoinByLinkForm({
             }}
           >
             <Check size={16} strokeWidth={2.5} />
-            <div>Link checks out — taking you to the invite…</div>
+            <div>Link checks out. Taking you to the invite…</div>
           </div>
         ) : null}
       </div>

@@ -2,13 +2,13 @@
  * GET /api/pdax/deposits/active?contract_id=<C>
  *
  * Returns the signed-in member's non-terminal deposit rows for a family
- * wallet. Drives the dashboard's "pending deposits" surface so a user who
- * closed the modal mid-flow (most importantly while the row was at
- * `credited` — XLM in their smart wallet, envelopes still empty) can
- * see and resume the deposit from the activity feed.
+ * wallet. Drives the dashboard's "pending deposits" surface so a user
+ * who closed the modal mid-InstaPay can see and resume from the feed.
  *
- * Non-terminal = status in {pending, funded, credited}. `split` and
- * `failed` are excluded because they're done from the modal's POV.
+ * Non-terminal = status in {pending, funded}. `credited` is terminal
+ * now that the server invokes deposit_from_xlm atomically (2026-07-12
+ * pivot) — envelopes are credited on-chain, no user-signed follow-up.
+ * `split` and `failed` are terminal too.
  */
 
 import { NextResponse } from "next/server";
@@ -21,6 +21,7 @@ import {
   type PdaxFiatTransaction,
 } from "@/lib/pdax/deposits";
 import { mintClaim } from "@/lib/pdax/depositClaim";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -53,6 +54,18 @@ export async function GET(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
 
+  // Client heartbeats this every 30s while the dashboard is open (~2880
+  // ticks/day). Cap needs generous headroom or an idle tab 429s itself.
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_deposits_active",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 6000,
+    perFamily: 12000,
+  });
+  if (rate) return rate;
+
   // GrabPay/PayMongo source URLs hard-expire; once they do, PDAX never
   // flips the corresponding /fiat/transactions row to COMPLETED and our
   // `pending` row sits in the bucket forever. Eagerly mark anything past
@@ -65,20 +78,17 @@ export async function GET(req: Request) {
   // can be re-initiated by the user with a single click and don't lose
   // funds (no money has moved at pending), so over-eager beats letting
   // an unusable URL sit in the feed.
-  const PENDING_TTL_MIN = 15;
-  const cutoff = new Date(
-    Date.now() - PENDING_TTL_MIN * 60_000,
-  ).toISOString();
-  await admin
-    .from("pdax_deposits")
-    .update({
-      status: "failed",
-      failure_reason: "Checkout expired",
-    })
-    .eq("family_wallet_id", familyWalletId)
-    .eq("member_id", memberId)
-    .eq("status", "pending")
-    .lt("created_at", cutoff);
+  // Two staleness gates on top of poll-status: (1) a checkout that PDAX
+  // never advanced (PayMongo source expired mid-InstaPay, ~15 min for UAT),
+  // and (2) a funded row where the modal's poll-status loop is what
+  // advances funded → credited via /crypto/transactions — if the user
+  // closed the modal at funded and never returned, the row shows
+  // "Buying XLM · tap to resume" forever. 60 min is well past PDAX UAT's
+  // 2-10 min crypto-withdraw settlement; a real slow settle can still
+  // reappear by resuming the modal (which drives it through poll-status
+  // before this gate fires for it).
+  await expireStaleDeposits(admin, familyWalletId, memberId, "pending", 15, "Checkout expired");
+  await expireStaleDeposits(admin, familyWalletId, memberId, "funded", 60, "Processing timed out");
 
   // Self-heal: PDAX's /fiat/transactions endpoint can lag the actual
   // settlement by a few seconds — the user may have paid via GrabPay,
@@ -101,7 +111,7 @@ export async function GET(req: Request) {
     )
     .eq("family_wallet_id", familyWalletId)
     .eq("member_id", memberId)
-    .in("status", ["pending", "funded", "credited"])
+    .in("status", ["pending", "funded"])
     .order("created_at", { ascending: false });
   if (error) {
     return NextResponse.json(
@@ -131,6 +141,27 @@ export async function GET(req: Request) {
     deposits: rows ?? [],
     recentlyFailed: failedRows ?? [],
   });
+}
+
+/** Mark all deposit rows sitting in `status` past `ttlMin` minutes as failed
+ *  with `failureReason`. Same query shape as PENDING_TTL_MIN gate; extracting
+ *  keeps a future `credited` gate from becoming a third copy of the block. */
+async function expireStaleDeposits(
+  admin: ReturnType<typeof getSupabaseAdmin>,
+  familyWalletId: string,
+  memberId: string,
+  status: "pending" | "funded" | "credited",
+  ttlMin: number,
+  failureReason: string,
+): Promise<void> {
+  const cutoff = new Date(Date.now() - ttlMin * 60_000).toISOString();
+  await admin
+    .from("pdax_deposits")
+    .update({ status: "failed", failure_reason: failureReason })
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", status)
+    .lt("created_at", cutoff);
 }
 
 /** Window in minutes after a row was marked "Cancelled by user" where

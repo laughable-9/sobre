@@ -25,6 +25,9 @@ export interface WalletContext {
   contractId: string;
   /** Auth user's display name (Google `full_name` → email → "Sobre User"). */
   fullName: string;
+  /** Auth user's email address (lower-case). Used by the rate-limit helper
+   *  to short-circuit for dev bypass emails in RATE_LIMIT_BYPASS_EMAILS. */
+  email: string;
 }
 
 export type FamilyMemberContext = WalletContext;
@@ -41,6 +44,7 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   const authId = data.user.id;
+  const email = (data.user.email ?? "").toLowerCase();
   const fullName =
     data.user.user_metadata?.full_name ?? data.user.email ?? "Sobre User";
 
@@ -57,7 +61,7 @@ export async function requireWallet(): Promise<WalletContext | NextResponse> {
     );
   }
   const w = wallet as { id: string; contract_id: string };
-  return { memberId: w.id, contractId: w.contract_id, fullName };
+  return { memberId: w.id, contractId: w.contract_id, fullName, email };
 }
 
 export async function requireFamilyMember(

@@ -23,6 +23,7 @@
 import { NextResponse } from "next/server";
 
 import { requireFamilyMember } from "@/lib/auth/familyMember";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { PdaxError } from "@/lib/pdax/client";
 import { getPdaxFiatTx } from "@/lib/pdax/deposits";
 import { isFreshClaim } from "@/lib/pdax/depositClaim";
@@ -61,7 +62,7 @@ export async function POST(
       if (tx && tx.status === "COMPLETED") {
         return NextResponse.json(
           {
-            error: "Payment already received — cancel refused",
+            error: "Payment already received. Cancel refused.",
             code: "already_paid",
           },
           { status: 409 },
@@ -103,6 +104,16 @@ export async function POST(
   };
   const membership = await requireFamilyMember(r.family_wallet_id);
   if (membership instanceof NextResponse) return membership;
+
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_deposit_cancel",
+    walletId: membership.memberId,
+    familyWalletId: r.family_wallet_id,
+    callerEmail: membership.email,
+    perUser: 30,
+    perFamily: 60,
+  });
+  if (rate) return rate;
 
   if (r.status !== "pending") {
     return NextResponse.json({ ok: true, noChange: true, status: r.status });

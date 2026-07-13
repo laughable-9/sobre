@@ -8,14 +8,17 @@ import {
   scValToNative,
 } from "@stellar/stellar-sdk";
 
-import { NETWORK } from "@/lib/config";
-import { getServer, simulateSourceAccount, type SpendPolicyShape } from "@/lib/contract";
+import { NETWORK, type EnvelopeName } from "@/lib/config";
+import { getServer, simulateSourceAccount, type WalletPolicyShape } from "@/lib/contract";
+import { envelopeNameFromScNative } from "@/lib/format";
 import { useFamilyDisplay } from "@/hooks/useFamilyDisplay";
 
 export interface Member {
   address: string;
   name: string;
-  emoji: string;
+  /** Google profile picture URL when the member has signed in via OAuth,
+   *  else null — Avatar falls back to initials on a name-hashed colour. */
+  avatarUrl: string | null;
   /** Supabase `wallets.id` — handy when a downstream mutation needs to
    *  reference the member's row without a fresh contract_id → id lookup. */
   walletDbId: string | null;
@@ -31,6 +34,48 @@ export interface SubAccount {
   locked: boolean;
 }
 
+export interface EarnPosition {
+  envelope: EnvelopeName;
+  /** USDC stroops originally deposited into USDY under this envelope,
+   *  net of prior withdrawals. Baseline for interest calculation. */
+  principal: bigint;
+  /** Yield-inclusive USDY balance attributed to this envelope, in USDC
+   *  stroops. Ticks up between polls as USDY accrues. */
+  currentValue: bigint;
+  /** Monotonic cumulative USDC stroops ever supplied under this envelope's
+   *  attribution. Doesn't decrease. */
+  suppliedTotal: bigint;
+  /** Monotonic cumulative USDC stroops ever redeemed. Doesn't decrease. */
+  withdrawnTotal: bigint;
+  /** `currentValue + withdrawnTotal - suppliedTotal`. Lifetime interest
+   *  accrued to this envelope through USDY. */
+  interestEarned: bigint;
+}
+
+export interface EarnState {
+  /** USDY-shaped token contract Sobre deposits into (MockUSDY on testnet,
+   *  real Ondo USDY once it ships on Stellar). */
+  usdyContract: string;
+  /** One entry per envelope with any USDY history (live position OR
+   *  supplied>0 OR withdrawn>0). Absent envelopes have zero. */
+  positions: EarnPosition[];
+}
+
+export interface GrowWithdrawRequest {
+  /** Monotonic id assigned by `request_grow_withdrawal`. Stable across
+   *  polls; used to route `execute_grow_withdrawal` / `cancel_grow_withdrawal`. */
+  id: bigint;
+  /** The address that queued the request. Under the current single-admin
+   *  model this equals `state.admin`; kept explicit so a future multi-admin
+   *  refactor doesn't silently break the auth semantic. */
+  requester: string;
+  amount: bigint;
+  /** Unix seconds. Compare with `Math.floor(Date.now() / 1000)` to derive
+   *  the countdown; the contract's `execute_grow_withdrawal` traps until
+   *  `env.ledger().timestamp() >= unlock_at`. */
+  unlockAt: bigint;
+}
+
 export interface WalletState {
   admin: string;
   payment_token: string;
@@ -38,9 +83,12 @@ export interface WalletState {
   wallet_name: string;
   /** Envelope display labels (Supabase). */
   envelope_names: string[];
+  /** Envelope icon keys (Supabase). See lib/envelopeIcons.tsx for lookup;
+   *  null means the family hasn't customised that slot. */
+  envelope_icons: string[];
   /** Per-envelope split percentages (Supabase). Indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
-  /** On-chain members. Joined with Supabase display data (name + emoji + walletDbId). */
+  /** On-chain members. Joined with Supabase display data (name + avatarUrl + walletDbId). */
   members: Member[];
   /** On-chain envelope balances in stroops. */
   balances: bigint[];
@@ -49,7 +97,7 @@ export interface WalletState {
    *  not present-as-empty. */
   subaccounts: SubAccount[];
   /** Family policy (Supabase). Frontend gates spends against this. */
-  policy: SpendPolicyShape;
+  policy: WalletPolicyShape;
   /** Savings-envelope all-admins lock (Supabase). Routes Savings spends +
    *  sub-account funds to a pending request when on AND the family has more
    *  than one admin. */
@@ -57,6 +105,29 @@ export interface WalletState {
   /** Count of family_members with role='admin' for this family. Read live by
    *  the relay route at release-time; surfaced here for UI gating. */
   admin_count: number;
+  /** Maximum admins allowed. Configurable per family (default 2). Used by
+   *  the MembersSection to display "N of M admins" and by redeem_admin_invite
+   *  to reject over-cap redemptions. */
+  admin_cap: number;
+  /** Null when the wallet hasn't opted into Blend Earn. Present when Earn
+   *  is enabled — carries the pool + asset + per-envelope positions. Older
+   *  contracts return no `earn` field on the wire and normalize to null. */
+  earn: EarnState | null;
+  /** True once admin has opted into the Grow bucket. Absent on pre-upgrade
+   *  contracts and normalizes to false. */
+  grow_enabled: boolean;
+  /** Grow-bucket balance in stroops. Zero when disabled or empty. */
+  grow_balance: bigint;
+  /** Cumulative USDC stroops routed into Grow via
+   *  grow_transfer_from_savings. Frontend derives interest as
+   *  `grow_balance + grow_withdrawn_total - grow_supplied_total`. Zero
+   *  on pre-2026-07-13 contracts that predate the field. */
+  grow_supplied_total: bigint;
+  /** Cumulative USDC stroops paid out of Grow via
+   *  execute_grow_withdrawal. Zero on pre-2026-07-13 contracts. */
+  grow_withdrawn_total: bigint;
+  /** Pending grow-withdraw requests. Empty when none active. */
+  grow_requests: GrowWithdrawRequest[];
 }
 
 export interface UseWalletStateResult {
@@ -71,6 +142,11 @@ export interface UseWalletStateResult {
   familyError: string | null;
   familyWalletId: string | null;
   refresh: () => Promise<void>;
+  /** Re-fetches the Supabase-side family display only — no on-chain
+   *  simulate. Prefer this when the change is off-chain (envelope names,
+   *  split percents, admin_cap, spend policy) so the ~200-400ms Soroban
+   *  RPC round-trip isn't spent for nothing. */
+  refreshDisplay: () => Promise<void>;
 }
 
 interface OnChainState {
@@ -79,13 +155,19 @@ interface OnChainState {
   members: { address: string }[];
   balances: bigint[];
   subaccounts: SubAccount[];
+  earn: EarnState | null;
+  grow_enabled: boolean;
+  grow_balance: bigint;
+  grow_supplied_total: bigint;
+  grow_withdrawn_total: bigint;
+  grow_requests: GrowWithdrawRequest[];
 }
 
 /**
  * Polls the contract's `get_state` for the on-chain truth (admin, members'
  * addresses, balances) and joins it with the Supabase-resident display +
  * family-rule state from useFamilyDisplay (wallet name, envelope labels,
- * percents, policy, member name/emoji).
+ * percents, policy, member name/avatar).
  */
 export function useWalletState(
   userAddress: string | null,
@@ -144,14 +226,21 @@ export function useWalletState(
   }, [userAddress, contractId]);
 
   useEffect(() => {
+    // Reset on contract swap so the next fetch doesn't merge state from
+    // the previous contract. External-sync effect.
     lastRetvalXdrRef.current = null;
     lastLedgerRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnChain(null);
+     
     setError(null);
   }, [contractId]);
 
   useEffect(() => {
+    // Wallet polling driver. Intentional external-sync effect — the
+    // interval feeds setState from RPC simulate results.
     if (!userAddress || !contractId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchState();
     const interval = setInterval(fetchState, 3000);
     return () => clearInterval(interval);
@@ -167,7 +256,7 @@ export function useWalletState(
       return {
         address: m.address,
         name: d?.name ?? "",
-        emoji: d?.emoji ?? "",
+        avatarUrl: d?.avatarUrl ?? null,
         walletDbId: d?.walletDbId ?? null,
         role,
       };
@@ -177,6 +266,7 @@ export function useWalletState(
       payment_token: onChain.payment_token,
       wallet_name: display.walletName,
       envelope_names: display.envelopeNames,
+      envelope_icons: display.envelopeIcons,
       percents: display.percents,
       members,
       balances: onChain.balances,
@@ -184,14 +274,23 @@ export function useWalletState(
       policy: display.policy,
       savings_lock_all_admins: display.savingsLockAllAdmins,
       admin_count: adminCount,
+      admin_cap: display.adminCap,
+      earn: onChain.earn,
+      grow_enabled: onChain.grow_enabled,
+      grow_balance: onChain.grow_balance,
+      grow_supplied_total: onChain.grow_supplied_total,
+      grow_withdrawn_total: onChain.grow_withdrawn_total,
+      grow_requests: onChain.grow_requests,
     };
   }, [
     onChain,
     display.walletName,
     display.envelopeNames,
+    display.envelopeIcons,
     display.percents,
     display.policy,
     display.savingsLockAllAdmins,
+    display.adminCap,
     display.membersByAddress,
   ]);
 
@@ -207,6 +306,7 @@ export function useWalletState(
     familyError: display.loadError,
     familyWalletId: display.familyWalletId,
     refresh,
+    refreshDisplay: display.refresh,
   };
 }
 
@@ -231,5 +331,61 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
     members,
     balances: (raw.balances as bigint[]) ?? [],
     subaccounts,
+    earn: normalizeEarnState(raw.earn),
+    grow_enabled: Boolean(raw.grow_enabled),
+    grow_balance: toBigInt(raw.grow_balance),
+    grow_supplied_total: toBigInt(raw.grow_supplied_total),
+    grow_withdrawn_total: toBigInt(raw.grow_withdrawn_total),
+    grow_requests: normalizeGrowRequests(raw.grow_requests),
   };
+}
+
+/** Grow-request rows come across as `[{ id, requester, amount, unlock_at }]`.
+ *  u64 ids and unlock_at land as bigint via scValToNative. */
+function normalizeGrowRequests(raw: unknown): GrowWithdrawRequest[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: toBigInt(row.id),
+      requester: String(row.requester ?? ""),
+      amount: toBigInt(row.amount),
+      unlockAt: toBigInt(row.unlock_at),
+    };
+  });
+}
+
+/**
+ * Contract wire shape is `Vec<EarnState>` (0- or 1-element) because
+ * contracttype doesn't derive Option XDR for our own structs in SDK 25.
+ * Empty vec (or missing field on a pre-upgrade contract) → null.
+ * One-element vec → the EarnState, with per-envelope positions decoded.
+ * `envelope` inside each position is a Soroban enum unit variant — decoded
+ * by `scValToNative` as `["Groceries"]`-style single-element array.
+ */
+function normalizeEarnState(raw: unknown): EarnState | null {
+  if (!Array.isArray(raw) || raw.length === 0) return null;
+  const outer = raw[0] as Record<string, unknown>;
+  const positionsRaw = Array.isArray(outer.positions) ? outer.positions : [];
+  const positions: EarnPosition[] = positionsRaw.map((p) => {
+    const row = p as Record<string, unknown>;
+    return {
+      envelope: envelopeNameFromScNative(row.envelope, "Groceries"),
+      principal: toBigInt(row.principal),
+      currentValue: toBigInt(row.current_value),
+      suppliedTotal: toBigInt(row.supplied_total),
+      withdrawnTotal: toBigInt(row.withdrawn_total),
+      interestEarned: toBigInt(row.interest_earned),
+    };
+  });
+  return {
+    usdyContract: String(outer.usdy_contract ?? ""),
+    positions,
+  };
+}
+
+function toBigInt(v: unknown): bigint {
+  if (typeof v === "bigint") return v;
+  if (v === null || v === undefined) return 0n;
+  return BigInt(String(v));
 }

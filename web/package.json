@@ -3,15 +3,18 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "next dev --webpack",
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "bootstrap:relay-usdc-trustline": "node scripts/bootstrap-relay-usdc-trustline.mjs",
     "postinstall": "node scripts/fix-passkey-kit.mjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.5.0",
     "@creit-tech/stellar-wallets-kit": "npm:@jsr/creit-tech__stellar-wallets-kit@^2.3.0",
+    "@google/genai": "^2.11.0",
+    "@phosphor-icons/react": "^2.1.10",
     "@stellar/freighter-api": "^6.0.1",
     "@stellar/stellar-sdk": "^15.1.0",
     "@supabase/ssr": "^0.12.0",

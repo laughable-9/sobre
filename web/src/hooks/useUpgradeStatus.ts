@@ -58,6 +58,8 @@ export function useUpgradeStatus(
   }, [contractId]);
 
   useEffect(() => {
+    // Fetch-on-mount external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     void fetchOnce();
   }, [fetchOnce]);

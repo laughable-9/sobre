@@ -66,6 +66,8 @@ export function useActiveDeposits(
   }, [contractId]);
 
   useEffect(() => {
+    // Polling driver. Intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     // 30s heartbeat — too slow to be a real driver, fast enough that
     // resumes from another tab show up within a screen-glance.

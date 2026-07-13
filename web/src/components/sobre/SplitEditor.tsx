@@ -1,6 +1,10 @@
 "use client";
 
 import { ENVELOPE_LABELS } from "@/lib/config";
+import {
+  BAR_COLORS,
+} from "@/components/sobre/EnvelopeSplitCard";
+import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
 
 export type Split = [number, number, number];
 
@@ -30,38 +34,76 @@ export function SplitEditor({
   onChange,
   disabled,
   labels,
+  icons,
 }: {
   value: Split;
   onChange: (next: Split) => void;
   disabled?: boolean;
   /** Row labels — defaults to the contract-side enum names. */
   labels?: readonly [string, string, string];
+  /** Per-envelope icon key. When absent, each row falls back to the slot
+   *  default in renderEnvelopeIcon. */
+  icons?: readonly [string, string, string];
 }) {
   const sum = value[0] + value[1] + value[2];
   const ok = sum === 100;
+  const displayLabels = labels ?? ENVELOPE_LABELS;
 
   const setAt = (i: number, n: number) => {
-    const clamped = Math.max(0, Math.min(100, Math.round(n)));
+    // Empty field / non-numeric input yields NaN — coerce to 0 so it can't
+    // slip past the clamp and poison the sum. Integers only, 0..100.
+    const safe = Number.isFinite(n) ? n : 0;
+    const clamped = Math.max(0, Math.min(100, Math.round(safe)));
     const next: Split = [value[0], value[1], value[2]];
     next[i] = clamped;
     onChange(next);
   };
 
   return (
-    <div className="space-y-2.5">
+    <div className="space-y-3">
+      {/* Visual preview — segmented bar in envelope colors so the split is
+          immediately readable before the user scans the numeric rows. */}
       <div
-        className="flex justify-end tabular text-[12px] font-semibold whitespace-nowrap"
+        className="flex overflow-hidden"
         style={{
-          color: ok ? "var(--sobre-accent)" : "var(--sobre-danger)",
+          height: 10,
+          borderRadius: 999,
+          background: "var(--surface-alt)",
         }}
+        role="img"
+        aria-label={`Split preview: ${value.join("/")}`}
       >
-        Total {sum}% {ok ? "✓" : "(needs 100%)"}
+        {value.map((pct, i) =>
+          pct > 0 ? (
+            <span
+              key={i}
+              style={{
+                width: `${pct}%`,
+                background: BAR_COLORS[i],
+                transition: "width 200ms ease",
+              }}
+            />
+          ) : null,
+        )}
       </div>
 
-      {(labels ?? ENVELOPE_LABELS).map((label, i) => (
+      {displayLabels.map((label, i) => (
         <div key={label} className="flex items-center gap-3">
+          <span
+            className="grid place-items-center shrink-0"
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              background: `${BAR_COLORS[i]}22`,
+              color: BAR_COLORS[i],
+            }}
+            aria-hidden
+          >
+            {renderEnvelopeIcon(icons?.[i], ENVELOPE_LABELS[i], 16)}
+          </span>
           <div
-            className="flex-1 text-[14px] font-medium"
+            className="flex-1 text-[14px] font-medium truncate"
             style={{ color: "var(--text-1)" }}
           >
             {label}
@@ -72,7 +114,7 @@ export function SplitEditor({
               border: "1.5px solid var(--border)",
               borderRadius: 10,
               background: "var(--surface)",
-              width: 110,
+              width: 96,
             }}
           >
             <input
@@ -83,12 +125,13 @@ export function SplitEditor({
               value={value[i]}
               onChange={(e) => setAt(i, Number(e.target.value))}
               disabled={disabled}
+              aria-label={`${label} percent`}
               className="tabular flex-1 text-right text-[15px] font-semibold"
               style={{
                 background: "transparent",
                 border: "none",
                 outline: "none",
-                padding: "8px 8px 8px 12px",
+                padding: "8px 4px 8px 12px",
                 color: "var(--text-1)",
                 width: "100%",
               }}
@@ -107,7 +150,7 @@ export function SplitEditor({
         </div>
       ))}
 
-      <div className="flex gap-1.5 pt-1 overflow-x-auto">
+      <div className="flex items-center justify-center gap-2 flex-wrap">
         {PRESETS.map((p) => {
           const active = splitsEqual(p.value, value);
           return (
@@ -118,19 +161,28 @@ export function SplitEditor({
               onClick={() => onChange(p.value)}
               className="text-[11px] font-medium whitespace-nowrap"
               style={{
-                padding: "5px 10px",
+                padding: "6px 12px",
                 borderRadius: 999,
                 border: `1px solid ${active ? "var(--sobre-primary)" : "var(--border)"}`,
                 color: active ? "var(--sobre-primary)" : "var(--text-2)",
                 background: active ? "var(--surface-alt)" : "var(--surface)",
                 cursor: disabled ? "not-allowed" : "pointer",
-                flexShrink: 0,
               }}
             >
               {p.label}
             </button>
           );
         })}
+        {!ok ? (
+          <span
+            className="tabular text-[12px] font-medium ml-auto"
+            style={{ color: "var(--sobre-danger)" }}
+            role="status"
+            aria-live="polite"
+          >
+            {sum < 100 ? `${100 - sum}% left` : `${sum - 100}% over`}
+          </span>
+        ) : null}
       </div>
     </div>
   );

@@ -1,7 +1,11 @@
 "use client";
 
-import { useMemo } from "react";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+
+/** Load-more page size for the activity feed. Rows are cheap to render,
+ *  but a fresh dashboard doesn't need 300 rows painted before the first
+ *  paint; the "Show more" button unlocks 30 more per click. */
+const PAGE_SIZE = 30;
 import {
   AlertTriangle,
   ArrowDownToLine,
@@ -12,6 +16,7 @@ import {
   Loader2,
   Lock,
   LockOpen,
+  Receipt,
   Send,
   ShoppingBag,
   Trash2,
@@ -20,22 +25,34 @@ import {
   X as XIcon,
 } from "lucide-react";
 
+import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
+import { ActivityRowsSkeleton } from "@/components/sobre/Skeletons";
+import { Avatar } from "@/components/sobre/Avatar";
+import { Sheet } from "@/components/sobre/Sheet";
 import type { ActiveCashoutRow } from "@/hooks/useActiveCashouts";
 import type { ActiveDepositRow } from "@/hooks/useActiveDeposits";
-import type { FeedEvent } from "@/hooks/useTxFeed";
+import { eventActor, type FeedEvent } from "@/hooks/useTxFeed";
 import type { Member } from "@/hooks/useWalletState";
-import { bankName } from "@/lib/banks";
-import { displayEnvelopeName, STROOPS_PER_TOKEN } from "@/lib/config";
-import {
-  formatPhpLocale,
-  maskAccountNumber,
-  shortenAddress,
-} from "@/lib/format";
+import { STROOPS_PER_TOKEN, displayEnvelopeName } from "@/lib/config";
+import { formatPhpLocale, shortenAddress } from "@/lib/format";
 
 
-function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
+/** Bucket key = YYYY-MM-DD (PH-local calendar day). Today and yesterday get
+ *  friendly labels ("TODAY" / "YESTERDAY") at render time; every older date
+ *  keeps its own bucket so the reader sees actual dates instead of a giant
+ *  "EARLIER" pile. */
+function bucket(closedAtIso: string): string {
+  const d = new Date(closedAtIso);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+function dayHeader(key: string): string {
   const now = new Date();
-  const ev = new Date(closedAtIso);
+  const [y, m, d] = key.split("-").map(Number);
+  const ev = new Date(y, m - 1, d);
   const sameDay = (a: Date, b: Date) =>
     a.getFullYear() === b.getFullYear() &&
     a.getMonth() === b.getMonth() &&
@@ -44,7 +61,12 @@ function bucket(closedAtIso: string): "TODAY" | "YESTERDAY" | "EARLIER" {
   const yesterday = new Date(now);
   yesterday.setDate(now.getDate() - 1);
   if (sameDay(ev, yesterday)) return "YESTERDAY";
-  return "EARLIER";
+  // Include the year when the bucket is in a different calendar year.
+  const opts: Intl.DateTimeFormatOptions =
+    ev.getFullYear() === now.getFullYear()
+      ? { month: "short", day: "numeric" }
+      : { month: "short", day: "numeric", year: "numeric" };
+  return ev.toLocaleDateString("en-PH", opts).toUpperCase();
 }
 
 function fmtTime(closedAtIso: string): string {
@@ -62,8 +84,8 @@ interface ActivityFeedProps {
   /** Look-up so "GA12...spent" renders as "Maria spent". Pass state.members. */
   members: Member[];
   /** Same shape as members but for sub-account holders, so SubAccount* events
-   *  render with the kid's display name + emoji instead of a raw C-address. */
-  subaccounts?: { address: string; name: string; emoji: string }[];
+   *  render with the kid's display name instead of a raw C-address. */
+  subaccounts?: { address: string; name: string; avatarUrl?: string | null }[];
   envelopeNames: string[];
   /** Non-terminal deposit rows surfaced as "pending" affordances at the top
    *  of the feed. The Resume button reopens the deposit modal at whatever
@@ -85,6 +107,20 @@ interface ActivityFeedProps {
    *  knows where it is. Tap re-opens the modal at the awaiting view. */
   pendingCashouts?: ActiveCashoutRow[];
   onResumeCashout?: (identifier: string) => void;
+  /** Fires after the receipt-detail delete button removes an ExpenseLog
+   *  row. Parent refreshes the expense-log hook so the feed re-renders. */
+  onExpenseDeleted?: () => void;
+  /** Suppress the TODAY / YESTERDAY / EARLIER bucket labels. Used when
+   *  the feed is embedded inside a narrower surface (e.g. the Expenses
+   *  view under a range chip) where the day headers add noise. */
+  hideDayLabels?: boolean;
+  /** Suppress the "Activity" heading. Same use case as hideDayLabels —
+   *  Expenses view already has its own hero card / title context. */
+  hideTitle?: boolean;
+  /** Cap the total rows rendered. Used by RecentActivityPreview to embed
+   *  the same row primitive but only show the top N. Load-more is hidden
+   *  when set. */
+  maxRows?: number;
   /** Terminal failed rows (~last 7 days) — rendered as warning entries
    *  in the appropriate day bucket so the user has an honest trail of
    *  cashouts/deposits that didn't go through. */
@@ -108,28 +144,34 @@ export function ActivityFeed({
   onCancelDeposit,
   pendingCashouts,
   onResumeCashout,
+  onExpenseDeleted,
+  hideDayLabels,
+  hideTitle,
+  maxRows,
   failedDeposits,
   failedCashouts,
   completedCashouts,
 }: ActivityFeedProps) {
-  const nameByAddress = useMemo(() => {
-    const out = new Map<string, { name: string; emoji: string }>();
+  const profileByAddress = useMemo(() => {
+    const out = new Map<string, { name: string; avatarUrl: string | null }>();
     for (const m of members) {
-      out.set(m.address, { name: m.name, emoji: m.emoji });
+      out.set(m.address, { name: m.name, avatarUrl: m.avatarUrl });
     }
     for (const s of subaccounts ?? []) {
-      out.set(s.address, { name: s.name, emoji: s.emoji });
+      out.set(s.address, { name: s.name, avatarUrl: s.avatarUrl ?? null });
     }
     return out;
   }, [members, subaccounts]);
 
-  const labelFor = (addr: string): string => {
-    const profile = nameByAddress.get(addr);
-    if (!profile) return shortenAddress(addr);
-    return profile.emoji
-      ? `${profile.emoji} ${profile.name}`
-      : profile.name;
-  };
+  const labelFor = (addr: string): string =>
+    profileByAddress.get(addr)?.name ?? shortenAddress(addr);
+  const avatarUrlFor = (addr: string): string | null =>
+    profileByAddress.get(addr)?.avatarUrl ?? null;
+
+  // Which activity row's detail modal is open. All rows tap through to the
+  // same modal — parents get date + plain-language breakdown, advanced users
+  // get the tx hash tucked into a collapsed "Advanced" section.
+  const [openEvent, setOpenEvent] = useState<FeedEvent | null>(null);
 
   // Index completed cashouts by envelope+amount+rough-minute so the
   // on-chain Spend event renderer can look up the destination bank
@@ -156,7 +198,7 @@ export function ActivityFeed({
   }, [completedCashouts]);
 
   const matchCompleted = (
-    ev: FeedEvent & { kind: "Spend" },
+    ev: FeedEvent & { kind: "Withdraw" },
   ): ActiveCashoutRow | undefined => {
     const minuteKey = Math.floor(
       new Date(ev.ledgerClosedAt).getTime() / 60_000,
@@ -180,49 +222,86 @@ export function ActivityFeed({
         data: ActiveCashoutRow;
       };
   const groups = useMemo(() => {
-    const out: Record<"TODAY" | "YESTERDAY" | "EARLIER", FeedEntry[]> = {
-      TODAY: [],
-      YESTERDAY: [],
-      EARLIER: [],
+    const out = new Map<string, FeedEntry[]>();
+    const push = (key: string, entry: FeedEntry) => {
+      const bucketList = out.get(key);
+      if (bucketList) bucketList.push(entry);
+      else out.set(key, [entry]);
     };
     for (const ev of events) {
-      out[bucket(ev.ledgerClosedAt)].push({
+      push(bucket(ev.ledgerClosedAt), {
         kind: "event",
         when: ev.ledgerClosedAt,
         data: ev,
       });
     }
     for (const d of failedDeposits ?? []) {
-      out[bucket(d.created_at)].push({
+      push(bucket(d.created_at), {
         kind: "failed_deposit",
         when: d.created_at,
         data: d,
       });
     }
     for (const c of failedCashouts ?? []) {
-      out[bucket(c.created_at)].push({
+      push(bucket(c.created_at), {
         kind: "failed_cashout",
         when: c.created_at,
         data: c,
       });
     }
-    for (const day of ["TODAY", "YESTERDAY", "EARLIER"] as const) {
-      out[day].sort(
+    for (const list of out.values()) {
+      list.sort(
         (a, b) => new Date(b.when).getTime() - new Date(a.when).getTime(),
       );
     }
     return out;
   }, [events, failedDeposits, failedCashouts]);
 
-  const ordered = (["TODAY", "YESTERDAY", "EARLIER"] as const).filter(
-    (day) => groups[day].length > 0,
+  // Bucket keys ordered newest-first (they're YYYY-MM-DD strings so
+  // reverse-lex sort matches reverse-chronological).
+  const ordered = useMemo(
+    () => Array.from(groups.keys()).sort((a, b) => b.localeCompare(a)),
+    [groups],
   );
+
+  const [visibleCount, setVisibleCount] = useState(
+    maxRows !== undefined ? maxRows : PAGE_SIZE,
+  );
+  const totalEntries =
+    events.length +
+    (failedDeposits?.length ?? 0) +
+    (failedCashouts?.length ?? 0);
+  const isEmpty = totalEntries === 0;
+  // Reset pagination when the events set changes drastically so a filter
+  // switch (Feed → Expenses) doesn't leave you deep-paged into nothing.
+  // When maxRows is set (RecentActivityPreview), stay pinned to that cap
+  // instead of jumping back to PAGE_SIZE.
+  useEffect(() => {
+    // Sticky counter reset on transitions. Not derivable — the user
+    // grows visibleCount via "Show more" between transitions.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setVisibleCount(maxRows !== undefined ? maxRows : PAGE_SIZE);
+  }, [isEmpty, maxRows]);
+  const visibleGroups = useMemo(() => {
+    let remaining = visibleCount;
+    const out: Array<{ day: string; entries: FeedEntry[] }> = [];
+    for (const day of ordered) {
+      if (remaining <= 0) break;
+      const entries = (groups.get(day) ?? []).slice(0, remaining);
+      out.push({ day, entries });
+      remaining -= entries.length;
+    }
+    return out;
+  }, [ordered, groups, visibleCount]);
+  const hasMore = maxRows === undefined && visibleCount < totalEntries;
 
   return (
     <aside className="sobre-activity">
-      <div className="head">
-        <h3>Activity</h3>
-      </div>
+      {hideTitle ? null : (
+        <div className="head">
+          <h3>Activity</h3>
+        </div>
+      )}
       <div className="list">
         {error ? (
           <p
@@ -260,32 +339,38 @@ export function ActivityFeed({
         ) : null}
 
         {!error &&
-        events.length === 0 &&
+        ordered.length === 0 &&
         !pendingDeposits?.length &&
         !pendingCashouts?.length ? (
-          <p className="text-xs" style={{ color: "var(--text-3)" }}>
-            {loading ? "Loading activity…" : "No activity yet."}
-          </p>
+          loading ? (
+            <ActivityRowsSkeleton count={5} />
+          ) : (
+            <div className="sobre-activity-empty">
+              <div className="ic">
+                <Clock size={22} strokeWidth={1.75} />
+              </div>
+              <div className="msg">Activity will show up here.</div>
+            </div>
+          )
         ) : null}
 
-        {ordered.map((day) => (
+        {visibleGroups.map(({ day, entries }) => (
           <div key={day}>
-            <div className="sobre-day">{day}</div>
-            {groups[day].map((entry) => {
+            {hideDayLabels ? null : (
+              <div className="sobre-day">{dayHeader(day)}</div>
+            )}
+            {entries.map((entry) => {
               if (entry.kind === "event") {
                 const ev = entry.data;
-                const completed =
-                  ev.kind === "Spend" && ev.memo === "PDAX cashout"
-                    ? matchCompleted(ev)
-                    : undefined;
                 return (
                   <ActivityRow
                     key={`${ev.txHash}-${ev.ledger}-${ev.kind}`}
                     ev={ev}
                     isNew={ev.txHash === newestTxHash}
                     labelFor={labelFor}
+                    avatarUrlFor={avatarUrlFor}
                     envelopeNames={envelopeNames}
-                    completedCashout={completed}
+                    onOpen={setOpenEvent}
                   />
                 );
               }
@@ -306,77 +391,193 @@ export function ActivityFeed({
             })}
           </div>
         ))}
+        {hasMore ? (
+          <button
+            type="button"
+            onClick={() => setVisibleCount((v) => v + PAGE_SIZE)}
+            style={{
+              display: "block",
+              width: "100%",
+              margin: "12px auto 0",
+              padding: "10px 16px",
+              background: "transparent",
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              color: "var(--text-2)",
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            Show more · {totalEntries - visibleCount} left
+          </button>
+        ) : null}
       </div>
+      {openEvent ? (
+        <ActivityDetailModal
+          event={openEvent}
+          members={members}
+          subaccounts={subaccounts}
+          envelopeNames={envelopeNames}
+          completedCashout={
+            openEvent.kind === "Withdraw" && openEvent.memo === "PDAX cashout"
+              ? matchCompleted(openEvent)
+              : undefined
+          }
+          onClose={() => setOpenEvent(null)}
+          onExpenseDeleted={onExpenseDeleted}
+        />
+      ) : null}
     </aside>
   );
 }
 
-/** Terminal failed deposit row. Renders the failure reason inline so the
- *  user gets a clear audit trail instead of the row silently disappearing
- *  the moment status flipped to `failed`. */
+/** Terminal failed deposit row. Compact one-liner; the raw failure_reason
+ *  (often a multi-KB HostError log) opens in an error modal on demand
+ *  instead of dumping into the feed. */
 function FailedDepositRow({ deposit }: { deposit: ActiveDepositRow }) {
-  const time = fmtTime(deposit.created_at);
   return (
-    <div
-      className="sobre-activity-item outflow"
-      style={{ background: "var(--surface-alt)" }}
-    >
-      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
-        <AlertTriangle size={16} strokeWidth={2} />
-      </div>
-      <div className="body">
-        <div className="who">
-          Deposit didn&apos;t complete{" "}
-          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
-            ₱{Number(deposit.amount_php).toLocaleString("en-PH")}
-          </span>
-        </div>
-        {deposit.failure_reason ? (
-          <div className="where">{deposit.failure_reason}</div>
-        ) : null}
-        <div className="meta">{time}</div>
-      </div>
-    </div>
+    <FailureRow
+      title="Deposit didn't complete"
+      amountPhp={Number(deposit.amount_php)}
+      createdAt={deposit.created_at}
+      failureReason={deposit.failure_reason ?? null}
+    />
   );
 }
 
-/** Terminal failed cashout row. The PDAX failure reason (from the
- *  webhook or poll-status) lands in failure_reason — surface it inline
- *  so the demo viewer sees what actually broke. */
+/** Terminal failed cashout row. Same compact treatment as deposits. */
 function FailedCashoutRow({ cashout }: { cashout: ActiveCashoutRow }) {
-  const time = fmtTime(cashout.created_at);
   return (
-    <div
-      className="sobre-activity-item outflow"
-      style={{ background: "var(--surface-alt)" }}
-    >
-      <div className="ic" style={{ color: "var(--sobre-danger)" }}>
-        <AlertTriangle size={16} strokeWidth={2} />
-      </div>
-      <div className="body">
-        <div className="who">
-          Cashout didn&apos;t complete{" "}
-          <span className="amt tabular" style={{ color: "var(--text-2)" }}>
-            ₱{Number(cashout.amount_php ?? 0).toLocaleString("en-PH")}
-          </span>
+    <FailureRow
+      title="Cashout didn't complete"
+      amountPhp={Number(cashout.amount_php ?? 0)}
+      createdAt={cashout.created_at}
+      failureReason={cashout.failure_reason ?? null}
+    />
+  );
+}
+
+/** Shared failure-row visual: warning icon, one-line summary, small
+ *  "Show error" button that pops the raw failure text in a modal. */
+function FailureRow({
+  title,
+  amountPhp,
+  createdAt,
+  failureReason,
+}: {
+  title: string;
+  amountPhp: number;
+  createdAt: string;
+  failureReason: string | null;
+}) {
+  const [errorOpen, setErrorOpen] = useState(false);
+  const time = fmtTime(createdAt);
+  return (
+    <>
+      <div
+        className="sobre-activity-item outflow"
+        style={{ background: "var(--surface-alt)" }}
+      >
+        <div className="ic" style={{ color: "var(--sobre-danger)" }}>
+          <AlertTriangle size={16} strokeWidth={2} />
         </div>
-        {cashout.failure_reason ? (
-          <div className="where">{cashout.failure_reason}</div>
-        ) : null}
-        <div className="meta">{time}</div>
+        <div className="body">
+          <div className="who">
+            {title}{" "}
+            <span className="amt tabular" style={{ color: "var(--text-2)" }}>
+              ₱{amountPhp.toLocaleString("en-PH")}
+            </span>
+          </div>
+          <div className="meta flex items-center gap-2 flex-wrap">
+            <span>{time}</span>
+            {failureReason ? (
+              <>
+                <span aria-hidden style={{ opacity: 0.4 }}>·</span>
+                <button
+                  type="button"
+                  onClick={() => setErrorOpen(true)}
+                  className="sobre-btn-inline-link"
+                  style={{
+                    color: "var(--sobre-danger)",
+                    fontWeight: 600,
+                    fontSize: 12,
+                    padding: 0,
+                    background: "transparent",
+                    border: 0,
+                    cursor: "pointer",
+                  }}
+                >
+                  Show error
+                </button>
+              </>
+            ) : null}
+          </div>
+        </div>
       </div>
-    </div>
+      {errorOpen && failureReason ? (
+        <Sheet
+          onClose={() => setErrorOpen(false)}
+          ariaLabel={`${title} error`}
+        >
+          <h2>{title}</h2>
+          <p className="sub">
+            The full error returned by the provider or the on-chain
+            simulation. Copy and share with support if you need help.
+          </p>
+          <pre
+            className="tabular"
+            style={{
+              maxHeight: "50vh",
+              overflow: "auto",
+              padding: "12px 14px",
+              borderRadius: 10,
+              background: "var(--surface-alt)",
+              border: "1px solid var(--border)",
+              fontSize: 12,
+              lineHeight: 1.55,
+              color: "var(--text-2)",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              margin: "12px 0 4px",
+            }}
+          >
+            {failureReason}
+          </pre>
+          <div className="sobre-modal-actions">
+            <button
+              type="button"
+              onClick={() => {
+                void navigator.clipboard.writeText(failureReason);
+              }}
+              className="sobre-btn sobre-btn-soft"
+            >
+              Copy
+            </button>
+            <button
+              type="button"
+              onClick={() => setErrorOpen(false)}
+              className="sobre-btn sobre-btn-soft"
+            >
+              Close
+            </button>
+          </div>
+        </Sheet>
+      ) : null}
+    </>
   );
 }
 
 /** Row rendered above the on-chain bucket for a non-terminal `pdax_deposits`
  *  row. The primary tap resumes the modal at whatever phase matches the
  *  row's status. A small trash icon on the right cancels the row (marks
- *  it `failed` server-side). Cancel at status='credited' doesn't pull
- *  XLM back out of the smart wallet — that's a caveat we accept for the
- *  demo. */
-const ROW_EXIT_MS = 300;
-
+ *  it `failed` server-side) — visible ONLY on status='pending' because
+ *  the server rejects cancel for funded/credited (money's already in
+ *  flight PDAX-side), and a silent-noop trash led to "I click it and it
+ *  disappears then refresh brings it back" confusion. Visibility is
+ *  driven purely by props — the parent adds this row's identifier to a
+ *  cancelledIds set the instant onCancel fires so the row unmounts
+ *  immediately instead of relying on a local hidden timer. */
 function PendingDepositRow({
   deposit,
   onResume,
@@ -389,68 +590,42 @@ function PendingDepositRow({
   ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
 }) {
   const [cancelling, setCancelling] = useState(false);
-  // Two-step exit so the row stays gone even between "animation done" and
-  // "API + parent refresh complete":
-  // - exiting: applies the animate-out classes
-  // - hidden: returns null after ROW_EXIT_MS so the row doesn't pop back
-  //   into view when the css animation ends (tw-animate-css doesn't pin
-  //   the final state) and isn't seen twice if the parent refreshes
-  //   later than the animation finishes.
-  const [exiting, setExiting] = useState(false);
-  const [hidden, setHidden] = useState(false);
   const time = fmtTime(deposit.created_at);
   const statusLabel: Record<ActiveDepositRow["status"], string> = {
     pending: "Awaiting payment",
-    funded: "Buying XLM",
+    funded: "Almost there",
+    // credited/split/failed shouldn't reach this row anymore — the
+    // /active route excludes them from the pending bucket. Kept as
+    // fallback strings so a stale client bundle never renders "undefined".
     credited: "Ready to split",
-    split: "Split",
+    split: "Done",
     failed: "Failed",
   };
+  const canCancel = deposit.status === "pending" && Boolean(onCancel);
   const handleCancel = async (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!onCancel || cancelling) return;
+    if (!canCancel || cancelling) return;
     setCancelling(true);
-    setExiting(true);
-    const hideTimer = setTimeout(() => setHidden(true), ROW_EXIT_MS);
     try {
-      const result = await onCancel(deposit.identifier);
-      if (!result.ok && result.alreadyPaid) {
-        // PDAX already received the payment. Don't hide the row —
-        // poll-status will drive it through funded → credited and
-        // PendingCashout/Deposit will transition normally.
-        clearTimeout(hideTimer);
-        setHidden(false);
-        setExiting(false);
-      }
-    } catch {
-      clearTimeout(hideTimer);
-      setHidden(false);
-      setExiting(false);
+      await onCancel!(deposit.identifier);
     } finally {
       setCancelling(false);
     }
   };
-  if (hidden) return null;
   return (
     <div
       role="button"
-      tabIndex={exiting ? -1 : 0}
-      onClick={exiting ? undefined : () => onResume?.(deposit.identifier)}
+      tabIndex={0}
+      onClick={() => onResume?.(deposit.identifier)}
       onKeyDown={(e) => {
-        if (exiting) return;
         if (e.key === "Enter" || e.key === " ") {
           e.preventDefault();
           onResume?.(deposit.identifier);
         }
       }}
-      className={`sobre-activity-item pending ${
-        exiting
-          ? "animate-out fade-out slide-out-to-right duration-300"
-          : ""
-      }`}
+      className="sobre-activity-item pending"
       style={{
-        cursor: exiting ? "default" : "pointer",
-        background: "var(--accent-soft)",
+        cursor: "pointer",
         pointerEvents: cancelling ? "none" : undefined,
       }}
     >
@@ -469,7 +644,7 @@ function PendingDepositRow({
         </div>
         <div className="meta">{time}</div>
       </div>
-      {onCancel ? (
+      {canCancel ? (
         <button
           type="button"
           onClick={(e) => void handleCancel(e)}
@@ -539,10 +714,7 @@ function PendingCashoutRow({
         }
       }}
       className="sobre-activity-item pending"
-      style={{
-        cursor: "pointer",
-        background: "var(--accent-soft)",
-      }}
+      style={{ cursor: "pointer" }}
     >
       <div className="ic">
         <ArrowUpFromLine size={16} strokeWidth={2} />
@@ -565,283 +737,268 @@ function ActivityRow({
   ev,
   isNew,
   labelFor,
+  avatarUrlFor,
   envelopeNames,
-  completedCashout,
+  onOpen,
 }: {
   ev: FeedEvent;
   isNew: boolean;
   labelFor: (addr: string) => string;
+  avatarUrlFor: (addr: string) => string | null;
   envelopeNames: string[];
-  /** When this Spend event matches a successfully-paid PDAX cashout
-   *  row, the matching row is passed in so we can render the destination
-   *  bank inline ("✓ Sent to Security Bank •••1461"). */
-  completedCashout?: ActiveCashoutRow;
+  /** Tap on any row opens the shared ActivityDetailModal — parents see the
+   *  breakdown + date/time; advanced users can drill into the tx hash. */
+  onOpen: (ev: FeedEvent) => void;
 }) {
   const time = fmtTime(ev.ledgerClosedAt);
-  const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${ev.txHash}`;
 
-  // Each row wraps its content in an anchor so clicking opens the underlying
-  // Stellar transaction on stellar.expert in a new tab. The trailing arrow is
-  // a small affordance so this isn't a mystery hover.
-  const wrap = (kindClass: string, content: React.ReactNode) => (
-    <a
-      href={explorerUrl}
-      target="_blank"
-      rel="noreferrer"
+  // For rows where a household member acted (Spend / MemberJoined / etc.)
+  // the left slot is their Avatar — replaces the old emoji-prefixed name and
+  // makes the row scannable at a glance for non-crypto parents. Deposits
+  // (external inflow) and system events (Earn/Grow toggles) fall back to
+  // the small action glyph.
+  const actorAddr = eventActor(ev);
+  const wrap = (kindClass: string, actionGlyph: React.ReactNode, content: React.ReactNode) => (
+    <button
+      type="button"
+      onClick={() => onOpen(ev)}
       className={`sobre-activity-item ${kindClass} ${isNew ? "new" : ""}`}
-      title="View transaction on stellar.expert"
     >
-      {content}
-    </a>
+      {actorAddr ? (
+        <span className="ic ic-avatar" aria-hidden>
+          <Avatar
+            name={labelFor(actorAddr)}
+            src={avatarUrlFor(actorAddr)}
+            size={40}
+          />
+        </span>
+      ) : (
+        <div className="ic">{actionGlyph}</div>
+      )}
+      <div className="body">{content}</div>
+    </button>
+  );
+
+  // Everything below funnels through `wrap()` — no more per-row markup
+  // scaffold. Each case just names its inflow/outflow tint, its action
+  // glyph (used ONLY when there's no household actor to avatar), and the
+  // one-line primary text. Meta line is the same time-stamp everywhere.
+  const meta = <div className="meta">{time}</div>;
+  const line = (content: React.ReactNode) => (
+    <>
+      <div className="who">{content}</div>
+      {meta}
+    </>
+  );
+  const amt = (n: bigint) => (
+    <span className="amt tabular">{formatPhpLocale(n)}</span>
   );
 
   switch (ev.kind) {
     case "Deposit":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <ArrowDownToLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Remittance received{" "}
-              <span className="amt tabular">
-                + {formatPhpLocale(ev.amount)}
-              </span>
-            </div>
-            <div className="where">
-              Auto-split · G {formatPhpLocale(ev.groceries)} · T{" "}
-              {formatPhpLocale(ev.tuition)} · S{" "}
-              {formatPhpLocale(ev.savings)}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <ArrowDownToLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Remittance received {amt(ev.amount)}
+          </>,
+        ),
       );
-    case "Spend": {
-      // Cashout-spends and regular spends are both Spend events on chain;
-      // we differentiate by the memo. For the cashout-flavored entry,
-      // describe what truly happened — the envelope was debited — without
-      // claiming the bank received the money. That's what the PENDING
-      // bucket + the bank-arrival toast are for.
+    case "ExpenseLog": {
+      const headline = ev.vendor ?? ev.note;
+      return wrap(
+        "outflow",
+        <Receipt size={16} strokeWidth={2} />,
+        line(
+          <>
+            {labelFor(ev.caller)} logged{" "}
+            {ev.amount !== null ? <>{amt(ev.amount)} at </> : null}
+            <b>{headline}</b>
+          </>,
+        ),
+      );
+    }
+    case "Withdraw": {
       const isCashout = ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            {isCashout ? (
-              <ArrowUpFromLine size={16} strokeWidth={2} />
-            ) : (
-              <ShoppingBag size={16} strokeWidth={2} />
-            )}
-          </div>
-          <div className="body">
-            <div className="who">
-              {isCashout ? (
-                <>
-                  {labelFor(ev.caller)} withdrew{" "}
-                  <span className="amt tabular">
-                    {formatPhpLocale(ev.amount)}
-                  </span>{" "}
-                  from {displayEnvelopeName(ev.envelope, envelopeNames)} for
-                  cashout
-                </>
-              ) : (
-                <>
-                  {labelFor(ev.caller)} spent{" "}
-                  <span className="amt tabular">
-                    {formatPhpLocale(ev.amount)}
-                  </span>{" "}
-                  from {displayEnvelopeName(ev.envelope, envelopeNames)}
-                </>
-              )}
-            </div>
-            {ev.memo && !isCashout ? (
-              <div className="where">&quot;{ev.memo}&quot;</div>
-            ) : null}
-            {isCashout && completedCashout ? (
-              <div
-                className="where"
-                style={{
-                  color: "var(--sobre-accent)",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 4,
-                }}
-              >
-                <CheckCheck size={12} strokeWidth={2.5} />
-                Sent to {bankName(completedCashout.beneficiary_bank_code)}{" "}
-                {maskAccountNumber(
-                  completedCashout.beneficiary_account_number,
-                )}
-              </div>
-            ) : null}
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        isCashout ? (
+          <ArrowUpFromLine size={16} strokeWidth={2} />
+        ) : (
+          <ShoppingBag size={16} strokeWidth={2} />
+        ),
+        line(
+          isCashout ? (
+            <>
+              {labelFor(ev.caller)} cashed out {amt(ev.amount)}
+            </>
+          ) : (
+            <>
+              {labelFor(ev.caller)} withdrew {amt(ev.amount)} from{" "}
+              {displayEnvelopeName(ev.envelope, envelopeNames)}
+            </>
+          ),
+        ),
       );
     }
     case "RequestCreated":
       return wrap(
         "pending",
-        <>
-          <div className="ic">
-            <Hourglass size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              {labelFor(ev.caller)} requested{" "}
-              <span className="amt tabular">{formatPhpLocale(ev.amount)}</span>{" "}
-              from {displayEnvelopeName(ev.envelope, envelopeNames)}
-            </div>
-            {ev.memo ? <div className="where">&quot;{ev.memo}&quot;</div> : null}
-            <div className="meta">
-              awaiting approval · {time} · #{ev.requestId.toString()} · view tx ↗
-            </div>
-          </div>
-        </>,
+        <Hourglass size={16} strokeWidth={2} />,
+        line(
+          <>
+            {labelFor(ev.caller)} requested {amt(ev.amount)} from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
       );
     case "RequestApproved":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <CheckCheck size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Request #{ev.requestId.toString()} approved
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <CheckCheck size={16} strokeWidth={2} />,
+        line(<>Request #{ev.requestId.toString()} approved</>),
       );
     case "RequestDenied":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <XIcon size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Request #{ev.requestId.toString()} denied
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <XIcon size={16} strokeWidth={2} />,
+        line(<>Request #{ev.requestId.toString()} denied</>),
       );
     case "MemberJoined":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <UserPlus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              {ev.emoji ? `${ev.emoji} ` : ""}
-              <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserPlus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
+          </>,
+        ),
       );
     case "MemberRemoved":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <UserMinus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.member)}</b> was removed from the wallet
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserMinus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.member)}</b> was removed from the wallet
+          </>,
+        ),
       );
     case "SubAccountFunded":
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <Send size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              Sent{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>{" "}
-              to <b>{labelFor(ev.recipient)}</b> from{" "}
-              {displayEnvelopeName(ev.envelope, envelopeNames)}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <Send size={16} strokeWidth={2} />,
+        line(
+          <>
+            Sent {amt(ev.amount)} to <b>{labelFor(ev.recipient)}</b> from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
       );
-    case "SubAccountSpent": {
-      // Sub-account cashout flows reuse this event with memo "Cash out" — the
-      // copy mirrors how Spend renders cashout-flavoured events.
+    case "SubAccountWithdraw": {
       const isCashout = ev.memo === "Cash out" || ev.memo === "PDAX cashout";
       return wrap(
         "outflow",
-        <>
-          <div className="ic">
-            <ArrowUpFromLine size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "spent"}{" "}
-              <span className="amt tabular">
-                {formatPhpLocale(ev.amount)}
-              </span>
-            </div>
-            {ev.memo && !isCashout ? (
-              <div className="where">&quot;{ev.memo}&quot;</div>
-            ) : null}
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <ArrowUpFromLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.caller)}</b> {isCashout ? "cashed out" : "withdrew"}{" "}
+            {amt(ev.amount)}
+          </>,
+        ),
       );
     }
     case "SubAccountJoined":
       return wrap(
         "inflow",
-        <>
-          <div className="ic">
-            <UserPlus size={16} strokeWidth={2} />
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.subaccount)}</b> joined as a supplementary account
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        <UserPlus size={16} strokeWidth={2} />,
+        line(
+          <>
+            <b>{labelFor(ev.subaccount)}</b> joined as a supplementary account
+          </>,
+        ),
       );
     case "SubAccountLockChanged":
       return wrap(
         ev.locked ? "outflow" : "inflow",
-        <>
-          <div className="ic">
-            {ev.locked ? (
-              <Lock size={16} strokeWidth={2} />
-            ) : (
-              <LockOpen size={16} strokeWidth={2} />
-            )}
-          </div>
-          <div className="body">
-            <div className="who">
-              <b>{labelFor(ev.subaccount)}</b>{" "}
-              {ev.locked ? "was locked" : "was unlocked"}
-            </div>
-            <div className="meta">{time} · view tx ↗</div>
-          </div>
-        </>,
+        ev.locked ? (
+          <Lock size={16} strokeWidth={2} />
+        ) : (
+          <LockOpen size={16} strokeWidth={2} />
+        ),
+        line(
+          <>
+            <b>{labelFor(ev.subaccount)}</b>{" "}
+            {ev.locked ? "was locked" : "was unlocked"}
+          </>,
+        ),
+      );
+    case "EarnEnabled":
+      return wrap(
+        "inflow",
+        <CheckCheck size={16} strokeWidth={2} />,
+        line(<>Started earning yield on Blend</>),
+      );
+    case "EarnSupply":
+      return wrap(
+        "outflow",
+        <ArrowDownToLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Moved {amt(ev.amount)} from{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)} to Earn
+          </>,
+        ),
+      );
+    case "EarnWithdraw":
+      return wrap(
+        "inflow",
+        <ArrowUpFromLine size={16} strokeWidth={2} />,
+        line(
+          <>
+            Withdrew {amt(ev.amount)} from Earn to{" "}
+            {displayEnvelopeName(ev.envelope, envelopeNames)}
+          </>,
+        ),
+      );
+    case "GrowEnabled":
+      return wrap(
+        "inflow",
+        <Lock size={16} strokeWidth={2} />,
+        line(
+          <>Turned Grow on. 48-hour cooling-off on withdrawals.</>,
+        ),
+      );
+    case "GrowTransfer":
+      return wrap(
+        "outflow",
+        <Lock size={16} strokeWidth={2} />,
+        line(<>Locked {amt(ev.amount)} in Grow</>),
+      );
+    case "GrowRequest":
+      return wrap(
+        "pending",
+        <Hourglass size={16} strokeWidth={2} />,
+        line(
+          <>
+            Requested {amt(ev.amount)} withdrawal from Grow. 48-hour timer
+            started.
+          </>,
+        ),
+      );
+    case "GrowExecute":
+      return wrap(
+        "inflow",
+        <LockOpen size={16} strokeWidth={2} />,
+        line(<>Unlocked {amt(ev.amount)} from Grow</>),
+      );
+    case "GrowCancel":
+      return wrap(
+        "inflow",
+        <XIcon size={16} strokeWidth={2} />,
+        line(<>Cancelled a {amt(ev.amount)} Grow withdrawal request</>),
       );
   }
 }
+

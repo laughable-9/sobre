@@ -5,9 +5,12 @@
 
 import "server-only";
 
-import { NETWORK, PAYMENT_TOKEN, STROOPS_PER_TOKEN } from "@/lib/config";
+import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
 import { pdaxFetch } from "@/lib/pdax/client";
-import { getRelayPublicKey, transferFromRelay } from "@/lib/relay";
+import {
+  depositFromXlmToSobre,
+  getRelayPublicKey,
+} from "@/lib/relay";
 
 /** PDAX `POST /fiat/deposit` response (relevant fields). */
 export interface PdaxFiatDepositResponse {
@@ -134,9 +137,15 @@ export async function kickOffPdaxWithdraw(args: {
   amountToken: number;
   netAmount: number;
   pdaxWithdrawTxId: number;
-  currency: "XLM" | "USDC";
+  currency: "XLM";
 }> {
-  const currency = PAYMENT_TOKEN;
+  // Always trade + withdraw XLM regardless of Sobre's on-chain payment
+  // token. The on-chain `deposit_from_xlm` swaps XLM → payment token via
+  // Soroswap after the relay receives the XLM. PDAX UAT can't buy
+  // USDCXLM directly (OT010016 "Asset unavailable" on `quote_currency=USDCXLM`),
+  // and USDC via PDAX credits a Circle-ERC20 bucket with the wrong step
+  // size for the network we settle on. Hardcoded XLM sidesteps both.
+  const currency = "XLM" as const;
   const relayG = getRelayPublicKey();
 
   const quote = await pdaxFetch<PdaxQuoteResponse>(
@@ -179,8 +188,9 @@ export async function kickOffPdaxWithdraw(args: {
       },
     },
   );
-  // Net = trade amount - PDAX fee (0.02 XLM flat for XLM). The relay
-  // receives this exact amount; we forward it onward in phase 2.
+  // Net = trade amount - PDAX's 0.02 XLM flat withdraw fee. The relay
+  // receives this exact amount; the on-chain swap in phase 2 turns it
+  // into USDC.
   const netAmount = withdraw.amount !== undefined
     ? Number(withdraw.amount)
     : amountToken;
@@ -207,7 +217,14 @@ export async function kickOffPdaxWithdraw(args: {
  */
 export async function tryCompleteWithdrawAndTransfer(args: {
   identifier: string;
-  destinationAddress: string;
+  /** Family Sobre contract's C-address. `deposit_from_xlm` runs on this
+   *  contract — envelopes get credited directly, no user-signed follow-up
+   *  step. */
+  familyContractId: string;
+  /** Family percentages `[groceries, tuition, savings]` summing to 100.
+   *  Server splits the Soroswap payout by these to compute per-envelope
+   *  USDC totals passed to the contract. */
+  percents: readonly [number, number, number];
   expectedNetAmount: number;
   /** ISO timestamp from the pdax_deposits row. Used as the lower bound
    *  when searching Horizon for the incoming payment — prevents matching
@@ -215,9 +232,9 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   kickedOffAt: string;
   /** Atomic claim. Caller flips withdraw_tx_hash from NULL to a sentinel
    *  on the row; returns true if THIS poll won the race, false if another
-   *  concurrent poll already claimed and is mid-SAC-transfer. Without
-   *  this guard the modal's 1s polling can double-send because the SAC
-   *  transfer itself takes ~5s to confirm. */
+   *  concurrent poll already claimed and is mid-invoke. Without this
+   *  guard the modal's 1s polling can double-send because the
+   *  deposit_from_xlm tx itself takes ~5s to confirm. */
   claimSacTransfer: () => Promise<boolean>;
 }): Promise<
   | { state: "still_pending" }
@@ -232,11 +249,15 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   const won = await args.claimSacTransfer();
   if (!won) return { state: "still_pending" };
 
-  const stroops = BigInt(Math.round(horizonHit.amount * STROOPS_PER_TOKEN));
-  const sacTransferHash = await transferFromRelay(
-    args.destinationAddress,
-    stroops,
-  );
+  const xlmStroops = BigInt(Math.round(horizonHit.amount * STROOPS_PER_TOKEN));
+  // Pass percentages straight through — the contract splits the actual
+  // Soroswap payout so we don't need to pre-compute USDC amounts here
+  // (which would need a live rate quote and risks mismatch).
+  const sacTransferHash = await depositFromXlmToSobre({
+    familyContractId: args.familyContractId,
+    relayXlmStroops: xlmStroops,
+    percents: args.percents,
+  });
   return {
     state: "completed",
     sacTransferHash,

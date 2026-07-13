@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useDeposit } from "@/hooks/useDeposit";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
@@ -10,7 +11,6 @@ import {
   STROOPS_PER_USDC,
   displayEnvelopeName,
 } from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
 
 const QUICK_PHP = [100, 500, 1000, 5000];
@@ -78,8 +78,7 @@ export function DepositModal({
     unit === "PHP" ? `₱${q.toLocaleString()}` : `${q} ${PAYMENT_TOKEN_LABEL}`;
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} ariaLabel="Add a remittance">
         <h2>Add a remittance</h2>
         <p className="sub">
           Sobre auto-splits the deposit across the envelopes per the
@@ -200,8 +199,7 @@ export function DepositModal({
             {pending ? "Submitting…" : "Send remittance"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 

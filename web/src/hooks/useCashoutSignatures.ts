@@ -109,7 +109,7 @@ export function useCashoutSignatures(
           nativeToScVal(args.amountStroops, { type: "i128" }),
           nativeToScVal(SPEND_MEMO, { type: "string" }),
         ];
-        const spendResult = await invokeWrite(contractId, "spend", spendArgs);
+        const spendResult = await invokeWrite(contractId, "withdraw", spendArgs);
 
         // Persist the moment we know the spend succeeded but BEFORE the
         // SAC transfer is even attempted. This is the partial-state
@@ -214,7 +214,7 @@ export function useCashoutSignatures(
         ];
         const spendResult = await invokeWrite(
           contractId,
-          "spend_from_subaccount",
+          "withdraw_subaccount",
           spendArgs,
         );
 

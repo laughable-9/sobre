@@ -19,17 +19,47 @@ import { NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
 import { simulateReadServer } from "@/lib/contractServer";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
+
+/** Household types offered in onboarding. Kept in sync with the DB CHECK
+ *  constraint on family_wallets.household_type and the onboarding UI. */
+const HOUSEHOLD_TYPES = ["family-at-home", "both-abroad", "scratch"] as const;
+type HouseholdType = (typeof HOUSEHOLD_TYPES)[number];
+
+/** Sanity ceiling for a monthly budget bound, in whole PHP. Guards against a
+ *  fat-fingered / hostile value; the split preview never needs more. */
+const MAX_BUDGET_PHP = 100_000_000;
 
 interface PostBody {
   contract_id: string;
   display_name: string;
   percents: [number, number, number];
   admin_name: string;
-  admin_emoji: string;
   envelope_names: [string, string, string];
+  /** Per-envelope icon key; null slots fall back to the default. Optional
+   *  so older callers (that don't customise icons) still work. */
+  envelope_icons?: [string | null, string | null, string | null];
+  // Onboarding metadata — off-chain only, all optional (columns are nullable).
+  household_type?: HouseholdType | null;
+  budget_min?: number | null;
+  budget_max?: number | null;
+}
+
+/** A budget bound is valid when omitted/null, or a finite non-negative number
+ *  within the ceiling with at most 2 decimal places (PHP centavos). Never
+ *  trust the client — mirrors the DB numeric(12,2) + CHECKs. */
+function isValidBudgetBound(v: unknown): v is number | null | undefined {
+  if (v === undefined || v === null) return true;
+  if (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > MAX_BUDGET_PHP) {
+    return false;
+  }
+  // At most 2 decimal places. Compare against the rounded-to-centavos value
+  // (epsilon guards float representation error, e.g. 15000.1 * 100).
+  const centavos = Math.round(v * 100);
+  return Math.abs(v * 100 - centavos) < 1e-6;
 }
 
 function isValidBody(b: unknown): b is PostBody {
@@ -39,9 +69,7 @@ function isValidBody(b: unknown): b is PostBody {
     return false;
   }
   if (typeof o.display_name !== "string") return false;
-  if (typeof o.admin_name !== "string" || typeof o.admin_emoji !== "string") {
-    return false;
-  }
+  if (typeof o.admin_name !== "string") return false;
   if (
     !Array.isArray(o.percents) ||
     o.percents.length !== 3 ||
@@ -57,6 +85,33 @@ function isValidBody(b: unknown): b is PostBody {
   ) {
     return false;
   }
+  if (o.envelope_icons !== undefined) {
+    if (
+      !Array.isArray(o.envelope_icons) ||
+      o.envelope_icons.length !== 3 ||
+      o.envelope_icons.some((k) => k !== null && typeof k !== "string")
+    ) {
+      return false;
+    }
+  }
+  // Onboarding metadata (all optional). Validate shape when present.
+  if (
+    o.household_type !== undefined &&
+    o.household_type !== null &&
+    !HOUSEHOLD_TYPES.includes(o.household_type as HouseholdType)
+  ) {
+    return false;
+  }
+  if (!isValidBudgetBound(o.budget_min) || !isValidBudgetBound(o.budget_max)) {
+    return false;
+  }
+  if (
+    typeof o.budget_min === "number" &&
+    typeof o.budget_max === "number" &&
+    o.budget_min > o.budget_max
+  ) {
+    return false;
+  }
   return true;
 }
 
@@ -66,21 +121,35 @@ export async function POST(req: Request) {
     return NextResponse.json(
       {
         error:
-          "Invalid body. Expect { contract_id, display_name, percents:[3], admin_name, admin_emoji, envelope_names:[3] } with percents summing to 100.",
+          "Invalid body. Expect { contract_id, display_name, percents:[3], admin_name, envelope_names:[3] } with percents summing to 100.",
       },
       { status: 400 },
     );
   }
 
-  // Auth and the on-chain admin lookup are independent — race them to cut
-  // ~one round-trip off the critical path. The simulate is the dominant
-  // cost (~100-300ms) so it overlaps with auth's ~30-100ms.
-  const [ctxOrRes, onChainState] = await Promise.all([
-    requireWallet(),
-    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state"),
-  ]);
+  // Auth first so we can key the rate limit on the caller. The Soroban
+  // simulate below can burn RPC quota if we let unlimited junk contract_id
+  // posts through; race the limit against the simulate to keep the wall
+  // clock similar while still gating the RPC call on today's cap.
+  const ctxOrRes = await requireWallet();
   if (ctxOrRes instanceof NextResponse) return ctxOrRes;
   const ctx = ctxOrRes;
+
+  // Per-wallet cap. Real users create maybe one Sobre a lifetime, so 5/day
+  // stops loop abuse without ever tripping legitimate flows. No family
+  // scope yet at this point (that's what this route creates).
+  const [rate, onChainState] = await Promise.all([
+    enforceDailyLimit({
+      endpoint: "family_create",
+      walletId: ctx.memberId,
+      familyWalletId: null,
+      callerEmail: ctx.email,
+      perUser: 5,
+      perFamily: 5,
+    }),
+    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state"),
+  ]);
+  if (rate) return rate;
 
   if (!onChainState?.admin) {
     return NextResponse.json(
@@ -120,6 +189,11 @@ export async function POST(req: Request) {
       display_name: body.display_name,
       created_by: ctx.memberId,
       percents: body.percents,
+      // Onboarding metadata — off-chain, nullable. `?? null` so an absent
+      // field lands as SQL NULL rather than `undefined`.
+      household_type: body.household_type ?? null,
+      budget_min: body.budget_min ?? null,
+      budget_max: body.budget_max ?? null,
     })
     .select("id")
     .single();
@@ -132,16 +206,17 @@ export async function POST(req: Request) {
   const familyWalletId = (family as { id: string }).id;
 
   const [g, t, s] = body.envelope_names;
+  const icons = body.envelope_icons ?? [null, null, null];
   const [memberRes, namesRes] = await Promise.all([
     admin
       .from("family_members")
-      .update({ name: body.admin_name, emoji: body.admin_emoji })
+      .update({ name: body.admin_name })
       .eq("family_wallet_id", familyWalletId)
       .eq("wallet_id", ctx.memberId),
     admin.from("family_envelope_names").insert([
-      { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g },
-      { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t },
-      { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s },
+      { family_wallet_id: familyWalletId, envelope_key: "Groceries", display_name: g, icon: icons[0] },
+      { family_wallet_id: familyWalletId, envelope_key: "Tuition", display_name: t, icon: icons[1] },
+      { family_wallet_id: familyWalletId, envelope_key: "Savings", display_name: s, icon: icons[2] },
     ]),
   ]);
   if (memberRes.error) {

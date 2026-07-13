@@ -10,16 +10,17 @@ export interface UseSetEnvelopeNamesResult {
   setEnvelopeNames: (
     familyWalletId: string,
     names: [string, string, string],
+    icons: [string, string, string],
   ) => Promise<void>;
   pending: boolean;
   error: string | null;
 }
 
 /**
- * Admin-only. Renames the three envelope display labels in Supabase
- * (family_envelope_names). Purely cosmetic — the canonical Envelope enum
- * (`Groceries | Tuition | Savings`) still indexes balances and policy.
- * Renames are instant + free.
+ * Admin-only. Renames the three envelope display labels + icon keys in
+ * Supabase (family_envelope_names). Purely cosmetic — the canonical
+ * Envelope enum (`Groceries | Tuition | Savings`) still indexes balances
+ * and policy. Renames are instant + free.
  */
 export function useSetEnvelopeNames(
   adminAddress: string | null,
@@ -28,6 +29,7 @@ export function useSetEnvelopeNames(
     async (
       familyWalletId: string,
       names: [string, string, string],
+      icons: [string, string, string],
     ): Promise<void> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
       if (!familyWalletId) throw new Error("No family wallet id.");
@@ -36,6 +38,7 @@ export function useSetEnvelopeNames(
         family_wallet_id: familyWalletId,
         envelope_key: ENVELOPE_LABELS[i],
         display_name,
+        icon: icons[i],
       }));
       const { data, error } = await supabase
         .from("family_envelope_names")

@@ -28,6 +28,15 @@ export function shortenAddress(address: string): string {
   return `${address.slice(0, 4)}…${address.slice(-4)}`;
 }
 
+/** "KP" from "Kyle Pagunsan", "AI" from "Airi", "?" from "". Used by the
+ *  Avatar fallback tile when no Google profile picture is available. */
+export function initialsOf(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "?";
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /** "•••1461" from a bank account number. Preserves the last 4 chars. */
 export function maskAccountNumber(account: string): string {
   return account.replace(/.(?=.{4})/g, "•");
@@ -66,5 +75,152 @@ export function formatPhpInt(stroops: bigint | null): string {
   return `₱${php.toLocaleString("en-PH", {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
+  })}`;
+}
+
+/** "just now" / "5m ago" / "3h ago" / "2d ago" — shared by the activity
+ *  surfaces (EnvelopeCard blurb, HouseholdSummary mini feed). */
+export function relativeTime(iso: string): string {
+  const secs = Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 1000));
+  if (secs < 60) return "just now";
+  const mins = Math.floor(secs / 60);
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+// Hoisted so the RegExp isn't recompiled on every catch. Match order
+// matters — the WebAuthn "not allowed" line is the biggest offender we
+// want to normalize before any tail URL cleanup fires.
+const RX_WEBAUTHN =
+  /NotAllowedError|operation either timed out or was not allowed|webauthn/i;
+const RX_ABORT = /AbortError/i;
+const RX_INVALID_STATE = /InvalidStateError/i;
+const RX_NETWORK = /NetworkError|Failed to fetch/i;
+const RX_TRAILING_SEE_URL = /\s*See:\s*https?:\/\/\S+\s*$/i;
+const RX_TRAILING_URL = /\s+https?:\/\/\S+\s*$/i;
+
+/** Map raw browser / passkey errors to a message a non-technical family
+ *  admin can act on. Accepts either the caught `unknown` or a
+ *  pre-extracted string. WebAuthn errors are the biggest offender — they
+ *  include a spec URL that reads as spam in a toast. Anything unmatched
+ *  falls through with its own message strip-cleaned of trailing spec
+ *  URLs so the truncation strategy on the toast has less to hide. */
+export function friendlyError(err: unknown): string {
+  const raw =
+    err instanceof Error
+      ? err.message
+      : typeof err === "string"
+        ? err
+        : String(err);
+  const s = raw.trim();
+  if (RX_WEBAUTHN.test(s)) return "Face ID was cancelled or timed out";
+  if (RX_ABORT.test(s)) return "Cancelled";
+  if (RX_INVALID_STATE.test(s)) {
+    return "This device isn't set up for this passkey";
+  }
+  if (RX_NETWORK.test(s)) return "Network hiccup. Try again in a moment.";
+  return s.replace(RX_TRAILING_SEE_URL, "").replace(RX_TRAILING_URL, "");
+}
+
+/** "Nov 8, 3:42 PM" — short absolute timestamp used by activity rows in
+ *  the sub-account panels. Falls back to "" on unparseable input so a
+ *  broken ledger timestamp doesn't blow up the render. */
+export function formatShortDateTime(iso: string): string {
+  try {
+    return new Date(iso).toLocaleString("en-PH", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/** "2026/07/13" — date-only sibling to formatShortDateTime. Used on the
+ *  receipt detail sheet header for "Date:" and "Added:". Same graceful
+ *  fallback on unparseable input. */
+export function formatShortDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/** Loose v4-UUID validator used by every API route that takes a UUID from
+ *  the URL or a JSON body. Cheap regex — not a full parse. */
+export function isUuid(v: unknown): v is string {
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+  );
+}
+
+/** Coerce a wire value (JSON transport) into stroops. Accepts bigint,
+ *  finite number, or all-digit string. Returns null on anything else so
+ *  callers can distinguish "not supplied" from "zero". */
+export function toStroops(v: unknown): bigint | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return BigInt(Math.round(v));
+  if (typeof v === "string" && /^-?\d+$/.test(v)) return BigInt(v);
+  return null;
+}
+
+/** "47h 12m 3s" / "5m 3s" / "0s" — future-tense sibling to relativeTime, for
+ *  countdown surfaces (Grow request unlock timers). Skips zero hour/minute
+ *  fields when they'd read as noise ("3s" not "0h 0m 3s"), keeps them when
+ *  a higher unit is present ("47h 0m 3s" reads honestly). */
+export function formatCountdown(secondsLeft: number): string {
+  const clamped = Math.max(0, Math.floor(secondsLeft));
+  const hours = Math.floor(clamped / 3600);
+  const minutes = Math.floor((clamped % 3600) / 60);
+  const seconds = clamped % 60;
+  const parts: string[] = [];
+  if (hours > 0) parts.push(`${hours}h`);
+  if (minutes > 0 || hours > 0) parts.push(`${minutes}m`);
+  parts.push(`${seconds}s`);
+  return parts.join(" ");
+}
+
+/** Parses a user-typed PHP amount string ("1,234.56" or "1234.56") to
+ *  payment-token stroops. Returns 0n on empty / invalid input. Strips
+ *  commas so paste-from-currency-formatted works cleanly. Rounds via
+ *  Math.round so a fractional stroop doesn't sneak past the i128
+ *  boundary. */
+export function phpToStroops(raw: string): bigint {
+  const clean = raw.replace(/,/g, "").trim();
+  const php = Number(clean);
+  if (!Number.isFinite(php) || php <= 0) return 0n;
+  const tokens = php / PHP_PER_USDC;
+  const stroops = Math.round(tokens * STROOPS_PER_USDC);
+  return stroops > 0 ? BigInt(stroops) : 0n;
+}
+
+/** Formats a stroop amount as PHP or USD based on the caller's currency
+ *  choice (usually from useCurrency()). Uses tabular locale grouping so
+ *  columns of values align in monospace-numeral flows. */
+export function formatCurrencyLocale(
+  stroops: bigint,
+  currency: "PHP" | "USD",
+): string {
+  const usd = stroopsToUsdc(stroops);
+  if (currency === "USD") {
+    return `$${usd.toLocaleString("en-US", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}`;
+  }
+  return `₱${(usd * PHP_PER_USDC).toLocaleString("en-PH", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
   })}`;
 }

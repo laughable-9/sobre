@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import { Fraunces, Inter } from "next/font/google";
+import { Fraunces, Geist_Mono, Inter, Manrope } from "next/font/google";
 import "./globals.css";
 
 import { EnvelopeTransition } from "@/components/sobre/EnvelopeTransition";
@@ -17,8 +17,22 @@ const fraunces = Fraunces({
   style: ["normal", "italic"],
 });
 
+// v2 design system (dashboard): Manrope for display headings, Geist Mono for
+// amounts. Loaded globally but only referenced inside `.sobre-v2` scopes.
+const manrope = Manrope({
+  variable: "--font-manrope",
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700", "800"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+});
+
 const SITE = "https://sobre-mocha.vercel.app";
-const TITLE = "Sobre — joint wallets for OFW families";
+const TITLE = "Sobre: joint wallets for OFW families";
 const DESC =
   "Remittances auto-split into named envelopes the moment they land. Both members see the same balances in real time, on Stellar.";
 
@@ -49,7 +63,8 @@ export default function RootLayout({
   return (
     <html
       lang="en"
-      className={`${inter.variable} ${fraunces.variable} h-full antialiased`}
+      data-scroll-behavior="smooth"
+      className={`${inter.variable} ${fraunces.variable} ${manrope.variable} ${geistMono.variable} sobre-v2 h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
         {children}

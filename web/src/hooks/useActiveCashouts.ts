@@ -101,7 +101,9 @@ export function useActiveCashouts(
   const lastRecoverableRef = useRef<ActiveCashoutRow[]>([]);
   const recoverableTickRef = useRef(0);
   const callbacksRef = useRef(callbacks);
-  callbacksRef.current = callbacks;
+  useEffect(() => {
+    callbacksRef.current = callbacks;
+  }, [callbacks]);
 
   const refresh = useCallback(async () => {
     if (!contractId) {
@@ -238,6 +240,9 @@ export function useActiveCashouts(
   }, [contractId]);
 
   useEffect(() => {
+    // Polling driver — refresh() feeds setState from a fetch. Heartbeat
+    // catches missed realtime updates; intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     const t = setInterval(() => void refresh(), HEARTBEAT_MS);
     return () => clearInterval(t);

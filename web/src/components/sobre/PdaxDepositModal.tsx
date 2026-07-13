@@ -4,21 +4,25 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { Check, Clock, ExternalLink, Loader2, Send } from "lucide-react";
 
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
-import { useDeposit } from "@/hooks/useDeposit";
+import { Sheet } from "@/components/sobre/Sheet";
 import { usePdaxDeposit, type DepositStatus } from "@/hooks/usePdaxDeposit";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
-import {
-  ENVELOPE_LABELS,
-  STROOPS_PER_TOKEN,
-  displayEnvelopeName,
-} from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
+import { ENVELOPE_LABELS, displayEnvelopeName } from "@/lib/config";
+import { useCurrency, type Currency } from "@/lib/currency";
 
 // First pill is the PDAX cash-in minimum (₱200). Anything below is rejected
 // at the /trade/quote step — don't surface it as a one-tap option.
 const QUICK_PHP = [200, 500, 1000, 5000];
+
+/** InstaPay per-transaction ceiling. Deposits use `instapay_upay_cashin`
+ *  which inherits the BSP-mandated ₱50k real-time InstaPay cap. Above
+ *  ₱50k also triggers PDAX's Travel Rule fields (sender ID or address
+ *  or DOB + place of birth) which we don't collect today — capping at
+ *  the tier boundary lets the flow stay identity-light. */
+const PDAX_DEPOSIT_MIN_PHP = 200;
+const PDAX_DEPOSIT_MAX_PHP = 49_999;
 
 /**
  * "Add money via PDAX" flow. Step machine driven by the `pdax_deposits`
@@ -27,11 +31,9 @@ const QUICK_PHP = [200, 500, 1000, 5000];
  *   input    → user types PHP amount + taps Generate
  *   awaiting → checkout URL minted; user pays via InstaPay; we watch the
  *              row tick from pending → funded (PHP received by PDAX) →
- *              credited (the payment token — XLM today, USDC once PDAX UAT
- *              fixes its USDCXLM bucket — withdrawn to user's smart wallet)
- *   confirm  → the token has landed; user taps Confirm to fire the on-chain
- *              deposit() that splits across envelopes
- *   done     → split lands on chain; close modal, dashboard refreshes
+ *              credited (contract's `deposit_from_xlm` swapped USDC and
+ *              credited envelopes atomically)
+ *   done     → server credited envelopes; close modal, dashboard refreshes
  *   failed   → any step errored; show the reason + a Close
  */
 type Phase =
@@ -39,8 +41,6 @@ type Phase =
   | "preparing"
   | "awaiting"
   | "celebrating"
-  | "confirm"
-  | "splitting"
   | "done"
   | "failed"
   | "cancelling";
@@ -58,7 +58,7 @@ const PENDING_MESSAGES = [
 ];
 
 const FUNDED_MESSAGES = [
-  "Buying XLM…",
+  "Almost there…",
   "Locking in the rate…",
   "Sending to your wallet…",
 ];
@@ -78,28 +78,17 @@ function rotatingTitlesFor(status: DepositStatus): string[] {
   }
 }
 
-/** Title shown during the on-chain split step. Two sub-phases:
- *  - checking_balance: polling the SAC `balance()` until the relay's
- *    transfer to the smart wallet has propagated. Surfaces as a distinct
- *    title so the user knows we're waiting on the chain, not stuck.
- *  - depositing: the passkey prompt is up and we're submitting deposit(). */
-const SPLIT_STEP_TITLE: Record<
-  "idle" | "checking_balance" | "depositing",
-  string
-> = {
-  idle: "Splitting across envelopes…",
-  checking_balance: "Waiting for funds to settle…",
-  depositing: "Splitting across envelopes…",
-};
-
 function phaseFromStatus(status: DepositStatus | undefined): Phase {
   switch (status) {
     case "pending":
     case "funded":
       return "awaiting";
     case "credited":
-      return "confirm";
     case "split":
+      // 2026-07-12 pivot: server-side `deposit_from_xlm` credits envelopes
+      // directly, so `credited` is already the terminal successful state.
+      // `split` maps here too for pre-pivot rows that used the old two-step
+      // flow (credited → user signs deposit_with_split → split).
       return "done";
     case "failed":
       return "failed";
@@ -109,7 +98,6 @@ function phaseFromStatus(status: DepositStatus | undefined): Phase {
 }
 
 export function PdaxDepositModal({
-  userAddress,
   state,
   contractId,
   onClose,
@@ -118,7 +106,6 @@ export function PdaxDepositModal({
   resumeIdentifier,
   onActiveIdentifierChange,
 }: {
-  userAddress: string;
   state: WalletState;
   contractId: string;
   /** Plain close. Called for terminal-state closes (done / failed / never
@@ -135,7 +122,9 @@ export function PdaxDepositModal({
   onAttemptCancel?: (
     identifier: string | null,
   ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
-  onSuccess: (info: { usdc: number; stroops: bigint }) => void;
+  /** Fired when the modal reaches the credited terminal state. Parent
+   *  uses it for post-success side effects (hero animation, refresh). */
+  onSuccess?: (info: { usdc: number; stroops: bigint }) => void;
   /** When set, the modal hydrates state from this existing deposit row
    *  and skips the input/preparing steps. The user lands on whichever
    *  phase matches the row's current status (typically `awaiting` or
@@ -147,25 +136,16 @@ export function PdaxDepositModal({
    *  show up in two places at once. */
   onActiveIdentifierChange?: (identifier: string | null) => void;
 }) {
-  const [amountStr, setAmountStr] = useState("500");
+  const [amountStr, setAmountStr] = useState("");
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const { currency } = useCurrency();
 
   const {
     initiate,
     row,
-    markSplit,
     pending: pdaxPending,
     error: pdaxError,
   } = usePdaxDeposit(contractId, resumeIdentifier);
-
-  const {
-    deposit,
-    pending: depositPending,
-    step: depositStep,
-    error: depositError,
-  } = useDeposit(userAddress, contractId);
-
-  const [splitting, setSplitting] = useState(false);
   // "preparing" covers the gap between "user clicked Continue" and "PDAX
   // returned a checkout URL". The /fiat/deposit call takes 1-3s; without
   // this flag the modal stays on the input step with a frozen-looking
@@ -226,18 +206,41 @@ export function PdaxDepositModal({
     }
     if (last === "funded" && current === "credited") {
       setCelebration("funds_arrived");
+      // Fire onSuccess exactly once on the funded → credited transition
+      // so the parent can trigger the hero animation and refresh chains.
+      // row.amount_usdc is populated by phase-2 before we flip credited.
+      if (row?.amount_usdc && onSuccess) {
+        const usdc = Number(row.amount_usdc);
+        const stroops = BigInt(Math.round(usdc * 10_000_000));
+        onSuccess({ usdc, stroops });
+      }
       const t = setTimeout(() => setCelebration(null), 1500);
       return () => clearTimeout(t);
     }
-  }, [row?.status]);
+  }, [row?.status, row?.amount_usdc, onSuccess]);
 
   // Modal mounts → focus the amount input so the user can type immediately.
   useEffect(() => {
     setTimeout(() => inputRef.current?.focus(), 50);
   }, []);
 
-  const amountPhp = Number(amountStr);
-  const validAmount = Number.isFinite(amountPhp) && amountPhp > 0;
+  // User enters an amount in whichever currency the home toggle is set
+  // to. PDAX always trades PHP → USDC on its side, so we convert USD
+  // input to PHP before validation and before firing /fiat/deposit.
+  // 1 USDC = 1 USD (stablecoin), so USD → USDC is identity, and
+  // USD → PHP = usd * phpPerToken.
+  const amountEntered = Number(amountStr);
+  const amountPhp =
+    Number.isFinite(amountEntered) && amountEntered > 0
+      ? currency === "USD"
+        ? amountEntered * phpPerToken
+        : amountEntered
+      : 0;
+  const belowMin =
+    Number.isFinite(amountEntered) && amountEntered > 0 && amountPhp < PDAX_DEPOSIT_MIN_PHP;
+  const aboveMax = amountPhp > PDAX_DEPOSIT_MAX_PHP;
+  const validAmount =
+    amountPhp >= PDAX_DEPOSIT_MIN_PHP && amountPhp <= PDAX_DEPOSIT_MAX_PHP;
   const expectedToken = amountPhp / phpPerToken;
 
   // When the modal opens via "Resume", row is null for one paint while the
@@ -257,15 +260,22 @@ export function PdaxDepositModal({
   else if ((preparing || hydrating) && !row) phase = "preparing";
   else if (!row) phase = "input";
   else if (celebration) phase = "celebrating";
-  else if (splitting) phase = "splitting";
   else phase = phaseFromStatus(row.status);
+
+  // Phases where a backdrop click, drag, or programmatic close must NOT
+  // dismiss the modal — payment is either mid-processing (`awaiting`
+  // after status leaves `pending`, `cancelling`) or in a brief animation
+  // the user shouldn't interrupt (`celebrating`). Sheet's `canClose`
+  // gate ignores backdrop clicks during these phases; attemptCancel
+  // early-returns for the same reason.
+  const lockedPhase =
+    phase === "celebrating" ||
+    phase === "cancelling" ||
+    (phase === "awaiting" && row?.status !== "pending");
 
   // One close path for the inline "Cancel this checkout" button AND the
   // backdrop/escape close. Safety rails:
-  // - LOCKED (refuses to close): celebrating, splitting, confirm, and
-  //   awaiting once status is past pending. Closing while money is at
-  //   PDAX or sitting in the smart wallet would strand funds where the
-  //   user can't easily recover them mid-demo.
+  // - LOCKED (refuses to close): see `lockedPhase` above.
   // - Terminal / pre-start (input, done, failed): plain close, no
   //   cancel call needed.
   // - After 409 (alreadyPaidNotice set): plain close too — we already
@@ -278,11 +288,6 @@ export function PdaxDepositModal({
   //   funded → credited. Otherwise we close after the parent's cancel
   //   + refresh resolves.
   const attemptCancel = async () => {
-    const lockedPhase =
-      phase === "celebrating" ||
-      phase === "splitting" ||
-      phase === "confirm" ||
-      (phase === "awaiting" && row?.status !== "pending");
     if (lockedPhase) return;
 
     const cleanClose =
@@ -346,6 +351,7 @@ export function PdaxDepositModal({
           await onAttemptCancel?.(row.identifier);
         } finally {
           cancelFiredRef.current = false;
+           
           setCancelling(false);
           onClose();
         }
@@ -353,49 +359,34 @@ export function PdaxDepositModal({
       return;
     }
     if (!preparing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCancelling(false);
       onClose();
     }
   }, [cancelling, row?.identifier, preparing, onAttemptCancel, onClose]);
 
-  const error = pdaxError ?? depositError;
+  const error = pdaxError;
 
   const handleGenerate = async () => {
     if (!validAmount) return;
+    // Don't auto-open a popup — a slow or failing `initiate` leaves the
+    // popup stuck at about:blank, which reads as broken. The AwaitingStep
+    // renders a normal anchor the user taps once the URL is ready; the
+    // click there is in the same gesture chain so no popup blocker fires.
     setPreparing(true);
     try {
-      const result = await initiate(amountPhp);
-      // Best-effort auto-open. Some browsers block this (no user gesture
-      // after an awaited call); the AwaitingStep always renders an
-      // "Open checkout" anchor as the reliable fallback so the user
-      // never gets stranded.
-      window.open(result.paymentCheckoutUrl, "_blank", "noopener,noreferrer");
+      await initiate(amountPhp);
     } catch {
       setPreparing(false);
     }
   };
 
-  const handleConfirmSplit = async () => {
-    if (!row || row.amount_usdc === null) return;
-    setSplitting(true);
-    try {
-      const stroops = BigInt(
-        Math.round(row.amount_usdc * STROOPS_PER_TOKEN),
-      );
-      const txHash = await deposit(stroops, state.percents);
-      await markSplit(txHash);
-      onSuccess({ usdc: row.amount_usdc, stroops });
-    } catch {
-      setSplitting(false);
-    }
-  };
-
   return (
-    <div
-      className="sobre-modal-bg"
-      onMouseDown={backdropClose(() => void attemptCancel())}
+    <Sheet
+      onClose={() => void attemptCancel()}
+      canClose={!lockedPhase}
+      ariaLabel="Add money"
     >
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
         {/* key={phase} on the inner wrapper remounts the active phase on
             every transition. animate-in fade-in (tw-animate-css) then
             plays an entry animation so the user sees motion as the modal
@@ -411,8 +402,11 @@ export function PdaxDepositModal({
             inputRef={inputRef}
             pending={pdaxPending}
             valid={validAmount}
+            belowMin={belowMin}
+            aboveMax={aboveMax}
             expectedToken={expectedToken}
             phpPerToken={phpPerToken}
+            currency={currency}
             state={state}
             onCancel={() => void attemptCancel()}
             onGenerate={() => void handleGenerate()}
@@ -456,24 +450,6 @@ export function PdaxDepositModal({
           />
         ) : null}
 
-        {phase === "confirm" && row ? (
-          <ConfirmStep
-            amountToken={row.amount_usdc ?? expectedToken}
-            phpPerToken={phpPerToken}
-            state={state}
-            pending={depositPending || pdaxPending}
-            onConfirm={() => void handleConfirmSplit()}
-            error={error}
-          />
-        ) : null}
-
-        {phase === "splitting" ? (
-          <CenteredCopy
-            icon={<Loader2 size={28} className="animate-spin" />}
-            title={SPLIT_STEP_TITLE[depositStep]}
-          />
-        ) : null}
-
         {phase === "done" ? (
           <CenteredCopy
             icon={<Check size={28} strokeWidth={2.5} />}
@@ -506,8 +482,7 @@ export function PdaxDepositModal({
           />
         ) : null}
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
@@ -517,8 +492,11 @@ function InputStep({
   inputRef,
   pending,
   valid,
+  belowMin,
+  aboveMax,
   expectedToken,
   phpPerToken,
+  currency,
   state,
   onCancel,
   onGenerate,
@@ -529,41 +507,72 @@ function InputStep({
   inputRef: React.RefObject<HTMLInputElement | null>;
   pending: boolean;
   valid: boolean;
+  belowMin: boolean;
+  aboveMax: boolean;
   expectedToken: number;
   phpPerToken: number;
+  currency: Currency;
   state: WalletState;
   onCancel: () => void;
   onGenerate: () => void;
   error: string | null;
 }) {
+  const isUsd = currency === "USD";
+  const symbol = isUsd ? "$" : "₱";
+  const locale = isUsd ? "en-US" : "en-PH";
+  // PDAX enforces PHP bounds; the input operates in the user's currency
+  // so convert to display terms for both the range hint and the pill
+  // labels. USDC = USD 1:1, so USD = PHP / phpPerToken. Round the min
+  // UP and the max DOWN so the hint never lies about what will actually
+  // pass validation.
+  const inputMin = isUsd
+    ? Math.ceil(PDAX_DEPOSIT_MIN_PHP / phpPerToken)
+    : PDAX_DEPOSIT_MIN_PHP;
+  const inputMax = isUsd
+    ? Math.floor(PDAX_DEPOSIT_MAX_PHP / phpPerToken)
+    : PDAX_DEPOSIT_MAX_PHP;
+  const fmt = (n: number) =>
+    n.toLocaleString(locale, {
+      minimumFractionDigits: isUsd ? 2 : 0,
+      maximumFractionDigits: isUsd ? 2 : 0,
+    });
+  const rangeHint = `Between ${symbol}${fmt(inputMin)} and ${symbol}${fmt(inputMax)} per deposit.`;
+  const validationMsg = belowMin
+    ? `PDAX minimum is ${symbol}${fmt(inputMin)}.`
+    : aboveMax
+      ? `InstaPay caps single deposits at ${symbol}${fmt(inputMax)}. Split across multiple deposits for larger amounts.`
+      : null;
+  // Quick-pill amounts in the display currency. In PHP mode the historical
+  // 200 / 500 / 1000 / 5000 stays; in USD mode we translate through the
+  // live rate and snap to sensible round values so the pills read cleanly.
+  const quickAmounts = isUsd ? [5, 10, 20, 100] : QUICK_PHP;
+
   return (
     <>
       <h2>Add money via PDAX</h2>
-      <p className="sub">
-        Pay in pesos via InstaPay (any bank or e-wallet). PDAX credits your
-        Sobre wallet automatically. The contract splits across envelopes when
-        you confirm.
-      </p>
 
       <div className="sobre-input-group">
-        <label htmlFor="pdax-amount">Amount in pesos</label>
+        <label htmlFor="pdax-amount">
+          Amount in {isUsd ? "dollars" : "pesos"}
+        </label>
         <div className="sobre-input-wrap">
-          <span className="prefix">₱</span>
+          <span className="prefix">{symbol}</span>
           <input
             id="pdax-amount"
             ref={inputRef}
             className="sobre-input has-prefix tabular"
             type="number"
             inputMode="decimal"
-            min="0"
-            step="1"
+            min={inputMin}
+            max={inputMax}
+            step={isUsd ? "0.01" : "1"}
             value={amountStr}
             onChange={(e) => setAmountStr(e.target.value)}
             disabled={pending}
           />
         </div>
         <div className="sobre-quick-amts">
-          {QUICK_PHP.map((q) => (
+          {quickAmounts.map((q) => (
             <button
               key={q}
               type="button"
@@ -571,9 +580,18 @@ function InputStep({
               onClick={() => setAmountStr(String(q))}
               disabled={pending}
             >
-              ₱{q.toLocaleString()}
+              {symbol}
+              {q.toLocaleString()}
             </button>
           ))}
+        </div>
+        <div
+          className="mt-2 text-[11px]"
+          style={{
+            color: validationMsg ? "var(--sobre-danger)" : "var(--text-3)",
+          }}
+        >
+          {validationMsg ?? rangeHint}
         </div>
       </div>
 
@@ -582,6 +600,7 @@ function InputStep({
           title="Auto-split preview"
           amountToken={expectedToken}
           phpPerToken={phpPerToken}
+          currency={currency}
           state={state}
         />
       ) : null}
@@ -735,74 +754,22 @@ function AwaitingStep({
   );
 }
 
-function ConfirmStep({
-  amountToken,
-  phpPerToken,
-  state,
-  pending,
-  onConfirm,
-  error,
-}: {
-  amountToken: number;
-  phpPerToken: number;
-  state: WalletState;
-  pending: boolean;
-  onConfirm: () => void;
-  error: string | null;
-}) {
-  const amountPhp = amountToken * phpPerToken;
-  return (
-    <>
-      <h2>Funds arrived</h2>
-      <p className="sub">
-        ₱{amountPhp.toLocaleString("en-PH", { minimumFractionDigits: 2 })} is
-        in your wallet. Confirm to split it across envelopes.
-      </p>
-
-      <SplitPreview
-        title="Split preview"
-        amountToken={amountToken}
-        phpPerToken={phpPerToken}
-        state={state}
-      />
-
-      {error ? (
-        <p
-          className="text-xs break-all mb-3"
-          style={{ color: "var(--sobre-danger)" }}
-        >
-          {error}
-        </p>
-      ) : null}
-
-      <div
-        className="sobre-modal-actions"
-        style={{ justifyContent: "center" }}
-      >
-        <button
-          className="sobre-btn sobre-btn-primary"
-          onClick={onConfirm}
-          disabled={pending}
-          style={pending ? { opacity: 0.5 } : {}}
-        >
-          {pending ? "Splitting…" : "Confirm split"}
-        </button>
-      </div>
-    </>
-  );
-}
-
 function SplitPreview({
   title,
   amountToken,
   phpPerToken,
+  currency,
   state,
 }: {
   title: string;
   amountToken: number;
   phpPerToken: number;
+  currency: Currency;
   state: WalletState;
 }) {
+  const isUsd = currency === "USD";
+  const symbol = isUsd ? "$" : "₱";
+  const locale = isUsd ? "en-US" : "en-PH";
   return (
     <div
       className="rounded-[10px] p-[14px_16px] mb-[18px]"
@@ -810,7 +777,8 @@ function SplitPreview({
     >
       <div className="sobre-label mb-2.5">{title}</div>
       {ENVELOPE_LABELS.map((env, i) => {
-        const portionPhp = ((amountToken * state.percents[i]) / 100) * phpPerToken;
+        const portionToken = (amountToken * state.percents[i]) / 100;
+        const portion = isUsd ? portionToken : portionToken * phpPerToken;
         const label = displayEnvelopeName(env, state.envelope_names);
         return (
           <div
@@ -832,8 +800,8 @@ function SplitPreview({
                     : "var(--text-1)",
               }}
             >
-              + ₱
-              {portionPhp.toLocaleString("en-PH", {
+              + {symbol}
+              {portion.toLocaleString(locale, {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}

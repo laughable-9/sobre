@@ -17,9 +17,9 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
  *  steer the user off-site after Google OAuth completes — a passkey
  *  phishing vector). */
 function safeNext(raw: string | null): string {
-  if (!raw) return "/signup";
+  if (!raw) return "/dashboard";
   if (!raw.startsWith("/") || raw.startsWith("//") || raw.startsWith("/\\")) {
-    return "/signup";
+    return "/dashboard";
   }
   return raw;
 }
@@ -34,7 +34,7 @@ export async function GET(request: NextRequest) {
     const { error } = await supabase.auth.exchangeCodeForSession(code);
     if (error) {
       return NextResponse.redirect(
-        new URL(`/signup?auth_error=${encodeURIComponent(error.message)}`, url.origin),
+        new URL(`/dashboard?auth_error=${encodeURIComponent(error.message)}`, url.origin),
       );
     }
   }

@@ -1,19 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import {
-  Check,
-  ChevronDown,
-  Copy,
-  LogOut,
-  Pencil,
-  RefreshCw,
-} from "lucide-react";
+import { Check, ChevronDown, Copy, LogOut, RefreshCw } from "lucide-react";
 
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { shortenAddress } from "@/lib/format";
-import { getProfile, type UserProfile } from "@/lib/profile";
-import { ProfileEditModal } from "@/components/sobre/ProfileEditModal";
+import { Avatar } from "@/components/sobre/Avatar";
 
 /**
  * Connected-wallet pill + dropdown menu. Lives in the landing nav (and any
@@ -27,23 +19,14 @@ import { ProfileEditModal } from "@/components/sobre/ProfileEditModal";
  */
 export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
   const { address, disconnect, refresh } = wallet;
+  const avatarUrl = wallet.wallet?.avatar_url ?? null;
+  const displayName =
+    wallet.wallet?.display_name ?? wallet.user?.name ?? "";
+  const email = wallet.user?.email ?? "";
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
-  const [editingProfile, setEditingProfile] = useState(false);
-  const [profile, setProfileState] = useState<UserProfile | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
-
-  // Pull the profile on mount + whenever the connected address changes; we
-  // re-pull after the edit modal saves so the new emoji/name lands in the
-  // pill without a page reload.
-  useEffect(() => {
-    if (!address) {
-      setProfileState(null);
-      return;
-    }
-    setProfileState(getProfile(address));
-  }, [address]);
 
   // Close on outside click + Escape.
   useEffect(() => {
@@ -99,13 +82,13 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
         aria-expanded={open}
         title={address}
       >
-        {profile?.emoji ? (
-          <span className="emoji" aria-hidden>
-            {profile.emoji}
-          </span>
-        ) : null}
+        <Avatar
+          src={avatarUrl}
+          name={displayName || shortenAddress(address)}
+          size={20}
+        />
         <span className="addr">
-          {profile?.name ?? shortenAddress(address)}
+          {displayName || shortenAddress(address)}
         </span>
         <ChevronDown
           size={14}
@@ -121,59 +104,33 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
       {open ? (
         <div className="sobre-wallet-menu-panel" role="menu">
           <div className="sobre-wallet-menu-head">
-            {profile ? (
-              <div className="flex items-center gap-3 mb-3">
+            <div className="flex items-center gap-3">
+              <Avatar src={avatarUrl} name={displayName} size={44} />
+              <div className="min-w-0">
                 <div
-                  className="grid place-items-center"
-                  style={{
-                    width: 36,
-                    height: 36,
-                    borderRadius: 10,
-                    background: "var(--surface-alt)",
-                    border: "1px solid var(--border)",
-                    fontSize: 20,
-                  }}
+                  className="font-semibold truncate"
+                  style={{ fontSize: 14, color: "var(--text-1)" }}
                 >
-                  {profile.emoji}
+                  {displayName || shortenAddress(address)}
                 </div>
-                <div className="min-w-0">
+                {email ? (
                   <div
-                    className="font-semibold truncate"
-                    style={{ fontSize: 14, color: "var(--text-1)" }}
-                  >
-                    {profile.name}
-                  </div>
-                  <div
-                    className="text-[11px]"
+                    className="truncate text-[12px]"
                     style={{ color: "var(--text-3)" }}
                   >
-                    Your profile
+                    {email}
                   </div>
-                </div>
+                ) : null}
               </div>
-            ) : null}
-            <div className="label">Connected wallet</div>
-            <div className="addr-full">{address}</div>
+            </div>
           </div>
-
-          <button
-            type="button"
-            onClick={() => {
-              setOpen(false);
-              setEditingProfile(true);
-            }}
-            className="sobre-wallet-menu-item"
-            role="menuitem"
-          >
-            <Pencil size={15} strokeWidth={2} />
-            <span>Edit your profile</span>
-          </button>
 
           <button
             type="button"
             onClick={() => void handleCopy()}
             className="sobre-wallet-menu-item"
             role="menuitem"
+            title={address}
           >
             {copied ? (
               <Check
@@ -184,7 +141,7 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
             ) : (
               <Copy size={15} strokeWidth={2} />
             )}
-            <span>{copied ? "Copied!" : "Copy wallet address"}</span>
+            <span>{copied ? "Copied!" : "Copy your Sobre ID"}</span>
           </button>
 
           <button
@@ -203,7 +160,7 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
                   : "none",
               }}
             />
-            <span>{refreshing ? "Refreshing…" : "Refresh wallet"}</span>
+            <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
           </button>
 
           <div className="sobre-wallet-menu-divider" />
@@ -215,21 +172,9 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
             role="menuitem"
           >
             <LogOut size={15} strokeWidth={2} />
-            <span>Disconnect wallet</span>
+            <span>Sign out</span>
           </button>
         </div>
-      ) : null}
-
-      {editingProfile ? (
-        <ProfileEditModal
-          address={address}
-          current={profile}
-          onClose={() => setEditingProfile(false)}
-          onSaved={() => {
-            setEditingProfile(false);
-            setProfileState(getProfile(address));
-          }}
-        />
       ) : null}
     </div>
   );

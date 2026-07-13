@@ -38,7 +38,7 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "10000000000"
+                  "i128": "1000000000"
                 }
               ]
             }
@@ -60,13 +60,13 @@
                   "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
                 },
                 {
-                  "i128": "500000000"
+                  "i128": "300000000"
                 },
                 {
                   "i128": "0"
                 },
                 {
-                  "i128": "500000000"
+                  "i128": "100000000"
                 }
               ]
             }
@@ -85,7 +85,7 @@
                       "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM"
                     },
                     {
-                      "i128": "1000000000"
+                      "i128": "400000000"
                     }
                   ]
                 }
@@ -227,13 +227,13 @@
                       "val": {
                         "vec": [
                           {
-                            "i128": "500000000"
+                            "i128": "300000000"
                           },
                           {
                             "i128": "0"
                           },
                           {
-                            "i128": "500000000"
+                            "i128": "100000000"
                           }
                         ]
                       }
@@ -321,7 +321,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "9000000000"
+                      "i128": "600000000"
                     }
                   },
                   {
@@ -373,7 +373,7 @@
                       "symbol": "amount"
                     },
                     "val": {
-                      "i128": "1000000000"
+                      "i128": "400000000"
                     }
                   },
                   {

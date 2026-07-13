@@ -3,10 +3,14 @@
 import { Address, contract } from "@stellar/stellar-sdk";
 
 import {
+  BLEND_POOL_ID,
   FACTORY_CONTRACT_ID,
   NETWORK,
   PAYMENT_TOKEN_SAC_ID,
+  SOROSWAP_ROUTER_ID,
+  XLM_SAC_ID,
 } from "@/lib/config";
+import { invokeWrite } from "@/lib/contract";
 import {
   getDeployerAddress,
   signTransaction,
@@ -19,7 +23,7 @@ import {
  *   1. Load the factory contract's spec from chain (one network round-trip).
  *   2. Build an AssembledTransaction for `create_sobre(admin, payment_token,
  *      percents)` with the caller's smart wallet C-address as admin. Display
- *      fields (wallet name, envelope names, admin display name/emoji) are NO
+ *      fields (wallet name, envelope names, admin display name) are NO
  *      LONGER passed on-chain — they live in Supabase, written in step 6.
  *   3. Sign auth entries with the user's passkey via passkey-kit. The FaceID
  *      prompt fires inside this step.
@@ -33,7 +37,7 @@ import {
  *      insert a `public.family_wallets` row (carries the wallet display name).
  *      The `bootstrap_family_admin` trigger auto-inserts the matching
  *      `public.family_members` row with `role = 'admin'`. We then UPDATE that
- *      row with the admin's display name + emoji, and seed the three
+ *      row with the admin's display name, and seed the three
  *      `family_envelope_names` rows with the chosen labels.
  *
  * Untyped indexed access on the Client is deliberate: `Client.from` returns a
@@ -47,11 +51,17 @@ export interface CreateFamilyArgs {
   /** Supabase `public.wallets.id` for the same wallet (created_by FK). */
   myWalletDbId: string;
   envelopeNames: readonly [string, string, string];
+  /** Per-envelope icon key; null slots take the built-in default. */
+  envelopeIcons?: readonly [string | null, string | null, string | null];
   percents: readonly [number, number, number];
   /** Display name written to family_wallets.display_name. */
   walletName: string;
   adminName: string;
-  adminEmoji: string;
+  /** Onboarding metadata — off-chain, optional. Omitted by the dashboard
+   *  create path; supplied by the creator onboarding flow. */
+  householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
 }
 
 export interface CreateFamilyResult {
@@ -172,6 +182,26 @@ export async function createFamilyWallet(
     );
   }
 
+  // Enable Grow inline so the PDAX ramp works on first deposit — the
+  // contract's `deposit_from_xlm` reads Blend + Soroswap addresses out
+  // of Grow storage, and skipping this would strand any freshly-created
+  // family at "PDAX credited, on-chain invoke panicked". Two FaceID
+  // prompts back-to-back is the trade-off; the alternative (a separate
+  // contract-side SwapConfig DataKey) would require a wasm redeploy for
+  // what is architecturally the same pin. Families that never use Grow
+  // just leave the bucket empty — enabling costs nothing beyond the fee.
+  try {
+    await invokeWrite(familyContractId, "grow_enable", [
+      Address.fromString(BLEND_POOL_ID).toScVal(),
+      Address.fromString(XLM_SAC_ID).toScVal(),
+      Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+    ]);
+  } catch (err) {
+    throw new Error(
+      `[create_sobre step 6] auto-grow_enable failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
+
   // Mirror via the server-side route that verifies caller is the on-chain
   // admin of the new contract (closes the "predict next salt + pre-insert"
   // squat). Client-side INSERT on family_wallets is RLS-revoked.
@@ -180,8 +210,11 @@ export async function createFamilyWallet(
     displayName: args.walletName,
     percents: args.percents,
     adminName: args.adminName,
-    adminEmoji: args.adminEmoji,
     envelopeNames: args.envelopeNames,
+    envelopeIcons: args.envelopeIcons,
+    householdType: args.householdType ?? null,
+    budgetMin: args.budgetMin ?? null,
+    budgetMax: args.budgetMax ?? null,
   });
 
   return { familyContractId, familyWalletId };
@@ -198,8 +231,13 @@ export async function mirrorFamilyCreate(args: {
   displayName: string;
   percents: readonly [number, number, number];
   adminName: string;
-  adminEmoji: string;
   envelopeNames: readonly [string, string, string];
+  envelopeIcons?: readonly [string | null, string | null, string | null];
+  /** Onboarding metadata — off-chain, all optional. Validated + stored by the
+   *  route; omit for the non-onboarding (dashboard) create path. */
+  householdType?: "family-at-home" | "both-abroad" | "scratch" | null;
+  budgetMin?: number | null;
+  budgetMax?: number | null;
 }): Promise<{ familyWalletId: string }> {
   const res = await fetch("/api/family/create", {
     method: "POST",
@@ -209,8 +247,17 @@ export async function mirrorFamilyCreate(args: {
       display_name: args.displayName,
       percents: [...args.percents],
       admin_name: args.adminName,
-      admin_emoji: args.adminEmoji,
       envelope_names: [...args.envelopeNames],
+      ...(args.envelopeIcons
+        ? { envelope_icons: [...args.envelopeIcons] }
+        : {}),
+      // Only include when provided so the route sees `undefined` (→ NULL) not
+      // a spurious value on the dashboard create path.
+      ...(args.householdType != null
+        ? { household_type: args.householdType }
+        : {}),
+      ...(args.budgetMin != null ? { budget_min: args.budgetMin } : {}),
+      ...(args.budgetMax != null ? { budget_max: args.budgetMax } : {}),
     }),
   });
   if (!res.ok) {

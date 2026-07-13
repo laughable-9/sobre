@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 
 /**
  * Server-side proxy from passkey-kit's `PasskeyServer` (which wraps the
@@ -24,6 +25,10 @@ import { requireWallet } from "@/lib/auth/familyMember";
 export const runtime = "nodejs";
 
 const CHANNELS_ENDPOINT = "https://channels.openzeppelin.com/testnet";
+/** Hard body-size ceiling. A signed Soroban tx envelope is ~2 KB; padding
+ *  128 KB leaves headroom without letting an attacker push megabytes
+ *  through our upstream fetch. */
+const MAX_BODY_BYTES = 128 * 1024;
 
 export async function POST(req: NextRequest) {
   const ctx = await requireWallet();
@@ -37,16 +42,55 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const body = await req.text();
-
-  const upstream = await fetch(CHANNELS_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body,
+  const rate = await enforceDailyLimit({
+    endpoint: "passkey_relayer",
+    walletId: ctx.memberId,
+    familyWalletId: null,
+    callerEmail: ctx.email,
+    perUser: 200,
+    perFamily: 500,
   });
+  if (rate) return rate;
+
+  // Check content-length BEFORE buffering. Reading req.text() first
+  // would let a hostile client push megabytes into memory before we
+  // 413 them, which OOMs the serverless instance.
+  const contentLength = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: `Body too large. Max ${MAX_BODY_BYTES} bytes.` },
+      { status: 413 },
+    );
+  }
+  const body = await req.text();
+  if (body.length > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: `Body too large. Max ${MAX_BODY_BYTES} bytes.` },
+      { status: 413 },
+    );
+  }
+
+  // Guard the upstream call so a DNS/TLS/timeout hiccup at Channels
+  // doesn't bubble to Next.js as an unhandled 500 — the passkey signing
+  // modal would just hang on a generic error.
+  let upstream: Response;
+  try {
+    upstream = await fetch(CHANNELS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    console.error("[relayer] Channels fetch failed", e);
+    return NextResponse.json(
+      { error: "Relayer unavailable" },
+      { status: 502 },
+    );
+  }
 
   const responseBody = await upstream.text();
 

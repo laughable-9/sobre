@@ -6,6 +6,7 @@ members = [
 
 [workspace.dependencies]
 soroban-sdk = "25"
+blend-contract-sdk = "2.25.0"
 
 [profile.release]
 opt-level = "z"

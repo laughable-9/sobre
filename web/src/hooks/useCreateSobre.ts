@@ -4,16 +4,33 @@ import { useCallback } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
 import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
-import { FACTORY_CONTRACT_ID, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
+import {
+  BLEND_POOL_ID,
+  FACTORY_CONTRACT_ID,
+  PAYMENT_TOKEN_SAC_ID,
+  SOROSWAP_ROUTER_ID,
+  XLM_SAC_ID,
+} from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
 import { mirrorFamilyCreate } from "@/lib/familyWallets";
+
+export type CreateSobrePhase =
+  | "idle"
+  | "deploying"
+  | "enabling-grow"
+  | "mirroring"
+  | "done";
 
 export interface CreateSobreArgs {
   walletName: string;
   adminName: string;
-  adminEmoji: string;
   percents?: [number, number, number];
   envelopeNames?: [string, string, string];
+  envelopeIcons?: [string | null, string | null, string | null];
+  /** Fires when the multi-step create moves to the next phase. Callers can
+   *  render a progress checklist so the two FaceID prompts + the mirror
+   *  don't feel like an opaque "Opening..." spinner. */
+  onPhase?: (phase: CreateSobrePhase) => void;
 }
 
 export interface UseCreateSobreResult {
@@ -39,11 +56,13 @@ export function useCreateSobre(
     async ({
       walletName,
       adminName,
-      adminEmoji,
       percents = [50, 30, 20],
       envelopeNames = ["Groceries", "Tuition", "Savings"],
+      envelopeIcons,
+      onPhase,
     }: CreateSobreArgs): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
+      onPhase?.("deploying");
       const args = [
         Address.fromString(userAddress).toScVal(),
         Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
@@ -57,14 +76,25 @@ export function useCreateSobre(
         throw new Error("create_sobre returned no contract address");
       }
       const newContractId = returnValue;
+      // Auto-enable Grow so PDAX deposits work on first try — the
+      // contract's deposit_from_xlm reads Blend + Soroswap addresses
+      // out of Grow storage. Second FaceID prompt is the trade-off.
+      onPhase?.("enabling-grow");
+      await invokeWrite(newContractId, "grow_enable", [
+        Address.fromString(BLEND_POOL_ID).toScVal(),
+        Address.fromString(XLM_SAC_ID).toScVal(),
+        Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+      ]);
+      onPhase?.("mirroring");
       await mirrorFamilyCreate({
         contractId: newContractId,
         displayName: walletName,
         percents,
         adminName,
-        adminEmoji,
         envelopeNames,
+        envelopeIcons,
       });
+      onPhase?.("done");
       return newContractId;
     },
     [userAddress],

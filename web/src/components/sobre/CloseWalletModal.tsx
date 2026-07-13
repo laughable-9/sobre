@@ -3,12 +3,13 @@
 import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 
+import { Sheet } from "@/components/sobre/Sheet";
 import { useCloseWallet } from "@/hooks/useCloseWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { STROOPS_PER_USDC } from "@/lib/config";
 import { markSobreClosed } from "@/lib/closedSobres";
-import { backdropClose } from "@/lib/ui";
 import { PHP_PER_USDC } from "@/lib/config";
+import { walletTotalStroops } from "@/lib/walletTotals";
 
 export function CloseWalletModal({
   adminAddress,
@@ -31,7 +32,9 @@ export function CloseWalletModal({
     adminAddress,
     contractId,
   );
-  const total = state.balances.reduce((a, b) => a + b, 0n);
+  // close_wallet sweeps Blend positions + Grow bucket back to admin, so
+  // the preview total needs to include them (not just envelope caches).
+  const total = walletTotalStroops(state);
   const totalUsdc = Number(total) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 
@@ -49,8 +52,7 @@ export function CloseWalletModal({
   };
 
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(onClose)}>
-      <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
+    <Sheet onClose={onClose} role="alertdialog" ariaLabel="Close wallet">
         <div className="flex items-center gap-3 mb-1.5">
           <div
             className="grid place-items-center"
@@ -83,7 +85,6 @@ export function CloseWalletModal({
           <div
             className="tabular mt-1"
             style={{
-              fontFamily: "var(--serif)",
               fontSize: 26,
               fontWeight: 600,
               color: "var(--text-1)",
@@ -111,7 +112,6 @@ export function CloseWalletModal({
             id="close-confirm"
             className="sobre-input"
             type="text"
-            placeholder="CLOSE"
             value={confirmText}
             onChange={(e) => setConfirmText(e.target.value)}
             disabled={pending}
@@ -149,7 +149,6 @@ export function CloseWalletModal({
             {pending ? "Closing…" : "Close wallet"}
           </button>
         </div>
-      </div>
-    </div>
+    </Sheet>
   );
 }

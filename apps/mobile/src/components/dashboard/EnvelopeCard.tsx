@@ -111,7 +111,7 @@ export function EnvelopeCard({
 
       <View style={styles.meta}>
         <View style={styles.metaRow}>
-          <Text style={styles.metaLabel}>Spent this month</Text>
+          <Text style={styles.metaLabel}>Withdrawn this month</Text>
           <Text style={styles.metaValue}>
             {formatPhpLocale(spentThisMonthStroops)}
           </Text>

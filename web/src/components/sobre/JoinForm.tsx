@@ -5,7 +5,7 @@ import Link from "next/link";
 
 import { useJoinWallet } from "@/hooks/useJoinWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { EmojiPicker, SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
+import { Avatar } from "@/components/sobre/Avatar";
 import { getProfile } from "@/lib/profile";
 
 export function JoinForm({
@@ -13,6 +13,8 @@ export function JoinForm({
   state,
   contractId,
   inviteToken,
+  displayName,
+  avatarUrl,
   onSuccess,
   onCancel,
 }: {
@@ -22,10 +24,16 @@ export function JoinForm({
   /** 32-byte plaintext token from the `/invite/<token>` URL. Passed to
    *  `join_wallet` so the contract can verify against the on-chain hash. */
   inviteToken: Uint8Array;
+  /** Google display name from the OAuth session — pre-fill for the name
+   *  fallback when no local profile is saved yet. */
+  displayName?: string;
+  /** Google profile picture URL from the OAuth session. */
+  avatarUrl?: string | null;
   onSuccess: () => void;
   onCancel: () => void;
 }) {
   const savedProfile = getProfile(userAddress);
+  const resolvedName = savedProfile?.name ?? displayName ?? "";
   const { joinWallet, pending, error } = useJoinWallet(userAddress, contractId);
 
   // `alreadyMember` is handled one altitude up — the /invite/[token] page
@@ -35,18 +43,11 @@ export function JoinForm({
   return (
     <main className="flex-1 grid place-items-center px-6">
       <div className="text-center max-w-md w-full">
-        <div
-          className="grid place-items-center mx-auto text-[40px]"
-          style={{
-            width: 72,
-            height: 72,
-            borderRadius: "50%",
-            background: "var(--surface-alt)",
-            border: "1.5px solid var(--border)",
-          }}
-        >
-          📩
-        </div>
+        <Avatar
+          name={state.wallet_name || "Family Wallet"}
+          size={72}
+          style={{ margin: "0 auto" }}
+        />
         <h1 className="font-serif text-[36px] font-semibold mt-5 mb-3">
           You&apos;re invited
         </h1>
@@ -73,20 +74,16 @@ export function JoinForm({
               Back to My Sobres
             </Link>
           </>
-        ) : savedProfile ? (
+        ) : resolvedName ? (
           <ConfirmJoin
-            name={savedProfile.name}
-            emoji={savedProfile.emoji}
+            name={resolvedName}
+            avatarUrl={avatarUrl ?? null}
             pending={pending}
             error={error}
             onCancel={onCancel}
             onConfirm={async () => {
               try {
-                await joinWallet(
-                  savedProfile.name,
-                  savedProfile.emoji,
-                  inviteToken,
-                );
+                await joinWallet(resolvedName, inviteToken);
                 onSuccess();
               } catch {
                 /* error on hook */
@@ -95,13 +92,13 @@ export function JoinForm({
           />
         ) : (
           <ProfileJoin
-            contractId={contractId}
+            avatarUrl={avatarUrl ?? null}
             pending={pending}
             error={error}
             onCancel={onCancel}
-            onSubmit={async (name, emoji) => {
+            onSubmit={async (name) => {
               try {
-                await joinWallet(name, emoji, inviteToken);
+                await joinWallet(name, inviteToken);
                 onSuccess();
               } catch {
                 /* error on hook */
@@ -114,19 +111,18 @@ export function JoinForm({
   );
 }
 
-/** One-click confirm: the user already has a saved profile so we don't ask
- *  for a name + emoji again — just confirm they want to join this wallet
- *  under their existing identity. */
+/** One-click confirm: we already have a name (saved profile or Google session)
+ *  so we just ask the user to confirm they want to join this wallet. */
 function ConfirmJoin({
   name,
-  emoji,
+  avatarUrl,
   pending,
   error,
   onConfirm,
   onCancel,
 }: {
   name: string;
-  emoji: string;
+  avatarUrl: string | null;
   pending: boolean;
   error: string | null;
   onConfirm: () => void;
@@ -141,19 +137,7 @@ function ConfirmJoin({
           border: "1px solid var(--border)",
         }}
       >
-        <div
-          className="grid place-items-center"
-          style={{
-            width: 44,
-            height: 44,
-            borderRadius: 12,
-            background: "var(--surface)",
-            border: "1px solid var(--border)",
-            fontSize: 24,
-          }}
-        >
-          {emoji}
-        </div>
+        <Avatar name={name} src={avatarUrl} size={44} />
         <div className="flex-1 min-w-0 text-left">
           <div
             className="text-[11px] uppercase tracking-wider"
@@ -205,56 +189,59 @@ function ConfirmJoin({
   );
 }
 
-/** Fallback: no saved profile (user hit the invite link before doing the
- *  first-connect profile setup). Collect name + emoji inline and join. */
+/** Fallback: no saved profile and no Google name available. Collect just a
+ *  name inline and join. */
 function ProfileJoin({
-  contractId: _contractId,
+  avatarUrl,
   pending,
   error,
   onSubmit,
   onCancel,
 }: {
-  contractId: string;
+  avatarUrl: string | null;
   pending: boolean;
   error: string | null;
-  onSubmit: (name: string, emoji: string) => Promise<void> | void;
+  onSubmit: (name: string) => Promise<void> | void;
   onCancel: () => void;
 }) {
   const [name, setName] = useState("");
-  const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[1]);
   const valid = name.trim().length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    void onSubmit(name.trim(), emoji);
+    void onSubmit(name.trim());
   };
 
   return (
     <form onSubmit={handleSubmit} className="text-left space-y-4 mt-4">
-      <p
-        className="text-[14px] -mt-2"
-        style={{ color: "var(--text-3)" }}
+      <div
+        className="rounded-[10px] p-3 flex items-center gap-3"
+        style={{
+          background: "var(--surface-alt)",
+          border: "1px solid var(--border)",
+        }}
       >
-        Pick your name + emoji so you show up on both dashboards.
-      </p>
+        <Avatar name={name || "?"} src={avatarUrl} size={40} />
+        <p
+          className="text-[13px] flex-1"
+          style={{ color: "var(--text-2)" }}
+        >
+          Add a name so you show up on both dashboards.
+        </p>
+      </div>
       <div className="sobre-input-group">
         <label htmlFor="join-name">Your name</label>
         <input
           id="join-name"
           className="sobre-input"
           type="text"
-          placeholder="Maria"
           value={name}
           onChange={(e) => setName(e.target.value)}
           disabled={pending}
           maxLength={32}
           autoFocus
         />
-      </div>
-      <div className="sobre-input-group">
-        <label>Your icon</label>
-        <EmojiPicker value={emoji} onChange={setEmoji} disabled={pending} />
       </div>
       {error ? (
         <p

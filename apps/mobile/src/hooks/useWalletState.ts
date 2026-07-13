@@ -15,7 +15,7 @@ import { NETWORK, type EnvelopeName } from "../lib/config";
 import { getServer } from "../lib/contract";
 import { envelopeNameFromScNative } from "../lib/format";
 
-export interface SpendPolicy {
+export interface WalletPolicy {
   require_all_sigs: boolean;
   daily_limit: bigint | null;
   protected_envelopes: EnvelopeName[];
@@ -44,7 +44,7 @@ export interface WalletState {
   percents: number[];
   members: Member[];
   balances: bigint[];
-  policy: SpendPolicy;
+  policy: WalletPolicy;
   pending: PendingRequest[];
 }
 
@@ -130,7 +130,7 @@ export function useWalletState(
 
 function normalizeWalletState(raw: Record<string, unknown>): WalletState {
   const rawPolicy = (raw.policy ?? {}) as Record<string, unknown>;
-  const policy: SpendPolicy = {
+  const policy: WalletPolicy = {
     require_all_sigs: Boolean(rawPolicy.require_all_sigs),
     daily_limit:
       rawPolicy.daily_limit === undefined || rawPolicy.daily_limit === null

@@ -15,8 +15,16 @@ export interface FamilySubaccountRow {
    *  family_members policy). */
   walletAddress: string | null;
   displayName: string;
-  emoji: string;
+  /** Google profile picture. Prefers family_subaccounts.avatar_url when
+   *  set, falls back to wallets.avatar_url so a sub-account signed in with
+   *  Google shows their Gmail avatar in the activity feed. */
+  avatarUrl: string | null;
   invitePending: boolean;
+  /** sha256 hex of the plaintext invite token. Populated on `create_
+   *  subaccount_invite` and needed by `cancel_subaccount_invite` to look
+   *  up the on-chain storage entry. Null on rows redeemed before the
+   *  column existed. */
+  inviteTokenHash: string | null;
   createdAt: string;
 }
 
@@ -33,8 +41,13 @@ interface RawRow {
   wallet_id: string | null;
   wallet_address: string | null;
   display_name: string;
-  emoji: string;
+  avatar_url: string | null;
+  invite_token_hash: string | null;
   created_at: string;
+  wallets:
+    | { avatar_url: string | null }
+    | Array<{ avatar_url: string | null }>
+    | null;
 }
 
 /**
@@ -62,7 +75,7 @@ export function useSubaccounts(
       const { data, error: fetchErr } = await supabase
         .from("family_subaccounts")
         .select(
-          "id, family_wallet_id, wallet_id, wallet_address, display_name, emoji, created_at",
+          "id, family_wallet_id, wallet_id, wallet_address, display_name, avatar_url, invite_token_hash, created_at, wallets(avatar_url)",
         )
         .eq("family_wallet_id", familyWalletId)
         .order("created_at", { ascending: true });
@@ -72,16 +85,20 @@ export function useSubaccounts(
       }
       setError(null);
       const rows: FamilySubaccountRow[] = ((data as RawRow[] | null) ?? []).map(
-        (r) => ({
-          id: r.id,
-          familyWalletId: r.family_wallet_id,
-          walletDbId: r.wallet_id,
-          walletAddress: r.wallet_address,
-          displayName: r.display_name,
-          emoji: r.emoji,
-          invitePending: r.wallet_id === null,
-          createdAt: r.created_at,
-        }),
+        (r) => {
+          const walletsRow = Array.isArray(r.wallets) ? r.wallets[0] : r.wallets;
+          return {
+            id: r.id,
+            familyWalletId: r.family_wallet_id,
+            walletDbId: r.wallet_id,
+            walletAddress: r.wallet_address,
+            displayName: r.display_name,
+            avatarUrl: r.avatar_url ?? walletsRow?.avatar_url ?? null,
+            invitePending: r.wallet_id === null,
+            inviteTokenHash: r.invite_token_hash,
+            createdAt: r.created_at,
+          };
+        },
       );
       setSubaccounts(rows);
     } finally {
@@ -90,14 +107,25 @@ export function useSubaccounts(
   }, [familyWalletId]);
 
   useEffect(() => {
+    // Fetch-on-mount external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchAll();
   }, [fetchAll]);
 
   useEffect(() => {
     if (!familyWalletId) return;
     const supabase = getSupabaseBrowserClient();
+    // Supabase caches channels by name; two hook instances subscribing
+    // to the same familyWalletId (e.g. SubAccountsPanel + SubAccountView)
+    // would collide and the second `.on()` would throw "cannot add
+    // postgres_changes callbacks after subscribe()". Add a per-instance
+    // suffix so each hook gets its own channel.
+    const suffix =
+      typeof crypto !== "undefined" && crypto.randomUUID
+        ? crypto.randomUUID()
+        : Math.random().toString(36).slice(2);
     const channel = supabase
-      .channel(`family-subaccounts:${familyWalletId}`)
+      .channel(`family-subaccounts:${familyWalletId}:${suffix}`)
       .on(
         "postgres_changes" as never,
         {

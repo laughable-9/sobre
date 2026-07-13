@@ -23,10 +23,11 @@ import {
   requireFamilyMember,
   requireFamilyParticipant,
 } from "@/lib/auth/familyMember";
-import { PAYMENT_TOKEN } from "@/lib/config";
+import { PAYMENT_TOKEN, PDAX_INSTAPAY_FEE_PHP } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxErrorToResponse, PdaxError } from "@/lib/pdax/client";
 import { getPdaxCryptoDepositAddr } from "@/lib/pdax/withdrawals";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getRelayPublicKey } from "@/lib/relay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -115,6 +116,16 @@ export async function POST(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
 
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_fiat_withdraw",
+    walletId: memberId,
+    familyWalletId,
+    callerEmail: ctx.email,
+    perUser: 10,
+    perFamily: 30,
+  });
+  if (rate) return rate;
+
   // When this is a sub-account cashout, verify the caller is actually the
   // owner of that sub-account row. Without this any participant could pass
   // somebody else's subaccount_id and cash out from their balance.
@@ -154,7 +165,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "No bank on file — register a Philippine bank account before cashing out",
+            "No bank on file. Register a Philippine bank account before cashing out.",
         },
         { status: 400 },
       );
@@ -199,6 +210,12 @@ export async function POST(req: Request) {
   }
 
   const identifier = body.identifier ?? crypto.randomUUID();
+  // amount_php stored on the row = what lands at the user's bank (the
+  // number they typed in the modal). service_fee_php = PDAX's InstaPay
+  // fee, taken from the sold USDC proceeds before the bank transfer.
+  // amount_usdc is the pre-fee on-chain spend, so amount_usdc's PHP
+  // conversion ~= amount_php + service_fee_php. Server-side config is
+  // the source of truth so client can't lie about the fee.
   const { error: insertErr } = await admin.from("pdax_withdrawals").insert({
     identifier,
     family_wallet_id: familyWalletId,
@@ -207,6 +224,7 @@ export async function POST(req: Request) {
     subaccount_id: subaccountValid ? body.subaccount_id : null,
     amount_usdc: body.amount_token,
     amount_php: body.amount_php,
+    service_fee_php: PDAX_INSTAPAY_FEE_PHP,
     beneficiary_bank_code: bankCode,
     beneficiary_account_name: accountName,
     beneficiary_account_number: accountNumber,

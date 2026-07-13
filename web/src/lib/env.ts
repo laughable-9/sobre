@@ -85,3 +85,30 @@ export function relayEnv() {
     secret: required(process.env.RELAY_G_SECRET, "RELAY_G_SECRET"),
   };
 }
+
+/**
+ * Google Gemini API key (server-only). Used by /api/expense-logs/scan to
+ * OCR + classify receipt images on gemini-3.1-flash-lite. Deferred via a
+ * getter so the app boots without it — only the scan route throws on missing.
+ */
+export function geminiEnv() {
+  return {
+    apiKey: required(process.env.GEMINI_API_KEY, "GEMINI_API_KEY"),
+  };
+}
+
+/**
+ * Comma-separated list of caller emails that bypass daily rate limits.
+ * Used for the dev team's own accounts so we can hammer testnet endpoints
+ * without hitting the 30/60 caps meant for real users. Never set in prod.
+ * Empty / unset means no bypasses.
+ */
+export function rateLimitBypassEmails(): Set<string> {
+  const raw = process.env.RATE_LIMIT_BYPASS_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0),
+  );
+}

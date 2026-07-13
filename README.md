@@ -9,9 +9,9 @@
 
 > A joint account for families living worlds apart.
 
-Sobre is a shared family wallet for OFW households, built on Stellar. Each remittance is split atomically into named envelopes (e.g., Groceries, Tuition, Savings) the moment it lands, so both the OFW abroad and the family at home see the same balances update in real time.
+Sobre is a shared family wallet for OFW households, built on Stellar. Payment inflows arrive on chain and a Soroban contract atomically splits them across three named envelopes (e.g. Groceries, Tuition, Savings) by admin-set percentages. Both the OFW abroad and the family at home see the same balances update in real time, with the Savings envelope earning yield through Ondo's USDY (mocked on testnet) and an optional 48-hour-timelocked Grow bucket that supplies into Blend.
 
-Built for the [Rise In x Stellar APAC Hackathon](https://www.risein.com/programs/build-on-stellar-philippines-hackathon), Philippines track. Demo day: May 23, 2026, PDAX Office, Manila.
+Currently building for the [Rise In × Stellar APAC Hackathon](https://www.risein.com/programs/build-on-stellar-philippines-hackathon), Philippines track. Demo day May 23, 2026, PDAX Office, Manila.
 
 ## 🧩 Problem
 
@@ -40,45 +40,185 @@ Stellar's cheap, fast settlement plus Soroban's programmable money let us put th
 
 ## 👥 Target Users
 
-- **OFW remitters abroad** (Saudi, UAE, Hong Kong, Singapore, US) who want their money to be auto budgeted at the source instead of disappearing into a single bank balance.
-- **OFW dependent households in the Philippines**, typically a spouse plus dependents, who want shared visibility into how the month's remittance has been split and spent.
-- **Future:** unbanked and underbanked Filipinos with no formal savings tooling, plus MSMEs receiving cross border B2B payments that need split by category accounting.
+- **OFW remitters abroad** (Saudi, UAE, Hong Kong, Singapore, US) who want their money to be auto-budgeted at the source instead of disappearing into a single bank balance.
+- **OFW-dependent households in the Philippines**, typically a spouse plus dependents, who want shared visibility into how the month's remittance has been split and spent.
+- **Future:** unbanked and underbanked Filipinos with no formal savings tooling, plus MSMEs receiving cross-border B2B payments that need split-by-category accounting.
 
 ## ✨ Features
 
-Below is what currently runs on the deployed testnet contract + the local Next.js app.
+Below is what currently runs on the deployed testnet contract + the live web app. Everything is USDC-denominated on chain (the family's balance is real Circle-issued USDC on testnet); PHP and USD are display-only.
 
-- **Shared wallet with member link.** Admin opens a Sobre and shares a single use invite link with one family member. Cap of 2 members per wallet (admin + one).
-- **Custom envelope names.** Admin names the first two envelopes whatever the family actually budgets for (Rent, School, Vacation, etc.). The third slot is permanently Savings, the APY bearing envelope.
-- **Admin set percentage split.** Three envelopes, percentages sum to 100, set on creation and editable from Settings later. Existing balances stay put when the split changes; only future deposits use the new ratios.
-- **Auto split on inflow.** A `deposit(from, amount)` contract call atomically distributes the payment across the three envelopes by the configured percentages, in one signed transaction.
-- **Spending policy.** Optional admin approval gate: require all sigs flag, per member daily limit (PHP or XLM unit toggle), and per envelope protection. Savings is always protected. Admin spends always execute immediately and bypass the policy.
-- **Pending approvals.** When a member's spend hits the policy threshold, the contract creates a pending request the admin can approve or deny from the dashboard. Both actions emit events into the activity feed.
-- **Shared dashboard.** Both members poll `get_state` every 3 seconds via `simulateTransaction` and see the same total balance, per envelope balances, members list, and policy. Tabbed into Envelopes (live view) and Settings (admin controls).
-- **Activity feed.** Live `Deposit`, `Spend`, `RequestCreated`, `RequestApproved`, `RequestDenied`, `MemberJoined`, `MemberRemoved`, `WalletRenamed`, and `EnvelopesRenamed` events pulled via the RPC `getEvents` endpoint and grouped by day.
-- **One time, 30 minute invite links.** Each invite URL embeds a `expires=<unix>` parameter fixed at modal open time. Past or missing expiry routes to an "invite expired" screen. Admin can regenerate inside the modal. The 2 member cap naturally enforces the single use semantics: once the invitee joins, no one else can use the link.
-- **Confirm only invite acceptance.** If the invitee already has a saved profile (name + emoji from first connect), accepting the invite is a single tap. The full name and emoji form only shows for first time users.
-- **Close wallet.** Admin can sweep every envelope back to their address in a single SEP-41 transfer. Wallet stays callable for completeness, but the dashboard locks itself to a closed state.
-- **Yield label.** Static "Est. 4.5% APY" pill on the Savings envelope (P2 placeholder per the product spec, no on chain yield strategy in this iteration).
-- **Token agnostic contract.** `init` accepts any SEP-41 token contract ID. Demo runs on XLM via the native Stellar Asset Contract. Switching to USDC or EURC for a future deploy is one constructor argument with no code change.
-- **Multi Sobre per user.** A `SobreFactory` deploys a fresh per family `SobreContract` instance at `create_sobre` via `deploy_v2`, with constructor args supplied in the same tx (no init race). The same Stellar address can be admin of one family wallet and a member of another.
+### Shared wallet
+- **Admin + one member per family** (2-cap). Admin opens the wallet, shares a single-use invite link with the second admin. Each new admin picks their display name from Google OAuth on first connect.
+- **Up to 4 supplementary accounts** (kids / dependents). Admin mints a separate sub-account invite that redeems into a tracked balance inside the same contract — sub-accounts don't share the envelope pool, they get top-ups from it.
+- **Live dashboard.** Both admins poll `get_state` every 3 seconds via `simulateTransaction`. Total balance, per-envelope balances, member list, supplementary balances, Earn interest, and Grow position all stay in sync.
+
+### Envelopes
+- **Three named envelopes.** First two are admin-labeled (e.g. Groceries, Tuition); the third is permanently Savings. Icons customizable per envelope.
+- **Admin-set percentage split.** Percentages sum to 100. Editable via a two-admin proposal flow if there's more than one admin — the second admin approves in-app before the change lands.
+- **Envelope actions.** Tapping an envelope opens an action sheet with **Cash out to bank** (PDAX withdrawal to a registered InstaPay account) and, admin-only, **Send to family member** (top up a supplementary account from that envelope).
+
+### Deposits (fiat → USDC → auto-split)
+- **PDAX ramp.** In-app "Add money via PDAX" opens the checkout URL. User pays via InstaPay (any bank / e-wallet with QRPh). PDAX credits our institutional account, our server buys XLM on PDAX's exchange, then the contract's `deposit_from_xlm` swap-and-splits atomically: XLM → USDC via Soroswap, then USDC → envelopes by the family's percentage split, in one signed transaction. The user does not sign anything after the InstaPay payment.
+- **PDAX bounds enforced:** ₱200 minimum, ₱49,999 maximum per deposit (below the InstaPay real-time cap + PDAX's Travel Rule threshold so no identity fields are required for the demo).
+
+### Cash-out (USDC → PHP → bank)
+- **Registered bank account.** Users add a bank once via the Profile tab (PDAX UAT supports Security Bank and CTBC in the demo). Bank info is one row per member; edits upsert.
+- **Envelope-scoped cashout.** Users pick an envelope, enter an amount, and the contract's `withdraw` transfers USDC from that envelope to the caller's smart wallet. A follow-up SAC transfer forwards to the PDAX relay, which sells USDC → PHP and books an InstaPay payout to the bank on file. Usually lands in under a minute.
+- **Supplementary cash-out.** Sub-account holders have their own dashboard and cash out from their tracked balance the same way.
+
+### Savings + Earn (transparent yield through USDY)
+- **One-click Earn.** Admin toggles Earn on. Every future deposit's Savings portion routes straight into USDY inside the same transaction; the existing Savings cache also migrates. No separate "supply" step, no manual staking.
+- **On-read interest.** USDY's balance rebases on ledger time, so the interest ticks up between reads with no writes. The dashboard shows the current value, principal, and lifetime interest earned.
+- **Transparent redeem.** When the family spends from Savings, the contract's `ensure_envelope_liquidity` helper redeems the shortfall from USDY inside the same tx via `withdraw` or `fund_subaccount`. No user-visible "unstake" wait — the family just sees Savings behave like a regular envelope, only with a growing balance.
+- **On testnet we use MockUSDY**, a Rust contract that implements the exact same interface as [Ondo Finance USDY](https://ondo.finance/usdy) will expose on Stellar (`deposit`, `redeem`, `balance_of`, `underlying`). MockUSDY simulates 5% linear APY on ledger time. When Ondo's real USDY ships on Stellar, promotion to mainnet is a single address swap on `earn_enable`.
+
+### Savings + Grow (48-hour-timelocked lending on Blend)
+- **Opt-in Grow bucket.** Admin can move a chosen amount out of Savings and into a Grow bucket that supplies into [Blend Protocol](https://www.blend.capital/)'s Testnet V2 XLM lending pool. Because Blend's testnet depth is on the XLM reserve (not USDC), the contract does a Soroswap sandwich internally: USDC → XLM → Blend supply on the way in, Blend withdraw → XLM → USDC on the way out. The Grow bucket is USDC-denominated end-to-end from the user's perspective.
+- **48-hour timelock on withdrawals.** Any Grow withdrawal creates a persistent request that becomes executable 48 hours after the request lands. Requests are cancellable before unlock. This is a deliberate shared-wallet safeguard so a compromised admin can't drain the yield-earning bucket instantly.
+- **Live b-rate accrual.** Blend's b-rate ticks the underlying value between reads. Dashboard shows locked amount + interest earned + available-to-request.
+
+### Activity + safety
+- **Live activity feed.** Every on-chain money movement (deposits, withdrawals, sub-account fundings, sub-account cashouts, member joins/removes, Earn supply/withdraw, Grow supply/request/execute) surfaces in a shared feed with day buckets and per-event detail modals.
+- **In-flight PDAX deposit state** rendered inline (Awaiting InstaPay payment → Almost there → Sent to wallet). Users can safely close the deposit modal; the row re-appears in the activity feed and is re-hydratable.
+- **Cash-out recovery.** If a cash-out signs the on-chain withdraw but the SAC transfer to the PDAX relay drops (wifi, refresh), the modal detects the half-completed state on next open and finishes the flow without double-debiting.
+- **Sub-account lock.** Admin can freeze any supplementary account's spending instantly via `lock_subaccount` — the sub still exists on chain, but `withdraw_subaccount` panics with `SubAccountLocked` until unlocked.
+- **One-shot invite links.** Every invite is a `sha256(plaintext)` hash stored on chain with a per-invite expiry. Once redeemed, the invite entry is removed from persistent storage — replay-resistant by construction. Admin can cancel unredeemed invites.
 
 ### Not yet built (roadmap)
 
-- USDC inflow path via Transak on ramp (P1 in the spec).
-- MoneyGram Ramps off ramp (P1 in the spec).
-- Real interest accrual on the Savings envelope (today's "4.5% APY" is a static label).
-- Financial coach (P2 stretch in the spec).
+- **Mainnet promotion of the v10 wasm** — waiting on Ondo Finance to ship real USDY on Stellar so the Earn address swap is meaningful.
+- **Multi-token payment support.** The contract's `init(payment_token)` is token-agnostic; adding EURC or another SEP-41 asset is a factory-side deploy, not a code change.
+- **MoneyGram Ramps.** Alternative off-ramp path documented in `docs/pdax-moneygram-integration.md`. Deferred until PDAX-side flows are polished.
+- **Real Ondo Finance USDY** on Stellar mainnet. Interface-compatible with our MockUSDY; a single address swap on `earn_enable` promotes.
+
+## 🏗️ Architecture
+
+Sobre spans a Soroban contract, a Next.js web app, a Supabase backend for PDAX transit-state tracking, and three on-chain third-party protocols (Circle USDC, Blend, Soroswap) plus one contract we wrote ourselves as a stand-in for Ondo (MockUSDY).
+
+```
+                ┌────────────────────────────────┐
+       InstaPay │  User pays via bank / e-wallet │
+   (BSP, QRPh)  └─────────────────┬──────────────┘
+                                  ▼
+                           ┌─────────────┐
+                           │  PDAX UAT   │◀── /v1/fiat/deposit ──┐
+                           │  API        │──── /v1/trade/quote ──┤
+                           └──────┬──────┘                       │
+                                  │ PDAX buys XLM                │
+                                  ▼                              │
+                           ┌─────────────┐                       │
+                           │  Relay      │                       │
+                           │  G-address  │                       │
+                           └──────┬──────┘                       │
+                                  │ signs deposit_from_xlm       │
+                                  ▼                              │
+┌────────────────────────────────────────────────────────────────┴──┐
+│                     SobreContract (Soroban)                       │
+│                                                                   │
+│  deposit_from_xlm  → Soroswap XLM → USDC → split                  │
+│  withdraw          → USDC to caller (auto-redeems from USDY)      │
+│  fund_subaccount   → USDC envelope → sub balance                  │
+│  earn_enable/*     → USDY position for Savings                    │
+│  grow_enable/*     → USDC → XLM → Blend supply (48h timelock)     │
+└─┬────────────┬────────────┬───────────────┬────────────────────┬──┘
+  │            │            │               │                    │
+  ▼            ▼            ▼               ▼                    ▼
+Circle       Soroswap    MockUSDY         Blend Pool          User's
+USDC SAC     Router      (Ondo USDY       (Testnet V2         Smart
+                          stand-in)        XLM reserve)       Wallet
+```
+
+**Everything the family holds is USDC**, sitting either directly in the Sobre contract (envelope caches), or held on their behalf by MockUSDY (Savings Earn position), or held on their behalf by Blend as bTokens (Grow position). PHP and USD are UI-side display conversions using a fiat rate from a hook (`useTokenRate`).
 
 ## 🛠️ Tech Stack
 
-- **Smart contracts:** Rust, `soroban-sdk` v25, compiled to `wasm32v1-none`. Two crates in `contract/`:
-  - `sobre`: per family wallet contract.
-  - `sobre-factory`: deploys per family instances via `deploy_v2`.
-- **Blockchain:** Stellar testnet. Soroban for smart contracts, Stellar RPC for reads (`simulateTransaction`) and event polling (`getEvents`), Stellar SDK (`@stellar/stellar-sdk` v15).
-- **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind v4, shadcn/ui, in `web/`.
-- **Wallet:** Freighter via `@stellar/freighter-api` v6.
-- **Tooling:** Stellar CLI 26.0, Friendbot for testnet funding.
+**Smart contracts** — Rust with `soroban-sdk` v25, compiled to `wasm32v1-none`. Three crates in `contract/`:
+- `sobre` — per-family wallet contract (~60KB wasm, 27 exports)
+- `sobre_factory` — deploys per-family instances via `deploy_v2`
+- `mock_usdy` — Ondo USDY-shaped stand-in for testnet
+
+**Blockchain** — Stellar Soroban (testnet + mainnet). Reads via `simulateTransaction`, writes via passkey-signed transactions, events via `getEvents`. `@stellar/stellar-sdk` v15.
+
+**Web app** — Next.js 16 (App Router), React 19, TypeScript, Tailwind v4, shadcn/ui, in `web/`.
+
+**Wallet** — [passkey-kit](https://github.com/kalepail/passkey-kit) v0.13. Users create a Stellar smart wallet with a WebAuthn passkey on first connect. No seed phrase, no browser extension, biometric signing on every write.
+
+**Auth** — Google OAuth via NextAuth. The Google name seeds the member's display name on first connect.
+
+**Backend** — Supabase Postgres for family metadata (percentages, member wallets, sub-account rows), the PDAX transit-state machine (`pdax_deposits`, `pdax_withdrawals`), and pending admin proposals (percent-split changes). Supabase Realtime pushes row changes to open dashboards.
+
+**Third-party integrations:**
+- **[PDAX Institutional API](https://pdax.ph/)** — fiat ↔ crypto ramp. Deposits via `POST /v1/fiat/deposit` (InstaPay checkout URL), withdrawals via `POST /v1/crypto/withdraw` + `POST /v1/fiat/withdraw`. UAT credentials for the hackathon; production API requires their institutional onboarding.
+- **[Blend Protocol](https://www.blend.capital/) Testnet V2** — non-collateral lending pool for the Grow feature. We supply into the XLM reserve for b-rate yield.
+- **[Soroswap](https://soroswap.finance/)** — DEX for USDC ↔ XLM swaps sandwiching the Blend supply/withdraw calls.
+- **[Circle USDC](https://www.circle.com/en/usdc)** — real Circle-issued USDC on Stellar testnet, wrapped as a SAC.
+- **[Ondo Finance USDY](https://ondo.finance/usdy)** — the intended production yield source for Savings; not yet live on Stellar. Our `contract/contracts/mock-usdy/` stands in with the exact interface Ondo's real USDY will expose.
+
+**Tooling** — Stellar CLI 26.0, Friendbot for testnet funding, Vercel for hosting.
+
+## 🌐 Deployment
+
+### Testnet (current)
+
+Current testnet deploy is the **v10 wasm** shipped 2026-07-13.
+
+| Item | Value |
+|---|---|
+| **Network** | Testnet |
+| **Passphrase** | `Test SDF Network ; September 2015` |
+| **RPC** | `https://soroban-testnet.stellar.org` |
+
+**Our contracts:**
+
+| Contract | Address / Hash | Purpose |
+|---|---|---|
+| `SobreFactory` | [`CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ`](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ) | Deploys per-family `SobreContract` instances |
+| `SobreContract` wasm v10 | `4d02bebd601537b8e29cc2654a675f0d14e4b8fa79ab53d16f382311d878c6fb` (59,681 bytes) | Per-family wallet — envelopes, Earn, Grow, sub-accounts |
+| `MockUSDY` instance | [`CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA`](https://stellar.expert/explorer/testnet/contract/CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA) | Testnet stand-in for Ondo USDY. 5% simulated APY. Underlying = Circle testnet USDC |
+| `MockUSDY` wasm | `9f543de035faaad0bc85f6071b1c8917aa8739e9ea69580876e0e140efaf81d6` (~20KB) | Same interface as Ondo's real USDY — mainnet promotion is a single address swap |
+
+**Third-party contracts we call:**
+
+| Contract | Address | Purpose |
+|---|---|---|
+| Circle testnet USDC SAC | [`CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA`](https://stellar.expert/explorer/testnet/contract/CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA) | Payment token. Real Circle-issued USDC, issuer `GBBD47IF…` |
+| XLM native SAC | [`CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC`](https://stellar.expert/explorer/testnet/contract/CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC) | Intermediate hop for deposit ramp + Grow leg |
+| Blend Pool (Testnet V2) | [`CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF`](https://stellar.expert/explorer/testnet/contract/CCEBVDYM32YNYCVNRXQKDFFPISJJCV557CDZEIRBEE4NCV4KHPQ44HGF) | Grow supplies here, reserve index 0 (XLM) |
+| Soroswap Router | [`CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD`](https://stellar.expert/explorer/testnet/contract/CCJUD55AG6W5HAI5LRVNKAE5WDP5XGZBUDS5WNTIVDU7O264UZZE7BRD) | USDC ↔ XLM swaps for deposit ramp + Grow sandwich |
+
+**How to verify the Earn position is real:** open MockUSDY's contract page on stellar.expert. Its `Contract balances` tab shows the total USDC MockUSDY holds across all depositors (the collateral backing every USDY position). The `Events` tab logs every `deposit(from, amount)` and `redeem(from, amount)`; filter by any `SobreContract` address to see just that family's supplies. The `Interface` tab lets you call `balance_of(owner)` right in the browser — pass a family's `SobreContract` address to get their current USDY position in USDC stroops. This is the same query the frontend uses.
+
+**SobreContract exports (v10):**
+
+- **Lifecycle:** `init`, `close_wallet`, `upgrade`
+- **Members:** `create_invite`, `cancel_invite`, `join_wallet`, `remove_member`
+- **Sub-accounts:** `create_subaccount_invite`, `cancel_subaccount_invite`, `join_as_subaccount`, `fund_subaccount`, `lock_subaccount`, `unlock_subaccount`, `withdraw_subaccount`
+- **Money movement:** `deposit_with_split`, `deposit_from_xlm`, `withdraw`
+- **Earn (USDY):** `earn_enable`, `earn_supply`, `earn_withdraw`
+- **Grow (Blend + Soroswap):** `grow_enable`, `grow_transfer_from_savings`, `request_grow_withdrawal`, `execute_grow_withdrawal`, `cancel_grow_withdrawal`
+- **Read:** `get_state`
+
+**SobreFactory exports:** `init`, `set_sobre_wasm`, `current_sobre_wasm`, `create_sobre`, `sobres_of_admin`.
+
+**Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code.
+
+📸 Screenshot: [Testnet SobreFactory on stellar.expert](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ)
+
+### Mainnet (previous hackathon deploy — pre-v10)
+
+The mainnet deploy below is from the earlier Build the Future of Finance Hackathon PH (2026) and does **not** include Earn, Grow, PDAX, or sub-accounts. The APAC-track v10 wasm is testnet-only until the final hackathon deliverable.
+
+| | |
+|---|---|
+| **SobreFactory** | `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` |
+| **SobreContract wasm hash** | `545f5b8ad2c0c7c7e378d75b7d2d4060c3250259cb02700d53c4fe084d3b3da0` |
+| **Payment token** | XLM native SAC `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
+| **Passphrase** | `Public Global Stellar Network ; September 2015` |
+| **RPC** | `https://mainnet.sorobanrpc.com` |
+| **Factory explorer** | [stellar.expert](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) |
+
+📸 Screenshot: [Mainnet SobreFactory](./screenshots/mainnet.png)
 
 ## 🚀 How to Run Locally
 
@@ -86,64 +226,24 @@ Below is what currently runs on the deployed testnet contract + the local Next.j
 git clone https://github.com/laughable-9/sobre.git
 cd sobre
 
-# Web app (in one terminal)
+# Web app (one terminal)
 cd web
 npm install
 npm run dev          # http://localhost:3000
 
-# Contract tests (in another terminal, from repo root)
+# Contract tests (another terminal, from repo root)
 cd contract
-cargo test
+cargo test           # 88 tests, ~1 second
 ```
 
-The web app talks to the live testnet factory by default, so once `npm run dev` is up you can open `http://localhost:3000` in a browser that has [Freighter](https://www.freighter.app/) installed and switched to **Testnet**, then connect and either open a new Sobre or paste an invite link.
+The web app talks to the live testnet factory by default, so once `npm run dev` is up you can open `http://localhost:3000`, sign in with Google, and either open a new Sobre or paste an invite link. The passkey-kit smart wallet is created on first connect using a WebAuthn passkey (biometric or platform-authenticator).
 
-## 🌐 Deployment
-
-The wasm built with `stellar contract build --optimize` is deployed on both networks. Mainnet is the production deploy the web app talks to. Testnet stays live as a sandbox.
-
-### Mainnet (production)
-
-| | |
-|---|---|
-| **SobreFactory** | `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` |
-| **SobreContract wasm hash** | `545f5b8ad2c0c7c7e378d75b7d2d4060c3250259cb02700d53c4fe084d3b3da0` |
-| **Payment token** | XLM native Stellar Asset Contract `CAS3J7GYLGXMF6TDJBBYYSE3HQ6BBSMLNUQ34T6TZMYMW2EVH34XOWMA` |
-| **Network passphrase** | `Public Global Stellar Network ; September 2015` |
-| **RPC** | `https://mainnet.sorobanrpc.com` |
-| **Factory explorer** | [stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) |
-
-📸 Screenshot, Stellar Expert (Mainnet)
-![Mainnet Screenshot](./screenshots/mainnet.png)
-
-### Testnet (sandbox)
-
-| | |
-|---|---|
-| **SobreFactory** | `CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X` |
-| **SobreContract wasm hash** | `7e10bb8904ff29d51ee40a60fca74758bd444825fb427086a83bd281b5a453ec` |
-| **Payment token** | XLM native Stellar Asset Contract `CDLZFC3SYJYDZT7K67VZ75HPJVIEUVNIXF47ZG2FB2RMQQVU2HHGCYSC` |
-| **Network passphrase** | `Test SDF Network ; September 2015` |
-| **RPC** | `https://soroban-testnet.stellar.org` |
-| **Factory explorer** | [stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X](https://stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X) |
-
-📸 Screenshot, Stellar Expert (Testnet)
-![Testnet Screenshot](./screenshots/testnet.png)
-
-**SobreContract exports:** `init`, `join_wallet`, `remove_member`, `set_wallet_name`, `close_wallet`, `upgrade`, `set_envelopes`, `set_envelope_names`, `set_policy`, `deposit`, `spend`, `approve_request`, `deny_request`, `get_state`. Wasm size 22,836 bytes (after `--optimize`).
-
-**SobreFactory exports:** `init`, `set_sobre_wasm`, `current_sobre_wasm`, `create_sobre`, `sobres_of_admin`. Wasm size 4,975 bytes.
-
-**Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code. See [the upgrade rationale in the README appendix](#appendix-deploying-your-own-factory) for the industry pattern this implements.
-
-### Live web app
-
-`https://sobre-mocha.vercel.app` runs against the mainnet factory above. Real XLM, real wallets.
+You'll need Supabase credentials in `web/.env.local` for the family metadata + PDAX transit tables — see `web/.env.example` for the shape.
 
 ## 🎥 Demo
 
-- 🔗 **Live App:** not deployed yet
-- 🎬 **Demo Video:** not recorded yet
+- 🔗 **Live App:** [sobre-mocha.vercel.app](https://sobre-mocha.vercel.app) (testnet)
+- 🎬 **Demo Video:** in progress for APAC demo day
 - 🖼️ **Pitch Deck:** in progress
 
 ## 👨‍💻 Team
@@ -181,28 +281,36 @@ stellar contract build
 # 1. Upload the SobreContract wasm. Capture the hash from the output.
 stellar contract upload \
   --wasm target/wasm32v1-none/release/sobre.wasm \
-  --source alice --network testnet
+  --source alice \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015"
 
 # 2. Deploy a fresh SobreFactory and init it with the wasm hash.
 stellar contract deploy \
   --wasm target/wasm32v1-none/release/sobre_factory.wasm \
-  --source alice --network testnet --alias sobre_factory
+  --source alice \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --alias sobre_factory
 
 stellar contract invoke \
-  --id sobre_factory --source alice --network testnet \
-  -- init --sobre_wasm <hash_from_step_1>
+  --id sobre_factory --source alice \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  -- init --admin alice --sobre_wasm <hash_from_step_1>
 
-# 3. Open a Sobre via the factory (admin becomes the caller).
+# 3. Open a Sobre via the factory (admin becomes the caller). Payment
+#    token is Circle testnet USDC; envelope names + split live in
+#    Supabase, not on chain, so no --percents / --envelope_names args.
 stellar contract invoke \
-  --id sobre_factory --source alice --network testnet \
+  --id sobre_factory --source alice \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015" \
   -- create_sobre \
   --admin alice \
-  --payment_token $(stellar contract id asset --asset native --network testnet) \
-  --percents '[50,30,20]' \
-  --envelope_names '["Groceries","Tuition","Savings"]' \
-  --wallet_name '"Dela Cruz Family"' \
-  --admin_name '"Juan Dela Cruz"' \
-  --admin_emoji '"🥭"'
+  --payment_token CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
 ```
 
 To point the web app at your own factory, update `FACTORY_CONTRACT_ID` in `web/src/lib/config.ts`.
+
+**CLI gotcha:** the stellar-cli's built-in `--network testnet` alias points at a dead RPC. Always pass explicit `--rpc-url` and `--network-passphrase` (or set them as env vars).

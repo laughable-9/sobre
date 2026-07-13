@@ -2,16 +2,18 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { SpendPolicyShape } from "@/lib/contract";
+import type { WalletPolicyShape } from "@/lib/contract";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
+import { DEFAULT_ICON_KEY_BY_SLOT } from "@/lib/envelopeIcons";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
-import { firstJoined } from "@/lib/supabase/utils";
 
 export interface FamilyMemberDisplay {
   contractId: string;
   walletDbId: string;
   name: string;
-  emoji: string;
+  /** Google profile picture URL (populated on OAuth sign-in). Null when the
+   *  member hasn't signed in yet or their Google account has no picture. */
+  avatarUrl: string | null;
   role: "admin" | "recipient";
 }
 
@@ -20,13 +22,21 @@ export interface FamilyDisplayState {
   familyWalletId: string | null;
   walletName: string;
   envelopeNames: [string, string, string];
+  /** Per-envelope icon key (see lib/envelopeIcons.tsx). Null means the
+   *  family hasn't customised that slot; UI falls back to the slot default. */
+  envelopeIcons: [string, string, string];
   /** Per-envelope split percentages, indexed [Groceries, Tuition, Savings]. */
   percents: [number, number, number];
   /** Family-level spend policy. Defaults are "no gate, nobody protected". */
-  policy: SpendPolicyShape;
+  policy: WalletPolicyShape;
   /** When true, money leaving Savings needs every admin's approval. Read fresh
    *  at release-time so adding/removing admins re-thresholds in flight. */
   savingsLockAllAdmins: boolean;
+  /** Maximum number of family_members with role='admin' allowed on this
+   *  family. Configurable per family (default 2 for the OFW-couple model);
+   *  enforced by the redeem_admin_invite RPC when an invitee tries to
+   *  promote to admin. */
+  adminCap: number;
   membersByAddress: Map<string, FamilyMemberDisplay>;
   loading: boolean;
   /** Non-null when the latest Supabase fetch errored. Consumers can read
@@ -41,8 +51,13 @@ const DEFAULT_NAMES: [string, string, string] = [
   ENVELOPE_LABELS[1],
   ENVELOPE_LABELS[2],
 ];
+const DEFAULT_ICONS: [string, string, string] = [
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[0]],
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[1]],
+  DEFAULT_ICON_KEY_BY_SLOT[ENVELOPE_LABELS[2]],
+];
 const DEFAULT_PERCENTS: [number, number, number] = [50, 30, 20];
-const DEFAULT_POLICY: SpendPolicyShape = {
+const DEFAULT_POLICY: WalletPolicyShape = {
   requireAllSigs: false,
   dailyLimit: null,
   perTxThreshold: null,
@@ -60,9 +75,10 @@ interface FamilyRow {
     protected_envelopes?: EnvelopeName[];
   } | null;
   savings_lock_all_admins: boolean | null;
+  admin_cap: number | null;
 }
 
-function normalizePolicy(raw: FamilyRow["policy_json"]): SpendPolicyShape {
+function normalizePolicy(raw: FamilyRow["policy_json"]): WalletPolicyShape {
   if (!raw) return DEFAULT_POLICY;
   const optBigint = (v: string | number | null | undefined) =>
     v === null || v === undefined ? null : BigInt(v);
@@ -81,7 +97,7 @@ function normalizePercents(raw: number[] | null): [number, number, number] {
 
 /**
  * Family-level Supabase state — wallet name, envelope display labels, split
- * percents, spend policy, and per-member display data (name/emoji/role).
+ * percents, spend policy, and per-member display data (name/avatar/role).
  * The dashboard joins this with on-chain truth in useWalletState.
  */
 export function useFamilyDisplay(
@@ -91,10 +107,13 @@ export function useFamilyDisplay(
   const [walletName, setWalletName] = useState<string>("");
   const [envelopeNames, setEnvelopeNames] =
     useState<[string, string, string]>(DEFAULT_NAMES);
+  const [envelopeIcons, setEnvelopeIcons] =
+    useState<[string, string, string]>(DEFAULT_ICONS);
   const [percents, setPercents] =
     useState<[number, number, number]>(DEFAULT_PERCENTS);
-  const [policy, setPolicy] = useState<SpendPolicyShape>(DEFAULT_POLICY);
+  const [policy, setPolicy] = useState<WalletPolicyShape>(DEFAULT_POLICY);
   const [savingsLockAllAdmins, setSavingsLockAllAdmins] = useState(false);
+  const [adminCap, setAdminCap] = useState<number>(2);
   const [membersByAddress, setMembersByAddress] = useState<
     Map<string, FamilyMemberDisplay>
   >(new Map());
@@ -116,7 +135,7 @@ export function useFamilyDisplay(
       const { data: family, error: familyErr } = await supabase
         .from("family_wallets")
         .select(
-          "id, display_name, percents, policy_json, savings_lock_all_admins",
+          "id, display_name, percents, policy_json, savings_lock_all_admins, admin_cap",
         )
         .eq("contract_id", contractId)
         .maybeSingle();
@@ -129,9 +148,11 @@ export function useFamilyDisplay(
         setFamilyWalletId(null);
         setWalletName("");
         setEnvelopeNames(DEFAULT_NAMES);
+        setEnvelopeIcons(DEFAULT_ICONS);
         setPercents(DEFAULT_PERCENTS);
         setPolicy(DEFAULT_POLICY);
         setSavingsLockAllAdmins(false);
+        setAdminCap(2);
         setMembersByAddress(new Map());
         return;
       }
@@ -140,11 +161,13 @@ export function useFamilyDisplay(
       const [namesQ, membersQ] = await Promise.all([
         supabase
           .from("family_envelope_names")
-          .select("envelope_key, display_name")
+          .select("envelope_key, display_name, icon")
           .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
-          .select("wallet_id, role, name, emoji, wallets(contract_id)")
+          .select(
+            "wallet_id, role, name, contract_id, avatar_url, wallets(avatar_url)",
+          )
           .eq("family_wallet_id", row.id),
       ]);
       if (namesQ.error) {
@@ -164,34 +187,57 @@ export function useFamilyDisplay(
       setPercents(normalizePercents(row.percents));
       setPolicy(normalizePolicy(row.policy_json));
       setSavingsLockAllAdmins(Boolean(row.savings_lock_all_admins));
+      setAdminCap(
+        typeof row.admin_cap === "number" && row.admin_cap >= 1
+          ? row.admin_cap
+          : 2,
+      );
 
       const nextNames: [string, string, string] = [...DEFAULT_NAMES];
+      const nextIcons: [string, string, string] = [...DEFAULT_ICONS];
+      const slotFor = (key: string): 0 | 1 | 2 | null =>
+        key === "Groceries" ? 0 :
+        key === "Tuition" ? 1 :
+        key === "Savings" ? 2 :
+        null;
       for (const n of (namesQ.data as Array<{
         envelope_key: string;
         display_name: string;
+        icon: string | null;
       }> | null) ?? []) {
-        if (n.envelope_key === "Groceries") nextNames[0] = n.display_name;
-        else if (n.envelope_key === "Tuition") nextNames[1] = n.display_name;
-        else if (n.envelope_key === "Savings") nextNames[2] = n.display_name;
+        const slot = slotFor(n.envelope_key);
+        if (slot === null) continue;
+        nextNames[slot] = n.display_name;
+        if (n.icon) nextIcons[slot] = n.icon;
       }
       setEnvelopeNames(nextNames);
+      setEnvelopeIcons(nextIcons);
 
       const map = new Map<string, FamilyMemberDisplay>();
       type MemberRow = {
         wallet_id: string;
         role: "admin" | "recipient";
         name: string | null;
-        emoji: string | null;
-        wallets: { contract_id: string } | { contract_id: string }[] | null;
+        contract_id: string | null;
+        avatar_url: string | null;
+        // Embedded wallets join. Supabase types embedded rows as an
+        // array even when the FK is a many-to-one; unwrap the first
+        // element. Older family_members rows have NULL avatar_url;
+        // wallets.avatar_url is populated from the Google session
+        // picture on sign-in, so fall back to that.
+        wallets:
+          | { avatar_url: string | null }
+          | Array<{ avatar_url: string | null }>
+          | null;
       };
       for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
-        const wallets = firstJoined(m.wallets);
-        if (!wallets?.contract_id) continue;
-        map.set(wallets.contract_id, {
-          contractId: wallets.contract_id,
+        if (!m.contract_id) continue;
+        const walletsRow = Array.isArray(m.wallets) ? m.wallets[0] : m.wallets;
+        map.set(m.contract_id, {
+          contractId: m.contract_id,
           walletDbId: m.wallet_id,
           name: m.name ?? "",
-          emoji: m.emoji ?? "",
+          avatarUrl: m.avatar_url ?? walletsRow?.avatar_url ?? null,
           role: m.role,
         });
       }
@@ -202,6 +248,8 @@ export function useFamilyDisplay(
   }, [contractId]);
 
   useEffect(() => {
+    // Fetch-on-mount external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void fetchAll();
   }, [fetchAll]);
 
@@ -251,9 +299,11 @@ export function useFamilyDisplay(
       familyWalletId,
       walletName,
       envelopeNames,
+      envelopeIcons,
       percents,
       policy,
       savingsLockAllAdmins,
+      adminCap,
       membersByAddress,
       loading,
       loadError,
@@ -263,9 +313,11 @@ export function useFamilyDisplay(
       familyWalletId,
       walletName,
       envelopeNames,
+      envelopeIcons,
       percents,
       policy,
       savingsLockAllAdmins,
+      adminCap,
       membersByAddress,
       loading,
       loadError,

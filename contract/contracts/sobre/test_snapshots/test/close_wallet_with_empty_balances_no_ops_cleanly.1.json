@@ -178,6 +178,18 @@
                       "key": {
                         "vec": [
                           {
+                            "symbol": "GrowBalance"
+                          }
+                        ]
+                      },
+                      "val": {
+                        "i128": "0"
+                      }
+                    },
+                    {
+                      "key": {
+                        "vec": [
+                          {
                             "symbol": "Members"
                           }
                         ]

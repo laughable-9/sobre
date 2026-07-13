@@ -20,6 +20,7 @@ import { NextResponse } from "next/server";
 import { requireWallet } from "@/lib/auth/familyMember";
 import { simulateReadServer } from "@/lib/contractServer";
 import { base64UrlDecode } from "@/lib/encoding";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -75,6 +76,18 @@ export async function POST(req: Request) {
   const ctxOrRes = await requireWallet();
   if (ctxOrRes instanceof NextResponse) return ctxOrRes;
   const ctx = ctxOrRes;
+
+  // Per-wallet cap. Loops 5 Soroban simulates per call with 800ms sleeps
+  // between; without this a bad actor could hammer our RPC quota.
+  const rate = await enforceDailyLimit({
+    endpoint: "subaccount_join",
+    walletId: ctx.memberId,
+    familyWalletId: null,
+    callerEmail: ctx.email,
+    perUser: 20,
+    perFamily: 20,
+  });
+  if (rate) return rate;
 
   // Soroban RPC replicas index ledger writes asynchronously — the joiner's
   // join_as_subaccount tx may have landed seconds ago but the replica
@@ -180,6 +193,9 @@ export async function POST(req: Request) {
       // only and can't be widened — see the wallets_read_family_peers
       // backout migration).
       wallet_address: ctx.contractId,
+      // Overwrite the "Awaiting sign-in" placeholder set at invite time
+      // with the joiner's Google display name.
+      display_name: ctx.fullName,
     })
     .eq("id", r.id)
     .is("wallet_id", null)

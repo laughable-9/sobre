@@ -1,18 +1,22 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Loader2 } from "lucide-react";
+import { ArrowDownToLine, Loader2 } from "lucide-react";
 
+import { CenteredCopy } from "@/components/sobre/CenteredCopy";
+import { STATUS_LABELS } from "@/components/sobre/PdaxWithdrawModal";
+import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import { BANKS, bankName } from "@/lib/banks";
 import {
+  PDAX_INSTAPAY_FEE_PHP,
   PHP_PER_USDC,
   STROOPS_PER_USDC,
 } from "@/lib/config";
-import { backdropClose } from "@/lib/ui";
+import { useCurrency } from "@/lib/currency";
 
 /**
  * Sub-account PDAX cashout. Mirrors PdaxWithdrawModal but tailored to the
@@ -37,6 +41,11 @@ interface Props {
    *  amount at this. Ignored when resumeIdentifier is set (the row's
    *  amount_usdc is what matters at that point). */
   balanceStroops: bigint;
+  /** True when this sub-account is locked on-chain. The modal short-
+   *  circuits to a locked empty state instead of the input phase — a
+   *  cashout would revert anyway, so we head that off with an
+   *  explanation. */
+  locked?: boolean;
   /** When set, hydrate from an existing pdax_withdrawals row instead of
    *  starting a fresh cashout. Used by the PENDING strip in SubAccountView
    *  to let the user reopen a mid-pipeline cashout (modal closed before
@@ -66,6 +75,7 @@ export function SubAccountCashoutModal({
   contractId,
   subaccountId,
   balanceStroops,
+  locked = false,
   resumeIdentifier,
   onClose,
   onSuccess,
@@ -158,17 +168,22 @@ export function SubAccountCashoutModal({
   // doesn't).
   const successFiredRef = useRef(false);
 
-  // Watch the row through the backend pipeline.
+  // Watch the row through the backend pipeline. External-sync effect —
+  // the row prop is driven by realtime updates, and we fire onSuccess
+  // exactly once on the terminal transition.
   useEffect(() => {
     if (!row) return;
     if (row.status === "paid") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase("success");
       if (!successFiredRef.current) {
         successFiredRef.current = true;
         onSuccessRef.current(row.amount_php ?? 0);
       }
     } else if (row.status === "failed") {
+       
       setErrMsg(row.failure_reason ?? "Cashout failed.");
+       
       setPhase("error");
     } else if (
       row.status === "spent" ||
@@ -176,6 +191,7 @@ export function SubAccountCashoutModal({
       row.status === "converted" ||
       row.status === "processing"
     ) {
+       
       setPhase("awaiting");
     }
   }, [row]);
@@ -186,10 +202,34 @@ export function SubAccountCashoutModal({
   // amountStroops > balanceStroops, which spend_from_subaccount then
   // rejects with InsufficientBalance.
   const rate = phpPerToken ?? PHP_PER_USDC;
-  const balancePhp = (Number(balanceStroops) / STROOPS_PER_USDC) * rate;
-  const parsedPhp = Number(amountStr);
-  const validAmount =
-    Number.isFinite(parsedPhp) && parsedPhp > 0 && parsedPhp <= balancePhp;
+  const { currency } = useCurrency();
+  const symbol = currency === "USD" ? "$" : "₱";
+  const balanceToken = Number(balanceStroops) / STROOPS_PER_USDC;
+  const balancePhp = balanceToken * rate;
+  const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
+  const balanceLocale = currency === "USD" ? "en-US" : "en-PH";
+  // Fee handling (Option 2): the amount the user types is what lands at
+  // the bank. PDAX's InstaPay service fee is added on top and the total
+  // has to be covered by the on-chain USDC spend, so their bank payout
+  // stays exactly what they asked for.
+  const parsedAmount = Number(amountStr);
+  const payoutPhp =
+    Number.isFinite(parsedAmount) && parsedAmount > 0
+      ? currency === "USD"
+        ? parsedAmount * rate
+        : parsedAmount
+      : 0;
+  const feePhp = PDAX_INSTAPAY_FEE_PHP;
+  const totalPhp = payoutPhp + feePhp;
+  // On-chain spend covers the total (payout + fee) so PDAX's fee comes
+  // out of the USDC the user just sold. Bank leg still receives payoutPhp
+  // exactly. amountPhp stored on the row stays "what lands in the bank"
+  // — the fee is tracked in service_fee_php.
+  const amountToken = totalPhp / rate;
+  const amountPhp = payoutPhp;
+  const totalInCurrency = currency === "USD" ? totalPhp / rate : totalPhp;
+  const feeInCurrency = currency === "USD" ? feePhp / rate : feePhp;
+  const validAmount = amountToken > 0 && amountToken <= balanceToken;
 
   const submitBank = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -224,7 +264,6 @@ export function SubAccountCashoutModal({
     if (!validAmount || !bank) return;
     setErrMsg(null);
     setPhase("signing");
-    const amountToken = parsedPhp / rate;
     let amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_USDC));
     // Final guard against sub-peso rounding pushing us above the on-chain
     // balance. Cap at the holder's actual stroops — the cashout PHP value
@@ -234,7 +273,7 @@ export function SubAccountCashoutModal({
       const { relayG } = await initiate({
         subaccountId,
         amountToken,
-        amountPhp: parsedPhp,
+        amountPhp,
         bankCode: bank.bank_code,
         accountName: bank.account_name,
         accountNumber: bank.account_number,
@@ -257,15 +296,40 @@ export function SubAccountCashoutModal({
     onClose();
   };
 
+  // Empty-state short-circuit: locked account OR zero balance. Skip the
+  // regular phase machinery — a fresh cashout attempt would revert
+  // on-chain or fail validation anyway, so tell the user why plainly.
+  // The `resumeIdentifier` path bypasses this because we're just
+  // watching a mid-pipeline row settle, not starting a new cashout.
+  if (!resumeIdentifier && (locked || balanceStroops <= 0n)) {
+    return (
+      <Sheet onClose={close} ariaLabel="Cash out">
+        <h2>{locked ? "Account locked" : "Nothing to cash out yet"}</h2>
+        <p className="sub">
+          {locked
+            ? "Ask an admin to unlock this account before cashing out."
+            : "Money will appear here once an admin tops you up."}
+        </p>
+        <div className="sobre-modal-actions">
+          <button
+            type="button"
+            className="sobre-btn sobre-btn-primary"
+            onClick={close}
+          >
+            Done
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
+
   return (
-    <div className="sobre-modal-bg" onMouseDown={backdropClose(close)}>
-      <div
-        className="sobre-modal"
-        onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: 460 }}
-      >
+    <Sheet onClose={close} ariaLabel="Cash out">
         {phase === "loading_bank" ? (
-          <CenteredSpinner label="Loading…" />
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title="Loading…"
+          />
         ) : null}
 
         {phase === "bank_setup" ? (
@@ -325,7 +389,6 @@ export function SubAccountCashoutModal({
                         account_name: e.target.value,
                       }))
                     }
-                    placeholder="Juan Dela Cruz"
                     disabled={bankSaving}
                     maxLength={80}
                   />
@@ -346,7 +409,6 @@ export function SubAccountCashoutModal({
                         account_number: e.target.value.replace(/\D/g, ""),
                       }))
                     }
-                    placeholder="0123456789"
                     disabled={bankSaving}
                     maxLength={20}
                   />
@@ -388,39 +450,121 @@ export function SubAccountCashoutModal({
 
         {phase === "input" && bank ? (
           <>
-            <h2>Cash out</h2>
-            <p className="sub">
-              Lands in your {bankName(bank.bank_code)} account · ••
-              {bank.account_number.slice(-4)}
-            </p>
+            <h2>Cash out to your bank</h2>
+
             <div className="sobre-input-group">
-              <label htmlFor="sub-cashout-amt">Amount in pesos</label>
+              <label htmlFor="sub-cashout-amt">
+                Amount in {currency === "USD" ? "dollars" : "pesos"}
+              </label>
               <div className="sobre-input-wrap">
-                <span className="prefix">₱</span>
+                <span className="prefix">{symbol}</span>
                 <input
                   id="sub-cashout-amt"
                   className="sobre-input has-prefix tabular"
                   type="number"
                   inputMode="decimal"
                   min="0"
-                  step="1"
+                  step={currency === "USD" ? "0.01" : "1"}
                   value={amountStr}
                   onChange={(e) => setAmountStr(e.target.value)}
-                  placeholder="200"
+                  disabled={pdaxPending || signPending}
                   autoFocus
                 />
               </div>
               <div
-                style={{ fontSize: 11, color: "var(--text-3)", marginTop: 6 }}
+                className="mt-2 text-[12px]"
+                style={{ color: "var(--text-3)" }}
               >
-                You have ₱
-                {balancePhp.toLocaleString("en-PH", {
+                Available: {symbol}
+                {balanceInCurrency.toLocaleString(balanceLocale, {
                   minimumFractionDigits: 2,
                   maximumFractionDigits: 2,
-                })}{" "}
-                available.
+                })}
               </div>
             </div>
+
+            {payoutPhp > 0 ? (
+              <div
+                className="rounded-[10px] px-3 py-2 mb-4 text-[12px]"
+                style={{
+                  background: "var(--surface-alt)",
+                  border: "1px solid var(--border)",
+                  color: "var(--text-2)",
+                }}
+              >
+                <div className="flex items-center justify-between">
+                  <span>InstaPay fee</span>
+                  <span className="tabular">
+                    {symbol}
+                    {feeInCurrency.toLocaleString(balanceLocale, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+                <div
+                  className="flex items-center justify-between mt-1 pt-2"
+                  style={{
+                    borderTop: "1px dashed var(--border)",
+                    color: "var(--text-1)",
+                    fontWeight: 600,
+                  }}
+                >
+                  <span>Total deducted</span>
+                  <span className="tabular">
+                    {symbol}
+                    {totalInCurrency.toLocaleString(balanceLocale, {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
+                  </span>
+                </div>
+              </div>
+            ) : null}
+
+            <div
+              className="flex items-center justify-between p-3 rounded-[10px] mb-4"
+              style={{ background: "var(--surface-alt)" }}
+            >
+              <div className="flex items-center gap-3">
+                <ArrowDownToLine
+                  size={18}
+                  strokeWidth={2}
+                  style={{ color: "var(--sobre-accent)" }}
+                />
+                <div>
+                  <div
+                    className="text-[13px] font-medium"
+                    style={{ color: "var(--text-1)" }}
+                  >
+                    {bank.account_name}
+                  </div>
+                  <div
+                    className="text-[11px] tabular"
+                    style={{ color: "var(--text-3)" }}
+                  >
+                    {bankName(bank.bank_code)} · ••
+                    {bank.account_number.slice(-4)}
+                  </div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setPhase("bank_setup")}
+                disabled={pdaxPending || signPending}
+                className="text-[12px]"
+                style={{
+                  color: "var(--sobre-accent)",
+                  background: "transparent",
+                  border: "none",
+                  cursor:
+                    pdaxPending || signPending ? "not-allowed" : "pointer",
+                }}
+              >
+                Change
+              </button>
+            </div>
+
             {errMsg ? (
               <p
                 className="text-xs break-all mb-3"
@@ -429,11 +573,13 @@ export function SubAccountCashoutModal({
                 {errMsg}
               </p>
             ) : null}
+
             <div className="sobre-modal-actions">
               <button
                 type="button"
                 className="sobre-btn sobre-btn-soft"
                 onClick={close}
+                disabled={pdaxPending || signPending}
               >
                 Cancel
               </button>
@@ -443,19 +589,22 @@ export function SubAccountCashoutModal({
                 disabled={!validAmount || pdaxPending || signPending}
                 onClick={() => void submitCashout()}
                 style={{
-                  opacity: !validAmount || pdaxPending || signPending ? 0.55 : 1,
+                  opacity:
+                    !validAmount || pdaxPending || signPending ? 0.55 : 1,
                 }}
               >
-                Cash out ₱
-                {validAmount ? parsedPhp.toLocaleString("en-PH") : "0"}
+                {pdaxPending || signPending
+                  ? "Preparing…"
+                  : "Confirm cashout"}
               </button>
             </div>
           </>
         ) : null}
 
         {phase === "signing" ? (
-          <CenteredSpinner
-            label={
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title={
               signStep === "spending"
                 ? "Confirm in your passkey (1 of 2)"
                 : signStep === "forwarding"
@@ -466,17 +615,10 @@ export function SubAccountCashoutModal({
         ) : null}
 
         {phase === "awaiting" ? (
-          <CenteredSpinner
-            label={
-              row?.status === "spent"
-                ? "Sending to PDAX…"
-                : row?.status === "transferred"
-                  ? "Selling for pesos…"
-                  : row?.status === "converted"
-                    ? "Sending to your bank…"
-                    : row?.status === "processing"
-                      ? "Waiting on your bank…"
-                      : "Working on it…"
+          <CenteredCopy
+            icon={<Loader2 size={28} className="animate-spin" />}
+            title={
+              row?.status ? STATUS_LABELS[row.status] : "Preparing…"
             }
           />
         ) : null}
@@ -486,7 +628,7 @@ export function SubAccountCashoutModal({
             <h2>Cashed out</h2>
             <p className="sub">
               ₱
-              {(row?.amount_php ?? parsedPhp).toLocaleString("en-PH", {
+              {(row?.amount_php ?? amountPhp).toLocaleString("en-PH", {
                 minimumFractionDigits: 2,
                 maximumFractionDigits: 2,
               })}{" "}
@@ -505,46 +647,75 @@ export function SubAccountCashoutModal({
         ) : null}
 
         {phase === "error" ? (
-          <>
-            <h2>Something went wrong</h2>
-            <p className="sub">
-              {errMsg ?? pdaxError ?? signError ?? "Cashout couldn't complete."}
-            </p>
-            <div className="sobre-modal-actions">
-              <button
-                type="button"
-                className="sobre-btn sobre-btn-soft"
-                onClick={close}
-              >
-                Close
-              </button>
-            </div>
-          </>
+          <ErrorPhase
+            reason={
+              errMsg ?? pdaxError ?? signError ?? "Cashout couldn't complete."
+            }
+            onClose={close}
+          />
         ) : null}
-      </div>
-    </div>
+    </Sheet>
   );
 }
 
-function CenteredSpinner({ label }: { label: string }) {
+/** Error phase for the cashout modal. Renders a short friendly title,
+ *  the sanitized reason as a scrollable copyable block (matches the
+ *  activity feed's FailureRow sheet so support screenshots have the
+ *  same shape), and a Copy button so a user can send it to support
+ *  without hand-transcribing a HostError. */
+function ErrorPhase({
+  reason,
+  onClose,
+}: {
+  reason: string;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
   return (
-    <div
-      style={{
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        gap: 14,
-        padding: "24px 0",
-      }}
-    >
-      <Loader2
-        size={28}
-        className="animate-spin"
-        style={{ color: "var(--sobre-accent)" }}
-      />
-      <div style={{ fontSize: 14, color: "var(--text-2)", textAlign: "center" }}>
-        {label}
+    <>
+      <h2>Something went wrong</h2>
+      <p className="sub">
+        Copy this and send it to support if you need help.
+      </p>
+      <pre
+        className="tabular"
+        style={{
+          maxHeight: "45vh",
+          overflow: "auto",
+          padding: "12px 14px",
+          borderRadius: 10,
+          background: "var(--surface-alt)",
+          border: "1px solid var(--border)",
+          fontSize: 12,
+          lineHeight: 1.55,
+          color: "var(--text-2)",
+          whiteSpace: "pre-wrap",
+          wordBreak: "break-word",
+          margin: "0 0 12px",
+        }}
+      >
+        {reason}
+      </pre>
+      <div className="sobre-modal-actions">
+        <button
+          type="button"
+          onClick={() => {
+            void navigator.clipboard.writeText(reason);
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1400);
+          }}
+          className="sobre-btn sobre-btn-soft"
+        >
+          {copied ? "Copied" : "Copy"}
+        </button>
+        <button
+          type="button"
+          onClick={onClose}
+          className="sobre-btn sobre-btn-primary"
+        >
+          Close
+        </button>
       </div>
-    </div>
+    </>
   );
 }

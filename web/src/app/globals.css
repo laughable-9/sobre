@@ -144,9 +144,9 @@
   100% { opacity: 0; transform: translateY(-6px); }
 }
 @keyframes sobre-celebrate {
-  0%        { opacity: 0; transform: translate(-50%, -16px); }
+  0%        { opacity: 0; transform: translate(-50%, 16px); }
   10%, 80%  { opacity: 1; transform: translate(-50%, 0); }
-  100%      { opacity: 0; transform: translate(-50%, -16px); }
+  100%      { opacity: 0; transform: translate(-50%, 16px); }
 }
 @keyframes sobre-env-pulse {
   0%   { box-shadow: 0 0 0 0 rgba(232, 146, 60, 0); }
@@ -157,11 +157,15 @@
   from { opacity: 0; transform: translateY(-8px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-@keyframes sobre-live-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(46, 107, 76, 0.4); }
-  50%      { box-shadow: 0 0 0 6px rgba(46, 107, 76, 0); }
-}
 @keyframes sobre-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Utility class version for React `key`-triggered remount transitions
+ * (segmented control switch, expandable panel reveal). Reduced-motion
+ * users get an instant swap. */
+.sobre-fade-in { animation: sobre-fade-in .18s ease-out both; }
+.sobre-expand-in { animation: sobre-slide-in .22s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .sobre-fade-in, .sobre-expand-in { animation: none; }
+}
 @keyframes sobre-pop-in {
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -196,16 +200,15 @@
 }
 .sobre-topbar-inner {
   max-width: 1320px; margin: 0 auto; padding: 0 28px;
-  display: grid; grid-template-columns: 1fr auto 1fr;
-  align-items: center; gap: 24px;
+  display: flex; align-items: center; gap: 24px;
+  min-width: 0;
 }
+.sobre-topbar-inner > .sobre-brand { flex: 0 0 auto; }
+.sobre-topbar-center { flex: 1 1 auto; min-width: 0; display: flex; justify-content: center; }
+.sobre-topbar-inner > .sobre-nav-links { margin-left: auto; flex-wrap: nowrap; }
 @media (max-width: 760px) {
-  .sobre-topbar-inner {
-    grid-template-columns: auto 1fr;
-    padding: 0 16px;
-    gap: 12px;
-  }
-  .sobre-topbar-inner > .sobre-wallet-pill { display: none; }
+  .sobre-topbar-inner { padding: 0 16px; gap: 12px; }
+  .sobre-topbar-center { display: none; }
 }
 .sobre-wallet-pill {
   display: inline-flex; align-items: center;
@@ -239,6 +242,59 @@
   grid-template-columns: 280px minmax(0, 1fr) 340px;
   gap: 24px;
 }
+/* Household summary — "This month" card, full-width above the envelope cards. */
+.sobre-hsummary {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-card);
+  box-shadow: var(--shadow-sm);
+  padding: 18px 20px;
+  margin-bottom: 20px;
+}
+.sobre-hsummary-head {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--text-3); margin-bottom: 14px;
+}
+.sobre-hsummary-grid {
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px;
+}
+.sobre-hsummary-stat { display: flex; gap: 11px; min-width: 0; }
+.sobre-hsummary-ic {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--surface-alt); color: var(--text-2);
+}
+.sobre-hsummary-ic.accent { background: var(--accent-soft); color: var(--sobre-accent); }
+.sobre-hsummary-body { min-width: 0; flex: 1; }
+.sobre-hsummary-label {
+  font-size: 12px; color: var(--text-2); font-weight: 500; margin-bottom: 3px;
+}
+.sobre-hsummary-value {
+  font-size: 21px; font-weight: 600; color: var(--text-1); line-height: 1.15;
+}
+.sobre-hsummary-value.accent { color: var(--sobre-accent); }
+.sobre-hsummary-unit { font-size: 13px; font-weight: 500; color: var(--text-3); }
+.sobre-hsummary-track {
+  height: 5px; border-radius: 999px; background: var(--surface-alt);
+  overflow: hidden; margin-top: 7px;
+}
+.sobre-hsummary-track-fill {
+  height: 100%; border-radius: 999px; background: var(--sobre-accent);
+  transition: width 300ms ease;
+  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.35s backwards;
+}
+.sobre-hsummary-sub { font-size: 11px; color: var(--text-3); margin-top: 5px; }
+
+/* Two-then-one column collapse so the numbers never crush. */
+@media (max-width: 900px) {
+  .sobre-hsummary-grid { grid-template-columns: repeat(2, 1fr); }
+  .sobre-hsummary-stat:last-child { grid-column: 1 / -1; }
+}
+@media (max-width: 520px) {
+  .sobre-hsummary-grid { grid-template-columns: 1fr; gap: 14px; }
+  .sobre-hsummary-stat:last-child { grid-column: auto; }
+}
+
 @media (max-width: 1100px) { .sobre-dash { grid-template-columns: 1fr; } }
 @media (max-width: 768px) {
   .sobre-dash { padding: 16px; gap: 16px; }
@@ -362,11 +418,20 @@
   transition: background .15s ease, box-shadow .15s ease;
 }
 .sobre-btn-primary { background: var(--sobre-primary); color: #fff; }
-.sobre-btn-primary:hover { background: var(--primary-hover); }
 .sobre-btn-soft { background: var(--surface-alt); color: var(--text-1); }
-.sobre-btn-soft:hover { background: #ebe0c3; }
 .sobre-btn-danger { background: var(--sobre-danger); color: #fff; }
-.sobre-btn-danger:hover { background: #a93827; }
+/* :active covers the tap-press feedback on touch devices — it's transient
+ * (only while the finger is down) so it can't get stuck the way :hover
+ * would. :hover is scoped to hover-capable devices only so it doesn't
+ * stick after a mobile tap. */
+.sobre-btn-primary:active { background: var(--primary-hover); }
+.sobre-btn-soft:active    { background: #ebe0c3; }
+.sobre-btn-danger:active  { background: #a93827; }
+@media (hover: hover) {
+  .sobre-btn-primary:hover { background: var(--primary-hover); }
+  .sobre-btn-soft:hover    { background: #ebe0c3; }
+  .sobre-btn-danger:hover  { background: #a93827; }
+}
 
 .sobre-activity {
   background: var(--surface);
@@ -375,6 +440,7 @@
   padding: 26px 24px;
   box-shadow: var(--shadow-sm);
   position: sticky; top: 100px;
+  align-self: start;            /* don't stretch to the full grid-row height */
   max-height: calc(100vh - 120px);
   display: flex; flex-direction: column;
 }
@@ -388,14 +454,23 @@
 }
 .sobre-activity .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
 .sobre-activity h3 { font-family: var(--serif); font-size: 18px; font-weight: 500; }
-.sobre-activity .live { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; color: var(--sobre-accent); font-weight: 500; }
-.sobre-activity .live .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--sobre-accent); animation: sobre-live-pulse 1.6s ease-in-out infinite; }
 .sobre-activity .list { overflow-y: auto; flex: 1; padding-right: 4px; }
 .sobre-activity .list::-webkit-scrollbar { width: 6px; }
 .sobre-activity .list::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 999px; }
 .sobre-day { font-size: 11px; font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-3); margin: 14px 0 8px; }
 .sobre-day:first-child { margin-top: 0; }
 .sobre-activity-item {
+  /* Button reset — the row is now a <button> so a tap opens the detail
+     modal. Left as flex-row so the same layout rules apply as when it was
+     an <a>. text-align:left keeps the copy aligned with the row above. */
+  appearance: none;
+  border: none;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
   display: flex; gap: 12px;
   padding: 12px 4px;
   border-radius: 8px;
@@ -516,32 +591,6 @@
 }
 .sobre-unit-toggle button:disabled { opacity: 0.5; cursor: not-allowed; }
 
-.sobre-tabs {
-  display: flex;
-  gap: 4px;
-  border-bottom: 1px solid var(--border);
-}
-.sobre-tab {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  background: transparent;
-  border: 0;
-  padding: 10px 14px 12px;
-  margin-bottom: -1px;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--text-3);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color .15s ease, border-color .15s ease;
-}
-.sobre-tab:hover { color: var(--text-1); }
-.sobre-tab[data-active="true"] {
-  color: var(--text-1);
-  border-bottom-color: var(--sobre-primary);
-}
 
 .sobre-quick-amts { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
 .sobre-quick-amts button {
@@ -570,15 +619,78 @@
   z-index: 50; pointer-events: none;
   animation: sobre-hero-pulse 1.4s ease-out;
 }
+/* Bottom-anchored confirmation toast. Sits above the dock (or above the
+   safe-area home indicator on dock-less screens). White pill with a
+   green success icon or a warning icon on the warn variant — no solid
+   fill, so it doesn't fight the balance hero's green or shout on top of
+   content the way a mango pill in the header used to. */
 .sobre-celebration {
-  position: fixed; top: 80px; left: 50%; transform: translateX(-50%);
-  background: var(--sobre-accent); color: #fff;
-  padding: 14px 22px; border-radius: 999px;
-  font-weight: 500; font-size: 14px;
+  position: fixed;
+  bottom: calc(var(--sobre-dock-h, 0px) + var(--safe-bottom) + 20px);
+  left: 50%; transform: translateX(-50%);
+  max-width: calc(100vw - 32px);
+  background: var(--sobre-surface);
+  color: var(--sobre-text-1);
+  padding: 12px 18px 12px 14px; border-radius: 999px;
+  font-weight: 500; font-size: 14px; line-height: 1.2;
   display: flex; align-items: center; gap: 10px;
-  box-shadow: 0 12px 28px rgba(46, 107, 76, 0.3);
+  border: 1px solid var(--sobre-border);
+  box-shadow: 0 8px 24px rgba(15, 26, 20, 0.12);
   z-index: 60;
   animation: sobre-celebrate 2.4s ease;
+}
+.sobre-celebration .ic {
+  width: 22px; height: 22px; border-radius: 50%;
+  display: inline-grid; place-items: center;
+  flex-shrink: 0;
+}
+.sobre-celebration[data-kind="ok"] .ic {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-celebration[data-kind="warn"] .ic {
+  background: var(--sobre-cream);
+  color: var(--sobre-warning);
+}
+.sobre-celebration .body {
+  min-width: 0;
+}
+.sobre-celebration .more {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sobre-primary);
+  background: transparent;
+  border: 0;
+  padding: 2px 4px;
+  cursor: pointer;
+}
+.sobre-celebration .more:hover { color: var(--sobre-primary-hover); }
+/* Long-message layout: drop the pill radius, allow the body to wrap and
+ * clamp to two lines with a Show more toggle. The animation window is
+ * still 2.4s, so friendlyError() should catch most cases upstream —
+ * this is a safety net for anything unmapped. */
+.sobre-celebration[data-long] {
+  border-radius: 14px;
+  align-items: flex-start;
+  max-width: min(420px, calc(100vw - 32px));
+  padding: 12px 14px;
+  animation-duration: 6s;
+}
+.sobre-celebration[data-long] .body {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  white-space: normal;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+.sobre-celebration[data-long][data-expanded] .body {
+  -webkit-line-clamp: unset;
+  display: block;
+  max-height: 40vh;
+  overflow-y: auto;
 }
 
 .sobre-card-flat {
@@ -807,7 +919,9 @@
    Anchored to its trigger via the wrapping .sobre-wallet-menu div. */
 .sobre-wallet-menu { position: relative; display: inline-block; }
 .sobre-wallet-menu-pill {
-  display: inline-flex;
+  display: inline-grid;
+  grid-auto-flow: column;
+  grid-auto-columns: max-content;
   align-items: center;
   gap: 8px;
   padding: 7px 12px;
@@ -816,25 +930,29 @@
   border: 1px solid var(--border);
   font-size: 13px;
   font-weight: 500;
+  line-height: 1;
   color: var(--text-1);
   cursor: pointer;
   transition: background .15s ease, border-color .15s ease;
 }
+.sobre-wallet-menu-pill > * { align-self: center; }
 .sobre-wallet-menu-pill:hover {
   background: var(--surface-alt);
   border-color: var(--border-strong);
 }
-.sobre-wallet-menu-pill .emoji {
-  font-size: 16px;
-  line-height: 1;
-  display: inline-flex;
-  align-items: center;
-}
 .sobre-wallet-menu-pill .addr {
+  display: block;
+  line-height: 1;
   font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
   font-weight: 600;
 }
-.sobre-wallet-menu-pill .chev { color: var(--text-3); }
+/* Chevron: lucide renders it as inline SVG. `display: block` drops the
+ * baseline-anchored inline layout so flex centers it by geometric
+ * center — matches the avatar and text spans. */
+.sobre-wallet-menu-pill .chev {
+  display: block;
+  color: var(--text-3);
+}
 
 .sobre-wallet-menu-panel {
   position: absolute;
@@ -1402,7 +1520,6 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-btn-nav,
   .sobre-iconbtn,
   .sobre-faq-q,
-  .sobre-tab,
   .sobre-quick-amts button { min-height: 44px; }
 }
 
@@ -1480,6 +1597,28 @@ body { overflow-x: clip; min-width: 320px; }
   html { scroll-behavior: auto; }
 }
 
+/* Wizard step swap — the child is re-mounted via key change; this class
+   plays a fade + slide from the direction the user is moving. Forward
+   (Next) slides in from the right; back slides in from the left. */
+@keyframes sobre-step-in-forward {
+  from { opacity: 0; transform: translateX(24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes sobre-step-in-back {
+  from { opacity: 0; transform: translateX(-24px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.sobre-step-panel {
+  animation: sobre-step-in-forward .28s cubic-bezier(.2,.7,.2,1) both;
+  will-change: opacity, transform;
+}
+.sobre-step-panel[data-direction="back"] {
+  animation-name: sobre-step-in-back;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-step-panel { animation: none; }
+}
+
 /* ─── App-first hero (phone/tablet) ─────────────────────────────────────
    Lead with the product, not a wall of copy: the split card moves up under a
    tighter headline, the inline CTA is dropped (the sticky bottom bar carries
@@ -1508,6 +1647,144 @@ body { overflow-x: clip; min-width: 320px; }
 @media (max-width: 900px) {
   .has-bottom-bar { padding-bottom: 88px; }
 }
+
+/* ─── Bottom dock (mobile-first primary nav) ────────────────────────────
+   Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
+   Sits pinned to the safe-area bottom. Center slot is a raised mango tile
+   that opens the "action sheet" — the app's only action surface. */
+/* Scoped to .has-dock so descendants of a dock-less shell (e.g. the
+   sub-account view, which still uses the top bar) see the variable as
+   unset. The `.sobre-celebration` toast reads it with a 0px fallback so
+   it sits close to the bottom on dock-less screens and above the dock on
+   dock-ful ones without any per-view props. */
+.has-dock { --sobre-dock-h: 68px; }
+.sobre-dock {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  padding-bottom: var(--safe-bottom);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  box-shadow: 0 -2px 12px rgba(15, 107, 58, 0.06);
+}
+@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
+  .sobre-dock {
+    background: color-mix(in srgb, var(--surface) 88%, transparent);
+    -webkit-backdrop-filter: saturate(1.4) blur(14px);
+    backdrop-filter: saturate(1.4) blur(14px);
+  }
+}
+.sobre-dock-inner {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  height: var(--sobre-dock-h);
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 0 10px;
+  position: relative;
+}
+/* Sub-account dock: Home | fab | User. Same shell + fab as the main
+ * wallet dock, one fewer entry each side. */
+.sobre-dock-inner[data-cols="3"] {
+  grid-template-columns: 1fr auto 1fr;
+  max-width: 320px;
+  gap: 24px;
+}
+.sobre-dock-tab {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 3px;
+  height: 100%;
+  background: transparent;
+  border: 0;
+  color: var(--text-3);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color .15s ease;
+}
+.sobre-dock-tab:hover { color: var(--text-1); }
+.sobre-dock-tab[data-active="true"] { color: var(--sobre-primary); }
+.sobre-dock-fab {
+  align-self: start;
+  margin-top: -18px;
+  justify-self: center;
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--sobre-primary);
+  color: #fff;
+  border: 4px solid var(--surface);
+  box-shadow: 0 6px 16px rgba(15, 107, 58, 0.28);
+  display: grid; place-items: center;
+  cursor: pointer;
+  transition: transform .1s ease, background .15s ease;
+}
+.sobre-dock-fab:hover { background: var(--sobre-primary-hover); }
+.sobre-dock-fab:active { transform: scale(0.96); }
+/* Reserve space so content isn't tucked under the dock, and clear the
+   safe-area notch since there's no top bar on dashboard shells. On
+   desktop the safe-inset is 0px, so max() enforces a real floor. */
+.has-dock {
+  padding-top: max(var(--safe-top), 8px);
+  padding-bottom: calc(var(--sobre-dock-h) + var(--safe-bottom) + 16px);
+}
+
+/* ─── "Opened Sobre" action list ────────────────────────────────────────
+   Buttons rendered inside a shared .sobre-modal — no parallel chrome. */
+.sobre-sheet-actions { display: grid; gap: 8px; }
+.sobre-sheet-action {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 14px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  cursor: pointer;
+  text-align: left;
+  transition: background .12s ease, border-color .12s ease;
+}
+.sobre-sheet-action:hover:not(:disabled) {
+  background: var(--surface-alt);
+  border-color: var(--border-strong);
+}
+.sobre-sheet-action:disabled { opacity: 0.5; cursor: not-allowed; }
+.sobre-sheet-action .chip {
+  display: inline-grid; place-items: center;
+  width: 40px; height: 40px;
+  border-radius: 12px;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+  flex-shrink: 0;
+}
+.sobre-sheet-action .body { display: flex; flex-direction: column; min-width: 0; }
+.sobre-sheet-action .label { font-size: 15px; font-weight: 600; color: var(--text-1); }
+.sobre-sheet-action .hint { font-size: 12px; color: var(--text-3); }
+
+/* ─── Profile tab content ───────────────────────────────────────────────
+   Rendered inside the dashboard scroll area when the Profile dock tab is
+   active. Not a modal — just the tab's contents. */
+.sobre-profile { display: flex; flex-direction: column; gap: 20px; padding: 8px 4px; }
+.sobre-profile .head { display: flex; align-items: center; gap: 14px; }
+.sobre-profile .who { min-width: 0; }
+.sobre-profile .name {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 20px; font-weight: 700; color: var(--text-1);
+}
+.sobre-profile .email { font-size: 13px; color: var(--text-3); word-break: break-all; }
+.sobre-profile .rows { display: flex; flex-direction: column; gap: 6px; }
+.sobre-profile .row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  font-size: 15px; font-weight: 500;
+  color: var(--text-1);
+  text-decoration: none;
+  cursor: pointer;
+  transition: background .12s ease;
+}
+.sobre-profile .row:hover { background: var(--surface-alt); }
+.sobre-profile .row.danger { color: var(--sobre-danger); }
 
 /* ─── Landing feature-visual rows that must collapse on phones ───────────
    These replace inline `style={{ display:flex }}` / grid in page.tsx so they
@@ -1549,14 +1826,6 @@ body { overflow-x: clip; min-width: 320px; }
     padding: 24px 20px calc(24px + var(--safe-bottom));
     max-height: 92vh;
     animation: sobre-sheet-up .28s cubic-bezier(.2, .8, .25, 1);
-  }
-  .sobre-modal::before {
-    content: "";
-    display: block;
-    width: 40px; height: 4px;
-    border-radius: 999px;
-    background: var(--border-strong);
-    margin: -6px auto 14px;
   }
   .sobre-modal-actions {
     flex-direction: column-reverse;
@@ -1632,6 +1901,8 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(2) { transition-delay: .12s; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(3) { transition-delay: .20s; }
 .sobre-reveal[data-stagger].is-visible > *:nth-child(4) { transition-delay: .28s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(5) { transition-delay: .36s; }
+.sobre-reveal[data-stagger].is-visible > *:nth-child(6) { transition-delay: .44s; }
 
 /* Brand mark gives a tiny wave on hover — adds warmth without being loud. */
 @media (hover: hover) {
@@ -1670,6 +1941,12 @@ body { overflow-x: clip; min-width: 320px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sobre-reveal[data-stagger].is-visible .sobre-stat-num { animation: none; }
+  .sobre-v2-action, .sobre-v2-action .chip, .sobre-v2-split-row,
+  .sobre-hsummary-track-fill {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -1762,4 +2039,1649 @@ body { overflow-x: clip; min-width: 320px; }
   display: inline-flex;
   align-items: center;
   gap: 8px;
+}
+
+/* ═══ v2 design system — dashboard-scoped (green board) ═══════════════════
+   Everything below only applies inside `.sobre-v2`. The rest of the app keeps
+   the cream/mango theme until the team promotes this to :root. Palette hexes
+   come from the brand board (Section 04): Green 600/700/500/50, Ink 900/700,
+   Page BG, semantic Success/Info/Warning/Error. */
+.sobre-v2 {
+  /* Board hexes only. Neutrals stay NEUTRAL — no sage/green-washed grays
+     (that soft look reads as Tarsi, which we're deliberately not). Green
+     shows up flat and vivid (600/700 + Green-50 tint); everything else is
+     ink on white. */
+  --sobre-bg: #FFFFFF;             /* full white page (was board's #FAFAF7) */
+  --sobre-surface: #FFFFFF;
+  --sobre-surface-alt: #F4F4F2;    /* neutral muted surface */
+  --sobre-primary: #22A45C;        /* Green 600 */
+  --sobre-primary-hover: #0F6B3A;  /* Green 700 */
+  --sobre-primary-bright: #3BC176; /* Green 500 — bright bar accents */
+  --sobre-accent: #0F6B3A;         /* trust green (dark, AA on tints) */
+  --sobre-accent-soft: #E8F5EE;    /* Green 50 */
+  --sobre-text-1: #0F1A14;         /* Ink 900 */
+  --sobre-text-2: #3D4A42;         /* Ink 700 */
+  --sobre-text-3: #9C9C97;         /* neutral gray, not sage */
+  --sobre-success: #1A8F52;
+  --sobre-info: #2D6CA8;
+  --sobre-warning: #C68A2E;
+  --sobre-danger: #C4443B;
+  --sobre-cream: #F5E6C8;          /* board Cream accent */
+  --sobre-danger-soft: #F9E4E2;    /* soft tint behind danger copy */
+  --sobre-border: #E9E9E6;         /* neutral */
+  --sobre-border-strong: #D6D6D1;
+  --sobre-shadow-sm: 0 2px 8px rgba(15, 26, 20, 0.05), 0 1px 2px rgba(15, 26, 20, 0.06);
+  --sobre-shadow-md: 0 8px 24px rgba(15, 26, 20, 0.09);
+  /* Type ramp: display headings go Manrope (was Fraunces serif). */
+  --serif: var(--font-manrope), var(--font-sans), system-ui, sans-serif;
+  --font-serif: var(--font-manrope);
+  background: var(--sobre-bg);
+
+  /* Re-declare every alias that maps onto --sobre-* tokens. Custom properties
+     compute at the element they're DECLARED on — the :root aliases baked in
+     the cream values, so without these the toggle/topbar/text would keep the
+     old theme inside v2 (that bug shipped once; don't remove these). */
+  --bg: var(--sobre-bg);
+  --surface: var(--sobre-surface);
+  --surface-alt: var(--sobre-surface-alt);
+  --primary-hover: var(--sobre-primary-hover);
+  --primary-text: var(--sobre-primary-text);
+  --accent-soft: var(--sobre-accent-soft);
+  --text-1: var(--sobre-text-1);
+  --text-2: var(--sobre-text-2);
+  --text-3: var(--sobre-text-3);
+  --border-strong: var(--sobre-border-strong);
+  --shadow-sm: var(--sobre-shadow-sm);
+  --shadow-md: var(--sobre-shadow-md);
+  /* shadcn tokens used by ui/ primitives + modals inside the dashboard. */
+  --background: var(--sobre-bg);
+  --foreground: var(--sobre-text-1);
+  --card: var(--sobre-surface);
+  --card-foreground: var(--sobre-text-1);
+  --popover: var(--sobre-surface);
+  --popover-foreground: var(--sobre-text-1);
+  --primary: var(--sobre-primary);
+  --primary-foreground: var(--sobre-primary-text);
+  --secondary: var(--sobre-surface-alt);
+  --secondary-foreground: var(--sobre-text-1);
+  --muted: var(--sobre-surface-alt);
+  --muted-foreground: var(--sobre-text-2);
+  --accent: var(--sobre-accent-soft);
+  --accent-foreground: var(--sobre-accent);
+  --destructive: var(--sobre-danger);
+  --border: var(--sobre-border);
+  --input: var(--sobre-border);
+  --ring: var(--sobre-primary);
+}
+/* v1 residue neutralizer: these v1 rules hardcode warm hexes (they predate
+   tokens), so the scope must correct them explicitly — hovers, badges,
+   activity tints, and the warning bar all go board-palette inside v2. */
+.sobre-v2 .sobre-btn-soft:hover { background: var(--sobre-border); }
+.sobre-v2 .sobre-member .badge {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+/* ─── v2 Activity feed: match the recent-activity row aesthetic ─────────
+   Full feed follows the same ink-on-white row style as home's Recent
+   activity preview and the Envelopes tab rows — one design language for
+   every list surface. Overrides the older sticky-card + colored-halo
+   look from the v1 dashboard. */
+.sobre-v2 .sobre-activity {
+  position: static;
+  max-height: none;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+  padding: 0;
+}
+.sobre-v2 .sobre-activity .head {
+  margin-bottom: 12px;
+}
+.sobre-v2 .sobre-activity h3 {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity .list { overflow: visible; padding-right: 0; }
+.sobre-v2 .sobre-day {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin: 18px 4px 8px;
+}
+.sobre-v2 .sobre-day:first-child { margin-top: 0; }
+.sobre-v2 .sobre-activity-item {
+  padding: 12px 14px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 12px;
+  background: var(--sobre-surface);
+  margin-bottom: 6px;
+  align-items: center;
+}
+.sobre-v2 .sobre-activity-item:hover { background: var(--sobre-surface-alt); }
+.sobre-v2 .sobre-activity-item.new { background: var(--sobre-accent-soft); }
+.sobre-v2 .sobre-activity-item .ic {
+  width: 36px; height: 36px; border-radius: 12px;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity-item.inflow .ic {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-v2 .sobre-activity-item.outflow .ic {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-activity-item.pending {
+  opacity: 0.72;
+}
+.sobre-v2 .sobre-activity-item.pending .ic {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
+}
+.sobre-v2 .sobre-activity-item .body { font-size: 14px; }
+.sobre-v2 .sobre-activity-item .body .who { font-weight: 500; }
+.sobre-v2 .sobre-activity-item .body .who .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700;
+}
+.sobre-v2 .sobre-activity-item .body .where { color: var(--sobre-text-3); }
+.sobre-v2 .sobre-activity-item .body .meta { color: var(--sobre-text-3); }
+
+/* Auto-split chip strip — only rendered on Deposit rows. 3 segments, each
+   tinted with the matching BAR_COLORS envelope color. Reads as "the
+   remittance became these three envelope credits" without needing prose. */
+.sobre-activity-split-chips {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  margin-top: 8px;
+}
+.sobre-activity-split-chips .chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--sobre-surface-alt);
+  font-size: 11px;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-activity-split-chips .chip .swatch {
+  width: 4px; height: 12px; border-radius: 2px;
+  flex-shrink: 0;
+}
+.sobre-activity-split-chips .chip.c0 .swatch { background: var(--sobre-primary); }
+.sobre-activity-split-chips .chip.c1 .swatch { background: var(--sobre-primary-hover); }
+.sobre-activity-split-chips .chip.c2 .swatch { background: var(--sobre-primary-bright); }
+.sobre-activity-split-chips .chip .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-weight: 700; font-size: 11px;
+}
+.sobre-activity-split-chips .chip .lbl {
+  color: var(--sobre-text-3);
+}
+
+/* Activity feed empty state — muted circle with a Clock, one line copy. */
+.sobre-activity-empty {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: 12px;
+  padding: 48px 20px;
+  color: var(--sobre-text-2);
+}
+.sobre-activity-empty .ic {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
+  display: grid; place-items: center;
+}
+.sobre-activity-empty .msg {
+  font-size: 13px; font-weight: 500;
+  color: var(--sobre-text-2);
+}
+
+/* ─── Split-proposal review card (Settings, above EnvelopeSplitForm) ─────
+   Ink-on-white card with a current→proposed diff. No colored halos. Uses
+   the same v2 aesthetic as the rest of the dashboard. */
+.sobre-proposal {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  padding: 18px 18px;
+  margin-bottom: 18px;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.sobre-proposal .head { display: flex; align-items: center; gap: 12px; }
+.sobre-proposal .who { flex: 1; min-width: 0; }
+.sobre-proposal .who .title {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 15px; font-weight: 600; color: var(--sobre-text-1);
+}
+.sobre-proposal .who .meta {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 12px; color: var(--sobre-text-3); margin-top: 2px;
+}
+.sobre-proposal .diff {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+}
+.sobre-proposal .diff .arrow {
+  font-size: 16px; color: var(--sobre-text-3); font-weight: 700;
+}
+.sobre-proposal .col-label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin-bottom: 6px;
+}
+.sobre-proposal .rows { display: flex; flex-direction: column; gap: 4px; }
+.sobre-proposal .row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px;
+  font-size: 13px;
+}
+.sobre-proposal .row .name {
+  color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-proposal .row .pct {
+  font-weight: 700; color: var(--sobre-text-1);
+}
+.sobre-proposal .col.muted .row .name,
+.sobre-proposal .col.muted .row .pct { color: var(--sobre-text-3); }
+.sobre-proposal .status {
+  font-size: 12px; color: var(--sobre-text-2);
+}
+.sobre-proposal .status b { color: var(--sobre-text-1); font-weight: 700; }
+.sobre-proposal .err {
+  font-size: 12px;
+  color: var(--sobre-danger);
+  padding: 8px 10px;
+  background: var(--sobre-danger-soft);
+  border-radius: 8px;
+}
+.sobre-proposal .actions {
+  display: flex; justify-content: flex-end; gap: 8px;
+}
+.sobre-proposal .actions .sobre-btn { padding: 8px 14px; font-size: 13px; }
+.sobre-proposal .actions .sobre-btn-soft.danger {
+  color: var(--sobre-danger);
+  border-color: rgba(196, 68, 59, 0.28);
+}
+.sobre-proposal .voted {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--sobre-text-3);
+}
+.sobre-v2 .sobre-warning-bar {
+  background: var(--sobre-cream);
+  border-color: rgba(198, 138, 46, 0.35);
+  color: var(--sobre-text-1);
+}
+.sobre-v2 .sobre-warning-bar svg { color: var(--sobre-warning); }
+.sobre-v2 .sobre-warning-bar b { color: var(--sobre-text-1); }
+
+/* Unified card chrome: every card in the v2 column shares the same radius,
+   shadow, and padding; vertical rhythm comes ONLY from the column's 16px gap
+   (no per-card margins). */
+.sobre-v2 .sobre-hsummary,
+.sobre-v2 .sobre-summary-card {
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 20px;
+  margin-bottom: 0;
+}
+.sobre-v2 .sobre-summary { gap: 16px; }
+
+/* Unified micro-labels: Inter, BOLD, tracked caps — one treatment for the
+   hero label, THIS MONTH, RECENT ACTIVITY, and MEMBERS. (Mono caps were
+   tried and swapped out; Geist Mono is reserved for numerals.) */
+.sobre-v2 .sobre-label,
+.sobre-v2 .sobre-hsummary-head,
+.sobre-v2 .sobre-hsummary-activity-head,
+.sobre-v2 .sobre-v2-hero .label {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Amounts read in Geist Mono per the board's numeric style. .tabular already
+   marks every balance/amount surface, so one rule covers them all. */
+.sobre-v2 .tabular,
+.sobre-v2 .sobre-total,
+.sobre-v2 .sobre-env-amount {
+  font-family: var(--font-geist-mono), ui-monospace, "SF Mono", monospace;
+}
+
+/* v2 wallet column — the centered native-app stack on the dashboard home. */
+.sobre-wallet-col {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+/* The wallet column owns its own summary/envelope spacing. */
+.sobre-wallet-col .sobre-envs { display: block; }
+
+/* Balance hero — the wallet's headline card. Flat Green 600 block. */
+.sobre-v2-hero {
+  background: var(--sobre-primary);
+  border: none;
+  border-radius: 16px;
+  box-shadow: 0 4px 12px rgba(15, 107, 58, 0.12);
+  padding: 22px 22px 20px;
+  color: #fff;
+}
+.sobre-v2-hero .label { color: rgba(255, 255, 255, 0.85); }
+/* Header row printed inside the hero — wallet name + rename + currency
+   toggle, so the balance card owns its title context. */
+.sobre-v2-hero .hero-title-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-width: 0;
+  margin: 0 0 14px;
+}
+.sobre-v2-hero .hero-title-left {
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.sobre-v2-hero .hero-title-name {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 15px; font-weight: 600;
+  color: #fff;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-v2-hero .hero-title-edit {
+  width: 22px; height: 22px; border-radius: 999px; flex-shrink: 0;
+  display: grid; place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.9);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-v2-hero .hero-title-edit:hover { background: rgba(255, 255, 255, 0.22); }
+/* Currency toggle sitting on the green hero — invert to translucent white
+   so it reads as a chip on green, not a floating light card. */
+.sobre-v2-hero [role="radiogroup"] {
+  background: rgba(255, 255, 255, 0.14) !important;
+  border-color: rgba(255, 255, 255, 0.24) !important;
+}
+.sobre-v2-hero [role="radiogroup"] [role="radio"] {
+  color: rgba(255, 255, 255, 0.75) !important;
+}
+.sobre-v2-hero [role="radiogroup"] [role="radio"][aria-checked="true"] {
+  background: #fff !important;
+  color: var(--sobre-primary-hover) !important;
+}
+.sobre-v2-hero .amount {
+  /* Board Section 07: the hero figure is Manrope display 700–800. Geist Mono
+     is reserved for running numerals (sub-lines, tables), not this number. */
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  margin-top: 4px;
+  font-size: clamp(36px, 7vw, 46px);
+  font-weight: 800; line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.sobre-v2-hero .amount .cents { font-size: 0.55em; color: rgba(255, 255, 255, 0.75); }
+.sobre-v2-hero .sub {
+  margin-top: 8px; display: flex; align-items: center; gap: 8px;
+  font-size: 13px; color: rgba(255, 255, 255, 0.85);
+}
+
+/* Quick actions — native-wallet tiles. Wrapping flex (not grid) so an
+   incomplete last row centers under the full one; every tile keeps the same
+   width via flex-basis. Long labels wrap instead of stretching a tile. */
+.sobre-v2-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 12px;
+}
+.sobre-v2-action {
+  flex: 0 1 calc(25% - 9px);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 12px 6px 11px;
+  min-width: 0;
+  /* Whole tile rides Green 50 with a dark-green icon — one hue, no chip box
+     (a multicolor chip cycle was tried and rejected as too busy). */
+  background: var(--sobre-accent-soft);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease;
+}
+.sobre-v2-action:hover { transform: translateY(-1px); box-shadow: var(--sobre-shadow-md); }
+.sobre-v2-action:active { transform: scale(0.97); }
+.sobre-v2-action:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.sobre-v2-action .chip {
+  width: 44px; height: 44px; border-radius: 13px;
+  display: grid; place-items: center;
+  background: transparent;
+  color: var(--sobre-primary-hover);
+  transition: transform 120ms ease;
+}
+@media (hover: hover) {
+  .sobre-v2-action:hover .chip { transform: scale(1.07); }
+}
+.sobre-v2-action:disabled {
+  background: var(--sobre-surface-alt);
+}
+.sobre-v2-action:disabled .chip { color: var(--sobre-text-3); }
+.sobre-v2-action .name {
+  /* Same unified Inter bold tracked-caps treatment as the micro-labels. */
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; color: var(--sobre-primary-hover);
+  letter-spacing: 0.06em; text-transform: uppercase;
+  text-align: center; line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 380px) {
+  .sobre-v2-actions { gap: 8px; }
+  .sobre-v2-action .chip { width: 40px; height: 40px; }
+  .sobre-v2-action .name { font-size: 11px; }
+}
+
+/* Split legend bar (envelopes view): one stacked track of the deposit split
+   + swatch legend. Segment colors = BAR_COLORS (home split card). */
+.sobre-v2-splitbar {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 16px 18px;
+  margin-bottom: 16px;
+}
+.sobre-v2-splitbar .head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin-bottom: 10px;
+}
+.sobre-v2-splitbar .track {
+  display: flex; height: 22px; border-radius: 8px; overflow: hidden;
+  background: var(--sobre-surface-alt);
+}
+.sobre-v2-splitbar .seg {
+  display: grid; place-items: center; height: 100%;
+  animation: sobre-bar-grow 0.7s cubic-bezier(0.22, 1, 0.36, 1) 0.15s backwards;
+}
+.sobre-v2-splitbar .seg b {
+  color: #fff; font-size: 11px; font-weight: 700; letter-spacing: 0.02em;
+}
+.sobre-v2-splitbar .seg + .seg { margin-left: 2px; }
+.sobre-v2-splitbar .legend {
+  display: flex; flex-wrap: wrap; gap: 8px 18px; margin-top: 12px;
+}
+.sobre-v2-splitbar .item {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 13px; color: var(--sobre-text-2);
+}
+.sobre-v2-splitbar .item b { color: var(--sobre-text-1); font-weight: 600; }
+.sobre-v2-splitbar .swatch {
+  width: 10px; height: 10px; border-radius: 4px; flex-shrink: 0;
+}
+
+/* Envelopes tab header — title on the left, admin settings gear on the
+   right (family rules — envelope names, split %, policy). */
+.sobre-envs-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+}
+.sobre-envs-header h2 {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 28px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+  margin: 0;
+}
+.sobre-envs-settings {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  color: var(--sobre-text-1);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.sobre-envs-settings:hover {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+/* Notification dot when a proposal is waiting on the current admin's vote.
+   Data-attribute is set from the dashboard when useSplitProposals.pending
+   exists AND the caller hasn't voted yet. */
+.sobre-envs-settings[data-badge="true"] {
+  position: relative;
+}
+.sobre-envs-settings[data-badge="true"]::after {
+  content: "";
+  position: absolute;
+  top: 6px; right: 6px;
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: #E8923C;
+  box-shadow: 0 0 0 2px var(--sobre-surface);
+}
+
+/* ─── Compact envelope row on the Envelopes tab ─────────────────────────
+   Icon · name+subline · amount · chevron. Tapping opens the SpendModal for
+   that envelope; policy detail lives inside the modal. */
+.sobre-env-row-btn {
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 14px 14px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  margin-bottom: 8px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, transform 90ms ease;
+}
+.sobre-env-row-btn:hover { background: var(--sobre-surface-alt); border-color: var(--sobre-border-strong); }
+.sobre-env-row-btn:active { transform: scale(0.995); }
+.sobre-env-row-btn .ic {
+  width: 40px; height: 40px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-env-row-btn .body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+}
+.sobre-env-row-btn .body .name {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 16px; font-weight: 600; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-env-row-btn .body .sub {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; color: var(--sobre-text-3);
+  white-space: nowrap;
+}
+.sobre-env-row-btn .body .sub .pct { font-weight: 600; color: var(--sobre-text-2); }
+.sobre-env-row-btn .body .sub .dot {
+  width: 3px; height: 3px; border-radius: 999px;
+  background: currentColor; opacity: 0.6;
+}
+.sobre-env-row-btn .amount {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 17px; font-weight: 700; color: var(--sobre-text-1);
+  flex-shrink: 0;
+}
+.sobre-env-row-btn .amount .cents {
+  font-size: 0.75em; color: var(--sobre-text-3); font-weight: 600;
+}
+.sobre-env-row-btn .chev { color: var(--sobre-text-3); flex-shrink: 0; }
+
+/* ─── Section header used above Members / Cards subsections ─────────── */
+.sobre-envs-section {
+  margin-top: 24px;
+}
+.sobre-envs-section-head {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px;
+}
+.sobre-envs-section-head h3 {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin: 0;
+}
+.sobre-envs-section-action {
+  font-size: 12px; font-weight: 600;
+  color: var(--sobre-primary);
+  background: transparent; border: 0; padding: 4px 6px;
+  cursor: pointer;
+}
+.sobre-envs-section-action:hover { color: var(--sobre-primary-hover); }
+/* "N of M admins" hint row + inline cap editor. Sits between the section
+   heading and the member rows. */
+/* "N of M admins" hint row. flex-wrap so on narrow phones the Change
+   button can drop below the text instead of collapsing on top of it. */
+.sobre-envs-section-hint {
+  display: flex; align-items: center; flex-wrap: wrap;
+  gap: 6px 12px;
+  margin: 0 4px 10px;
+  font-size: 12px; color: var(--sobre-text-3);
+}
+.sobre-envs-section-hint b { color: var(--sobre-text-1); font-weight: 700; }
+.sobre-envs-section-cap-edit {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 12px;
+  border: 1px solid var(--sobre-border);
+  background: var(--sobre-surface);
+  border-radius: 999px;
+  font-size: 12px; font-weight: 600;
+  line-height: 1;
+  color: var(--sobre-text-1);
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.sobre-envs-section-cap-edit:hover,
+.sobre-envs-section-cap-edit:active {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+.sobre-envs-section-cap-edit svg { flex-shrink: 0; }
+.sobre-envs-section-cap-editor {
+  display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+}
+.sobre-envs-section-cap-editor input {
+  width: 56px;
+  padding: 6px 8px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 8px;
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 14px; font-weight: 700;
+  text-align: center;
+  background: var(--sobre-surface);
+  color: var(--sobre-text-1);
+}
+.sobre-envs-section-cap-editor button {
+  width: 32px; height: 32px;
+  display: grid; place-items: center;
+  border: 1px solid var(--sobre-border);
+  background: var(--sobre-surface);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--sobre-text-1);
+  transition: background 120ms ease;
+}
+.sobre-envs-section-cap-editor button:hover,
+.sobre-envs-section-cap-editor button:active {
+  background: var(--sobre-surface-alt);
+}
+.sobre-envs-section-cap-editor .err {
+  flex-basis: 100%;
+  font-size: 11px; color: var(--sobre-danger);
+  margin-top: 2px;
+}
+
+/* Coarse-pointer (touch) tap targets — Apple/Google recommend ≥44px.
+   Small pills across the Envelopes tab bump up so finger-sized touches
+   land reliably. The currency pill in the hero and the Spending-policy
+   PHP/USDC switch bump too because they share the same "too small on
+   phones" complaint from a hallway test. */
+@media (pointer: coarse) {
+  .sobre-envs-section-cap-edit { min-height: 40px; padding: 8px 14px; font-size: 13px; }
+  .sobre-envs-section-cap-editor button { width: 40px; height: 40px; }
+  .sobre-envs-section-cap-editor input { width: 64px; padding: 8px; font-size: 16px; }
+  .sobre-envs-section-action { min-height: 40px; padding: 8px 10px; }
+  .sobre-unit-toggle button { padding: 10px 16px; font-size: 13px; }
+  .sobre-v2-hero .hero-title-row [role="radio"] {
+    min-height: 36px !important;
+    padding: 8px 16px !important;
+  }
+}
+.sobre-member-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 14px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 12px;
+  margin-bottom: 6px;
+}
+.sobre-member-row .who {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+}
+.sobre-member-row .who .name {
+  font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-member-row .who .role {
+  font-size: 11px; color: var(--sobre-text-3);
+  text-transform: uppercase; letter-spacing: 0.06em; font-weight: 600;
+}
+
+/* ─── Recent-activity preview on home ───────────────────────────────────
+   Ink-on-white rows, tabular amounts, small "See all" jumps to the full
+   Activity tab. Mirrors the design guide v2 rule: no colored halos, one
+   vivid green (used only for the inflow icon chip). */
+.sobre-recent { margin-top: 20px; }
+.sobre-recent-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin: 0 4px 10px;
+}
+.sobre-recent-head h3 {
+  font-family: var(--font-sans), system-ui, sans-serif;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin: 0;
+}
+.sobre-recent-see-all {
+  display: inline-flex; align-items: center; gap: 3px;
+  font-size: 12px; font-weight: 600;
+  color: var(--sobre-primary);
+  background: transparent; border: 0; padding: 4px 6px;
+  cursor: pointer;
+}
+.sobre-recent-see-all:hover { color: var(--sobre-primary-hover); }
+.sobre-recent-row {
+  /* Button reset — every recent row is now a <button> that opens the
+     shared ActivityDetailModal. text-align:left keeps content aligned
+     with the flow, width:100% stretches inside the section container. */
+  appearance: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  width: 100%;
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 14px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 12px;
+  margin-bottom: 6px;
+  transition: background 120ms ease;
+}
+.sobre-recent-row:hover { background: var(--sobre-surface-alt); }
+.sobre-recent-row .ic {
+  width: 36px; height: 36px; flex-shrink: 0;
+  border-radius: 12px;
+  display: grid; place-items: center;
+}
+.sobre-recent-row .ic.in {
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-accent);
+}
+.sobre-recent-row .ic.out {
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-1);
+}
+/* Avatar slot on member-driven rows — same 36px footprint as the tinted
+   glyph slot so widths don't shift when rows mix Deposit + Spend. */
+.sobre-recent-row .ic.ic-avatar {
+  background: transparent;
+  padding: 0;
+  border-radius: 50%;
+}
+.sobre-recent-row .body { flex: 1; min-width: 0; }
+.sobre-recent-row .line {
+  display: flex; align-items: baseline; justify-content: space-between;
+  gap: 12px;
+}
+.sobre-recent-row .who {
+  font-size: 14px; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  min-width: 0;
+}
+.sobre-recent-row .who .env-name { font-weight: 600; }
+.sobre-recent-row .amt {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 14px; font-weight: 700; color: var(--sobre-text-1);
+  flex-shrink: 0;
+}
+.sobre-recent-row .meta {
+  font-size: 12px; color: var(--sobre-text-3); margin-top: 2px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-recent-empty {
+  padding: 22px 16px;
+  background: var(--sobre-surface);
+  border: 1px dashed var(--sobre-border);
+  border-radius: 12px;
+  font-size: 13px; color: var(--sobre-text-3);
+  text-align: center;
+}
+
+/* Mini activity feed embedded in the This-month card: 3 latest rows + a
+   see-all button that opens the full activity view. */
+.sobre-hsummary-activity {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sobre-border);
+}
+.sobre-hsummary-activity-head {
+  font-size: 11px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3); margin-bottom: 8px;
+}
+.sobre-hsummary-activity-empty {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 0 4px;
+  font-size: 13px; color: var(--sobre-text-2);
+}
+.sobre-hsummary-activity-empty .ic {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--sobre-accent-soft); color: var(--sobre-primary-hover);
+}
+.sobre-hsummary-activity-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  background: var(--sobre-accent-soft);
+}
+.sobre-hsummary-activity-row + .sobre-hsummary-activity-row { margin-top: 6px; }
+.sobre-hsummary-activity-row .ic {
+  width: 22px; height: 22px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: transparent; color: var(--sobre-primary-hover);
+}
+.sobre-hsummary-activity-row .what {
+  flex: 1; min-width: 0; font-size: 13px; color: var(--sobre-text-1);
+  font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-hsummary-activity-row .when {
+  font-size: 12px; color: var(--sobre-text-3); flex-shrink: 0;
+}
+.sobre-hsummary-seeall {
+  margin-top: 10px;
+  width: 100%;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  padding: 10px 14px;
+  border: 1px solid var(--sobre-border);
+  border-radius: 10px;
+  background: var(--sobre-surface);
+  font-size: 13px; font-weight: 600; color: var(--sobre-primary-hover);
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-hsummary-seeall:hover { background: var(--sobre-accent-soft); }
+
+/* Envelope split card (board Section 07): compact rows — icon chip, name,
+   amount, thin per-envelope progress bar. Rows tap through to the full
+   envelopes view. */
+.sobre-v2-split {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 16px;
+  box-shadow: var(--sobre-shadow-sm);
+  padding: 8px;
+}
+.sobre-v2-split-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: var(--sobre-accent-soft);
+  border: none;
+  border-radius: 12px;
+  padding: 12px 14px;
+  cursor: pointer;
+  transition: filter 120ms ease;
+}
+.sobre-v2-split-row + .sobre-v2-split-row { margin-top: 8px; }
+.sobre-v2-split-row:hover { filter: brightness(0.98); }
+.sobre-v2-split-row:active { transform: scale(0.985); }
+.sobre-v2-split-row .top {
+  display: flex; align-items: center; gap: 10px;
+}
+.sobre-v2-split-row .chip {
+  width: 30px; height: 30px; border-radius: 9px; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: var(--sobre-surface);
+  color: var(--sobre-primary-hover);
+}
+.sobre-v2-split-row .name {
+  flex: 1; min-width: 0;
+  font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.sobre-v2-split-row .amt {
+  font-size: 14px; font-weight: 600; color: var(--sobre-text-1);
+  flex-shrink: 0;
+}
+.sobre-v2-split-row .top { min-width: 0; }
+
+/* ── PLACEHOLDER styles: notification pills + rail meta (board Section 07).
+   The pills render static sample copy until they're wired to real signals —
+   see <HomeSignalsPlaceholder>. Safe to restyle/remove with that component. */
+.sobre-v2-pill-note {
+  display: flex; align-items: center; gap: 9px;
+  border-radius: 12px;
+  padding: 11px 14px;
+  font-size: 13px;
+  /* One hue: every signal rides Green 50 — no colored dots/backgrounds per
+     severity (rejected as too colorful). Severity reads from the copy. */
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-text-1);
+}
+.sobre-v2-pill-note + .sobre-v2-pill-note { margin-top: 8px; }
+.sobre-v2-pill-note b { font-weight: 600; }
+.sobre-v2-pill-note .when {
+  margin-left: auto; flex-shrink: 0;
+  font-size: 12px; color: var(--sobre-text-3);
+}
+
+/* Split rows nested INSIDE the green balance hero (board Section 07 puts the
+   split in the balance card): drop the outer card chrome and flip rows to
+   white so they read on the green. */
+.sobre-v2-hero .sobre-v2-split {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  margin-top: 18px;
+}
+.sobre-v2-hero .sobre-v2-split-row {
+  background: var(--sobre-surface);
+  box-shadow: 0 1px 3px rgba(15, 26, 20, 0.10);
+}
+.sobre-v2-hero .sobre-v2-split-row:hover { filter: none; transform: translateY(-1px); }
+.sobre-v2-hero .sobre-v2-split-row { transition: transform 120ms ease; }
+.sobre-v2-hero .sobre-v2-split-row .chip {
+  background: var(--sobre-accent-soft);
+}
+
+/* ─── Earn panel ──────────────────────────────────────────────────────────
+   One card under the envelope list on the envelopes tab. Two visual states
+   (enable CTA vs enabled position) share the same shell so the layout
+   doesn't shift when admin flips the switch. */
+.sobre-earn-card {
+  padding: 14px 16px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sobre-earn-card-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+.sobre-earn-card-ic {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-earn-card-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-earn-card-body {
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--sobre-text-2);
+  line-height: 1.45;
+}
+.sobre-earn-card-sub {
+  margin: 3px 0 0;
+  font-size: 12px;
+  color: var(--sobre-text-3);
+}
+.sobre-earn-stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px 20px;
+  margin: 0;
+  padding: 12px 14px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+}
+.sobre-earn-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.sobre-earn-stats dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--sobre-text-3);
+}
+.sobre-earn-stats dd {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-earn-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.sobre-earn-primary-btn,
+.sobre-earn-secondary-btn {
+  flex: 1;
+  min-height: 40px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.sobre-earn-primary-btn {
+  background: var(--sobre-primary);
+  border: 1px solid var(--sobre-primary);
+  color: var(--sobre-primary-text);
+}
+.sobre-earn-primary-btn:hover:not(:disabled) {
+  background: var(--sobre-primary-hover);
+  border-color: var(--sobre-primary-hover);
+}
+.sobre-earn-secondary-btn {
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  color: var(--sobre-text-1);
+}
+.sobre-earn-secondary-btn:hover:not(:disabled) {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+.sobre-earn-primary-btn:disabled,
+.sobre-earn-secondary-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.sobre-earn-error {
+  margin: 0;
+  font-size: 12px;
+  color: var(--sobre-danger);
+}
+@media (max-width: 480px) {
+  .sobre-earn-stats {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ─── Envelope-row earn strip ────────────────────────────────────────────
+   Sits directly below the envelope button when that envelope has an
+   active Blend position. Shows lifetime interest earned + APY pill.
+   Wraps the button so it doesn't clip the row's rounded corners. */
+.sobre-env-row-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+.sobre-env-earn-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 14px 4px;
+  font-size: 12px;
+}
+.sobre-env-earn-interest {
+  color: var(--sobre-text-3);
+  font-weight: 500;
+}
+.sobre-env-earn-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+.sobre-env-earn-apy {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+  border: 0;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+.sobre-env-earn-apy:hover {
+  background: color-mix(in oklab, var(--sobre-accent-soft) 70%, var(--sobre-primary) 30%);
+}
+
+/* ─── Home-tab Yield hero cards ──────────────────────────────────────────
+   One standalone card per active surface (Savings earning, Grow). No
+   section header, no "Manage" link — the whole card is tappable and
+   jumps to Envelopes where any real action lives. Big balance is the
+   hero; APY chip anchors top-right; interest earned is a caption. */
+.sobre-yield-stack {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sobre-yield-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  padding: 18px 20px;
+  background: var(--sobre-surface);
+  border: 1px solid var(--sobre-border);
+  border-radius: 16px;
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease,
+    transform 120ms ease;
+}
+.sobre-yield-card:hover {
+  background: var(--sobre-surface-alt);
+  border-color: var(--sobre-border-strong);
+}
+.sobre-yield-card:active {
+  transform: scale(0.998);
+}
+.sobre-yield-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.sobre-yield-ic {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-yield-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--sobre-text-2);
+}
+.sobre-yield-chips {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.sobre-yield-badge {
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--sobre-surface-alt);
+  color: var(--sobre-text-2);
+  font-weight: 700;
+  font-size: 11px;
+  white-space: nowrap;
+}
+.sobre-yield-balance {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+  line-height: 1;
+  letter-spacing: -0.015em;
+}
+.sobre-yield-balance .cents {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--sobre-text-3);
+  margin-left: 1px;
+}
+.sobre-yield-interest {
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 500;
+  margin-top: -2px;
+}
+.sobre-yield-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+@media (max-width: 480px) {
+  .sobre-yield-card {
+    padding: 16px;
+    border-radius: 14px;
+  }
+  .sobre-yield-balance {
+    font-size: 28px;
+  }
+  .sobre-yield-balance .cents {
+    font-size: 16px;
+  }
+}
+
+/* ─── Earn info modal ────────────────────────────────────────────────────
+   Explainer opened from the "up to X% p.a." pill on Savings envelope
+   card, Grow panel, and the home-tab summary. Blocks stack vertically,
+   each with a 40px round icon chip left-aligned + a titled paragraph. */
+.sobre-earn-info-modal {
+  max-width: 500px;
+}
+.sobre-earn-info-modal h2 {
+  font-family: var(--serif);
+}
+.sobre-earn-info-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 18px 0 12px;
+}
+.sobre-earn-info-block {
+  display: flex;
+  gap: 14px;
+  padding: 14px 0;
+  border-top: 1px solid var(--sobre-border);
+  align-items: flex-start;
+}
+.sobre-earn-info-block:first-child {
+  border-top: 0;
+  padding-top: 4px;
+}
+.sobre-earn-info-ic {
+  flex-shrink: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--sobre-accent-soft);
+  color: var(--sobre-primary);
+}
+.sobre-earn-info-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sobre-earn-info-title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-earn-info-text p {
+  margin: 0;
+  font-size: 13px;
+  color: var(--sobre-text-2);
+  line-height: 1.55;
+}
+.sobre-earn-info-footer {
+  margin: 4px 0 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--sobre-border);
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  line-height: 1.55;
+}
+.sobre-earn-info-footer a {
+  color: var(--sobre-primary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.sobre-earn-info-footer a:hover {
+  color: var(--sobre-primary-hover);
+}
+
+/* ─── Grow panel additions ───────────────────────────────────────────────
+   Shares the sobre-earn-card shell + button + stats primitives. Only the
+   request-row + request-list are Grow-specific. */
+.sobre-grow-request-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sobre-grow-request-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  color: var(--sobre-text-3);
+}
+.sobre-grow-request-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  border: 1px solid var(--sobre-border);
+}
+.sobre-grow-request-currency {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-3);
+}
+.sobre-grow-request-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  background: transparent;
+  border: 0;
+  color: var(--sobre-text-1);
+  outline: none;
+}
+.sobre-grow-request-input-row .sobre-earn-secondary-btn {
+  flex: 0 0 auto;
+  min-width: 88px;
+  padding: 8px 14px;
+  min-height: 36px;
+}
+.sobre-grow-requests {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.sobre-grow-request-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--sobre-surface-alt);
+  border: 1px solid var(--sobre-border);
+  border-radius: 10px;
+}
+.sobre-grow-request-meta {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sobre-grow-request-amount {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-grow-request-countdown {
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 600;
+}
+.sobre-grow-request-countdown.is-ready {
+  color: var(--sobre-primary);
+}
+.sobre-grow-request-actions {
+  flex-shrink: 0;
+}
+.sobre-grow-request-actions .sobre-earn-secondary-btn {
+  min-width: 84px;
+  padding: 8px 14px;
+  min-height: 36px;
+  font-size: 12px;
+}
+
+/* Interest-earned line under the Grow stats block. */
+.sobre-grow-interest {
+  margin: 0;
+  padding: 4px 4px 0;
+  font-size: 12px;
+  color: var(--sobre-text-3);
+  font-weight: 600;
+}
+.sobre-grow-interest .tabular {
+  color: var(--sobre-primary);
+  font-weight: 700;
+}
+
+/* When the head has an APY chip alongside the title/sub, allow it to push
+   right instead of stacking. */
+.sobre-earn-card-head {
+  gap: 12px;
+  justify-content: flex-start;
+}
+.sobre-earn-card-head > .sobre-env-earn-apy {
+  margin-left: auto;
+  align-self: center;
+}
+
+/* ─── Activity redesign ────────────────────────────────────────────────
+ * When a household member drove the event (spend, request, sub-account
+ * fund, etc.), the row's left slot renders their Avatar instead of the
+ * small action glyph. The avatar carries the identity (with a coloured
+ * initials fallback for members without a photo); the row text stays
+ * short, and the full breakdown lives in ActivityDetailModal.
+ * ------------------------------------------------------------------- */
+.sobre-activity-item .ic.ic-avatar,
+.sobre-activity-item.inflow .ic.ic-avatar,
+.sobre-activity-item.outflow .ic.ic-avatar,
+.sobre-activity-item.pending .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.inflow .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.outflow .ic.ic-avatar,
+.sobre-v2 .sobre-activity-item.pending .ic.ic-avatar {
+  /* Override the tinted circle background used for glyph slots — the
+     avatar is opaque and provides its own colour. Same size as .ic so
+     rows with mixed slot types line up. Explicit variant list to beat
+     the per-tint .ic specificity above. */
+  background: transparent;
+  padding: 0;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  color: inherit;
+}
+
+/* ─── Activity detail modal ─────────────────────────────────────────── */
+.sobre-modal.sobre-activity-detail {
+  padding: 24px;
+  max-width: 420px;
+}
+.sobre-activity-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 20px;
+}
+.sobre-activity-detail-glyph {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--sobre-accent-soft);
+}
+.sobre-activity-detail-title .k {
+  font-family: var(--serif);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--sobre-text-1);
+  line-height: 1.2;
+}
+.sobre-activity-detail-title .when {
+  font-size: 13px;
+  color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-activity-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--sobre-border);
+  margin-bottom: 16px;
+}
+.sobre-activity-detail-amount {
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 32px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--sobre-text-1);
+  letter-spacing: -0.01em;
+}
+.sobre-activity-detail-amount.in { color: var(--sobre-accent); }
+.sobre-activity-detail-amount.out { color: var(--sobre-text-1); }
+.sobre-activity-detail-amount.pending { color: #b88b1c; }
+.sobre-activity-detail-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  font-size: 14px;
+}
+.sobre-activity-detail-row .k {
+  color: var(--sobre-text-3);
+  font-weight: 500;
+  white-space: nowrap;
+}
+.sobre-activity-detail-row .v {
+  color: var(--sobre-text-1);
+  font-weight: 500;
+  text-align: right;
+}
+.sobre-activity-detail-row .v.tabular {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+}
+.sobre-activity-detail-splits {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+.sobre-activity-detail-split-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  font-size: 14px;
+}
+.sobre-activity-detail-split-row .swatch {
+  width: 6px;
+  height: 20px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+.sobre-activity-detail-split-row .swatch.c0 { background: #22A45C; }
+.sobre-activity-detail-split-row .swatch.c1 { background: #E8923C; }
+.sobre-activity-detail-split-row .swatch.c2 { background: #2E6BAA; }
+.sobre-activity-detail-split-row .name {
+  color: var(--sobre-text-1);
+  font-weight: 500;
+  flex: 1;
+}
+.sobre-activity-detail-split-row .amt {
+  color: var(--sobre-text-1);
+  font-weight: 600;
+}
+
+.sobre-activity-detail-advanced-toggle {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 0;
+  color: var(--sobre-text-3);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.sobre-activity-detail-advanced-toggle:hover { color: var(--sobre-text-1); }
+.sobre-activity-detail-advanced-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--sobre-surface-alt);
+  border-radius: 10px;
+  font-size: 13px;
+}
+.sobre-activity-detail-explorer {
+  color: var(--sobre-accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 13px;
+}
+.sobre-activity-detail-explorer:hover { text-decoration: underline; }
+
+/* Universal exit animations — mirror the existing sobre-fade-in on the
+   backdrop and sobre-sheet-up on the mobile sheet, so every modal that
+   goes through <Sheet>'s closing state exits with the reverse glide.
+   Kept at global scope so desktop (which doesn't slide) still gets the
+   backdrop fade-out. */
+@keyframes sobre-sheet-down {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+@keyframes sobre-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+.sobre-modal-bg.closing {
+  animation: sobre-fade-out 0.22s ease forwards;
+}
+
+/* Mobile bottom-sheet exit — slide down on close. Base up-slide is
+ * declared alongside the mobile sheet block further up. Uses dvh so
+ * the mobile URL bar retracting doesn't cut the sheet mid-scroll. */
+@media (max-width: 640px) {
+  .sobre-modal.closing {
+    animation: sobre-sheet-down 0.22s cubic-bezier(0.4, 0, 0.6, 1) forwards;
+  }
+}
+
+/* ─── Supplementary detail sheet (Envelopes tab → row tap) ────────────── */
+.sobre-supp-detail-head {
+  display: flex; align-items: center; gap: 14px;
+  padding-bottom: 18px;
+  border-bottom: 1px solid var(--sobre-border);
+  margin-bottom: 18px;
+}
+.sobre-supp-detail-head .who { flex: 1; min-width: 0; }
+.sobre-supp-detail-head .name {
+  display: inline-flex; align-items: center; gap: 8px;
+  font-family: var(--font-manrope), var(--font-sans), sans-serif;
+  font-size: 16px; font-weight: 600; color: var(--sobre-text-1);
+}
+.sobre-supp-detail-head .name .lock-chip {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 7px; border-radius: 999px;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--sobre-danger);
+  background: rgba(220,38,38,0.10);
+}
+.sobre-supp-detail-head .balance {
+  font-family: var(--font-geist-mono), ui-monospace, monospace;
+  font-size: 26px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--sobre-text-1);
+  margin-top: 2px;
+}
+.sobre-supp-detail-head .label {
+  font-size: 11px; color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-supp-detail-history .head {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: var(--sobre-text-3);
+  margin-bottom: 10px;
+}
+.sobre-supp-detail-history .empty {
+  font-size: 13px; color: var(--sobre-text-3);
+  padding: 12px 0;
+}
+.sobre-supp-detail-history .row {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 12px; padding: 10px 0;
+  border-bottom: 1px dashed var(--sobre-border);
+}
+.sobre-supp-detail-history .row:last-child { border-bottom: 0; }
+.sobre-supp-detail-history .row .who { flex: 1; min-width: 0; }
+.sobre-supp-detail-history .row .who .label {
+  font-size: 13px; font-weight: 600; color: var(--sobre-text-1);
+}
+.sobre-supp-detail-history .row .who .when {
+  font-size: 11px; color: var(--sobre-text-3);
+  margin-top: 2px;
+}
+.sobre-supp-detail-history .row .amount {
+  font-size: 13px; font-weight: 700;
+  color: var(--sobre-text-1);
+}
+.sobre-supp-detail-history .row .amount[data-direction="in"] {
+  color: var(--sobre-accent);
 }

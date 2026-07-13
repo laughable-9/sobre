@@ -28,7 +28,7 @@ import {
   rpc,
 } from "@stellar/stellar-sdk";
 
-import { NETWORK, PAYMENT_TOKEN_SAC_ID, STROOPS_PER_TOKEN } from "@/lib/config";
+import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
 import { relayEnv } from "@/lib/env";
 
 let cachedServer: rpc.Server | null = null;
@@ -49,57 +49,62 @@ export function getRelayPublicKey(): string {
 }
 
 /**
- * Transfer `stroops` of the active payment-token SAC from the relay to
- * `destinationCAddress`. Submits via Soroban RPC, polls for inclusion,
- * returns the tx hash on success.
+ * PDAX-ramp entry: the relay G-address invokes the family Sobre contract's
+ * `deposit_from_xlm` with the XLM it just received from PDAX + the
+ * family's envelope percentages. The contract does the XLM→USDC swap
+ * via Soroswap internally, then splits the ACTUAL swap payout by the
+ * given percentages — the server doesn't need to pre-compute USDC
+ * amounts, so a live-rate mismatch can't leave envelopes short.
  *
- * Uses the standard SEP-41 `transfer(from, to, amount: i128)` interface.
- * `from = relay G-address` requires the envelope to be signed by the
- * relay's keypair — which is what the `tx.sign(kp)` below does. No
- * Soroban auth entries needed for a regular G-account source.
+ * No trustlines needed on the relay (XLM is native) and no user-signed
+ * follow-up step (the whole flow is server-side).
+ *
+ * Returns the tx hash on Horizon-confirmed success. Throws on
+ * submit/timeout failures.
  */
-export async function transferFromRelay(
-  destinationCAddress: string,
-  stroops: bigint,
-): Promise<string> {
+export async function depositFromXlmToSobre(args: {
+  familyContractId: string;
+  relayXlmStroops: bigint;
+  percents: readonly [number, number, number];
+}): Promise<string> {
   const server = getServer();
   const kp = getRelayKeypair();
 
   const account = await server.getAccount(kp.publicKey());
-  const tokenContract = new Contract(PAYMENT_TOKEN_SAC_ID);
+  const sobreContract = new Contract(args.familyContractId);
 
   const tx = new TransactionBuilder(account, {
     fee: BASE_FEE,
     networkPassphrase: NETWORK.passphrase,
   })
     .addOperation(
-      tokenContract.call(
-        "transfer",
+      sobreContract.call(
+        "deposit_from_xlm",
         Address.fromString(kp.publicKey()).toScVal(),
-        Address.fromString(destinationCAddress).toScVal(),
-        nativeToScVal(stroops, { type: "i128" }),
+        nativeToScVal(args.relayXlmStroops, { type: "i128" }),
+        nativeToScVal(args.percents[0], { type: "u32" }),
+        nativeToScVal(args.percents[1], { type: "u32" }),
+        nativeToScVal(args.percents[2], { type: "u32" }),
       ),
     )
     .setTimeout(30)
     .build();
 
-  // prepareTransaction runs simulation + populates Soroban footprint /
-  // resource fees so the network accepts the submission. Auth entries
-  // aren't needed because the source (relay G-address) is also the
-  // `from` of the SAC transfer — Soroban accepts the source signature
-  // as authorization for the source account.
+  // prepareTransaction runs simulation + populates Soroban footprint,
+  // auth entries, and resource fees. The Soroswap sub-invocation
+  // Sobre performs is authorized via `authorize_as_current_contract`
+  // inside the contract, so the outer tx only needs the relay's
+  // signature to satisfy the `from.require_auth()` at the top.
   const prepared = await server.prepareTransaction(tx);
   prepared.sign(kp);
 
   const sent = await server.sendTransaction(prepared);
   if (sent.status === "ERROR") {
     throw new Error(
-      `relay sendTransaction ERROR: ${JSON.stringify(sent.errorResult?.toXDR("base64") ?? sent)}`,
+      `relay deposit_from_xlm ERROR: ${JSON.stringify(sent.errorResult?.toXDR("base64") ?? sent)}`,
     );
   }
 
-  // Poll for inclusion. Soroban RPC's getTransaction returns NOT_FOUND
-  // until the ledger includes the tx, then SUCCESS or FAILED.
   const hash = sent.hash;
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
@@ -107,12 +112,12 @@ export async function transferFromRelay(
     if (status.status === "SUCCESS") return hash;
     if (status.status === "FAILED") {
       throw new Error(
-        `relay tx FAILED on chain: ${JSON.stringify(decodeResultXdr(status))}`,
+        `relay deposit_from_xlm FAILED on chain: ${JSON.stringify(decodeResultXdr(status))}`,
       );
     }
     await new Promise((r) => setTimeout(r, 1_000));
   }
-  throw new Error(`relay tx ${hash} did not confirm within 30s`);
+  throw new Error(`relay deposit_from_xlm ${hash} did not confirm within 30s`);
 }
 
 function decodeResultXdr(status: {

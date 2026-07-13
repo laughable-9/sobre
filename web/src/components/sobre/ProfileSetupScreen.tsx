@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Image from "next/image";
 
-import { EmojiPicker, SOBRE_EMOJIS } from "@/components/sobre/EmojiPicker";
 import { setProfile } from "@/lib/profile";
 
 export function ProfileSetupScreen({
@@ -17,13 +16,12 @@ export function ProfileSetupScreen({
   onDone: () => void;
 }) {
   const [name, setName] = useState(defaultName ?? "");
-  const [emoji, setEmoji] = useState<string>(SOBRE_EMOJIS[0]);
   const valid = name.trim().length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    setProfile(address, { name: name.trim(), emoji });
+    setProfile(address, { name: name.trim() });
     onDone();
   };
 
@@ -50,8 +48,8 @@ export function ProfileSetupScreen({
             What should we call you?
           </h1>
           <p style={{ fontSize: 15, color: "var(--text-2)" }}>
-            Pick a name and an icon once. We&apos;ll use them by default
-            whenever you open or join a Sobre.
+            Pick a name. We&apos;ll use it by default whenever you open or
+            join a Sobre.
           </p>
         </div>
 
@@ -61,17 +59,11 @@ export function ProfileSetupScreen({
             id="profile-name"
             className="sobre-input"
             type="text"
-            placeholder="Juan Dela Cruz"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={32}
             autoFocus
           />
-        </div>
-
-        <div className="sobre-input-group">
-          <label>Your icon</label>
-          <EmojiPicker value={emoji} onChange={setEmoji} />
         </div>
 
         <button
@@ -92,7 +84,7 @@ export function ProfileSetupScreen({
           className="text-[12px] text-center mt-3"
           style={{ color: "var(--text-3)" }}
         >
-          You can change these later inside any Sobre you open.
+          You can change this later inside any Sobre you open.
         </p>
       </form>
     </main>
