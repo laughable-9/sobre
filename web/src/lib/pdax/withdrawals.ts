@@ -31,7 +31,7 @@ import {
  *  Request with ID: <our-uuid>"` on /trade and /fiat/withdraw. Treating
  *  this as success is the only way to make convertAndPayoutPhp retryable
  *  after a mid-pipeline failure. */
-function isPdaxDuplicateRequest(e: unknown): boolean {
+export function isPdaxDuplicateRequest(e: unknown): boolean {
   if (!(e instanceof PdaxError)) return false;
   if (e.status !== 400) return false;
   const body = e.body;
@@ -108,7 +108,7 @@ export async function getPdaxCryptoDepositAddr(): Promise<{
     // attributable. Fail loud so the cashout aborts at kickoff rather than
     // sending funds into a black hole.
     throw new Error(
-      "PDAX /crypto/deposit returned no memo tag — refusing to send a classic payment without it",
+      "PDAX /crypto/deposit returned no memo tag. Refusing to send a classic payment without it.",
     );
   }
   cachedDepositAddr = { address: resp.data.address, memo };

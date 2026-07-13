@@ -21,6 +21,7 @@ import { NextResponse } from "next/server";
 
 import { PAYMENT_TOKEN } from "@/lib/config";
 import { pdaxEnv } from "@/lib/env";
+import { acquireDepositClaim, releaseDepositClaim } from "@/lib/pdax/depositClaim";
 import {
   isCryptoWebhook,
   isFiatWebhook,
@@ -29,7 +30,10 @@ import {
   type PdaxFiatWebhook,
   type PdaxWebhookPayload,
 } from "@/lib/pdax/deposits";
-import { convertAndPayoutPhp } from "@/lib/pdax/withdrawals";
+import {
+  convertAndPayoutPhp,
+  isPdaxDuplicateRequest,
+} from "@/lib/pdax/withdrawals";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -102,6 +106,12 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
     // NOTE: webhooks aren't registered in dev (no public URL). The primary
     // path for the hackathon demo is the polling route. This is here so
     // when we DO register the webhook, the architecture stays consistent.
+    //
+    // Atomic claim gates the external PDAX call so the webhook and
+    // poll-status can't both fire /trade + /crypto/withdraw against the
+    // same row. isPdaxDuplicateRequest swallowed here so a claim we win
+    // AFTER poll-status has already run its own doesn't 500 the webhook
+    // (which would trigger PDAX's retry loop).
     const { data: row } = await admin
       .from("pdax_deposits")
       .select("amount_php")
@@ -109,20 +119,33 @@ async function handleFiat(p: PdaxFiatWebhook): Promise<void> {
       .single();
     if (!row) return;
 
-    const { netAmount } = await kickOffPdaxWithdraw({
-      identifier: p.identifier,
-      amountPhp: (row as { amount_php: number }).amount_php,
-    });
+    const claim = await acquireDepositClaim(admin, p.identifier, "pending");
+    if (!claim) return;
+    try {
+      const { netAmount } = await kickOffPdaxWithdraw({
+        identifier: p.identifier,
+        amountPhp: (row as { amount_php: number }).amount_php,
+      });
 
-    await admin
-      .from("pdax_deposits")
-      .update({
-        status: "funded",
-        amount_usdc: netAmount,
-        token_currency: PAYMENT_TOKEN,
-      })
-      .eq("identifier", p.identifier)
-      .eq("status", "pending");
+      await admin
+        .from("pdax_deposits")
+        .update({
+          status: "funded",
+          amount_usdc: netAmount,
+          token_currency: PAYMENT_TOKEN,
+          withdraw_tx_hash: null,
+        })
+        .eq("identifier", p.identifier)
+        .eq("status", "pending")
+        .eq("withdraw_tx_hash", claim);
+    } catch (e) {
+      if (isPdaxDuplicateRequest(e)) {
+        await releaseDepositClaim(admin, p.identifier, claim);
+        return;
+      }
+      await releaseDepositClaim(admin, p.identifier, claim);
+      throw e;
+    }
     return;
   }
 
@@ -171,24 +194,41 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
   const admin = getSupabaseAdmin();
 
   if (p.transaction_type === "WITHDRAWAL") {
-    // Sobre→relay: PDAX sent the payment token to the relay G-address. The
-    // crypto webhook isn't registered in dev (no public URL), so the
-    // polling path handles this transition today. When this fires for
-    // real, mark the row credited — the SAC forward already ran via the
-    // polling path that detected the same payment first. `amount_usdc` is
-    // a legacy column name; it holds whatever token the family wallet
-    // uses, and `token_currency` records which.
-    const status = p.status === "completed" ? "credited" : p.status === "failed" ? "failed" : "funded";
-    // Guard against a late webhook overwriting a row past `funded` — a
-    // stale "failed" arriving after the polling path already credited
-    // / split the row would otherwise reverse a delivered deposit.
-    // Only mutate rows still at `funded` (the only state this webhook
-    // legitimately advances from).
+    // Sobre→relay: PDAX sent the payment token to the relay G-address.
+    //
+    // We do NOT advance funded → credited from the webhook. The polling
+    // path (advanceFromFunded → tryCompleteWithdrawAndTransfer →
+    // depositFromXlmToSobre) is the sole authority for that transition
+    // because it's the one that actually runs deposit_from_xlm on chain.
+    // If we flipped status to credited here, a webhook winning the race
+    // with the poll would leave the row reading "credited" while envelopes
+    // are unfunded. The polling path uses Horizon as the completion
+    // signal, so it doesn't need this webhook to notify it — /active
+    // surfaces funded rows to the dashboard and the poll drives them
+    // forward.
+    //
+    // We DO handle the failure signal here (the poll can't distinguish
+    // "PDAX marked failed" from "Horizon hasn't caught up yet"), and we
+    // preserve the tx hash + amount for later reconciliation.
+    if (p.status === "failed") {
+      await admin
+        .from("pdax_deposits")
+        .update({
+          status: "failed",
+          failure_reason: "PDAX crypto withdraw failed",
+          withdraw_tx_hash: p.transaction_hash,
+        })
+        .eq("identifier", p.identifier)
+        .eq("status", "funded");
+      return;
+    }
+    // Stamp metadata without advancing status. `amount_usdc` and
+    // `token_currency` help the polling path's Horizon match if it
+    // hadn't cached them yet. Skip `withdraw_tx_hash` because that
+    // column doubles as the poll's atomic-claim slot.
     await admin
       .from("pdax_deposits")
       .update({
-        status,
-        withdraw_tx_hash: p.transaction_hash,
         amount_usdc: p.amount,
         token_currency: PAYMENT_TOKEN,
       })
