@@ -40,6 +40,7 @@ import {
 } from "@/components/sobre/Skeletons";
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
+import { ExpensesView } from "@/components/sobre/ExpensesView";
 import { backdropClose } from "@/lib/ui";
 import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
@@ -131,6 +132,43 @@ function tabFromHash(hash?: string): DashboardSkeletonTab {
   return "home";
 }
 
+/** Underline tab used inside the Activity tab to toggle between the
+ *  chronological Feed and the aggregated Expenses view. Text-only,
+ *  mango-primary underline on the active one. Same rhythm as the rest
+ *  of Sobre's minimal chrome. */
+function ActivitySegment({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: "10px 0",
+        marginBottom: -1,
+        borderTop: 0,
+        borderLeft: 0,
+        borderRight: 0,
+        borderBottom: active ? "2px solid var(--sobre-primary)" : "2px solid transparent",
+        background: "transparent",
+        color: active ? "var(--text-1)" : "var(--text-3)",
+        fontSize: 14,
+        fontWeight: 600,
+        cursor: "pointer",
+        transition: "color 160ms ease",
+      }}
+    >
+      {label}
+    </button>
+  );
+}
+
 function Dashboard({ contractId }: { contractId: string }) {
   const wallet = usePasskeyWallet();
   const { address } = wallet;
@@ -163,6 +201,21 @@ function Dashboard({ contractId }: { contractId: string }) {
     splitProposals.pending && splitProposals.myVote === null,
   );
   const subRows = subaccountsHook.subaccounts;
+  // Compact ref shape shared by the three activity surfaces (feed,
+  // preview, expenses). Filters out subs without a wallet address and
+  // fixes the shape in one place so future field additions don't have
+  // to hunt through call sites.
+  const subaccountRefs = useMemo(
+    () =>
+      subRows
+        .filter((r) => r.walletAddress)
+        .map((r) => ({
+          address: r.walletAddress as string,
+          name: r.displayName,
+          avatarUrl: r.avatarUrl,
+        })),
+    [subRows],
+  );
 
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
@@ -319,6 +372,23 @@ function Dashboard({ contractId }: { contractId: string }) {
   // the wrong tab flashes for one paint before the effect below flips it,
   // AND the DashboardSkeleton below picks the wrong shape while state loads.
   const [tab, setTab] = useState<Tab>(() => tabFromHash());
+  // Activity tab has two sub-views: chronological Feed and aggregated
+  // Expenses. Kept as a hash query so refresh + back button preserve it.
+  const [activityView, setActivityView] = useState<"feed" | "expenses">(() =>
+    typeof window !== "undefined" && window.location.hash.includes("view=expenses")
+      ? "expenses"
+      : "feed",
+  );
+  const switchActivityView = (next: "feed" | "expenses") => {
+    setActivityView(next);
+    const base = ACTIVITY_HASH;
+    const hash = next === "expenses" ? `${base}?view=expenses` : base;
+    history.replaceState(
+      null,
+      "",
+      hash,
+    );
+  };
   // Hash-sync the tab so refresh + back-button keep the user where they were.
   useEffect(() => {
     const handler = () => setTab(tabFromHash());
@@ -668,12 +738,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             events={feedEvents}
             loading={txFeed.loading}
             members={state.members}
-            subaccounts={subRows
-              .filter((r) => r.walletAddress)
-              .map((r) => ({
-                address: r.walletAddress as string,
-                name: r.displayName,
-              }))}
+            subaccounts={subaccountRefs}
             envelopeNames={state.envelope_names}
             onSeeAll={() => switchTab("activity")}
             onExpenseDeleted={() => expenseLogHook.refresh()}
@@ -689,18 +754,46 @@ function Dashboard({ contractId }: { contractId: string }) {
           className="mx-auto w-full px-4 sm:px-7 pt-6 pb-12"
           style={{ maxWidth: 760 }}
         >
+          <div
+            style={{
+              display: "flex",
+              gap: 24,
+              borderBottom: "1px solid var(--border)",
+              marginBottom: 18,
+            }}
+          >
+            <ActivitySegment
+              label="Feed"
+              active={activityView === "feed"}
+              onClick={() => switchActivityView("feed")}
+            />
+            <ActivitySegment
+              label="Expenses"
+              active={activityView === "expenses"}
+              onClick={() => switchActivityView("expenses")}
+            />
+          </div>
+
+          <div
+            key={activityView}
+            className="sobre-fade-in"
+          >
+          {activityView === "expenses" ? (
+            <ExpensesView
+              events={feedEvents}
+              envelopeNames={state.envelope_names}
+              members={state.members}
+              subaccounts={subaccountRefs}
+              onExpenseDeleted={() => expenseLogHook.refresh()}
+            />
+          ) : (
           <ActivityFeed
             events={feedEvents}
             loading={txFeed.loading}
             error={txFeed.error}
           newestTxHash={newestTxHash}
           members={state.members}
-          subaccounts={subRows
-            .filter((r) => r.walletAddress)
-            .map((r) => ({
-              address: r.walletAddress as string,
-              name: r.displayName,
-            }))}
+          subaccounts={subaccountRefs}
           envelopeNames={state.envelope_names}
           pendingDeposits={activeDeposits.deposits.filter(
             (d) =>
@@ -762,6 +855,8 @@ function Dashboard({ contractId }: { contractId: string }) {
             }
           }}
           />
+          )}
+          </div>
         </Reveal>
       ) : null}
 
