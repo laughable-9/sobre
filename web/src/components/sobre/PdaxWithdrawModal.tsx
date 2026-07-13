@@ -186,6 +186,7 @@ export function PdaxWithdrawModal({
       const snap = readCashoutRecovery();
       if (
         snap &&
+        snap.kind === "member" &&
         snap.contractId === contractId &&
         (!resumeIdentifier || snap.identifier === resumeIdentifier) &&
         !cancelled
@@ -387,7 +388,7 @@ export function PdaxWithdrawModal({
       // Kyle hit before this fix. Route to the recovery prompt so the
       // next action is retryForward, not signAndForward.
       const snap = readCashoutRecovery();
-      if (snap) {
+      if (snap && snap.kind === "member") {
         setRecoverySnapshot(snap);
         setLocalPhase("recovery_prompt");
       } else {
@@ -428,8 +429,17 @@ export function PdaxWithdrawModal({
       //     row already exists it short-circuits the insert and just
       //     returns the same relayG, so this costs one Supabase select
       //     and avoids creating an orphan pending row.
+      // Member-cashout recovery — envelope is always populated on this
+      // path (the sub-account modal owns kind: "subaccount" flows), so
+      // the non-null assertion is safe.
+      const envelope = source.envelope;
+      if (!envelope) {
+        throw new Error(
+          "Recovery snapshot missing envelope; wrong modal for this row.",
+        );
+      }
       const init = await initiate({
-        envelope: source.envelope,
+        envelope,
         amountToken: source.amountToken,
         amountPhp: source.amountPhp,
         bankCode: source.bankCode,

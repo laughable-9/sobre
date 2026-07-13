@@ -18,13 +18,22 @@
  */
 
 export interface CashoutRecoverySnapshot {
+  /** Which cashout variant this snapshot came from. `member` means the
+   *  spend leg was `withdraw(envelope, amount)`; `subaccount` means it
+   *  was `withdraw_subaccount(caller, amount)` and `envelope` is null. */
+  kind: "member" | "subaccount";
   identifier: string;
   contractId: string;
   spendTxHash: string;
   /** Stroops as a string — JSON can't carry bigint. Caller re-parses. */
   amountStroops: string;
   relayG: string;
-  envelope: "Groceries" | "Tuition" | "Savings";
+  /** Set for member cashouts (which envelope debited). Null for
+   *  sub-account cashouts (sub-accounts hold a flat balance). */
+  envelope: "Groceries" | "Tuition" | "Savings" | null;
+  /** Sub-account holder's wallets.id. Set only when kind='subaccount' so
+   *  the modal can match the snapshot to the correct sub-account row. */
+  subaccountId: string | null;
   amountPhp: number;
   amountToken: number;
   bankCode: string;
