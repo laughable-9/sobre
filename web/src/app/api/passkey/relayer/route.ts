@@ -52,6 +52,16 @@ export async function POST(req: NextRequest) {
   });
   if (rate) return rate;
 
+  // Check content-length BEFORE buffering. Reading req.text() first
+  // would let a hostile client push megabytes into memory before we
+  // 413 them, which OOMs the serverless instance.
+  const contentLength = Number(req.headers.get("content-length") ?? "");
+  if (Number.isFinite(contentLength) && contentLength > MAX_BODY_BYTES) {
+    return NextResponse.json(
+      { error: `Body too large. Max ${MAX_BODY_BYTES} bytes.` },
+      { status: 413 },
+    );
+  }
   const body = await req.text();
   if (body.length > MAX_BODY_BYTES) {
     return NextResponse.json(
@@ -60,14 +70,27 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  const upstream = await fetch(CHANNELS_ENDPOINT, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body,
-  });
+  // Guard the upstream call so a DNS/TLS/timeout hiccup at Channels
+  // doesn't bubble to Next.js as an unhandled 500 — the passkey signing
+  // modal would just hang on a generic error.
+  let upstream: Response;
+  try {
+    upstream = await fetch(CHANNELS_ENDPOINT, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body,
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch (e) {
+    console.error("[relayer] Channels fetch failed", e);
+    return NextResponse.json(
+      { error: "Relayer unavailable" },
+      { status: 502 },
+    );
+  }
 
   const responseBody = await upstream.text();
 
