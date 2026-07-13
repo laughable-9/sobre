@@ -97,7 +97,7 @@ export function SubAccountView({
         };
         if (j.code === "already_spent") {
           onFlash(
-            "The on-chain spend already landed — resume this to finish it.",
+            "The on-chain spend already landed. Resume this to finish it.",
             "warn",
           );
         } else {

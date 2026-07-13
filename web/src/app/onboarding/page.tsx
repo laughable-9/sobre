@@ -397,7 +397,7 @@ export default function OnboardingFlow() {
       >
         <Question>Roughly how much do you send each month?</Question>
         <p className="mb-4 text-[13px]" style={{ color: "var(--text-2)" }}>
-          Just an estimate — it sets the preview amounts on the next steps. You
+          Just an estimate. It sets the preview amounts on the next steps. You
           can change it anytime. Leave blank to skip.
         </p>
 
@@ -522,7 +522,7 @@ export default function OnboardingFlow() {
           style={{ color: "var(--text-3)" }}
         >
           Roles control what each person sees in the app. On-chain, you are the
-          wallet&apos;s single admin — fund controls stay with you.
+          wallet&apos;s single admin. Fund controls stay with you.
         </p>
       </MobileScreen>
     );

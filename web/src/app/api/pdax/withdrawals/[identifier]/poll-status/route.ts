@@ -119,7 +119,7 @@ export async function GET(
   if (r.status === "transferred") {
     if (!r.amount_php) {
       return NextResponse.json(
-        { error: "Row missing amount_php — can't run sell trade" },
+        { error: "Row missing amount_php. Can't run sell trade." },
         { status: 500 },
       );
     }

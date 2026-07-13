@@ -74,6 +74,9 @@ export function EnvelopeSplitForm({
 
   const sig = useMemo(() => current.join(","), [current]);
   useEffect(() => {
+    // Re-seed form on poll changes only when the split signature moves.
+    // Intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setSplit(toSplit(current));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);
@@ -118,7 +121,7 @@ export function EnvelopeSplitForm({
         const result = await propose(familyWalletId!, split);
         if (result.outcome === "created") onProposalSent?.();
         else if (result.outcome === "pending_exists")
-          throw new Error("Another proposal is already waiting — resolve it first.");
+          throw new Error("Another proposal is already waiting. Resolve it first.");
         else if (result.outcome === "not_admin")
           throw new Error("Only admins can propose split changes.");
       } else {
@@ -134,7 +137,7 @@ export function EnvelopeSplitForm({
   const helperCopy = hasPendingProposal
     ? "Resolve the pending proposal above before changing the split."
     : requiresProposal
-      ? "This household has multiple admins — your change goes out as a proposal that every admin must approve."
+      ? "This household has multiple admins. Your change goes out as a proposal that every admin must approve."
       : "Changes apply to future deposits. Existing balances stay put. Saves instantly.";
 
   const buttonLabel = requiresProposal

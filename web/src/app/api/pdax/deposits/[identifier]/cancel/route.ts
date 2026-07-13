@@ -62,7 +62,7 @@ export async function POST(
       if (tx && tx.status === "COMPLETED") {
         return NextResponse.json(
           {
-            error: "Payment already received — cancel refused",
+            error: "Payment already received. Cancel refused.",
             code: "already_paid",
           },
           { status: 409 },

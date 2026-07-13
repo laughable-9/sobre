@@ -165,7 +165,7 @@ export async function POST(req: Request) {
       return NextResponse.json(
         {
           error:
-            "No bank on file — register a Philippine bank account before cashing out",
+            "No bank on file. Register a Philippine bank account before cashing out.",
         },
         { status: 400 },
       );

@@ -81,11 +81,15 @@ export function ReceiptReviewSheet({
   const firstBlob = imageBlobs[0] ?? null;
   const [previewUrl, setPreviewUrl] = useState<string>("");
   useEffect(() => {
+    // Blob URL lifecycle. Set/revoke inside the effect body so StrictMode's
+    // dev double-invoke doesn't leave a revoked URL bound to <img src>.
     if (!firstBlob) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPreviewUrl("");
       return;
     }
     const url = URL.createObjectURL(firstBlob);
+     
     setPreviewUrl(url);
     return () => URL.revokeObjectURL(url);
   }, [firstBlob]);
@@ -920,7 +924,7 @@ function EditableRow({
         value={item.description}
         onChange={(e) => onUpdate({ description: e.target.value.slice(0, 120) })}
         disabled={disabled}
-        placeholder="Item"
+        aria-label="Item description"
         style={{
           flex: 1,
           minWidth: 0,

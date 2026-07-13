@@ -60,7 +60,10 @@ export function JoinByLinkForm({
   // Auto-navigate as soon as the input parses to a valid invite link. Reset
   // the latch when the input is cleared so a second valid paste still works.
   useEffect(() => {
+    // Effect derives status from link + fires a side effect (onValid).
+    // Splitting these would just move complexity around.
     const next = parseLink(link);
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStatus(next);
     if (next.kind === "valid" && !navigatedRef.current) {
       navigatedRef.current = true;
@@ -119,7 +122,7 @@ export function JoinByLinkForm({
             }}
           >
             <Check size={16} strokeWidth={2.5} />
-            <div>Link checks out — taking you to the invite…</div>
+            <div>Link checks out. Taking you to the invite…</div>
           </div>
         ) : null}
       </div>

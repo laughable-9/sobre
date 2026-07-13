@@ -178,7 +178,7 @@ function AdminCapEditor({
       }
       if (result.outcome === "below_admin_count") {
         setValidationError(
-          `Can't go below ${result.current_admins} — that's the number of admins already in.`,
+          `Can't go below ${result.current_admins}. That's the number of admins already in.`,
         );
         return;
       }

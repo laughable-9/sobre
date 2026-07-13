@@ -123,7 +123,7 @@ export function HouseholdSummary({
           <div className="sobre-hsummary-body">
             <div className="sobre-hsummary-label">Withdrawals tracked</div>
             <div className="sobre-hsummary-value tabular accent">
-              {trackedPct === null ? "—" : `${trackedPct}%`}
+              {trackedPct === null ? "-" : `${trackedPct}%`}
             </div>
             <div className="sobre-hsummary-track" aria-hidden>
               <div

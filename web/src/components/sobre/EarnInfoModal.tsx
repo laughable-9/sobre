@@ -40,7 +40,7 @@ export function EarnInfoModal({ onClose }: { onClose: () => void }) {
               <p>
                 Your Savings money is put into <strong>USDY</strong>, a
                 token backed by short-term US Treasury bills. The rate
-                is steady but not fixed. Spend from Savings anytime — the
+                is steady but not fixed. Spend from Savings anytime. The
                 app pulls the money out for you instantly.
               </p>
             </div>

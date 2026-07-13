@@ -95,7 +95,7 @@ export function AdminJoinForm({
           <b style={{ color: "var(--text-1)" }}>
             {state.wallet_name || "this Sobre"}
           </b>
-          {" "}with full admin powers — equal control over splits, spends,
+          {" "}with full admin powers. Equal control over splits, spends,
           and household settings.
         </p>
 
@@ -162,11 +162,11 @@ function errorFor(r: RedeemAdminOutcome): string | null {
     case "family_full":
       return `This Sobre already has ${r.current_admins} of ${r.admin_cap} admins.`;
     case "not_a_chain_member":
-      return "Chain hasn't caught up yet — refresh in a moment.";
+      return "Chain hasn't caught up yet. Refresh in a moment.";
     case "already_redeemed":
       return "This invite has already been used.";
     case "cancelled":
-      return "This admin invite was cancelled — the household's admin cap changed. Ask for a fresh link.";
+      return "This admin invite was cancelled. The household's admin cap changed, so ask for a fresh link.";
     case "invalid_invite":
       return "This isn't an admin invite. Ask for a fresh link.";
     case "not_authenticated":

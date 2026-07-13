@@ -32,7 +32,7 @@ const geistMono = Geist_Mono({
 });
 
 const SITE = "https://sobre-mocha.vercel.app";
-const TITLE = "Sobre — joint wallets for OFW families";
+const TITLE = "Sobre: joint wallets for OFW families";
 const DESC =
   "Remittances auto-split into named envelopes the moment they land. Both members see the same balances in real time, on Stellar.";
 
