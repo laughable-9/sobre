@@ -266,10 +266,16 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
 
     // Move straight to converted+pay — same idempotent helper the
     // poll-status route uses. Webhook + poll converge on the same path.
-    await admin
+    // Gate on status='transferred' so a concurrent poll that already
+    // advanced the row to converted/processing/paid doesn't get
+    // regressed to converted (visible flicker in the activity feed).
+    const { data: advanced } = await admin
       .from("pdax_withdrawals")
       .update({ status: "converted" })
-      .eq("identifier", row.identifier);
+      .eq("identifier", row.identifier)
+      .eq("status", "transferred")
+      .select("identifier");
+    if (!advanced?.length) return;
 
     const { totalPhp } = await convertAndPayoutPhp({
       identifier: row.identifier,
