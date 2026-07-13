@@ -5,6 +5,7 @@ import {
   ArrowClockwiseIcon,
   CaretDownIcon,
   CheckIcon,
+  ImageSquareIcon,
   PencilSimpleIcon,
   PlusIcon,
   TrashIcon,
@@ -125,14 +126,27 @@ export function ReceiptReviewSheet({
     })}`;
   }, [amountStr, isUsd]);
 
-  const stepValid = (s: Step): boolean => {
-    if (s === 1) return amountStroops !== null && vendor.trim().length > 0;
-    if (s === 2) return categories.length > 0;
-    return note.trim().length > 0;
+  /** What's missing on the current step. Surfaced as the Next button's
+   *  helper text so tapping a disabled Next doesn't silently do nothing.
+   *  Also serves as the "is this step valid" check — null means valid. */
+  const stepMissing = (s: Step): string | null => {
+    if (s === 1) {
+      if (vendor.trim().length === 0 && amountStroops === null) {
+        return "Add a vendor name and total to continue.";
+      }
+      if (vendor.trim().length === 0) return "Add a vendor name to continue.";
+      if (amountStroops === null) return "Enter the total to continue.";
+      return null;
+    }
+    if (s === 2) {
+      return categories.length === 0 ? "Pick at least one category." : null;
+    }
+    return note.trim().length === 0 ? "Add a short note to save." : null;
   };
 
   const goBack = () => {
     if (saving) return;
+    setError(null);
     if (step === 1) {
       onClose();
       return;
@@ -141,12 +155,21 @@ export function ReceiptReviewSheet({
   };
 
   const goNext = () => {
-    if (!stepValid(step)) return;
+    const missing = stepMissing(step);
+    if (missing) {
+      setError(missing);
+      return;
+    }
+    setError(null);
     setStep((s) => (s + 1) as Step);
   };
 
   const save = async () => {
-    if (!stepValid(3) || amountStroops === null) return;
+    const missing = stepMissing(3);
+    if (missing || amountStroops === null) {
+      setError(missing ?? "Missing amount.");
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
@@ -307,8 +330,13 @@ export function ReceiptReviewSheet({
             <button
               type="button"
               className="sobre-btn sobre-btn-primary"
-              disabled={!stepValid(step) || saving}
-              onClick={goNext}
+              disabled={saving}
+              onClick={(e) => {
+                // Blur so the button doesn't stay stuck in its :focus /
+                // sticky-tap color state after an invalid Next.
+                e.currentTarget.blur();
+                goNext();
+              }}
               style={{ flex: 2 }}
             >
               Next
@@ -317,8 +345,11 @@ export function ReceiptReviewSheet({
             <button
               type="button"
               className="sobre-btn sobre-btn-primary"
-              disabled={!stepValid(3) || saving}
-              onClick={() => void save()}
+              disabled={saving}
+              onClick={(e) => {
+                e.currentTarget.blur();
+                void save();
+              }}
               style={{ flex: 2 }}
             >
               {saving ? "Saving…" : "Save"}
@@ -382,6 +413,7 @@ function Step1({
   };
   const symbol = isUsd ? "$" : "₱";
   const [editingVendor, setEditingVendor] = useState(false);
+  const isManual = photoCount === 0;
   return (
     <>
       <div
@@ -396,7 +428,7 @@ function Step1({
           marginBottom: 18,
         }}
       >
-        {previewUrl ? (
+        {isManual ? null : previewUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={previewUrl}
@@ -483,7 +515,7 @@ function Step1({
                   maxWidth: "100%",
                 }}
               >
-                {vendor || "Add vendor"}
+                {vendor || "Vendor name"}
               </span>
               <PencilSimpleIcon size={12} weight="bold" style={{ color: "var(--text-3)" }} />
             </button>
@@ -500,53 +532,85 @@ function Step1({
               {photoCount} photos merged
             </div>
           ) : null}
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            <button
-              type="button"
-              onClick={onRetake}
-              disabled={disabled}
-              className="sobre-btn sobre-btn-soft"
-              style={{
-                padding: "6px 12px",
-                fontSize: 12,
-                height: "auto",
-                gap: 6,
-              }}
-            >
-              <ArrowClockwiseIcon size={12} weight="bold" />
-              Retake
-            </button>
-            {onAddPhoto ? (
+          {isManual ? (
+            onAddPhoto ? (
               <button
                 type="button"
                 onClick={onAddPhoto}
                 disabled={disabled}
-                className="sobre-btn sobre-btn-soft"
+                title="Attach a receipt photo to auto-fill the amount and items."
                 style={{
-                  padding: "6px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 8,
+                  width: "100%",
+                  padding: "18px 12px",
+                  background: "var(--surface)",
+                  border: "1.5px dashed var(--border)",
+                  borderRadius: 10,
+                  color: "var(--text-3)",
                   fontSize: 12,
-                  height: "auto",
-                  gap: 6,
+                  fontWeight: 600,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  marginTop: 6,
                 }}
-                title="Snap another shot of this same receipt. Sobre merges it in."
               >
-                <PlusIcon size={12} weight="bold" />
-                {addingPhoto ? "Reading…" : "More of this receipt"}
+                <ImageSquareIcon size={18} weight="regular" />
+                {addingPhoto ? "Reading…" : "Attach receipt photo"}
               </button>
-            ) : null}
-          </div>
-          {onAddPhoto && photoCount === 1 ? (
-            <div
-              style={{
-                fontSize: 11,
-                color: "var(--text-3)",
-                marginTop: 8,
-                lineHeight: 1.35,
-              }}
-            >
-              Long receipt? Snap the rest and Sobre merges them.
-            </div>
-          ) : null}
+            ) : null
+          ) : (
+            <>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                <button
+                  type="button"
+                  onClick={onRetake}
+                  disabled={disabled}
+                  className="sobre-btn sobre-btn-soft"
+                  style={{
+                    padding: "6px 12px",
+                    fontSize: 12,
+                    height: "auto",
+                    gap: 6,
+                  }}
+                >
+                  <ArrowClockwiseIcon size={12} weight="bold" />
+                  Retake
+                </button>
+                {onAddPhoto ? (
+                  <button
+                    type="button"
+                    onClick={onAddPhoto}
+                    disabled={disabled}
+                    className="sobre-btn sobre-btn-soft"
+                    style={{
+                      padding: "6px 12px",
+                      fontSize: 12,
+                      height: "auto",
+                      gap: 6,
+                    }}
+                    title="Snap another shot of this same receipt. Sobre merges it in."
+                  >
+                    <ImageSquareIcon size={14} weight="regular" />
+                    {addingPhoto ? "Reading…" : "More of this receipt"}
+                  </button>
+                ) : null}
+              </div>
+              {onAddPhoto && photoCount === 1 ? (
+                <div
+                  style={{
+                    fontSize: 11,
+                    color: "var(--text-3)",
+                    marginTop: 8,
+                    lineHeight: 1.35,
+                  }}
+                >
+                  Long receipt? Snap the rest and Sobre merges them.
+                </div>
+              ) : null}
+            </>
+          )}
         </div>
       </div>
 
@@ -1187,6 +1251,7 @@ function Step3({
             </button>
             {itemsOpen ? (
               <div
+                className="sobre-expand-in"
                 style={{
                   marginTop: 8,
                   border: "1px solid var(--border)",

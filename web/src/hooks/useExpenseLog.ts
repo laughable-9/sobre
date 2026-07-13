@@ -73,8 +73,13 @@ export interface UseExpenseLogResult {
   logs: ExpenseLog[];
   loading: boolean;
   error: string | null;
-  /** Save a text-only note off-chain immediately. */
-  logNote: (note: string) => Promise<ExpenseLog>;
+  /** Open the review sheet with a blank scan and no images. User fills
+   *  everything from scratch — amount, categories, items, note. The
+   *  session's addPhoto() still works, so a user can start manual and
+   *  attach a photo mid-flow. */
+  startManualEntry: (
+    envelopeNames?: [string, string, string],
+  ) => ReceiptLogSession;
   /** OCR + classify a receipt image. Returns a session that carries the
    *  merged scan across additional photos and a save() to persist. */
   logReceipt: (file: File) => Promise<ReceiptLogSession>;
@@ -193,11 +198,6 @@ export function useExpenseLog(
     [familyWalletId],
   );
 
-  const logNote = useCallback(
-    (note: string): Promise<ExpenseLog> => persist({ note }),
-    [persist],
-  );
-
   /** Compress a file and send it to /scan, optionally merging into an
    *  existing session's scan across multiple photos. */
   const scanOne = useCallback(
@@ -265,6 +265,31 @@ export function useExpenseLog(
     [buildSession, scanOne],
   );
 
+  const startManualEntry = useCallback(
+    (
+      envelopeNames: [string, string, string] = ["Groceries", "Tuition", "Savings"],
+    ): ReceiptLogSession => {
+      // Empty ReceiptScan — every field starts null / empty so the
+      // review sheet renders a fresh form. If the user adds a photo
+      // mid-flow, session.addPhoto merges it back through Gemini.
+      const blankScan: ReceiptScan = {
+        vendor: null,
+        amount_php: null,
+        subtotal_php: null,
+        tax_php: null,
+        currency: "PHP",
+        occurred_at: null,
+        category: null,
+        envelope_index: null,
+        envelope_confidence: 0,
+        note_summary: "",
+        items: [],
+      };
+      return buildSession(blankScan, envelopeNames, []);
+    },
+    [buildSession],
+  );
+
   const deleteExpense = useCallback(
     async (id: string): Promise<void> => {
       if (!familyWalletId) return;
@@ -282,7 +307,15 @@ export function useExpenseLog(
     [familyWalletId, refresh],
   );
 
-  return { logs, loading, error, logNote, logReceipt, deleteExpense, refresh };
+  return {
+    logs,
+    loading,
+    error,
+    logReceipt,
+    startManualEntry,
+    deleteExpense,
+    refresh,
+  };
 }
 
 function blobToBase64(blob: Blob): Promise<string> {

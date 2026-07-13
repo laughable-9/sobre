@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { CameraIcon, PlusIcon } from "@phosphor-icons/react";
+import { CameraIcon, PencilSimpleIcon } from "@phosphor-icons/react";
 
 import {
   useExpenseLog,
@@ -13,15 +13,12 @@ import { friendlyError } from "@/lib/format";
 import { ReceiptReviewSheet } from "./ReceiptReviewSheet";
 
 /**
- * Expense logging affordance on the dashboard. Two paths:
- *   - Primary: Snap receipt → compressed → Gemini OCR + classify → 3-step
- *     review sheet → save + upload image.
- *   - Fallback (collapsed): text-only "log without a receipt" for cash-in-hand
- *     spends.
- *
- * On save the parent handler (`onSaved`) closes the outer Log-expense modal
- * and flashes a toast; the row also appears in the activity feed via the
- * parent's page-level `useExpenseLog` refresh.
+ * Expense logging affordance on the dashboard. Two paths, both land in
+ * the same 3-step review wizard:
+ *   - Snap receipt → Gemini OCR pre-fills the wizard, user edits + saves.
+ *   - Log without receipt → wizard opens blank; user types amount, items,
+ *     categories, note. Can still attach a photo mid-flow via the review
+ *     sheet's "Attach receipt photo" affordance.
  */
 export function ExpenseQuickAdd({
   familyWalletId,
@@ -32,12 +29,9 @@ export function ExpenseQuickAdd({
    *  refresh the dashboard's activity feed. */
   onSaved?: (log: ExpenseLog) => void;
 }) {
-  const { logNote, logReceipt } = useExpenseLog(familyWalletId);
+  const { logReceipt, startManualEntry } = useExpenseLog(familyWalletId);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const addPhotoInputRef = useRef<HTMLInputElement>(null);
-  /** Resolves the file the user picks via `addPhotoInputRef`. Set by the
-   *  addPhoto callback in ReceiptReviewSheet, awaited inside the change
-   *  handler so the merge happens in the same async tick. */
   const addPhotoResolverRef = useRef<{
     resolve: (file: File | null) => void;
   } | null>(null);
@@ -45,11 +39,6 @@ export function ExpenseQuickAdd({
   const [scanning, setScanning] = useState(false);
   const [scanError, setScanError] = useState<string | null>(null);
   const [session, setSession] = useState<ReceiptLogSession | null>(null);
-
-  const [showTextFallback, setShowTextFallback] = useState(false);
-  const [note, setNote] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [noteError, setNoteError] = useState<string | null>(null);
 
   const openCamera = () => {
     if (!familyWalletId || scanning) return;
@@ -81,10 +70,10 @@ export function ExpenseQuickAdd({
     pending?.resolve(file);
   };
 
-  // File inputs don't fire `change` when the user dismisses the picker,
-  // so we listen to `cancel` (Chrome 113+/Safari 16.4+/Firefox 91+) to
-  // resolve the pending Promise with null. Without this the review sheet's
-  // "Reading…" state stays stuck forever after a cancelled add-photo.
+  // File inputs don't fire `change` when the picker is dismissed, so a
+  // `cancel` listener resolves the pending Promise with null. Without
+  // this the review sheet's "Reading…" state stays stuck forever after
+  // a cancelled add-photo.
   useEffect(() => {
     const el = addPhotoInputRef.current;
     if (!el) return;
@@ -108,21 +97,9 @@ export function ExpenseQuickAdd({
     setSession(merged);
   };
 
-  const submitNote = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const trimmed = note.trim();
-    if (trimmed.length === 0 || saving || !familyWalletId) return;
-    setSaving(true);
-    setNoteError(null);
-    try {
-      const log = await logNote(trimmed);
-      setNote("");
-      onSaved?.(log);
-    } catch (err) {
-      setNoteError(friendlyError(err));
-    } finally {
-      setSaving(false);
-    }
+  const openManual = () => {
+    if (!familyWalletId) return;
+    setSession(startManualEntry());
   };
 
   return (
@@ -173,7 +150,8 @@ export function ExpenseQuickAdd({
 
       <button
         type="button"
-        onClick={() => setShowTextFallback((v) => !v)}
+        onClick={openManual}
+        disabled={!familyWalletId}
         className="sobre-btn sobre-btn-soft"
         style={{
           width: "100%",
@@ -182,51 +160,12 @@ export function ExpenseQuickAdd({
           fontSize: 14,
           fontWeight: 600,
           justifyContent: "center",
+          gap: 6,
         }}
       >
-        {showTextFallback ? "Hide" : "Log without a receipt"}
+        <PencilSimpleIcon size={14} weight="bold" />
+        Log without a receipt
       </button>
-
-      {showTextFallback ? (
-        <form onSubmit={submitNote} className="sobre-input-group mt-3">
-          <label htmlFor="expense-note">Note</label>
-          <div className="flex items-stretch gap-2">
-            <input
-              id="expense-note"
-              type="text"
-              value={note}
-              onChange={(e) => setNote(e.target.value.slice(0, 200))}
-              maxLength={200}
-              disabled={saving || !familyWalletId}
-              className="sobre-input flex-1"
-              style={{ padding: "12px 14px", fontSize: 15 }}
-            />
-            <button
-              type="submit"
-              disabled={saving || note.trim().length === 0 || !familyWalletId}
-              className="sobre-btn sobre-btn-primary"
-              style={{
-                padding: "0 18px",
-                opacity:
-                  saving || note.trim().length === 0 || !familyWalletId ? 0.5 : 1,
-                cursor:
-                  saving || note.trim().length === 0 || !familyWalletId
-                    ? "not-allowed"
-                    : "pointer",
-              }}
-            >
-              <PlusIcon weight="bold" size={16} />
-              {saving ? "Saving…" : "Log"}
-            </button>
-          </div>
-        </form>
-      ) : null}
-
-      {noteError ? (
-        <p className="mt-2 text-[12px]" style={{ color: "var(--sobre-danger)" }}>
-          {noteError}
-        </p>
-      ) : null}
 
       {session ? (
         <ReceiptReviewSheet
