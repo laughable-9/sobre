@@ -192,6 +192,7 @@ export async function createFamilyWallet(
   // just leave the bucket empty — enabling costs nothing beyond the fee.
   try {
     await invokeWrite(familyContractId, "grow_enable", [
+      Address.fromString(args.myWalletContractId).toScVal(),
       Address.fromString(BLEND_POOL_ID).toScVal(),
       Address.fromString(XLM_SAC_ID).toScVal(),
       Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),

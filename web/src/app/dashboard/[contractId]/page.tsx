@@ -229,7 +229,9 @@ function Dashboard({ contractId }: { contractId: string }) {
     void subaccountsHook.refresh();
   };
 
-  const isAdmin = Boolean(state && address && state.admin === address);
+  const isAdmin = Boolean(
+    state && address && state.admins.includes(address),
+  );
   const isMember = Boolean(
     state && address && state.members.some((m) => m.address === address),
   );
@@ -958,7 +960,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           <BankAccountSection />
           <MembersSection
             members={state.members}
-            adminAddress={state.admin}
+            adminAddresses={state.admins}
             adminCount={state.admin_count}
             adminCap={state.admin_cap}
             familyWalletId={familyWalletId}
@@ -1272,6 +1274,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       {inviteOpen ? (
         <InviteModal
           walletName={state.wallet_name}
+          adminAddress={address}
           contractId={contractId}
           familyWalletId={familyWalletId}
           createdByWalletId={wallet.wallet?.id ?? null}

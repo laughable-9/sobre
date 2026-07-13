@@ -379,7 +379,7 @@ export function SubAccountView({
           <BankAccountSection />
           <MembersSection
             members={state.members}
-            adminAddress={state.admin}
+            adminAddresses={state.admins}
             adminCount={state.admin_count}
             adminCap={state.admin_cap}
             familyWalletId={null}

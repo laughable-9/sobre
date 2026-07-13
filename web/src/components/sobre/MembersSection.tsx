@@ -19,7 +19,7 @@ import { shortenAddress } from "@/lib/format";
  */
 export function MembersSection({
   members,
-  adminAddress,
+  adminAddresses,
   adminCount,
   adminCap,
   familyWalletId,
@@ -29,8 +29,9 @@ export function MembersSection({
   onCapChanged,
 }: {
   members: Member[];
-  /** The C-address the contract knows as admin — flagged as "Admin". */
-  adminAddress: string | null;
+  /** Every on-chain admin C-address. A member whose address is in this
+   *  list is flagged as "Admin"; others render as "Member". */
+  adminAddresses: string[];
   adminCount: number;
   adminCap: number;
   familyWalletId: string | null;
@@ -111,7 +112,7 @@ export function MembersSection({
                   fontWeight: 600,
                 }}
               >
-                {m.address === adminAddress ? "Admin" : "Member"}
+                {adminAddresses.includes(m.address) ? "Admin" : "Member"}
               </div>
             </div>
           </div>

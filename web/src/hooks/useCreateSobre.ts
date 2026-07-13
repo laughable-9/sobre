@@ -81,6 +81,7 @@ export function useCreateSobre(
       // out of Grow storage. Second FaceID prompt is the trade-off.
       onPhase?.("enabling-grow");
       await invokeWrite(newContractId, "grow_enable", [
+        Address.fromString(userAddress).toScVal(),
         Address.fromString(BLEND_POOL_ID).toScVal(),
         Address.fromString(XLM_SAC_ID).toScVal(),
         Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),

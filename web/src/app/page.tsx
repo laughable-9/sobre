@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -30,7 +30,7 @@ import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
  * in-app design, not a hand-rolled lookalike.
  */
 const PREVIEW_STATE: WalletState = {
-  admin: "",
+  admins: [],
   payment_token: "",
   wallet_name: "Sample family",
   envelope_names: [],
@@ -182,7 +182,6 @@ export default function Landing() {
   return (
     <>
       <Nav />
-      <SectionRail />
       <Hero />
       <Problem />
       <HowItWorks />
@@ -243,87 +242,6 @@ function MobileCTABar() {
   );
 }
 
-const NAV_SECTIONS = [
-  { id: "top", label: "Home" },
-  { id: "problem", label: "The reality" },
-  { id: "how", label: "How it works" },
-  { id: "product", label: "The product" },
-  { id: "trust", label: "Why this works" },
-  { id: "two-sides", label: "Two sides" },
-  { id: "about", label: "FAQ" },
-] as const;
-
-/**
- * Tracks which landing-page section is currently in view, so the nav can
- * show a "you are here" cue as the user scrolls. Recomputes on every scroll
- * by picking whichever section's top is closest to (without passing) a line
- * near the top of the viewport — a plain IntersectionObserver was going
- * silent (and leaving the old section highlighted) whenever an anchor-link
- * jump landed a short section entirely outside its narrow intersection
- * band, so this always has an answer instead of only reacting to crossings.
- */
-function useScrollSpy(ids: readonly string[]): string | null {
-  const [active, setActive] = useState<string | null>(null);
-
-  useEffect(() => {
-    const sections = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el !== null);
-    if (sections.length === 0) return;
-
-    const ANCHOR_LINE = 0.25; // 25% down the viewport
-
-    const recompute = () => {
-      const line = window.innerHeight * ANCHOR_LINE;
-      let best: HTMLElement | null = null;
-      let bestDelta = -Infinity;
-      for (const el of sections) {
-        const top = el.getBoundingClientRect().top;
-        // Prefer the last section whose top has crossed the anchor line;
-        // if none has (page hasn't scrolled yet), fall back to the first.
-        if (top <= line && top > bestDelta) {
-          bestDelta = top;
-          best = el;
-        }
-      }
-      setActive((best ?? sections[0]).id);
-    };
-
-    recompute();
-    window.addEventListener("scroll", recompute, { passive: true });
-    window.addEventListener("resize", recompute);
-    return () => {
-      window.removeEventListener("scroll", recompute);
-      window.removeEventListener("resize", recompute);
-    };
-  }, [ids]);
-
-  return active;
-}
-
-/**
- * True while the given section is in view. Used by the rail to know when
- * it's scrolled over the dark green Final CTA band, so it can flip its
- * palette — the light-page ticks that read fine on white/gray sections are
- * invisible on green, and vice versa.
- */
-function useSectionInView(id: string): boolean {
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [id]);
-
-  return inView;
-}
-
 function Nav() {
   const wallet = usePasskeyWallet();
   const { status, address, connect } = wallet;
@@ -348,13 +266,17 @@ function Nav() {
 
   return (
     <SiteHeader
+      variant="landing"
       right={
         <>
           <a href="#how" className="sobre-nav-link-text">
             How it works
           </a>
+          <a href="#product" className="sobre-nav-link-text">
+            The product
+          </a>
           <a href="#about" className="sobre-nav-link-text">
-            About
+            FAQ
           </a>
           {connectButton}
           <Link href="/dashboard" className="sobre-btn-nav">
@@ -363,34 +285,6 @@ function Nav() {
         </>
       }
     />
-  );
-}
-
-/**
- * Fixed side rail (desktop only) showing every major landing-page section as
- * a tick; the tick for whichever section is currently in view is highlighted
- * and labeled, so there's always a "you are here" cue while scrolling.
- */
-function SectionRail() {
-  const active = useScrollSpy(NAV_SECTIONS.map((s) => s.id));
-  const onDark = useSectionInView("final-cta");
-
-  return (
-    <nav
-      className={`sobre-rail${onDark ? " on-dark" : ""}`}
-      aria-label="Page sections"
-    >
-      {NAV_SECTIONS.map((s) => (
-        <a
-          key={s.id}
-          href={`#${s.id}`}
-          className={`sobre-rail-item${active === s.id ? " active" : ""}`}
-        >
-          <span className="dot" aria-hidden />
-          <span className="label">{s.label}</span>
-        </a>
-      ))}
-    </nav>
   );
 }
 
@@ -1013,7 +907,20 @@ function Footer() {
         </div>
         <div className="sobre-footer-bottom">
           <div>© 2026 Sobre. Built for Stellar Philippines Hackathon.</div>
-          <div style={{ display: "flex", gap: 14, color: "var(--text-3)" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 20,
+              color: "var(--text-3)",
+            }}
+          >
+            <Link
+              href="/privacy"
+              style={{ color: "var(--text-2)", fontSize: 13 }}
+            >
+              Privacy
+            </Link>
             <a
               href="https://github.com/laughable-9/sobre"
               target="_blank"

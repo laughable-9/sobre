@@ -146,6 +146,7 @@ export function SubAccountsPanel({
 
       {inviteOpen ? (
         <SubAccountInviteModal
+          adminAddress={userAddress}
           contractId={contractId}
           familyWalletId={familyWalletId}
           onClose={() => setInviteOpen(false)}
@@ -181,7 +182,7 @@ function SubCard({
     contractId,
   );
   const { cancel: cancelInvite, pending: cancelPending } =
-    useCancelSubaccountInvite(contractId);
+    useCancelSubaccountInvite(userAddress, contractId);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
   const { row, chain } = sub;
   // Pending = the invite hasn't been redeemed in Supabase yet (wallet_id

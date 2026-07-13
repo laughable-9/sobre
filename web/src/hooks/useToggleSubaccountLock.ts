@@ -33,7 +33,10 @@ export function useToggleSubaccountLock(
       setError(null);
       try {
         const method = currentlyLocked ? "unlock_subaccount" : "lock_subaccount";
-        const args = [Address.fromString(subaccount).toScVal()];
+        const args = [
+          Address.fromString(adminAddress).toScVal(),
+          Address.fromString(subaccount).toScVal(),
+        ];
         const { hash } = await invokeWrite(contractId, method, args);
         setLastHash(hash);
         return hash;

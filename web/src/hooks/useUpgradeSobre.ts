@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { Address } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 
@@ -28,7 +29,7 @@ export function useUpgradeSobre(
       const { hash } = await invokeWrite(
         contractId,
         "upgrade",
-        [],
+        [Address.fromString(adminAddress).toScVal()],
       );
       return hash;
     } catch (e) {

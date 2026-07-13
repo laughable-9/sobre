@@ -26,7 +26,10 @@ export function useRemoveMember(
       setPending(true);
       setError(null);
       try {
-        const args = [Address.fromString(memberAddress).toScVal()];
+        const args = [
+          Address.fromString(adminAddress).toScVal(),
+          Address.fromString(memberAddress).toScVal(),
+        ];
         const { hash } = await invokeWrite(
           contractId,
           "remove_member",
