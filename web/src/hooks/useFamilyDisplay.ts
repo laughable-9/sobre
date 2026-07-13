@@ -165,7 +165,9 @@ export function useFamilyDisplay(
           .eq("family_wallet_id", row.id),
         supabase
           .from("family_members")
-          .select("wallet_id, role, name, contract_id, avatar_url")
+          .select(
+            "wallet_id, role, name, contract_id, avatar_url, wallets(avatar_url)",
+          )
           .eq("family_wallet_id", row.id),
       ]);
       if (namesQ.error) {
@@ -218,14 +220,24 @@ export function useFamilyDisplay(
         name: string | null;
         contract_id: string | null;
         avatar_url: string | null;
+        // Embedded wallets join. Supabase types embedded rows as an
+        // array even when the FK is a many-to-one; unwrap the first
+        // element. Older family_members rows have NULL avatar_url;
+        // wallets.avatar_url is populated from the Google session
+        // picture on sign-in, so fall back to that.
+        wallets:
+          | { avatar_url: string | null }
+          | Array<{ avatar_url: string | null }>
+          | null;
       };
       for (const m of (membersQ.data as MemberRow[] | null) ?? []) {
         if (!m.contract_id) continue;
+        const walletsRow = Array.isArray(m.wallets) ? m.wallets[0] : m.wallets;
         map.set(m.contract_id, {
           contractId: m.contract_id,
           walletDbId: m.wallet_id,
           name: m.name ?? "",
-          avatarUrl: m.avatar_url ?? null,
+          avatarUrl: m.avatar_url ?? walletsRow?.avatar_url ?? null,
           role: m.role,
         });
       }

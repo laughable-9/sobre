@@ -566,6 +566,7 @@ function useOwnSubaccountRow(
           walletDbId: r.wallet_id,
           walletAddress: r.wallet_address,
           displayName: r.display_name,
+          avatarUrl: null,
           invitePending: r.wallet_id === null,
           inviteTokenHash: r.invite_token_hash,
           createdAt: r.created_at,
