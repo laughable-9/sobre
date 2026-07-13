@@ -34,7 +34,7 @@ export function ActivityDetailModal({
 }: {
   event: FeedEvent;
   members: { address: string; name: string; avatarUrl: string | null }[];
-  subaccounts?: { address: string; name: string }[];
+  subaccounts?: { address: string; name: string; avatarUrl?: string | null }[];
   envelopeNames: string[];
   /** When the event is a PDAX-cashout Spend and we've matched its paid
    *  bank row, this row is passed in so the modal can render the
@@ -58,7 +58,7 @@ export function ActivityDetailModal({
       out.set(m.address, { name: m.name, avatarUrl: m.avatarUrl });
     }
     for (const s of subaccounts ?? []) {
-      out.set(s.address, { name: s.name, avatarUrl: null });
+      out.set(s.address, { name: s.name, avatarUrl: s.avatarUrl ?? null });
     }
     return out;
   }, [members, subaccounts]);
@@ -489,6 +489,7 @@ function ReceiptDetailSheet({
 
       {confirmingDelete ? (
         <div
+          className="sobre-expand-in"
           style={{
             background: "var(--sobre-surface-alt)",
             border: "1px solid var(--border)",
