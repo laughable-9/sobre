@@ -116,6 +116,35 @@ export type FeedEvent =
       requestId: bigint;
       requester: string;
       amount: bigint;
+    })
+  /** Off-chain expense record from public.expense_logs. Injected into the
+   *  feed at the page level (they don't come from Soroban RPC). Text-only
+   *  notes have amount=null / items=[]. Receipt-scan rows carry the
+   *  extracted amount, subtotal, tax, items array, and category tag. */
+  | (FeedEventBase & {
+      kind: "ExpenseLog";
+      logId: string;
+      familyWalletId: string;
+      caller: string;
+      note: string;
+      amount: bigint | null;
+      subtotal: bigint | null;
+      tax: bigint | null;
+      envelope: string | null;
+      vendor: string | null;
+      category: string[] | null;
+      /** Signed URLs for every image saved with this receipt (multi-photo). */
+      signedReceiptUrls: string[];
+      /** First signed URL for back-compat single-image renderers. */
+      signedReceiptUrl: string | null;
+      occurredAt: string | null;
+      addedAt: string;
+      items: Array<{
+        description: string;
+        qty: number;
+        unit_price: bigint;
+        category: string;
+      }>;
     });
 
 export interface UseTxFeedResult {
@@ -491,6 +520,7 @@ export function eventActor(ev: FeedEvent): string | null {
     case "Withdraw":
     case "SubAccountWithdraw":
     case "RequestCreated":
+    case "ExpenseLog":
       return ev.caller;
     case "GrowRequest":
     case "GrowExecute":

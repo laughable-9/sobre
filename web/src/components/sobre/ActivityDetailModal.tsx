@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { CaretDownIcon, CaretUpIcon } from "@phosphor-icons/react";
+import { CaretDownIcon, CaretUpIcon, TrashIcon } from "@phosphor-icons/react";
 
 import { Avatar } from "@/components/sobre/Avatar";
 import { Sheet } from "@/components/sobre/Sheet";
@@ -11,6 +11,7 @@ import { bankName } from "@/lib/banks";
 import { displayEnvelopeName } from "@/lib/config";
 import {
   formatPhpLocale,
+  formatShortDate,
   maskAccountNumber,
   shortenAddress,
 } from "@/lib/format";
@@ -29,6 +30,7 @@ export function ActivityDetailModal({
   envelopeNames,
   completedCashout,
   onClose,
+  onExpenseDeleted,
 }: {
   event: FeedEvent;
   members: { address: string; name: string; avatarUrl: string | null }[];
@@ -39,6 +41,9 @@ export function ActivityDetailModal({
    *  destination bank + masked account. */
   completedCashout?: ActiveCashoutRow;
   onClose: () => void;
+  /** Fires after the receipt-detail delete button removes the row. Parent
+   *  refreshes the expense-log hook so activity + preview stay in sync. */
+  onExpenseDeleted?: () => void;
 }) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -64,6 +69,19 @@ export function ActivityDetailModal({
 
   const explorerUrl = `https://stellar.expert/explorer/testnet/tx/${event.txHash}`;
   const hasDetails = detailsShouldRender(event);
+  // Synthetic feed rows (expense_logs) have no on-chain tx to point at.
+  const hasOnChainTx = !event.txHash.startsWith("expense:");
+
+  if (event.kind === "ExpenseLog") {
+    return (
+      <ReceiptDetailSheet
+        event={event}
+        nameOf={nameOf}
+        onClose={onClose}
+        onDeleted={onExpenseDeleted}
+      />
+    );
+  }
 
   return (
     <Sheet onClose={onClose} className="sobre-activity-detail">
@@ -96,37 +114,39 @@ export function ActivityDetailModal({
           </div>
         ) : null}
 
-      <div className="sobre-activity-detail-advanced">
-        <button
-          type="button"
-          className="sobre-activity-detail-advanced-toggle"
-          onClick={() => setAdvancedOpen((v) => !v)}
-          aria-expanded={advancedOpen}
-        >
-          <span>Advanced</span>
+      {hasOnChainTx ? (
+        <div className="sobre-activity-detail-advanced">
+          <button
+            type="button"
+            className="sobre-activity-detail-advanced-toggle"
+            onClick={() => setAdvancedOpen((v) => !v)}
+            aria-expanded={advancedOpen}
+          >
+            <span>Advanced</span>
+            {advancedOpen ? (
+              <CaretUpIcon weight="bold" size={12} />
+            ) : (
+              <CaretDownIcon weight="bold" size={12} />
+            )}
+          </button>
           {advancedOpen ? (
-            <CaretUpIcon weight="bold" size={12} />
-          ) : (
-            <CaretDownIcon weight="bold" size={12} />
-          )}
-        </button>
-        {advancedOpen ? (
-          <div className="sobre-activity-detail-advanced-body">
-            <div className="sobre-activity-detail-row">
-              <span className="k">Transaction ID</span>
-              <span className="v tabular">{shortHash(event.txHash)}</span>
+            <div className="sobre-activity-detail-advanced-body">
+              <div className="sobre-activity-detail-row">
+                <span className="k">Transaction ID</span>
+                <span className="v tabular">{shortHash(event.txHash)}</span>
+              </div>
+              <a
+                href={explorerUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="sobre-activity-detail-explorer"
+              >
+                View on Stellar Expert ↗
+              </a>
             </div>
-            <a
-              href={explorerUrl}
-              target="_blank"
-              rel="noreferrer"
-              className="sobre-activity-detail-explorer"
-            >
-              View on Stellar Expert ↗
-            </a>
-          </div>
-        ) : null}
-      </div>
+          ) : null}
+        </div>
+      ) : null}
     </Sheet>
   );
 }
@@ -300,7 +320,400 @@ function DetailBody({
           <KVRow k="Cancelled" v="Grow withdrawal request" />
         </>
       );
+    case "ExpenseLog":
+      // Handled by ReceiptDetailSheet before DetailBody is called.
+      return null;
   }
+}
+
+// ── Receipt-style detail view (kind === "ExpenseLog") ──────────────────────
+
+/**
+ * Invoice-style layout for a logged receipt. Shows the merchant + category
+ * chip + dates + total up top, an AI-generated narration, every scanned
+ * line item, the saved invoice image, and the subtotal/tax/total block.
+ */
+function ReceiptDetailSheet({
+  event,
+  nameOf,
+  onClose,
+  onDeleted,
+}: {
+  event: Extract<FeedEvent, { kind: "ExpenseLog" }>;
+  nameOf: (addr: string) => string;
+  onClose: () => void;
+  onDeleted?: () => void;
+}) {
+  const [deleting, setDeleting] = useState(false);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const total = event.amount;
+  const subtotal =
+    event.subtotal ??
+    (total !== null && event.tax !== null ? total - event.tax : null);
+  const tax = event.tax;
+  const dateLabel = event.occurredAt
+    ? formatShortDate(event.occurredAt)
+    : null;
+  const addedLabel = formatShortDate(event.addedAt);
+  const itemCount = event.items.length;
+
+  const deleteRow = async () => {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      const res = await fetch(
+        `/api/expense-logs?id=${event.logId}&family_wallet_id=${event.familyWalletId}`,
+        { method: "DELETE" },
+      );
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: string };
+        throw new Error(j.error ?? `HTTP ${res.status}`);
+      }
+      onDeleted?.();
+      onClose();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : String(err));
+      setDeleting(false);
+    }
+  };
+
+  return (
+    <Sheet
+      onClose={onClose}
+      canClose={!deleting}
+      className="sobre-receipt-detail"
+      ariaLabel="Receipt"
+    >
+      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div
+            style={{
+              fontSize: 16,
+              fontWeight: 700,
+              textTransform: "uppercase",
+              letterSpacing: "0.02em",
+              color: "var(--text-1)",
+              lineHeight: 1.2,
+              display: "flex",
+              flexWrap: "wrap",
+              alignItems: "center",
+              gap: 8,
+            }}
+          >
+            <span>{event.vendor ?? "Receipt"}</span>
+            {(event.category ?? []).map((c) => (
+              <span
+                key={c}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: "var(--sobre-accent)",
+                  background: "var(--accent-soft)",
+                  padding: "3px 8px",
+                  borderRadius: 6,
+                  letterSpacing: "0.04em",
+                }}
+              >
+                {c.toUpperCase()}
+              </span>
+            ))}
+          </div>
+          <div
+            style={{
+              fontSize: 12,
+              color: "var(--text-3)",
+              marginTop: 4,
+            }}
+          >
+            {dateLabel ? <>Date: {dateLabel} · </> : null}
+            Added: {addedLabel} · Logged by {nameOf(event.caller)}
+          </div>
+        </div>
+        {total !== null ? (
+          <div
+            style={{
+              textAlign: "right",
+              flexShrink: 0,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              gap: 8,
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-1)" }}>
+                {formatPhpLocale(total)}
+              </div>
+              {itemCount > 0 ? (
+                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
+                  {itemCount} {itemCount === 1 ? "item" : "items"}
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              aria-label="Delete receipt"
+              onClick={() => setConfirmingDelete(true)}
+              disabled={deleting}
+              style={{
+                width: 30,
+                height: 30,
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                background: "var(--surface)",
+                display: "grid",
+                placeItems: "center",
+                color: "var(--sobre-danger)",
+                cursor: deleting ? "not-allowed" : "pointer",
+              }}
+            >
+              <TrashIcon size={14} weight="bold" />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {confirmingDelete ? (
+        <div
+          style={{
+            background: "var(--sobre-surface-alt)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: "12px 14px",
+            marginBottom: 14,
+          }}
+        >
+          <div style={{ fontSize: 13, color: "var(--text-1)", marginBottom: 10 }}>
+            Delete this receipt?
+          </div>
+          <div style={{ display: "flex", gap: 8 }}>
+            <button
+              type="button"
+              className="sobre-btn sobre-btn-soft"
+              onClick={() => setConfirmingDelete(false)}
+              disabled={deleting}
+              style={{ flex: 1 }}
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="sobre-btn sobre-btn-primary"
+              onClick={() => void deleteRow()}
+              disabled={deleting}
+              style={{
+                flex: 1,
+                background: "var(--sobre-danger)",
+                boxShadow: "none",
+              }}
+            >
+              {deleting ? "Deleting…" : "Delete"}
+            </button>
+          </div>
+          {deleteError ? (
+            <p
+              className="text-xs break-all"
+              style={{ color: "var(--sobre-danger)", marginTop: 8 }}
+            >
+              {deleteError}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      {event.note ? (
+        <div
+          style={{
+            background: "var(--accent-soft)",
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            padding: "10px 12px",
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              color: "var(--sobre-accent)",
+              textTransform: "uppercase",
+              marginBottom: 4,
+            }}
+          >
+            AI Review Narration
+          </div>
+          <div
+            style={{
+              fontSize: 13,
+              color: "var(--text-1)",
+              fontStyle: "italic",
+              lineHeight: 1.4,
+            }}
+          >
+            &ldquo;{event.note}&rdquo;
+          </div>
+        </div>
+      ) : null}
+
+      {event.items.length > 0 ? (
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: 10,
+            overflow: "hidden",
+            marginBottom: 14,
+          }}
+        >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "1fr 40px 80px 90px",
+              gap: 8,
+              padding: "10px 12px",
+              background: "var(--sobre-surface-alt)",
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              color: "var(--text-3)",
+              textTransform: "uppercase",
+            }}
+          >
+            <span>Item</span>
+            <span style={{ textAlign: "right" }}>Qty</span>
+            <span style={{ textAlign: "right" }}>Price</span>
+            <span style={{ textAlign: "right" }}>Type</span>
+          </div>
+          {event.items.map((it, i) => (
+            <div
+              key={i}
+              style={{
+                display: "grid",
+                gridTemplateColumns: "1fr 40px 80px 90px",
+                gap: 8,
+                padding: "10px 12px",
+                borderTop: i === 0 ? "none" : "1px solid var(--border)",
+                fontSize: 13,
+                alignItems: "center",
+              }}
+            >
+              <span style={{ color: "var(--text-1)" }}>{it.description}</span>
+              <span className="tabular" style={{ textAlign: "right", color: "var(--text-2)" }}>
+                {it.qty}
+              </span>
+              <span className="tabular" style={{ textAlign: "right", color: "var(--text-1)" }}>
+                {formatPhpLocale(BigInt(it.qty) * it.unit_price)}
+              </span>
+              <span style={{ textAlign: "right" }}>
+                <span
+                  style={{
+                    fontSize: 10,
+                    fontWeight: 700,
+                    color: "var(--sobre-accent)",
+                    background: "var(--accent-soft)",
+                    padding: "3px 6px",
+                    borderRadius: 5,
+                    letterSpacing: "0.04em",
+                  }}
+                >
+                  {it.category.toUpperCase()}
+                </span>
+              </span>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {event.signedReceiptUrls.length > 0 ? (
+        <div style={{ marginBottom: 14 }}>
+          <div
+            style={{
+              fontSize: 10,
+              fontWeight: 700,
+              letterSpacing: "0.06em",
+              color: "var(--text-3)",
+              textTransform: "uppercase",
+              marginBottom: 6,
+            }}
+          >
+            Saved invoice document
+            {event.signedReceiptUrls.length > 1 ? (
+              <> · {event.signedReceiptUrls.length} photos</>
+            ) : null}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns:
+                event.signedReceiptUrls.length === 1
+                  ? "1fr"
+                  : "repeat(auto-fill, minmax(140px, 1fr))",
+              gap: 8,
+            }}
+          >
+            {event.signedReceiptUrls.map((url, i) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={i}
+                src={url}
+                alt={`Receipt ${i + 1}`}
+                style={{
+                  width: "100%",
+                  maxHeight: 320,
+                  objectFit: "contain",
+                  borderRadius: 10,
+                  border: "1px solid var(--border)",
+                  background: "var(--sobre-surface-alt)",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {total !== null ? (
+        <div
+          style={{
+            borderTop: "1px solid var(--border)",
+            paddingTop: 10,
+            fontSize: 13,
+          }}
+        >
+          {subtotal !== null ? (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ color: "var(--text-3)" }}>Subtotal</span>
+              <span className="tabular" style={{ color: "var(--text-1)" }}>
+                {formatPhpLocale(subtotal)}
+              </span>
+            </div>
+          ) : null}
+          {tax !== null ? (
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
+              <span style={{ color: "var(--text-3)" }}>Tax / VAT</span>
+              <span className="tabular" style={{ color: "var(--text-1)" }}>
+                {formatPhpLocale(tax)}
+              </span>
+            </div>
+          ) : null}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              fontWeight: 700,
+              fontSize: 14,
+              marginTop: 6,
+            }}
+          >
+            <span style={{ color: "var(--text-1)" }}>Receipt total</span>
+            <span className="tabular" style={{ color: "var(--text-1)" }}>
+              {formatPhpLocale(total)}
+            </span>
+          </div>
+        </div>
+      ) : null}
+    </Sheet>
+  );
 }
 
 function KVRow({ k, v }: { k: string; v: string }) {
@@ -386,6 +799,8 @@ function kindLabel(ev: FeedEvent): string {
       return "Grow withdrawal released";
     case "GrowCancel":
       return "Grow withdrawal cancelled";
+    case "ExpenseLog":
+      return "Logged expense";
   }
 }
 

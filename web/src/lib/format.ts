@@ -140,6 +140,41 @@ export function formatShortDateTime(iso: string): string {
   }
 }
 
+/** "2026/07/13" — date-only sibling to formatShortDateTime. Used on the
+ *  receipt detail sheet header for "Date:" and "Added:". Same graceful
+ *  fallback on unparseable input. */
+export function formatShortDate(iso: string): string {
+  try {
+    return new Date(iso).toLocaleDateString("en-PH", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit",
+    });
+  } catch {
+    return "";
+  }
+}
+
+/** Loose v4-UUID validator used by every API route that takes a UUID from
+ *  the URL or a JSON body. Cheap regex — not a full parse. */
+export function isUuid(v: unknown): v is string {
+  return (
+    typeof v === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(v)
+  );
+}
+
+/** Coerce a wire value (JSON transport) into stroops. Accepts bigint,
+ *  finite number, or all-digit string. Returns null on anything else so
+ *  callers can distinguish "not supplied" from "zero". */
+export function toStroops(v: unknown): bigint | null {
+  if (v === null || v === undefined) return null;
+  if (typeof v === "bigint") return v;
+  if (typeof v === "number" && Number.isFinite(v)) return BigInt(Math.round(v));
+  if (typeof v === "string" && /^-?\d+$/.test(v)) return BigInt(v);
+  return null;
+}
+
 /** "47h 12m 3s" / "5m 3s" / "0s" — future-tense sibling to relativeTime, for
  *  countdown surfaces (Grow request unlock timers). Skips zero hour/minute
  *  fields when they'd read as noise ("3s" not "0h 0m 3s"), keeps them when

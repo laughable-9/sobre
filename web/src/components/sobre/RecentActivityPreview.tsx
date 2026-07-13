@@ -1,7 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { ArrowDownIcon, ArrowUpIcon, CaretRightIcon } from "@phosphor-icons/react";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  CaretRightIcon,
+  ReceiptIcon,
+} from "@phosphor-icons/react";
 
 import { ActivityDetailModal } from "@/components/sobre/ActivityDetailModal";
 import { Avatar } from "@/components/sobre/Avatar";
@@ -35,6 +40,7 @@ export function RecentActivityPreview({
   subaccounts = [],
   envelopeNames,
   onSeeAll,
+  onExpenseDeleted,
 }: {
   events: FeedEvent[];
   /** True until the tx feed's first successful RPC page returns. Without
@@ -48,6 +54,7 @@ export function RecentActivityPreview({
   subaccounts?: SubaccountRef[];
   envelopeNames: string[];
   onSeeAll: () => void;
+  onExpenseDeleted?: () => void;
 }) {
   const [openEvent, setOpenEvent] = useState<FeedEvent | null>(null);
   const rows = events
@@ -56,7 +63,8 @@ export function RecentActivityPreview({
         e.kind === "Withdraw" ||
         e.kind === "Deposit" ||
         e.kind === "SubAccountFunded" ||
-        e.kind === "SubAccountWithdraw",
+        e.kind === "SubAccountWithdraw" ||
+        (e.kind === "ExpenseLog" && e.amount !== null),
     )
     .slice(0, 3);
 
@@ -101,6 +109,7 @@ export function RecentActivityPreview({
           members={members}
           envelopeNames={envelopeNames}
           onClose={() => setOpenEvent(null)}
+          onExpenseDeleted={onExpenseDeleted}
         />
       ) : null}
     </section>
@@ -242,6 +251,59 @@ function RecentRow({
           <div className="meta">
             {ev.memo && !isCashout ? `${ev.memo} · ` : ""}
             {relativeTime(ev.ledgerClosedAt)}
+          </div>
+        </div>
+      </button>
+    );
+  }
+
+  if (ev.kind === "ExpenseLog") {
+    const cats = ev.category ?? [];
+    const shown = cats.slice(0, 2);
+    const extra = cats.length - shown.length;
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(ev)}
+        className="sobre-recent-row"
+      >
+        <span className="ic out">
+          <ReceiptIcon weight="bold" size={16} />
+        </span>
+        <div className="body">
+          <div className="line">
+            <span className="who">
+              {ev.vendor ? <b>{ev.vendor}</b> : "Logged expense"}
+            </span>
+            {ev.amount !== null ? (
+              <span className="amt tabular">−{formatPhpLocale(ev.amount)}</span>
+            ) : null}
+          </div>
+          <div
+            className="meta"
+            style={{ display: "flex", alignItems: "center", flexWrap: "wrap", gap: 6 }}
+          >
+            {shown.map((c) => (
+              <span
+                key={c}
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  letterSpacing: "0.04em",
+                  textTransform: "uppercase",
+                  color: "var(--sobre-accent)",
+                  background: "var(--accent-soft)",
+                  padding: "2px 6px",
+                  borderRadius: 4,
+                }}
+              >
+                {c}
+              </span>
+            ))}
+            {extra > 0 ? (
+              <span style={{ fontSize: 10, color: "var(--text-3)" }}>+{extra}</span>
+            ) : null}
+            <span>{relativeTime(ev.ledgerClosedAt)}</span>
           </div>
         </div>
       </button>

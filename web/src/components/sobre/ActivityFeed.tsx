@@ -11,6 +11,7 @@ import {
   Loader2,
   Lock,
   LockOpen,
+  Receipt,
   Send,
   ShoppingBag,
   Trash2,
@@ -83,6 +84,9 @@ interface ActivityFeedProps {
    *  knows where it is. Tap re-opens the modal at the awaiting view. */
   pendingCashouts?: ActiveCashoutRow[];
   onResumeCashout?: (identifier: string) => void;
+  /** Fires after the receipt-detail delete button removes an ExpenseLog
+   *  row. Parent refreshes the expense-log hook so the feed re-renders. */
+  onExpenseDeleted?: () => void;
   /** Terminal failed rows (~last 7 days) — rendered as warning entries
    *  in the appropriate day bucket so the user has an honest trail of
    *  cashouts/deposits that didn't go through. */
@@ -106,6 +110,7 @@ export function ActivityFeed({
   onCancelDeposit,
   pendingCashouts,
   onResumeCashout,
+  onExpenseDeleted,
   failedDeposits,
   failedCashouts,
   completedCashouts,
@@ -324,6 +329,7 @@ export function ActivityFeed({
               : undefined
           }
           onClose={() => setOpenEvent(null)}
+          onExpenseDeleted={onExpenseDeleted}
         />
       ) : null}
     </aside>
@@ -703,6 +709,55 @@ function ActivityRow({
           </>,
         ),
       );
+    case "ExpenseLog": {
+      const headline = ev.vendor ?? ev.note;
+      const cats = ev.category ?? [];
+      return wrap(
+        "outflow",
+        <Receipt size={16} strokeWidth={2} />,
+        line(
+          <>
+            {labelFor(ev.caller)} logged{" "}
+            {ev.amount !== null ? <>{amt(ev.amount)} at </> : null}
+            <b>{headline}</b>
+            {cats.length > 0 ? (
+              <span
+                style={{
+                  marginLeft: 6,
+                  display: "inline-flex",
+                  flexWrap: "wrap",
+                  gap: 4,
+                  verticalAlign: "middle",
+                }}
+              >
+                {cats.slice(0, 2).map((c) => (
+                  <span
+                    key={c}
+                    style={{
+                      fontSize: 10,
+                      fontWeight: 700,
+                      letterSpacing: "0.04em",
+                      textTransform: "uppercase",
+                      color: "var(--sobre-accent)",
+                      background: "var(--accent-soft)",
+                      padding: "2px 6px",
+                      borderRadius: 4,
+                    }}
+                  >
+                    {c}
+                  </span>
+                ))}
+                {cats.length > 2 ? (
+                  <span style={{ fontSize: 10, color: "var(--text-3)" }}>
+                    +{cats.length - 2}
+                  </span>
+                ) : null}
+              </span>
+            ) : null}
+          </>,
+        ),
+      );
+    }
     case "Withdraw": {
       const isCashout = ev.memo === "PDAX cashout";
       return wrap(

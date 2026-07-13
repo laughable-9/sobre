@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useRef, useState } from "react";
+import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   GearSixIcon,
@@ -24,6 +24,7 @@ import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { MembersSection } from "@/components/sobre/MembersSection";
 import { OpenSobreSheet } from "@/components/sobre/OpenSobreSheet";
 import { ProfileSheet } from "@/components/sobre/ProfileSheet";
+import { Sheet } from "@/components/sobre/Sheet";
 import { RecentActivityPreview } from "@/components/sobre/RecentActivityPreview";
 import { SplitProposalCard } from "@/components/sobre/SplitProposalCard";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
@@ -57,6 +58,7 @@ import { TopBar } from "@/components/sobre/TopBar";
 
 import { useActiveCashouts } from "@/hooks/useActiveCashouts";
 import { useActiveDeposits } from "@/hooks/useActiveDeposits";
+import { useExpenseLog } from "@/hooks/useExpenseLog";
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
@@ -64,6 +66,7 @@ import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
+import { expenseLogsToFeedEvents } from "@/lib/expenseLogFeed";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
@@ -135,6 +138,22 @@ function Dashboard({ contractId }: { contractId: string }) {
   const txFeed = useTxFeed(contractId);
   const state = walletState.state;
   const familyWalletId = walletState.familyWalletId;
+  const expenseLogHook = useExpenseLog(familyWalletId);
+  // Merge on-chain events with off-chain expense_logs, sorted newest-first
+  // by ledgerClosedAt (occurred_at for logs, real ledger time for on-chain).
+  const feedEvents = useMemo(() => {
+    if (!state || !familyWalletId) return txFeed.events;
+    const synth = expenseLogsToFeedEvents(
+      expenseLogHook.logs,
+      state.members,
+      familyWalletId,
+    );
+    return [...txFeed.events, ...synth].sort((a, b) => {
+      const ta = new Date(a.ledgerClosedAt).getTime();
+      const tb = new Date(b.ledgerClosedAt).getTime();
+      return tb - ta;
+    });
+  }, [txFeed.events, expenseLogHook.logs, state, familyWalletId]);
   const splitProposals = useSplitProposals(
     familyWalletId,
     wallet.wallet?.id ?? null,
@@ -646,7 +665,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           />
 
           <RecentActivityPreview
-            events={txFeed.events}
+            events={feedEvents}
             loading={txFeed.loading}
             members={state.members}
             subaccounts={subRows
@@ -657,6 +676,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               }))}
             envelopeNames={state.envelope_names}
             onSeeAll={() => switchTab("activity")}
+            onExpenseDeleted={() => expenseLogHook.refresh()}
           />
 
         </Reveal>
@@ -670,7 +690,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           style={{ maxWidth: 760 }}
         >
           <ActivityFeed
-            events={txFeed.events}
+            events={feedEvents}
             loading={txFeed.loading}
             error={txFeed.error}
           newestTxHash={newestTxHash}
@@ -697,6 +717,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             setResumeCashoutId(identifier);
             setCashoutOpen(true);
           }}
+          onExpenseDeleted={() => expenseLogHook.refresh()}
           onResumeDeposit={(identifier) => {
             setResumeDepositId(identifier);
             setDepositOpen(true);
@@ -1190,27 +1211,21 @@ function Dashboard({ contractId }: { contractId: string }) {
       ) : null}
 
       {logExpenseOpen ? (
-        <div
-          className="sobre-modal-bg"
-          onMouseDown={backdropClose(() => setLogExpenseOpen(false))}
+        <Sheet
+          onClose={() => setLogExpenseOpen(false)}
+          ariaLabel="Log an expense"
         >
-          <div className="sobre-modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Log an expense</h2>
-            <p className="sub">
-              A note for the household — saved instantly, undo within 10
-              seconds. No money moves.
-            </p>
-            <ExpenseQuickAdd familyWalletId={familyWalletId} />
-            <div className="sobre-modal-actions">
-              <button
-                className="sobre-btn sobre-btn-soft"
-                onClick={() => setLogExpenseOpen(false)}
-              >
-                Done
-              </button>
-            </div>
-          </div>
-        </div>
+          <h2>Log an expense</h2>
+          <ExpenseQuickAdd
+            familyWalletId={familyWalletId}
+            onSaved={(log) => {
+              setLogExpenseOpen(false);
+              expenseLogHook.refresh();
+              const label = log.vendor ?? log.note.slice(0, 40);
+              flash(`Saved ${label}`, "ok");
+            }}
+          />
+        </Sheet>
       ) : null}
 
       {closeOpen ? (
