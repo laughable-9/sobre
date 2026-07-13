@@ -98,7 +98,6 @@ function phaseFromStatus(status: DepositStatus | undefined): Phase {
 }
 
 export function PdaxDepositModal({
-  userAddress,
   state,
   contractId,
   onClose,
@@ -107,7 +106,6 @@ export function PdaxDepositModal({
   resumeIdentifier,
   onActiveIdentifierChange,
 }: {
-  userAddress: string;
   state: WalletState;
   contractId: string;
   /** Plain close. Called for terminal-state closes (done / failed / never
@@ -124,7 +122,9 @@ export function PdaxDepositModal({
   onAttemptCancel?: (
     identifier: string | null,
   ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
-  onSuccess: (info: { usdc: number; stroops: bigint }) => void;
+  /** Fired when the modal reaches the credited terminal state. Parent
+   *  uses it for post-success side effects (hero animation, refresh). */
+  onSuccess?: (info: { usdc: number; stroops: bigint }) => void;
   /** When set, the modal hydrates state from this existing deposit row
    *  and skips the input/preparing steps. The user lands on whichever
    *  phase matches the row's current status (typically `awaiting` or
@@ -206,10 +206,18 @@ export function PdaxDepositModal({
     }
     if (last === "funded" && current === "credited") {
       setCelebration("funds_arrived");
+      // Fire onSuccess exactly once on the funded → credited transition
+      // so the parent can trigger the hero animation and refresh chains.
+      // row.amount_usdc is populated by phase-2 before we flip credited.
+      if (row?.amount_usdc && onSuccess) {
+        const usdc = Number(row.amount_usdc);
+        const stroops = BigInt(Math.round(usdc * 10_000_000));
+        onSuccess({ usdc, stroops });
+      }
       const t = setTimeout(() => setCelebration(null), 1500);
       return () => clearTimeout(t);
     }
-  }, [row?.status]);
+  }, [row?.status, row?.amount_usdc, onSuccess]);
 
   // Modal mounts → focus the amount input so the user can type immediately.
   useEffect(() => {
@@ -343,6 +351,7 @@ export function PdaxDepositModal({
           await onAttemptCancel?.(row.identifier);
         } finally {
           cancelFiredRef.current = false;
+           
           setCancelling(false);
           onClose();
         }
@@ -350,6 +359,7 @@ export function PdaxDepositModal({
       return;
     }
     if (!preparing) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setCancelling(false);
       onClose();
     }

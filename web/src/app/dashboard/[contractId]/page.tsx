@@ -41,7 +41,6 @@ import {
 import { EnvelopeCard } from "@/components/sobre/EnvelopeCard";
 import { ExpenseQuickAdd } from "@/components/sobre/ExpenseQuickAdd";
 import { ExpensesView } from "@/components/sobre/ExpensesView";
-import { backdropClose } from "@/lib/ui";
 import { CurrencyProvider, useCurrency } from "@/lib/currency";
 import { InviteModal } from "@/components/sobre/InviteModal";
 import {
@@ -425,6 +424,9 @@ function Dashboard({ contractId }: { contractId: string }) {
   // confirmed via useEffect that the contract is locally marked closed.
   const [closed, setClosed] = useState<boolean | null>(null);
   useEffect(() => {
+    // Delayed by one paint so isSobreClosed() (which reads localStorage)
+    // doesn't run during SSR. Intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClosed(isSobreClosed(contractId));
   }, [contractId]);
   useEffect(() => {
@@ -1123,7 +1125,6 @@ function Dashboard({ contractId }: { contractId: string }) {
 
       {depositOpen ? (
         <PdaxDepositModal
-          userAddress={address}
           state={state}
           contractId={contractId}
           resumeIdentifier={resumeDepositId ?? undefined}
@@ -1209,13 +1210,6 @@ function Dashboard({ contractId }: { contractId: string }) {
             setCashoutOpen(false);
             setResumeCashoutId(null);
             void activeCashouts.refresh();
-          }}
-          onCancelMidFlight={() => {
-            // Locked modal — onCancelMidFlight never fires for cashouts now,
-            // but keep the prop wired for prop-type compat with the modal.
-            setCashoutOpen(false);
-            setResumeCashoutId(null);
-            flash("Cashout cancelled.", "warn");
           }}
           onSuccess={({ php }) => {
             // Only fires when the row hit `paid`, which now means

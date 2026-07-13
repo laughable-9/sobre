@@ -168,17 +168,22 @@ export function SubAccountCashoutModal({
   // doesn't).
   const successFiredRef = useRef(false);
 
-  // Watch the row through the backend pipeline.
+  // Watch the row through the backend pipeline. External-sync effect —
+  // the row prop is driven by realtime updates, and we fire onSuccess
+  // exactly once on the terminal transition.
   useEffect(() => {
     if (!row) return;
     if (row.status === "paid") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setPhase("success");
       if (!successFiredRef.current) {
         successFiredRef.current = true;
         onSuccessRef.current(row.amount_php ?? 0);
       }
     } else if (row.status === "failed") {
+       
       setErrMsg(row.failure_reason ?? "Cashout failed.");
+       
       setPhase("error");
     } else if (
       row.status === "spent" ||
@@ -186,6 +191,7 @@ export function SubAccountCashoutModal({
       row.status === "converted" ||
       row.status === "processing"
     ) {
+       
       setPhase("awaiting");
     }
   }, [row]);

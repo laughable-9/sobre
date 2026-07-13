@@ -53,7 +53,10 @@ export function useSobresOfAdmin(
   }, [adminAddress]);
 
   useEffect(() => {
+    // Polling driver — refresh feeds setState from an RPC call.
+    // Intentional external-sync effect.
     if (!adminAddress) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     const id = setInterval(() => void refresh(), 30_000);
     return () => clearInterval(id);

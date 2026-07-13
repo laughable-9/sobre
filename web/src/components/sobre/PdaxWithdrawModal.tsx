@@ -27,7 +27,6 @@ import type { WalletState } from "@/hooks/useWalletState";
 import { BANKS } from "@/lib/banks";
 import {
   ENVELOPE_LABELS,
-  PAYMENT_TOKEN_LABEL,
   PDAX_INSTAPAY_FEE_PHP,
   STROOPS_PER_TOKEN,
   displayEnvelopeName,
@@ -104,7 +103,6 @@ export function PdaxWithdrawModal({
   state,
   contractId,
   onClose,
-  onCancelMidFlight,
   onSuccess,
   resumeIdentifier,
   onActiveIdentifierChange,
@@ -114,9 +112,6 @@ export function PdaxWithdrawModal({
   state: WalletState;
   contractId: string;
   onClose: () => void;
-  /** Legacy callback kept for prop compatibility, never fires now that
-   *  the modal locks itself closed during every in-flight phase. */
-  onCancelMidFlight?: () => void;
   onSuccess: (info: { php: number }) => void;
   /** Re-open the modal at the awaiting view for an existing cashout. */
   resumeIdentifier?: string;

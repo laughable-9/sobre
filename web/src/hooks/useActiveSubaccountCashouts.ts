@@ -59,6 +59,8 @@ export function useActiveSubaccountCashouts(
   }, []);
 
   useEffect(() => {
+    // Polling driver. Intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
     // Heartbeat at the family-side cadence — Realtime carries the
     // real-time updates; this just catches a missed event or a

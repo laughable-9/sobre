@@ -128,7 +128,6 @@ export function useExpenseLog(
 
   useEffect(() => {
     // Fetch-on-mount external-sync effect (same shape as useActiveDeposits).
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     refresh();
   }, [refresh]);
 

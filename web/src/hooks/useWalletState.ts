@@ -226,14 +226,21 @@ export function useWalletState(
   }, [userAddress, contractId]);
 
   useEffect(() => {
+    // Reset on contract swap so the next fetch doesn't merge state from
+    // the previous contract. External-sync effect.
     lastRetvalXdrRef.current = null;
     lastLedgerRef.current = 0;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnChain(null);
+     
     setError(null);
   }, [contractId]);
 
   useEffect(() => {
+    // Wallet polling driver. Intentional external-sync effect — the
+    // interval feeds setState from RPC simulate results.
     if (!userAddress || !contractId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     fetchState();
     const interval = setInterval(fetchState, 3000);
     return () => clearInterval(interval);
@@ -279,6 +286,7 @@ export function useWalletState(
     onChain,
     display.walletName,
     display.envelopeNames,
+    display.envelopeIcons,
     display.percents,
     display.policy,
     display.savingsLockAllAdmins,

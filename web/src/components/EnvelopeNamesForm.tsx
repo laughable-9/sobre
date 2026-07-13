@@ -89,7 +89,12 @@ export function EnvelopeNamesForm({
     [current, currentIcons],
   );
   useEffect(() => {
+    // Re-seed form fields from the poll's latest source-of-truth only
+    // when the underlying signature changes. Intentional external-sync
+    // effect — a useMemo would clobber every keystroke.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setNames(toEnvelopeNames(current));
+     
     setIcons(toEnvelopeIcons(currentIcons));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sig]);

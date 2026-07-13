@@ -109,6 +109,8 @@ export function useSplitProposals(
   }, [familyWalletId]);
 
   useEffect(() => {
+    // Fetch-on-mount external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
   }, [refresh]);
 

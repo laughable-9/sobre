@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   CaretLeftIcon,
   CaretRightIcon,
@@ -48,10 +48,15 @@ export function InitForm({
   const [step, setStep] = useState<0 | 1>(0);
   // Track the last-seen step so the mount animation knows which direction to
   // slide from. "forward" = coming in from the right, "back" = from the left.
-  const prevStepRef = useRef<0 | 1>(0);
+  const [prevStep, setPrevStep] = useState<0 | 1>(0);
   const direction: "forward" | "back" =
-    step >= prevStepRef.current ? "forward" : "back";
-  prevStepRef.current = step;
+    step >= prevStep ? "forward" : "back";
+  useEffect(() => {
+    // One-tick lag on prevStep so the CSS enter animation reads the
+    // correct direction. Intentional external-sync effect.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPrevStep(step);
+  }, [step]);
   const [walletName, setWalletName] = useState("");
   const [envelopeNames, setEnvelopeNames] = useState<EnvelopeNames>(
     DEFAULT_ENVELOPE_NAMES,

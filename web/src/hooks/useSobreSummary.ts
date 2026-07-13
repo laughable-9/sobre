@@ -50,7 +50,9 @@ export function useSobreSummary(
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    // Fetch-on-mount external-sync effect.
     if (!callerAddress) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLoading(false);
       return;
     }

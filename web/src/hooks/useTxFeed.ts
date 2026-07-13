@@ -484,12 +484,18 @@ export function useTxFeed(contractId: string | null): UseTxFeedResult {
           .slice()
           .sort((a, b) => b.ledger - a.ledger);
         lastSignatureRef.current = `${sorted.length}:${sorted[0]?.txHash ?? ""}:${sorted[0]?.kind ?? ""}`;
+        // Contract-swap reset + optional cache paint. Intentional
+        // external-sync effect driving the tx-feed subscription.
+        // eslint-disable-next-line react-hooks/set-state-in-effect
         setEvents(sorted);
+         
         setLoading(false);
         return;
       }
     }
+     
     setEvents([]);
+     
     setLoading(true);
   }, [contractId]);
 

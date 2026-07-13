@@ -64,14 +64,21 @@ export default function MySobresPage() {
   const [closedSet, setClosedSet] = useState<Set<string>>(new Set());
 
   useEffect(() => {
+    // External-sync effect: getJoinedSobres/getProfile read localStorage,
+    // which is client-only. Delayed until after mount so SSR and first
+    // client paint agree.
     if (!address) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setJoined([]);
+       
       setHasProfile(null);
       return;
     }
+     
     setJoined(getJoinedSobres(address));
     const existing = getProfile(address);
     if (existing) {
+       
       setHasProfile(true);
       return;
     }
@@ -82,13 +89,17 @@ export default function MySobresPage() {
     const oauthName = wallet.user?.name?.trim();
     if (oauthName) {
       setProfile(address, { name: oauthName });
+       
       setHasProfile(true);
     } else {
+       
       setHasProfile(false);
     }
   }, [address, wallet.user?.name]);
 
   useEffect(() => {
+    // External-sync effect: isSobreClosed reads localStorage. Same SSR
+    // deferral as above.
     const all = new Set<string>();
     for (const id of adminSobres.sobres) {
       if (isSobreClosed(id)) all.add(id);
@@ -96,6 +107,7 @@ export default function MySobresPage() {
     for (const id of joined) {
       if (isSobreClosed(id)) all.add(id);
     }
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setClosedSet(all);
   }, [adminSobres.sobres, joined]);
 

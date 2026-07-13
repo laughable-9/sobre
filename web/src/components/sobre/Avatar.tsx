@@ -23,7 +23,12 @@ export function Avatar({
   const [failed, setFailed] = useState(false);
 
   if (src && !failed) {
+    // Bare <img> is intentional — src can be any Google user-content
+    // avatar host, and configuring next.config.ts remotePatterns for
+    // every possible CDN isn't practical. Avatars are small; the LCP
+    // warning doesn't meaningfully apply.
     return (
+      // eslint-disable-next-line @next/next/no-img-element
       <img
         src={src}
         alt=""

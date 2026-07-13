@@ -277,8 +277,10 @@ export function ActivityFeed({
   // When maxRows is set (RecentActivityPreview), stay pinned to that cap
   // instead of jumping back to PAGE_SIZE.
   useEffect(() => {
+    // Sticky counter reset on transitions. Not derivable — the user
+    // grows visibleCount via "Show more" between transitions.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setVisibleCount(maxRows !== undefined ? maxRows : PAGE_SIZE);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isEmpty, maxRows]);
   const visibleGroups = useMemo(() => {
     let remaining = visibleCount;
