@@ -24,9 +24,10 @@ export const runtime = "nodejs";
 
 const MAX_NOTE_LEN = 200;
 const RECEIPTS_BUCKET = "receipts";
-// 10 min. 60s expired before the user could open the detail sheet on
-// receipts stored earlier in the session.
-const SIGNED_URL_TTL_SEC = 600;
+// 1 hour. 10 min still expired mid-session for users idling on the
+// dashboard. The bucket is private and signed URLs are per-family-member,
+// so a longer TTL doesn't widen the blast radius meaningfully.
+const SIGNED_URL_TTL_SEC = 3600;
 const MAX_RECEIPT_BYTES = 500 * 1024;
 const MAX_RECEIPT_IMAGES = 5;
 
