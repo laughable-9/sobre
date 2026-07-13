@@ -158,6 +158,14 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes sobre-fade-in { from { opacity: 0; } to { opacity: 1; } }
+/* Utility class version for React `key`-triggered remount transitions
+ * (segmented control switch, expandable panel reveal). Reduced-motion
+ * users get an instant swap. */
+.sobre-fade-in { animation: sobre-fade-in .18s ease-out both; }
+.sobre-expand-in { animation: sobre-slide-in .22s ease-out both; }
+@media (prefers-reduced-motion: reduce) {
+  .sobre-fade-in, .sobre-expand-in { animation: none; }
+}
 @keyframes sobre-pop-in {
   from { opacity: 0; transform: translateY(20px) scale(0.96); }
   to   { opacity: 1; transform: translateY(0) scale(1); }
@@ -410,11 +418,20 @@
   transition: background .15s ease, box-shadow .15s ease;
 }
 .sobre-btn-primary { background: var(--sobre-primary); color: #fff; }
-.sobre-btn-primary:hover { background: var(--primary-hover); }
 .sobre-btn-soft { background: var(--surface-alt); color: var(--text-1); }
-.sobre-btn-soft:hover { background: #ebe0c3; }
 .sobre-btn-danger { background: var(--sobre-danger); color: #fff; }
-.sobre-btn-danger:hover { background: #a93827; }
+/* :active covers the tap-press feedback on touch devices — it's transient
+ * (only while the finger is down) so it can't get stuck the way :hover
+ * would. :hover is scoped to hover-capable devices only so it doesn't
+ * stick after a mobile tap. */
+.sobre-btn-primary:active { background: var(--primary-hover); }
+.sobre-btn-soft:active    { background: #ebe0c3; }
+.sobre-btn-danger:active  { background: #a93827; }
+@media (hover: hover) {
+  .sobre-btn-primary:hover { background: var(--primary-hover); }
+  .sobre-btn-soft:hover    { background: #ebe0c3; }
+  .sobre-btn-danger:hover  { background: #a93827; }
+}
 
 .sobre-activity {
   background: var(--surface);
