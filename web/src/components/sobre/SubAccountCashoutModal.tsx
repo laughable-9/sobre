@@ -7,6 +7,11 @@ import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { STATUS_LABELS } from "@/components/sobre/PdaxWithdrawModal";
 import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutSignatures } from "@/hooks/useCashoutSignatures";
+import {
+  clearCashoutRecovery,
+  readCashoutRecovery,
+  type CashoutRecoverySnapshot,
+} from "@/lib/cashoutRecovery";
 import { usePdaxWithdraw } from "@/hooks/usePdaxWithdraw";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
@@ -27,7 +32,9 @@ import { useCurrency } from "@/lib/currency";
  *     member_bank_details keyed off the sub's own wallets.id (one bank
  *     per wallet — same table the member modal uses, just from a
  *     different wallet).
- *   - No localStorage recovery snapshot (deferred per feature-backlog).
+ *   - Recovery snapshot mirrors the member cashout: leg-1 landing
+ *     writes a `kind: "subaccount"` snapshot; if the tab dies before
+ *     leg-2, next mount reads the snapshot and offers Resume.
  *
  * Backend pipeline is identical once the row lands at `spent`:
  *   pending → spent → transferred → converted → processing → paid
@@ -60,6 +67,7 @@ type Phase =
   | "bank_setup"
   | "input"
   | "signing"
+  | "recovery_prompt"
   | "awaiting"
   | "success"
   | "error";
@@ -105,15 +113,104 @@ export function SubAccountCashoutModal({
   } = usePdaxWithdraw(contractId, resumeIdentifier);
   const {
     signSubaccountAndForward,
+    retryForward,
     pending: signPending,
     error: signError,
     step: signStep,
   } = useCashoutSignatures(userAddress, contractId);
+  // Recovery snapshot. Set when a partial-cashout leftover matches
+  // this contract + sub-account. Modal opens on recovery_prompt if
+  // populated.
+  const [recoverySnapshot, setRecoverySnapshot] =
+    useState<CashoutRecoverySnapshot | null>(null);
 
-  // Load bank on mount — skipped when resuming an existing cashout (we
-  // jump straight to the awaiting phase to poll the row).
+  // Recovery: if a sub-account snapshot exists for this contract +
+  // sub-account, route the modal to recovery_prompt instead of the
+  // input form. localStorage wins because it carries the bank fields
+  // verbatim; the server /recoverable endpoint is the fallback for
+  // cross-tab / cross-device recovery.
   useEffect(() => {
     if (resumeIdentifier) return;
+    let cancelled = false;
+    const snap = readCashoutRecovery();
+    if (
+      snap &&
+      snap.kind === "subaccount" &&
+      snap.contractId === contractId &&
+      snap.subaccountId === subaccountId
+    ) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setRecoverySnapshot(snap);
+      setPhase("recovery_prompt");
+      return;
+    }
+    // Server fallback for callers without a snapshot. Scan
+    // pdax_withdrawals + on-chain SubAccountWithdraw events for any
+    // pending row whose spend already landed on chain.
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/pdax/subaccount/cashouts/recoverable?contract_id=${encodeURIComponent(contractId)}`,
+        );
+        if (!res.ok || cancelled) return;
+        const json = (await res.json()) as {
+          recoverable: Array<{
+            identifier: string;
+            subaccountId: string;
+            amountStroops: string;
+            amountPhp: number;
+            amountToken: number;
+            beneficiary_bank_code: string;
+            beneficiary_account_name: string;
+            beneficiary_account_number: string;
+            spendTxHash: string;
+          }>;
+        };
+        const r = (json.recoverable ?? []).find(
+          (x) => x.subaccountId === subaccountId,
+        );
+        if (!r || cancelled) return;
+        // Reconstruct a CashoutRecoverySnapshot from the server row so
+        // the same resume path handles both sources.
+        setRecoverySnapshot({
+          kind: "subaccount",
+          identifier: r.identifier,
+          contractId,
+          spendTxHash: r.spendTxHash,
+          amountStroops: r.amountStroops,
+          relayG: "",
+          envelope: null,
+          subaccountId: r.subaccountId,
+          amountPhp: r.amountPhp,
+          amountToken: r.amountToken,
+          bankCode: r.beneficiary_bank_code,
+          accountName: r.beneficiary_account_name,
+          accountNumber: r.beneficiary_account_number,
+          savedAt: Date.now(),
+        });
+        setPhase("recovery_prompt");
+      } catch {
+        // No server fallback available — fall through to the normal
+        // input/bank-setup flow. Nothing to surface to the user.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resumeIdentifier, contractId, subaccountId]);
+
+  // Load bank on mount — skipped when resuming an existing cashout (we
+  // jump straight to the awaiting phase to poll the row) OR when a
+  // recovery snapshot is present (its bank fields carry the row's
+  // snapshotted values, so no re-fetch needed).
+  //
+  // recoverySnapshot deliberately excluded from deps: the guard only
+  // needs the mount-time value; once the effect skipped the fetch, a
+  // later snapshot from the server fallback doesn't need to re-run
+  // the load.
+  useEffect(() => {
+    if (resumeIdentifier) return;
+    if (recoverySnapshot) return;
     let cancelled = false;
     void fetch("/api/member/bank")
       .then(async (res) => {
@@ -141,6 +238,7 @@ export function SubAccountCashoutModal({
     return () => {
       cancelled = true;
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resumeIdentifier]);
 
   // Drive the server-side pipeline forward while we're in the awaiting
@@ -270,7 +368,7 @@ export function SubAccountCashoutModal({
     // stays as the user typed it; PDAX settles at the trade leg's rate.
     if (amountStroops > balanceStroops) amountStroops = balanceStroops;
     try {
-      const { relayG } = await initiate({
+      const { identifier, relayG } = await initiate({
         subaccountId,
         amountToken,
         amountPhp,
@@ -279,15 +377,80 @@ export function SubAccountCashoutModal({
         accountNumber: bank.account_number,
       });
       const { spendTxHash, forwardTxHash } = await signSubaccountAndForward({
+        identifier,
+        subaccountId,
         amountStroops,
+        amountPhp,
+        amountToken,
         relayG,
+        bankCode: bank.bank_code,
+        accountName: bank.account_name,
+        accountNumber: bank.account_number,
       });
       await confirmSigned({ spendTxHash, forwardTxHash });
       setPhase("awaiting");
     } catch (err) {
       setErrMsg(err instanceof Error ? err.message : String(err));
+      // If signSubaccountAndForward saved a snapshot between the two
+      // legs (spend landed, transfer didn't), route to recovery_prompt
+      // rather than the generic error. A retry from `input` would fire
+      // a SECOND spend and double-debit the sub-account.
+      const snap = readCashoutRecovery();
+      if (
+        snap &&
+        snap.kind === "subaccount" &&
+        snap.contractId === contractId &&
+        snap.subaccountId === subaccountId
+      ) {
+        setRecoverySnapshot(snap);
+        setPhase("recovery_prompt");
+        return;
+      }
       setPhase("error");
     }
+  };
+
+  // Resume path: leg-1 already landed on chain (we have its hash in the
+  // snapshot); skip signing another spend and just re-run the SAC
+  // transfer + /confirmed with the same identifier. Firing a fresh
+  // spend here would over-debit the sub-account balance.
+  const resumeFromSnapshot = async () => {
+    if (!recoverySnapshot) return;
+    setErrMsg(null);
+    setPhase("signing");
+    try {
+      // initiate is idempotent on identifier: an existing row returns
+      // the same relayG. Necessary because usePdaxWithdraw.confirmSigned
+      // needs identifierRef populated to know which row to advance.
+      const init = await initiate({
+        subaccountId,
+        amountToken: recoverySnapshot.amountToken,
+        amountPhp: recoverySnapshot.amountPhp,
+        bankCode: recoverySnapshot.bankCode,
+        accountName: recoverySnapshot.accountName,
+        accountNumber: recoverySnapshot.accountNumber,
+        identifier: recoverySnapshot.identifier,
+      });
+      const relayG = recoverySnapshot.relayG || init.relayG;
+      const { spendTxHash, forwardTxHash } = await retryForward({
+        spendTxHash: recoverySnapshot.spendTxHash,
+        amountStroops: BigInt(recoverySnapshot.amountStroops),
+        relayG,
+      });
+      await confirmSigned({ spendTxHash, forwardTxHash });
+      clearCashoutRecovery();
+      setRecoverySnapshot(null);
+      setPhase("awaiting");
+    } catch (err) {
+      setErrMsg(err instanceof Error ? err.message : String(err));
+      setPhase("recovery_prompt");
+    }
+  };
+
+  const discardRecovery = () => {
+    clearCashoutRecovery();
+    setRecoverySnapshot(null);
+    setPhase(bank ? "input" : "loading_bank");
   };
 
   const close = () => {
@@ -596,6 +759,47 @@ export function SubAccountCashoutModal({
                 {pdaxPending || signPending
                   ? "Preparing…"
                   : "Confirm cashout"}
+              </button>
+            </div>
+          </>
+        ) : null}
+
+        {phase === "recovery_prompt" && recoverySnapshot ? (
+          <>
+            <h2>Finish your cashout?</h2>
+            <p className="sub">
+              A ₱
+              {recoverySnapshot.amountPhp.toLocaleString("en-PH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+              })}{" "}
+              cashout landed on chain but didn&apos;t finish. Tap Resume
+              to send it to{" "}
+              <b>{bankName(recoverySnapshot.bankCode)}</b>. No new
+              charges — you already signed the on-chain part.
+            </p>
+            {errMsg ? (
+              <p
+                className="mt-2 text-[12px]"
+                style={{ color: "var(--sobre-danger)" }}
+              >
+                {errMsg}
+              </p>
+            ) : null}
+            <div className="sobre-modal-actions">
+              <button
+                type="button"
+                className="sobre-btn sobre-btn-soft"
+                onClick={discardRecovery}
+              >
+                Discard
+              </button>
+              <button
+                type="button"
+                className="sobre-btn sobre-btn-primary"
+                onClick={() => void resumeFromSnapshot()}
+              >
+                Resume
               </button>
             </div>
           </>
