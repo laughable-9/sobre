@@ -42,6 +42,7 @@ import {
   acquireDepositClaim,
   releaseDepositClaim,
 } from "@/lib/pdax/depositClaim";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -77,6 +78,19 @@ export async function GET(
 
   const ctxMember = await requireFamilyMember(r.family_wallet_id);
   if (ctxMember instanceof NextResponse) return ctxMember;
+
+  // Defense in depth. The deposit modal polls this every 3s while the
+  // pipeline advances; caps sized for a busy user with several pending
+  // deposits without breaking the modal.
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_deposit_poll_status",
+    walletId: ctxMember.memberId,
+    familyWalletId: r.family_wallet_id,
+    callerEmail: ctxMember.email,
+    perUser: 3000,
+    perFamily: 6000,
+  });
+  if (rate) return rate;
 
   if (
     r.status === "credited" ||

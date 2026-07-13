@@ -19,6 +19,7 @@ import { NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
 import { simulateReadServer } from "@/lib/contractServer";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -126,15 +127,29 @@ export async function POST(req: Request) {
     );
   }
 
-  // Auth and the on-chain admin lookup are independent — race them to cut
-  // ~one round-trip off the critical path. The simulate is the dominant
-  // cost (~100-300ms) so it overlaps with auth's ~30-100ms.
-  const [ctxOrRes, onChainState] = await Promise.all([
-    requireWallet(),
-    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state"),
-  ]);
+  // Auth first so we can key the rate limit on the caller. The Soroban
+  // simulate below can burn RPC quota if we let unlimited junk contract_id
+  // posts through; race the limit against the simulate to keep the wall
+  // clock similar while still gating the RPC call on today's cap.
+  const ctxOrRes = await requireWallet();
   if (ctxOrRes instanceof NextResponse) return ctxOrRes;
   const ctx = ctxOrRes;
+
+  // Per-wallet cap. Real users create maybe one Sobre a lifetime, so 5/day
+  // stops loop abuse without ever tripping legitimate flows. No family
+  // scope yet at this point (that's what this route creates).
+  const [rate, onChainState] = await Promise.all([
+    enforceDailyLimit({
+      endpoint: "family_create",
+      walletId: ctx.memberId,
+      familyWalletId: null,
+      callerEmail: ctx.email,
+      perUser: 5,
+      perFamily: 5,
+    }),
+    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state"),
+  ]);
+  if (rate) return rate;
 
   if (!onChainState?.admin) {
     return NextResponse.json(

@@ -37,6 +37,7 @@ import {
   getPdaxCryptoDepositAddr,
   isRelayPaymentIncluded,
 } from "@/lib/pdax/withdrawals";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { submitClassicPayment } from "@/lib/relay";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -92,6 +93,16 @@ export async function GET(
   if (r.member_id !== membership.memberId) {
     return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
   }
+
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_withdrawal_poll_status",
+    walletId: membership.memberId,
+    familyWalletId: r.family_wallet_id,
+    callerEmail: membership.email,
+    perUser: 3000,
+    perFamily: 6000,
+  });
+  if (rate) return rate;
 
   if (r.status === "paid" || r.status === "failed") {
     return NextResponse.json({ ok: true, status: r.status, noChange: true });

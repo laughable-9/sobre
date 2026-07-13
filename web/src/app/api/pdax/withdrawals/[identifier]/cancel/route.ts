@@ -11,11 +11,17 @@
  * and the money is already moving toward PDAX. Trying to cancel then
  * would strand the funds; return 409 with `code: "already_spent"` so
  * the caller can bounce back to the awaiting phase instead.
+ *
+ * Auth is scoped to the caller's own row: we `requireFamilyParticipant`
+ * on the row's family and check `member_id === ctx.memberId`. Without
+ * this, any signed-in wallet with a valid identifier could nuke another
+ * user's pending cashout.
  */
 
 import { NextResponse } from "next/server";
 
-import { requireWallet } from "@/lib/auth/familyMember";
+import { requireFamilyParticipant } from "@/lib/auth/familyMember";
+import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
 export const runtime = "nodejs";
@@ -29,14 +35,11 @@ export async function POST(
     return NextResponse.json({ error: "Missing identifier" }, { status: 400 });
   }
 
-  const ctxOrRes = await requireWallet();
-  if (ctxOrRes instanceof NextResponse) return ctxOrRes;
-
   const admin = getSupabaseAdmin();
 
   const { data: row, error: readErr } = await admin
     .from("pdax_withdrawals")
-    .select("status, spend_tx_hash")
+    .select("status, spend_tx_hash, family_wallet_id, member_id")
     .eq("identifier", identifier)
     .maybeSingle();
   if (readErr) {
@@ -48,7 +51,28 @@ export async function POST(
   if (!row) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
-  const r = row as { status: string; spend_tx_hash: string | null };
+  const r = row as {
+    status: string;
+    spend_tx_hash: string | null;
+    family_wallet_id: string;
+    member_id: string;
+  };
+
+  const membership = await requireFamilyParticipant(r.family_wallet_id);
+  if (membership instanceof NextResponse) return membership;
+  if (r.member_id !== membership.memberId) {
+    return NextResponse.json({ error: "Not your cashout" }, { status: 403 });
+  }
+
+  const rate = await enforceDailyLimit({
+    endpoint: "pdax_withdrawal_cancel",
+    walletId: membership.memberId,
+    familyWalletId: r.family_wallet_id,
+    callerEmail: membership.email,
+    perUser: 30,
+    perFamily: 60,
+  });
+  if (rate) return rate;
 
   if (r.status !== "pending") {
     return NextResponse.json(
