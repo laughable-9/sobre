@@ -24,7 +24,9 @@ export const runtime = "nodejs";
 
 const MAX_NOTE_LEN = 200;
 const RECEIPTS_BUCKET = "receipts";
-const SIGNED_URL_TTL_SEC = 60;
+// 10 min. 60s expired before the user could open the detail sheet on
+// receipts stored earlier in the session.
+const SIGNED_URL_TTL_SEC = 600;
 const MAX_RECEIPT_BYTES = 500 * 1024;
 const MAX_RECEIPT_IMAGES = 5;
 

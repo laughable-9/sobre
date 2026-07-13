@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CameraIcon, PlusIcon } from "@phosphor-icons/react";
 
 import {
@@ -80,6 +80,22 @@ export function ExpenseQuickAdd({
     addPhotoResolverRef.current = null;
     pending?.resolve(file);
   };
+
+  // File inputs don't fire `change` when the user dismisses the picker,
+  // so we listen to `cancel` (Chrome 113+/Safari 16.4+/Firefox 91+) to
+  // resolve the pending Promise with null. Without this the review sheet's
+  // "Reading…" state stays stuck forever after a cancelled add-photo.
+  useEffect(() => {
+    const el = addPhotoInputRef.current;
+    if (!el) return;
+    const onCancel = () => {
+      const pending = addPhotoResolverRef.current;
+      addPhotoResolverRef.current = null;
+      pending?.resolve(null);
+    };
+    el.addEventListener("cancel", onCancel);
+    return () => el.removeEventListener("cancel", onCancel);
+  }, []);
 
   const requestAddPhoto = async () => {
     if (!session) return;

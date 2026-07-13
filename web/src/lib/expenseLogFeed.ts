@@ -45,9 +45,13 @@ export function expenseLogsToFeedEvents(
     return {
       kind: "ExpenseLog",
       // Ledger fields aren't real for off-chain rows; the merger only reads
-      // ledgerClosedAt for bucketing so ledger=0 is fine.
+      // ledgerClosedAt for bucketing so ledger=0 is fine. Sort by created_at
+      // (when the user logged it), not occurred_at (the printed receipt date),
+      // so a 2012 receipt logged today lands at the top of the feed instead of
+      // buried under fourteen years of on-chain events. The printed date still
+      // shows in the ReceiptDetailSheet header via `occurredAt`.
       ledger: 0,
-      ledgerClosedAt: log.occurred_at ?? log.created_at,
+      ledgerClosedAt: log.created_at,
       txHash: `expense:${log.id}`,
       logId: log.id,
       familyWalletId,

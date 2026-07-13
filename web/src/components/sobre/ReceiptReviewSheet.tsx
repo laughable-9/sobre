@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowClockwiseIcon,
+  CaretDownIcon,
   CheckIcon,
   PencilSimpleIcon,
   PlusIcon,
@@ -203,7 +204,7 @@ export function ReceiptReviewSheet({
             display: "flex",
             alignItems: "center",
             gap: 10,
-            marginBottom: 14,
+            marginBottom: 22,
           }}
         >
           <h2 style={{ margin: 0, flex: 1 }}>Review receipt</h2>
@@ -271,7 +272,7 @@ export function ReceiptReviewSheet({
               vendor={vendor}
               primaryAmountLabel={primaryAmountLabel ?? ""}
               secondaryHint={secondaryHint}
-              itemCount={items.length}
+              items={items}
               categories={categories}
             />
           ) : null}
@@ -290,7 +291,7 @@ export function ReceiptReviewSheet({
           style={{
             display: "flex",
             gap: 10,
-            marginTop: 20,
+            marginTop: 32,
           }}
         >
           <button
@@ -395,21 +396,35 @@ function Step1({
           marginBottom: 18,
         }}
       >
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={previewUrl}
-          alt="Receipt"
-          style={{
-            width: 76,
-            height: 100,
-            objectFit: "cover",
-            borderRadius: 8,
-            border: "1px solid var(--border)",
-            boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-            flexShrink: 0,
-            background: "var(--surface)",
-          }}
-        />
+        {previewUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={previewUrl}
+            alt="Receipt"
+            style={{
+              width: 76,
+              height: 100,
+              objectFit: "cover",
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
+              flexShrink: 0,
+              background: "var(--surface)",
+            }}
+          />
+        ) : (
+          <div
+            aria-hidden
+            style={{
+              width: 76,
+              height: 100,
+              borderRadius: 8,
+              border: "1px solid var(--border)",
+              background: "var(--surface)",
+              flexShrink: 0,
+            }}
+          />
+        )}
         <div style={{ flex: 1, minWidth: 0 }}>
           {editingVendor ? (
             <input
@@ -473,18 +488,18 @@ function Step1({
               <PencilSimpleIcon size={12} weight="bold" style={{ color: "var(--text-3)" }} />
             </button>
           )}
-          <div
-            style={{
-              fontSize: 11,
-              color: "var(--text-3)",
-              marginBottom: 10,
-              letterSpacing: "0.02em",
-            }}
-          >
-            {photoCount > 1
-              ? `Scanned by Sobre · ${photoCount} photos`
-              : "Scanned by Sobre"}
-          </div>
+          {photoCount > 1 ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-3)",
+                marginBottom: 10,
+                letterSpacing: "0.02em",
+              }}
+            >
+              {photoCount} photos merged
+            </div>
+          ) : null}
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             <button
               type="button"
@@ -513,12 +528,25 @@ function Step1({
                   height: "auto",
                   gap: 6,
                 }}
+                title="Snap another shot of this same receipt. Sobre merges it in."
               >
                 <PlusIcon size={12} weight="bold" />
-                {addingPhoto ? "Reading…" : "Add photo"}
+                {addingPhoto ? "Reading…" : "More of this receipt"}
               </button>
             ) : null}
           </div>
+          {onAddPhoto && photoCount === 1 ? (
+            <div
+              style={{
+                fontSize: 11,
+                color: "var(--text-3)",
+                marginTop: 8,
+                lineHeight: 1.35,
+              }}
+            >
+              Long receipt? Snap the rest and Sobre merges them.
+            </div>
+          ) : null}
         </div>
       </div>
 
@@ -1018,7 +1046,7 @@ function Step3({
   vendor,
   primaryAmountLabel,
   secondaryHint,
-  itemCount,
+  items,
   categories,
 }: {
   note: string;
@@ -1027,9 +1055,11 @@ function Step3({
   vendor: string;
   primaryAmountLabel: string;
   secondaryHint: string | null;
-  itemCount: number;
+  items: ReceiptItem[];
   categories: string[];
 }) {
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const itemCount = items.length;
   return (
     <>
       <div
@@ -1055,18 +1085,6 @@ function Step3({
             background: "var(--sobre-primary)",
           }}
         />
-        <div
-          style={{
-            fontSize: 10,
-            fontWeight: 700,
-            color: "var(--text-3)",
-            textTransform: "uppercase",
-            letterSpacing: "0.08em",
-            marginBottom: 6,
-          }}
-        >
-          Ready to save
-        </div>
         <div
           style={{
             fontFamily: "var(--serif)",
@@ -1139,8 +1157,86 @@ function Step3({
           </div>
         ) : null}
         {itemCount > 0 ? (
-          <div style={{ fontSize: 11, color: "var(--text-3)", fontWeight: 500 }}>
-            {itemCount} {itemCount === 1 ? "item" : "items"} on this receipt
+          <div>
+            <button
+              type="button"
+              onClick={() => setItemsOpen((v) => !v)}
+              aria-expanded={itemsOpen}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 4,
+                background: "transparent",
+                border: 0,
+                padding: 0,
+                fontSize: 12,
+                fontWeight: 600,
+                color: "var(--text-3)",
+                cursor: "pointer",
+              }}
+            >
+              {itemCount} {itemCount === 1 ? "item" : "items"}
+              <CaretDownIcon
+                size={11}
+                weight="bold"
+                style={{
+                  transform: itemsOpen ? "rotate(180deg)" : "rotate(0deg)",
+                  transition: "transform 140ms ease",
+                }}
+              />
+            </button>
+            {itemsOpen ? (
+              <div
+                style={{
+                  marginTop: 8,
+                  border: "1px solid var(--border)",
+                  borderRadius: 10,
+                  maxHeight: 180,
+                  overflowY: "auto",
+                  background: "var(--surface)",
+                }}
+              >
+                {items.map((it, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 8,
+                      padding: "8px 12px",
+                      borderTop: i === 0 ? "none" : "1px solid var(--border)",
+                      fontSize: 13,
+                    }}
+                  >
+                    <span
+                      style={{
+                        flex: 1,
+                        color: "var(--text-1)",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {it.description || "Untitled item"}
+                    </span>
+                    <span
+                      className="tabular"
+                      style={{
+                        color: "var(--text-3)",
+                        fontSize: 12,
+                        whiteSpace: "nowrap",
+                      }}
+                    >
+                      {it.qty} × ₱
+                      {it.unit_price_php.toLocaleString("en-PH", {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            ) : null}
           </div>
         ) : null}
       </div>

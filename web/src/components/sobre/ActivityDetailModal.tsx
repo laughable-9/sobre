@@ -347,16 +347,23 @@ function ReceiptDetailSheet({
   const [deleting, setDeleting] = useState(false);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [tagsExpanded, setTagsExpanded] = useState(false);
+  const [itemsExpanded, setItemsExpanded] = useState(false);
+  const [lightboxIndex, setLightboxIndex] = useState<number | null>(null);
   const total = event.amount;
   const subtotal =
     event.subtotal ??
     (total !== null && event.tax !== null ? total - event.tax : null);
   const tax = event.tax;
-  const dateLabel = event.occurredAt
-    ? formatShortDate(event.occurredAt)
-    : null;
   const addedLabel = formatShortDate(event.addedAt);
   const itemCount = event.items.length;
+  const TAG_LIMIT = 2;
+  const ITEM_LIMIT = 5;
+  const tags = event.category ?? [];
+  const visibleTags = tagsExpanded ? tags : tags.slice(0, TAG_LIMIT);
+  const hiddenTagCount = tags.length - visibleTags.length;
+  const visibleItems = itemsExpanded ? event.items : event.items.slice(0, ITEM_LIMIT);
+  const hiddenItemCount = event.items.length - visibleItems.length;
 
   const deleteRow = async () => {
     setDeleting(true);
@@ -385,93 +392,99 @@ function ReceiptDetailSheet({
       className="sobre-receipt-detail"
       ariaLabel="Receipt"
     >
-      <div style={{ display: "flex", alignItems: "flex-start", gap: 12, marginBottom: 14 }}>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-start",
+          gap: 12,
+          marginBottom: 18,
+        }}
+      >
         <div style={{ flex: 1, minWidth: 0 }}>
           <div
             style={{
-              fontSize: 16,
-              fontWeight: 700,
-              textTransform: "uppercase",
-              letterSpacing: "0.02em",
+              fontFamily: "var(--serif)",
+              fontSize: 20,
+              fontWeight: 600,
+              letterSpacing: "-0.01em",
               color: "var(--text-1)",
-              lineHeight: 1.2,
-              display: "flex",
-              flexWrap: "wrap",
-              alignItems: "center",
-              gap: 8,
+              lineHeight: 1.15,
+              marginBottom: 6,
+              wordBreak: "break-word",
             }}
           >
-            <span>{event.vendor ?? "Receipt"}</span>
-            {(event.category ?? []).map((c) => (
-              <span
-                key={c}
-                style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  color: "var(--sobre-accent)",
-                  background: "var(--accent-soft)",
-                  padding: "3px 8px",
-                  borderRadius: 6,
-                  letterSpacing: "0.04em",
-                }}
-              >
-                {c.toUpperCase()}
-              </span>
-            ))}
+            {event.vendor ?? "Receipt"}
           </div>
-          <div
-            style={{
-              fontSize: 12,
-              color: "var(--text-3)",
-              marginTop: 4,
-            }}
-          >
-            {dateLabel ? <>Date: {dateLabel} · </> : null}
-            Added: {addedLabel} · Logged by {nameOf(event.caller)}
-          </div>
-        </div>
-        {total !== null ? (
-          <div
-            style={{
-              textAlign: "right",
-              flexShrink: 0,
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              gap: 8,
-            }}
-          >
-            <div>
-              <div style={{ fontSize: 20, fontWeight: 700, color: "var(--text-1)" }}>
-                {formatPhpLocale(total)}
-              </div>
-              {itemCount > 0 ? (
-                <div style={{ fontSize: 11, color: "var(--text-3)", marginTop: 2 }}>
-                  {itemCount} {itemCount === 1 ? "item" : "items"}
-                </div>
-              ) : null}
-            </div>
-            <button
-              type="button"
-              aria-label="Delete receipt"
-              onClick={() => setConfirmingDelete(true)}
-              disabled={deleting}
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "center",
+            gap: 6,
+            fontSize: 12,
+            color: "var(--text-3)",
+            lineHeight: 1.4,
+          }}
+        >
+          {visibleTags.map((c) => (
+            <span
+              key={c}
               style={{
-                width: 30,
-                height: 30,
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--sobre-accent)",
+                background: "var(--accent-soft)",
+                padding: "2px 8px",
                 borderRadius: 999,
-                border: "1px solid var(--border)",
-                background: "var(--surface)",
-                display: "grid",
-                placeItems: "center",
-                color: "var(--sobre-danger)",
-                cursor: deleting ? "not-allowed" : "pointer",
               }}
             >
-              <TrashIcon size={14} weight="bold" />
+              {c}
+            </span>
+          ))}
+          {hiddenTagCount > 0 ? (
+            <button
+              type="button"
+              onClick={() => setTagsExpanded(true)}
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                color: "var(--text-3)",
+                background: "var(--sobre-surface-alt)",
+                padding: "2px 8px",
+                borderRadius: 999,
+                border: 0,
+                cursor: "pointer",
+              }}
+            >
+              +{hiddenTagCount}
             </button>
-          </div>
-        ) : null}
+          ) : null}
+          {tags.length > 0 ? <span aria-hidden>·</span> : null}
+          <span>{nameOf(event.caller).split(" ")[0]}</span>
+          <span aria-hidden>·</span>
+          <span>{addedLabel}</span>
+        </div>
+        </div>
+        <button
+          type="button"
+          aria-label="Delete receipt"
+          onClick={() => setConfirmingDelete(true)}
+          disabled={deleting}
+          style={{
+            flexShrink: 0,
+            width: 32,
+            height: 32,
+            borderRadius: 999,
+            border: "1px solid var(--border)",
+            background: "var(--surface)",
+            display: "grid",
+            placeItems: "center",
+            color: "var(--sobre-danger)",
+            cursor: deleting ? "not-allowed" : "pointer",
+          }}
+        >
+          <TrashIcon size={14} weight="bold" />
+        </button>
       </div>
 
       {confirmingDelete ? (
@@ -481,7 +494,7 @@ function ReceiptDetailSheet({
             border: "1px solid var(--border)",
             borderRadius: 10,
             padding: "12px 14px",
-            marginBottom: 14,
+            marginBottom: 16,
           }}
         >
           <div style={{ fontSize: 13, color: "var(--text-1)", marginBottom: 10 }}>
@@ -522,164 +535,131 @@ function ReceiptDetailSheet({
         </div>
       ) : null}
 
-      {event.note ? (
-        <div
-          style={{
-            background: "var(--accent-soft)",
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            padding: "10px 12px",
-            marginBottom: 14,
-          }}
-        >
-          <div
-            style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              color: "var(--sobre-accent)",
-              textTransform: "uppercase",
-              marginBottom: 4,
-            }}
-          >
-            AI Review Narration
-          </div>
-          <div
-            style={{
-              fontSize: 13,
-              color: "var(--text-1)",
-              fontStyle: "italic",
-              lineHeight: 1.4,
-            }}
-          >
-            &ldquo;{event.note}&rdquo;
-          </div>
+      {event.note || event.signedReceiptUrls.length > 0 ? (
+        <div style={{ display: "flex", gap: 12, marginBottom: 16, alignItems: "flex-start" }}>
+          {event.signedReceiptUrls.length > 0 ? (
+            <ReceiptThumb
+              url={event.signedReceiptUrls[0]}
+              extraCount={event.signedReceiptUrls.length - 1}
+              onOpen={() => setLightboxIndex(0)}
+            />
+          ) : null}
+          {event.note ? (
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <NoteText note={event.note} />
+            </div>
+          ) : null}
         </div>
       ) : null}
 
       {event.items.length > 0 ? (
-        <div
-          style={{
-            border: "1px solid var(--border)",
-            borderRadius: 10,
-            overflow: "hidden",
-            marginBottom: 14,
-          }}
-        >
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "1fr 40px 80px 90px",
-              gap: 8,
-              padding: "10px 12px",
-              background: "var(--sobre-surface-alt)",
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              color: "var(--text-3)",
-              textTransform: "uppercase",
-            }}
-          >
-            <span>Item</span>
-            <span style={{ textAlign: "right" }}>Qty</span>
-            <span style={{ textAlign: "right" }}>Price</span>
-            <span style={{ textAlign: "right" }}>Type</span>
-          </div>
-          {event.items.map((it, i) => (
-            <div
-              key={i}
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 40px 80px 90px",
-                gap: 8,
-                padding: "10px 12px",
-                borderTop: i === 0 ? "none" : "1px solid var(--border)",
-                fontSize: 13,
-                alignItems: "center",
-              }}
-            >
-              <span style={{ color: "var(--text-1)" }}>{it.description}</span>
-              <span className="tabular" style={{ textAlign: "right", color: "var(--text-2)" }}>
-                {it.qty}
-              </span>
-              <span className="tabular" style={{ textAlign: "right", color: "var(--text-1)" }}>
-                {formatPhpLocale(BigInt(it.qty) * it.unit_price)}
-              </span>
-              <span style={{ textAlign: "right" }}>
-                <span
-                  style={{
-                    fontSize: 10,
-                    fontWeight: 700,
-                    color: "var(--sobre-accent)",
-                    background: "var(--accent-soft)",
-                    padding: "3px 6px",
-                    borderRadius: 5,
-                    letterSpacing: "0.04em",
-                  }}
-                >
-                  {it.category.toUpperCase()}
-                </span>
-              </span>
-            </div>
-          ))}
-        </div>
-      ) : null}
-
-      {event.signedReceiptUrls.length > 0 ? (
         <div style={{ marginBottom: 14 }}>
           <div
             style={{
-              fontSize: 10,
-              fontWeight: 700,
-              letterSpacing: "0.06em",
-              color: "var(--text-3)",
-              textTransform: "uppercase",
+              display: "flex",
+              alignItems: "baseline",
+              justifyContent: "space-between",
               marginBottom: 6,
             }}
           >
-            Saved invoice document
-            {event.signedReceiptUrls.length > 1 ? (
-              <> · {event.signedReceiptUrls.length} photos</>
+            <SectionLabel>{itemCount} items</SectionLabel>
+            {event.items.length > ITEM_LIMIT ? (
+              <button
+                type="button"
+                onClick={() => setItemsExpanded((v) => !v)}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 600,
+                  color: "var(--sobre-accent)",
+                  background: "transparent",
+                  border: 0,
+                  padding: 0,
+                  cursor: "pointer",
+                }}
+              >
+                {itemsExpanded ? "Show less" : `Show all ${event.items.length}`}
+              </button>
             ) : null}
           </div>
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns:
-                event.signedReceiptUrls.length === 1
-                  ? "1fr"
-                  : "repeat(auto-fill, minmax(140px, 1fr))",
-              gap: 8,
+              border: "1px solid var(--border)",
+              borderRadius: 10,
+              overflow: "hidden",
+              maxHeight: itemsExpanded ? 260 : undefined,
+              overflowY: itemsExpanded ? "auto" : "visible",
             }}
           >
-            {event.signedReceiptUrls.map((url, i) => (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img
+            {visibleItems.map((it, i) => (
+              <div
                 key={i}
-                src={url}
-                alt={`Receipt ${i + 1}`}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 10,
+                  padding: "8px 12px",
+                  borderTop: i === 0 ? "none" : "1px solid var(--border)",
+                  fontSize: 13,
+                  background: "var(--surface)",
+                }}
+              >
+                <span
+                  style={{
+                    flex: 1,
+                    color: "var(--text-1)",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {it.description || "Untitled item"}
+                </span>
+                <span
+                  className="tabular"
+                  style={{ color: "var(--text-3)", fontSize: 12, whiteSpace: "nowrap" }}
+                >
+                  {it.qty} ×
+                </span>
+                <span
+                  className="tabular"
+                  style={{
+                    color: "var(--text-1)",
+                    fontSize: 13,
+                    whiteSpace: "nowrap",
+                    minWidth: 70,
+                    textAlign: "right",
+                  }}
+                >
+                  {formatPhpLocale(BigInt(it.qty) * it.unit_price)}
+                </span>
+              </div>
+            ))}
+            {!itemsExpanded && hiddenItemCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => setItemsExpanded(true)}
                 style={{
                   width: "100%",
-                  maxHeight: 320,
-                  objectFit: "contain",
-                  borderRadius: 10,
-                  border: "1px solid var(--border)",
+                  padding: "8px 12px",
+                  borderTop: "1px solid var(--border)",
+                  fontSize: 12,
+                  fontWeight: 600,
+                  color: "var(--sobre-accent)",
                   background: "var(--sobre-surface-alt)",
+                  border: 0,
+                  borderRadius: 0,
+                  cursor: "pointer",
                 }}
-              />
-            ))}
+              >
+                + {hiddenItemCount} more
+              </button>
+            ) : null}
           </div>
         </div>
       ) : null}
 
       {total !== null ? (
-        <div
-          style={{
-            borderTop: "1px solid var(--border)",
-            paddingTop: 10,
-            fontSize: 13,
-          }}
-        >
+        <div style={{ fontSize: 13 }}>
           {subtotal !== null ? (
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 4 }}>
               <span style={{ color: "var(--text-3)" }}>Subtotal</span>
@@ -699,18 +679,37 @@ function ReceiptDetailSheet({
           <div
             style={{
               display: "flex",
+              alignItems: "baseline",
               justifyContent: "space-between",
-              fontWeight: 700,
-              fontSize: 14,
-              marginTop: 6,
+              marginTop: 10,
+              paddingTop: 10,
+              borderTop: "1px solid var(--border)",
             }}
           >
-            <span style={{ color: "var(--text-1)" }}>Receipt total</span>
-            <span className="tabular" style={{ color: "var(--text-1)" }}>
+            <span style={{ color: "var(--text-1)", fontSize: 15, fontWeight: 700 }}>
+              Total
+            </span>
+            <span
+              className="tabular"
+              style={{
+                color: "var(--text-1)",
+                fontSize: 22,
+                fontWeight: 700,
+                letterSpacing: "-0.01em",
+              }}
+            >
               {formatPhpLocale(total)}
             </span>
           </div>
         </div>
+      ) : null}
+
+      {lightboxIndex !== null ? (
+        <ReceiptLightbox
+          urls={event.signedReceiptUrls}
+          index={lightboxIndex}
+          setIndex={setLightboxIndex}
+        />
       ) : null}
     </Sheet>
   );
@@ -721,6 +720,269 @@ function KVRow({ k, v }: { k: string; v: string }) {
     <div className="sobre-activity-detail-row">
       <span className="k">{k}</span>
       <span className="v">{v}</span>
+    </div>
+  );
+}
+
+/** Note with a 2-line clamp + expand toggle. DB caps notes at 200 chars,
+ *  so worst case is ~4 lines; the clamp keeps the header block compact by
+ *  default and reveals the rest on tap. */
+function NoteText({ note }: { note: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflowing, setOverflowing] = useState(false);
+  const measureRef = (el: HTMLParagraphElement | null) => {
+    if (!el) return;
+    // scrollHeight > clientHeight ⇒ clamped content is being hidden.
+    setOverflowing(el.scrollHeight > el.clientHeight + 1);
+  };
+  return (
+    <div>
+      <p
+        ref={measureRef}
+        style={{
+          margin: 0,
+          fontSize: 13,
+          color: "var(--text-2)",
+          lineHeight: 1.5,
+          display: expanded ? "block" : "-webkit-box",
+          WebkitLineClamp: expanded ? undefined : 2,
+          WebkitBoxOrient: "vertical",
+          overflow: "hidden",
+        }}
+      >
+        {note}
+      </p>
+      {overflowing || expanded ? (
+        <button
+          type="button"
+          onClick={() => setExpanded((v) => !v)}
+          style={{
+            marginTop: 4,
+            padding: 0,
+            background: "transparent",
+            border: 0,
+            fontSize: 12,
+            fontWeight: 600,
+            color: "var(--sobre-accent)",
+            cursor: "pointer",
+          }}
+        >
+          {expanded ? "Show less" : "Show more"}
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+/** Tiny caps label used inside the receipt detail sheet. */
+function SectionLabel({ children }: { children: React.ReactNode }) {
+  return (
+    <div
+      style={{
+        fontSize: 10,
+        fontWeight: 700,
+        letterSpacing: "0.08em",
+        color: "var(--text-3)",
+        textTransform: "uppercase",
+        marginBottom: 8,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
+/** Compact clickable receipt thumbnail. Overlays a +N badge when there
+ *  are additional photos of the same receipt. Tap opens the lightbox. */
+function ReceiptThumb({
+  url,
+  extraCount,
+  onOpen,
+}: {
+  url: string;
+  extraCount: number;
+  onOpen: () => void;
+}) {
+  const [broken, setBroken] = useState(false);
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      aria-label="View receipt"
+      style={{
+        position: "relative",
+        width: 84,
+        height: 108,
+        flexShrink: 0,
+        padding: 0,
+        borderRadius: 10,
+        border: "1px solid var(--border)",
+        background: "var(--sobre-surface-alt)",
+        overflow: "hidden",
+        cursor: "pointer",
+      }}
+    >
+      {broken ? (
+        <span style={{ fontSize: 10, color: "var(--text-3)" }}>Unavailable</span>
+      ) : (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt="Receipt"
+          onError={() => setBroken(true)}
+          style={{
+            width: "100%",
+            height: "100%",
+            objectFit: "cover",
+            display: "block",
+          }}
+        />
+      )}
+      {extraCount > 0 ? (
+        <span
+          style={{
+            position: "absolute",
+            right: 4,
+            bottom: 4,
+            fontSize: 10,
+            fontWeight: 700,
+            color: "#fff",
+            background: "rgba(0,0,0,0.7)",
+            padding: "2px 6px",
+            borderRadius: 999,
+          }}
+        >
+          +{extraCount}
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
+/** Fullscreen dark overlay showing the receipt image at natural size.
+ *  Multi-photo receipts show ‹ prev / next › controls. Esc / backdrop-tap
+ *  dismisses; the underlying receipt sheet stays open behind it. */
+/** Round white nav button used on either side of the lightbox. Extracted so
+ *  the two mirror buttons share every style prop; only `side` differs. */
+function LightboxNav({
+  side,
+  onClick,
+  label,
+  children,
+}: {
+  side: "left" | "right";
+  onClick: () => void;
+  label: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick();
+      }}
+      aria-label={label}
+      style={{
+        position: "absolute",
+        [side]: 12,
+        top: "50%",
+        transform: "translateY(-50%)",
+        width: 40,
+        height: 40,
+        borderRadius: 999,
+        border: 0,
+        background: "rgba(255,255,255,0.9)",
+        cursor: "pointer",
+        fontSize: 18,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ReceiptLightbox({
+  urls,
+  index,
+  setIndex,
+}: {
+  urls: string[];
+  index: number;
+  setIndex: (i: number | null) => void;
+}) {
+  const close = () => setIndex(null);
+  const prev = () => setIndex(index > 0 ? index - 1 : urls.length - 1);
+  const next = () => setIndex(index < urls.length - 1 ? index + 1 : 0);
+  return (
+    <div
+      onClick={close}
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.85)",
+        zIndex: 1000,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 20,
+      }}
+    >
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={urls[index]}
+        alt={`Receipt ${index + 1}`}
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: "100%",
+          maxHeight: "100%",
+          objectFit: "contain",
+          borderRadius: 6,
+        }}
+      />
+      {urls.length > 1 ? (
+        <>
+          <LightboxNav side="left" onClick={prev} label="Previous receipt">
+            ‹
+          </LightboxNav>
+          <LightboxNav side="right" onClick={next} label="Next receipt">
+            ›
+          </LightboxNav>
+          <div
+            style={{
+              position: "absolute",
+              bottom: 20,
+              left: 0,
+              right: 0,
+              textAlign: "center",
+              fontSize: 12,
+              color: "#fff",
+            }}
+          >
+            {index + 1} / {urls.length}
+          </div>
+        </>
+      ) : null}
+      <button
+        type="button"
+        onClick={close}
+        aria-label="Close"
+        style={{
+          position: "absolute",
+          top: 12,
+          right: 12,
+          width: 36,
+          height: 36,
+          borderRadius: 999,
+          border: 0,
+          background: "rgba(255,255,255,0.9)",
+          cursor: "pointer",
+          fontSize: 20,
+          fontWeight: 700,
+        }}
+      >
+        ×
+      </button>
     </div>
   );
 }
