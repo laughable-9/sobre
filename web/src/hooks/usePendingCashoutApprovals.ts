@@ -108,28 +108,19 @@ export function usePendingCashoutApprovals(args: {
     async (row: PendingCashoutRequest): Promise<void> => {
       if (!args.currentWalletDbId) return;
       const supabase = getSupabaseBrowserClient();
-      const nextApprovers = [
-        ...row.approversWalletIds.filter((id) => id !== args.currentWalletDbId),
-        args.currentWalletDbId,
-      ];
-      // Client-side threshold check. When this append completes the
-      // admin set the row also flips to `approved` in the same update,
-      // avoiding a second round-trip.
-      const update: Record<string, unknown> = {
-        approvers_wallet_ids: nextApprovers,
-      };
-      if (nextApprovers.length >= args.totalAdmins) {
-        update.status = "approved";
-        update.resolved_at = new Date().toISOString();
-        update.resolved_by_wallet_id = args.currentWalletDbId;
-      }
-      await supabase
-        .from("family_pending_requests")
-        .update(update)
-        .eq("id", row.id);
+      // Atomic append via SECURITY DEFINER RPC — the previous
+      // read-modify-write on approvers_wallet_ids let two admins racing
+      // clobber each other's approval, and the loose UPDATE RLS policy
+      // let a single admin unilaterally flip status='approved' in one
+      // PATCH. `append_approval` row-locks the request, appends the
+      // caller if absent, and derives the final status server-side.
+      const { error } = await supabase.rpc("append_approval", {
+        request_id: row.id,
+      });
+      if (error) throw new Error(error.message);
       refresh();
     },
-    [args.currentWalletDbId, args.totalAdmins, refresh],
+    [args.currentWalletDbId, refresh],
   );
 
   const deny = useCallback(
