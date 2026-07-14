@@ -149,35 +149,34 @@ export default function MySobresPage() {
     }
     return (
       <div className="sobre-app sobre-v2">
-        <main className="flex-1 grid place-items-center px-6">
+        <main className="sobre-signin">
           {wallet.status === "signed-out" ? (
-            <div className="text-center max-w-md">
+            <div className="sobre-signin-card">
               <Image
                 src={LOGO_SRC}
                 alt=""
-                width={56}
-                height={56}
+                width={88}
+                height={88}
                 priority
-                className="mx-auto"
               />
-              <h1
-                className="sobre-cover-text mt-5 mb-3"
-                style={{ color: "var(--text-1)" }}
-              >
+              <h1 className="sobre-signin-title">
                 One Sobre.
                 <br />
                 One Family.
               </h1>
-              <Button onClick={() => void wallet.connect()} size="lg">
+              <p className="sobre-signin-body">
+                Sign in with Google to open your Sobre, invite your family,
+                and set your split. Sixty seconds, done.
+              </p>
+              <Button
+                onClick={() => void wallet.connect()}
+                size="lg"
+                className="sobre-signin-cta"
+              >
                 Sign in
               </Button>
               {wallet.error ? (
-                <p
-                  className="text-xs mt-3"
-                  style={{ color: "var(--sobre-danger)" }}
-                >
-                  {wallet.error}
-                </p>
+                <p className="sobre-signin-error">{wallet.error}</p>
               ) : null}
             </div>
           ) : (
