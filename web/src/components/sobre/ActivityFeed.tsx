@@ -871,7 +871,7 @@ function ActivityRow({
         <UserPlus size={16} strokeWidth={2} />,
         line(
           <>
-            <b>{ev.name || labelFor(ev.member)}</b> joined the wallet
+            <b>{ev.name || labelFor(ev.member)}</b> joined Sobre
           </>,
         ),
       );

@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   GearSixIcon,
@@ -10,6 +10,10 @@ import {
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
+import { CashoutApprovalBanner } from "@/components/sobre/CashoutApprovalBanner";
+import { TransferBetweenEnvelopesModal } from "@/components/sobre/TransferBetweenEnvelopesModal";
+import { PolicySettingsForm } from "@/components/PolicySettingsForm";
+import { usePendingCashoutApprovals } from "@/hooks/usePendingCashoutApprovals";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
@@ -64,7 +68,7 @@ import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
-import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
+import { ENVELOPE_LABELS, LOGO_SRC, type EnvelopeName } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { expenseLogsToFeedEvents } from "@/lib/expenseLogFeed";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
@@ -216,6 +220,28 @@ function Dashboard({ contractId }: { contractId: string }) {
     [subRows],
   );
 
+  // Multi-admin cashout approvals: any pending request the CURRENT
+  // admin still owes their sign-off on. Non-admins get an empty
+  // array. Renders as a stack of banners at the top of the Home tab.
+  const pendingApprovals = usePendingCashoutApprovals({
+    familyWalletId,
+    currentWalletDbId: wallet.wallet?.id ?? null,
+    currentIsAdmin: Boolean(
+      state && address && state.admins.includes(address),
+    ),
+    totalAdmins: state?.admins.length ?? 0,
+  });
+  const memberDisplayFor = useCallback(
+    (walletDbId: string): { name: string; avatarUrl: string | null } => {
+      const m = state?.members.find((mem) => mem.walletDbId === walletDbId);
+      return {
+        name: m?.name ?? "An admin",
+        avatarUrl: m?.avatarUrl ?? null,
+      };
+    },
+    [state],
+  );
+
   const refresh = () => void walletState.refresh();
   const refreshAll = () => {
     void walletState.refresh();
@@ -229,7 +255,9 @@ function Dashboard({ contractId }: { contractId: string }) {
     void subaccountsHook.refresh();
   };
 
-  const isAdmin = Boolean(state && address && state.admin === address);
+  const isAdmin = Boolean(
+    state && address && state.admins.includes(address),
+  );
   const isMember = Boolean(
     state && address && state.members.some((m) => m.address === address),
   );
@@ -315,7 +343,16 @@ function Dashboard({ contractId }: { contractId: string }) {
   // Distinct from `sendToSubFor` so the modal knows to render the envelope
   // picker instead of pinning to a specific envelope.
   const [sendToSubOpen, setSendToSubOpen] = useState(false);
+  // Inter-Sobre transfer entry — envelope pre-selected from the
+  // envelope actions sheet. Null closes the modal.
+  const [transferForEnvelope, setTransferForEnvelope] =
+    useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Household-policy dirty flag. Set true whenever PolicySettingsForm
+  // carries unsaved changes; used to gate tab switches + BackLink with
+  // a "save your changes?" confirm so an accidental navigation doesn't
+  // lose an edit that wasn't yet posted to Supabase.
+  const [policyDirty, setPolicyDirty] = useState(false);
   // "Log expense" quick-action tile → the off-chain note field in a modal.
   const [logExpenseOpen, setLogExpenseOpen] = useState(false);
   // Dock's center Sobre FAB opens the action sheet.
@@ -394,8 +431,32 @@ function Dashboard({ contractId }: { contractId: string }) {
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
+  // Browser-level guard for unsaved policy edits. The dashboard's own
+  // `switchTab` handles in-app navigation; this catches refresh, tab
+  // close, and hard back-button-out.
+  useEffect(() => {
+    if (!policyDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Modern browsers ignore custom text and show their own copy, but
+      // the return value is still required to trip the dialog.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [policyDirty]);
   const switchTab = (next: Tab) => {
     if (next === tab) return;
+    // Guard: unsaved policy edits stay put unless the admin confirms.
+    // Only fires when leaving the settings tab — every other switch
+    // sees the dirty flag as harmless residual state.
+    if (tab === "settings" && policyDirty) {
+      const ok = window.confirm(
+        "You have unsaved changes on the household policy. Leave without saving?",
+      );
+      if (!ok) return;
+      setPolicyDirty(false);
+    }
     setTab(next);
     const hash =
       next === "settings"
@@ -476,7 +537,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo2.svg"
+              src={LOGO_SRC}
               alt=""
               width={56}
               height={56}
@@ -622,7 +683,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo2.svg"
+              src={LOGO_SRC}
               alt=""
               width={56}
               height={56}
@@ -700,21 +761,39 @@ function Dashboard({ contractId }: { contractId: string }) {
         style={{ maxWidth: 640 }}
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
+          <CashoutApprovalBanner
+            requests={pendingApprovals.requests}
+            envelopeNames={state.envelope_names}
+            memberDisplayFor={memberDisplayFor}
+            subaccountDisplayFor={(address) => {
+              const s = state.subaccounts.find((x) => x.address === address);
+              if (!s) return null;
+              const row = subRows.find(
+                (r) => r.walletAddress === address,
+              );
+              return {
+                name: row?.displayName ?? "a sub-account",
+                avatarUrl: row?.avatarUrl ?? null,
+              };
+            }}
+            onApprove={pendingApprovals.approve}
+            onDeny={pendingApprovals.deny}
+          />
           <BalanceHero
             state={state}
             header={
               <div className="hero-title-row">
                 <div className="hero-title-left">
                   <span className="hero-title-name">
-                    {state.wallet_name || "Family Wallet"}
+                    {state.wallet_name || "Sobre"}
                   </span>
                   {isAdmin ? (
                     <button
                       type="button"
                       className="hero-title-edit"
                       onClick={() => setRenameOpen(true)}
-                      aria-label="Rename wallet"
-                      title="Rename wallet"
+                      aria-label="Rename Sobre"
+                      title="Rename Sobre"
                     >
                       <PencilSimpleIcon weight="bold" size={12} />
                     </button>
@@ -958,7 +1037,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           <BankAccountSection />
           <MembersSection
             members={state.members}
-            adminAddress={state.admin}
+            adminAddresses={state.admins}
             adminCount={state.admin_count}
             adminCap={state.admin_cap}
             familyWalletId={familyWalletId}
@@ -981,6 +1060,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             userAddress={address}
             contractId={contractId}
             familyWalletId={familyWalletId}
+            memberWalletDbId={wallet.wallet?.id ?? null}
             rows={subRows}
             state={state}
             events={txFeed.events}
@@ -1062,6 +1142,23 @@ function Dashboard({ contractId }: { contractId: string }) {
               onProposalSent={() => {
                 void splitProposals.refresh();
                 flash("Proposal sent to the other admin", "ok");
+              }}
+            />
+          </div>
+
+          <div className="sobre-admin-section sobre-card-flat">
+            <h3>Household policy</h3>
+            <PolicySettingsForm
+              familyWalletId={familyWalletId}
+              isAdmin={isAdmin}
+              adminCount={state.admins.length}
+              current={state.policy}
+              envelopeNames={state.envelope_names}
+              onDirtyChange={setPolicyDirty}
+              onSuccess={() => {
+                setPolicyDirty(false);
+                refresh();
+                flash("Policy saved", "ok");
               }}
             />
           </div>
@@ -1199,6 +1296,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           state={state}
           contractId={contractId}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
           resumeIdentifier={resumeCashoutId ?? undefined}
           onActiveIdentifierChange={setActiveCashoutId}
           initialEnvelope={cashoutInitialEnvelope}
@@ -1246,6 +1345,27 @@ function Dashboard({ contractId }: { contractId: string }) {
             setSendToSubFor(envActionsFor);
             setEnvActionsFor(null);
           }}
+          onTransfer={() => {
+            setTransferForEnvelope(envActionsFor);
+            setEnvActionsFor(null);
+          }}
+        />
+      ) : null}
+
+      {transferForEnvelope ? (
+        <TransferBetweenEnvelopesModal
+          userAddress={address}
+          contractId={contractId}
+          state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
+          initialEnvelope={transferForEnvelope}
+          onClose={() => setTransferForEnvelope(null)}
+          onSuccess={() => {
+            setTransferForEnvelope(null);
+            refreshAll();
+          }}
+          onFlash={flash}
         />
       ) : null}
 
@@ -1254,6 +1374,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           contractId={contractId}
           state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
           subRows={subRows}
           initialEnvelope={sendToSubFor ?? undefined}
           onClose={() => {
@@ -1272,6 +1394,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       {inviteOpen ? (
         <InviteModal
           walletName={state.wallet_name}
+          adminAddress={address}
           contractId={contractId}
           familyWalletId={familyWalletId}
           createdByWalletId={wallet.wallet?.id ?? null}

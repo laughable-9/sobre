@@ -54,8 +54,15 @@ export interface CashoutLegArgs {
 }
 
 export interface SubaccountCashoutLegArgs {
+  identifier: string;
+  subaccountId: string;
   amountStroops: bigint;
+  amountPhp: number;
+  amountToken: number;
   relayG: string;
+  bankCode: string;
+  accountName: string;
+  accountNumber: string;
 }
 
 export interface UseCashoutSignaturesResult {
@@ -63,10 +70,10 @@ export interface UseCashoutSignaturesResult {
     args: CashoutLegArgs,
   ) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
   /** Sub-account variant: replaces step 1's `spend(envelope, …)` with
-   *  `spend_from_subaccount(caller, amount, memo)` and skips the recovery
-   *  snapshot (sub-account cashouts are demo-grade — full recovery is
-   *  deferred per docs/feature-backlog.md). Step 2 (SAC transfer to the
-   *  relay) is identical. */
+   *  `withdraw_subaccount(caller, amount, memo)`. Same recovery snapshot
+   *  pattern as the member path — the modal reads it on mount to resume
+   *  a stranded row (leg-1 landed, leg-2 didn't). Step 2 (SAC transfer
+   *  to the relay) is identical. */
   signSubaccountAndForward: (
     args: SubaccountCashoutLegArgs,
   ) => Promise<{ spendTxHash: string; forwardTxHash: string }>;
@@ -116,12 +123,14 @@ export function useCashoutSignatures(
         // window where a failure used to strand XLM in the smart wallet
         // forever — now the modal can pick it up on the next mount.
         saveCashoutRecovery({
+          kind: "member",
           identifier: args.identifier,
           contractId,
           spendTxHash: spendResult.hash,
           amountStroops: args.amountStroops.toString(),
           relayG: args.relayG,
           envelope: args.envelope,
+          subaccountId: null,
           amountPhp: args.amountPhp,
           amountToken: args.amountToken,
           bankCode: args.bankCode,
@@ -217,6 +226,25 @@ export function useCashoutSignatures(
           "withdraw_subaccount",
           spendArgs,
         );
+
+        // Snapshot after leg 1 lands. Same partial-state window as
+        // member cashouts — a failure between here and leg 2 used to
+        // strand USDC in the kid's smart wallet with no retry path.
+        saveCashoutRecovery({
+          kind: "subaccount",
+          identifier: args.identifier,
+          contractId,
+          spendTxHash: spendResult.hash,
+          amountStroops: args.amountStroops.toString(),
+          relayG: args.relayG,
+          envelope: null,
+          subaccountId: args.subaccountId,
+          amountPhp: args.amountPhp,
+          amountToken: args.amountToken,
+          bankCode: args.bankCode,
+          accountName: args.accountName,
+          accountNumber: args.accountNumber,
+        });
 
         setStep("forwarding");
         const transferArgs = [

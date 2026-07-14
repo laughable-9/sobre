@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 
+import { LOGO_SRC } from "@/lib/config";
 import { setProfile } from "@/lib/profile";
 
 export function ProfileSetupScreen({
@@ -34,7 +35,7 @@ export function ProfileSetupScreen({
       >
         <div className="text-center mb-7">
           <Image
-            src="/sobre-logo2.svg"
+            src={LOGO_SRC}
             alt=""
             width={56}
             height={56}

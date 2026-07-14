@@ -64,7 +64,7 @@ export function useSobreSummary(
           simulateRead<Record<string, unknown>>(contractId, "get_state", []),
           supabase
             .from("family_wallets")
-            .select("display_name")
+            .select("id, display_name")
             .eq("contract_id", contractId)
             .maybeSingle(),
         ]);
@@ -72,9 +72,12 @@ export function useSobreSummary(
 
         const familyRow =
           familySettled.status === "fulfilled" && !familySettled.value.error
-            ? (familySettled.value.data as { display_name: string | null } | null)
+            ? (familySettled.value.data as
+                | { id: string; display_name: string | null }
+                | null)
             : null;
         const supabaseName = familyRow?.display_name ?? null;
+        const familyWalletId = familyRow?.id ?? null;
 
         let members: Member[] = [];
         let subaccounts: { address: string; balance: bigint }[] = [];
@@ -83,15 +86,55 @@ export function useSobreSummary(
         let chainFailed = false;
         if (rawSettled.status === "fulfilled") {
           const raw = rawSettled.value;
-          members = Array.isArray(raw.members)
+          const rawMembers = Array.isArray(raw.members)
             ? (raw.members as Record<string, unknown>[]).map((m) => ({
                 address: String(m.address),
-                name: String(m.name ?? ""),
-                avatarUrl: null,
-                walletDbId: null,
-                role: "recipient",
+                onChainName: String(m.name ?? ""),
               }))
             : [];
+          // Enrich each on-chain member with their Google display_name +
+          // avatar_url from Supabase. Goes through `family_members` (not
+          // `wallets` — that table's RLS only lets you see your own row),
+          // joining wallets(avatar_url) as fallback when family_members
+          // was written before avatar_url landed.
+          let profileByAddress = new Map<
+            string,
+            { name: string | null; avatarUrl: string | null }
+          >();
+          if (familyWalletId && rawMembers.length > 0) {
+            const { data: profileRows } = await supabase
+              .from("family_members")
+              .select("contract_id, name, avatar_url, wallets(avatar_url)")
+              .eq("wallet_id", familyWalletId);
+            profileByAddress = new Map(
+              (profileRows ?? []).map((r) => {
+                const walletsRow = Array.isArray(r.wallets)
+                  ? r.wallets[0]
+                  : r.wallets;
+                return [
+                  String(r.contract_id),
+                  {
+                    name: (r.name as string | null) ?? null,
+                    avatarUrl:
+                      (r.avatar_url as string | null) ??
+                      (walletsRow?.avatar_url as string | null | undefined) ??
+                      null,
+                  },
+                ];
+              }),
+            );
+          }
+          if (cancelled) return;
+          members = rawMembers.map((m) => {
+            const p = profileByAddress.get(m.address);
+            return {
+              address: m.address,
+              name: p?.name || m.onChainName,
+              avatarUrl: p?.avatarUrl ?? null,
+              walletDbId: null,
+              role: "recipient",
+            };
+          });
           subaccounts = Array.isArray(raw.subaccounts)
             ? (raw.subaccounts as Record<string, unknown>[]).map((s) => ({
                 address: String(s.address),

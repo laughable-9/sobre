@@ -54,7 +54,8 @@ fn create_sobre_deploys_and_inits_a_new_instance() {
 
     let sobre_client = sobre::SobreContractClient::new(&f.env, &sobre_addr);
     let state = sobre_client.get_state();
-    assert_eq!(state.admin, f.admin);
+    assert_eq!(state.admins.len(), 1);
+    assert_eq!(state.admins.get(0).unwrap(), f.admin);
     assert_eq!(state.payment_token, f.payment_token);
     assert_eq!(state.members.len(), 1);
     assert_eq!(state.members.get(0).unwrap().address, f.admin);

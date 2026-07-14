@@ -23,8 +23,13 @@ export function useRowRealtime<T>(
   useEffect(() => {
     if (!identifier) return;
     const supabase = getSupabaseBrowserClient();
+    // Per-instance channel name so two mounts subscribing to the same
+    // row (e.g. an open cashout modal + a background list watcher) get
+    // distinct channels — otherwise Supabase reuses the cached channel
+    // and the second `.on()` throws "cannot add postgres_changes
+    // callbacks after subscribe()".
     const channel = supabase
-      .channel(`${table}:${identifier}`)
+      .channel(`${table}:${identifier}:${crypto.randomUUID()}`)
       .on(
         "postgres_changes" as never,
         {

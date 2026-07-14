@@ -21,6 +21,8 @@ import {
   usePdaxWithdraw,
   type WithdrawStatus,
 } from "@/hooks/usePdaxWithdraw";
+import { useCashoutApproval } from "@/hooks/useCashoutApproval";
+import { useDailyCashoutTotal } from "@/hooks/useDailyCashoutTotal";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
@@ -32,6 +34,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { isEnvelopeApprovalGated } from "@/lib/contract";
 import {
   readCashoutRecovery,
   type CashoutRecoverySnapshot,
@@ -58,6 +61,7 @@ type LocalPhase =
   | "register_bank"
   | "input"
   | "signing"
+  | "awaiting_approval"
   | "recovery_prompt";
 
 type Phase = LocalPhase | "awaiting" | "done" | "failed";
@@ -102,6 +106,8 @@ export function PdaxWithdrawModal({
   userAddress,
   state,
   contractId,
+  familyWalletId,
+  memberWalletDbId,
   onClose,
   onSuccess,
   resumeIdentifier,
@@ -111,6 +117,11 @@ export function PdaxWithdrawModal({
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** family_wallets.id + wallets.id for the current caller. Threaded
+   *  through so the daily-limit gate can sum today's pdax_withdrawals
+   *  for this member from Supabase. Null disables the limit check. */
+  familyWalletId: string | null;
+  memberWalletDbId: string | null;
   onClose: () => void;
   onSuccess: (info: { php: number }) => void;
   /** Re-open the modal at the awaiting view for an existing cashout. */
@@ -186,6 +197,7 @@ export function PdaxWithdrawModal({
       const snap = readCashoutRecovery();
       if (
         snap &&
+        snap.kind === "member" &&
         snap.contractId === contractId &&
         (!resumeIdentifier || snap.identifier === resumeIdentifier) &&
         !cancelled
@@ -325,6 +337,22 @@ export function PdaxWithdrawModal({
   const balancePhp = balanceToken * phpPerToken;
   const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
 
+  // Household-policy daily limit is a per-caller wall-clock ceiling.
+  // The locked-envelope gate is a different mechanism (multi-admin
+  // approval flow, separate hook) — not enforced in this file.
+  const dailyLimitPhp =
+    state.policy.dailyLimit === null
+      ? null
+      : (Number(state.policy.dailyLimit) / STROOPS_PER_TOKEN) * phpPerToken;
+  const { totalPhp: spentTodayPhp } = useDailyCashoutTotal(
+    familyWalletId,
+    memberWalletDbId,
+  );
+  const remainingTodayPhp =
+    dailyLimitPhp === null
+      ? null
+      : Math.max(0, dailyLimitPhp - spentTodayPhp);
+
   const amountEntered = Number(amountStr);
   const validAmount = Number.isFinite(amountEntered) && amountEntered > 0;
   // The amount the user types is what lands at their bank. PDAX's
@@ -346,12 +374,33 @@ export function PdaxWithdrawModal({
   const amountPhp = payoutPhp;
   const amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_TOKEN));
   const overspend = amountStroops > balanceStroops;
+  const overDailyLimit =
+    remainingTodayPhp !== null && validAmount && payoutPhp > remainingTodayPhp;
+  const policyBlocked = overDailyLimit;
   const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
   const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
+  // Multi-admin approval mechanic. Solo-admin families short-circuit —
+  // the sole admin's own click IS the approval. isEnvelopeApprovalGated
+  // is the single source of truth across the three admin-outflow
+  // modals; keep the local names for readability at the callsite.
+  const totalAdmins = state.admins.length;
+  const needsApproval = isEnvelopeApprovalGated(
+    state.policy,
+    envelope,
+    totalAdmins,
+  );
+  const approval = useCashoutApproval({
+    familyWalletId,
+    memberWalletDbId,
+    envelope,
+    amountStroops,
+  });
+  const approvalsRemaining = Math.max(0, totalAdmins - approval.approvers.length);
+
   // ─── Action handlers ──────────────────────────────────────────────────
-  const handleConfirm = async () => {
-    if (!validAmount || overspend || !bank) return;
+  const runOnChainCashout = async (): Promise<void> => {
+    if (!bank) return;
     setLocalPhase("signing");
     try {
       const { identifier, relayG } = await initiate({
@@ -379,6 +428,7 @@ export function PdaxWithdrawModal({
       // /confirmed landed the row at status='spent' — the recovery
       // snapshot is no longer load-bearing.
       clearCashoutRecovery();
+      approval.reset();
     } catch {
       // CRITICAL: if signAndForward saved a snapshot (i.e. the spend
       // landed before whatever failed), DO NOT route back to the input
@@ -387,13 +437,54 @@ export function PdaxWithdrawModal({
       // Kyle hit before this fix. Route to the recovery prompt so the
       // next action is retryForward, not signAndForward.
       const snap = readCashoutRecovery();
-      if (snap) {
+      if (snap && snap.kind === "member") {
         setRecoverySnapshot(snap);
         setLocalPhase("recovery_prompt");
       } else {
         setLocalPhase("input");
       }
     }
+  };
+
+  const handleConfirm = async () => {
+    if (!validAmount || overspend || !bank || policyBlocked) return;
+    if (!needsApproval) {
+      // Solo admin or open envelope: fire the on-chain cashout inline.
+      await runOnChainCashout();
+      return;
+    }
+    // Multi-admin protected envelope: create the approval request
+    // instead. The awaiting_approval effect below auto-continues into
+    // signing when the request flips to `approved`.
+    setLocalPhase("awaiting_approval");
+    const id = await approval.create({ memo: "PDAX cashout" });
+    if (!id) {
+      setLocalPhase("input");
+    }
+  };
+
+  // Once every other admin has appended themselves to
+  // approvers_wallet_ids the row flips to `approved` and this effect
+  // fires the actual on-chain cashout. The initiator only signed the
+  // request row so far; the passkey prompts happen NOW.
+  useEffect(() => {
+    // External-sync effect: approval.status is driven by the polling
+    // interval inside useCashoutApproval, so this is the correct
+    // place to react to it. Both branches call setLocalPhase
+    // (runOnChainCashout does it internally).
+    if (localPhase !== "awaiting_approval") return;
+    if (approval.status === "approved") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void runOnChainCashout();
+    } else if (approval.status === "denied") {
+      setLocalPhase("input");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPhase, approval.status]);
+
+  const handleCancelApproval = async () => {
+    await approval.cancel();
+    setLocalPhase("input");
   };
 
   // Recovery path: skip the spend (it already landed) and re-attempt only
@@ -428,8 +519,17 @@ export function PdaxWithdrawModal({
       //     row already exists it short-circuits the insert and just
       //     returns the same relayG, so this costs one Supabase select
       //     and avoids creating an orphan pending row.
+      // Member-cashout recovery — envelope is always populated on this
+      // path (the sub-account modal owns kind: "subaccount" flows), so
+      // the non-null assertion is safe.
+      const envelope = source.envelope;
+      if (!envelope) {
+        throw new Error(
+          "Recovery snapshot missing envelope; wrong modal for this row.",
+        );
+      }
       const init = await initiate({
-        envelope: source.envelope,
+        envelope,
         amountToken: source.amountToken,
         amountPhp: source.amountPhp,
         bankCode: source.bankCode,
@@ -526,6 +626,10 @@ export function PdaxWithdrawModal({
             payoutPositive={payoutPhp > 0}
             feeInCurrency={feeInCurrency}
             totalInCurrency={totalInCurrency}
+            dailyLimitPhp={dailyLimitPhp}
+            spentTodayPhp={spentTodayPhp}
+            remainingTodayPhp={remainingTodayPhp}
+            overDailyLimit={overDailyLimit}
             bank={bank}
             onChangeBank={() => setLocalPhase("register_bank")}
             onCancel={handleClose}
@@ -537,6 +641,18 @@ export function PdaxWithdrawModal({
 
         {phase === "signing" ? (
           <SigningStep step={signStep} />
+        ) : null}
+
+        {phase === "awaiting_approval" ? (
+          <AwaitingApprovalStep
+            envelopeLabel={displayEnvelopeName(envelope, state.envelope_names)}
+            amountPhp={amountPhp}
+            approvedCount={approval.approvers.length}
+            totalAdmins={totalAdmins}
+            approvalsRemaining={approvalsRemaining}
+            error={approval.error}
+            onCancel={() => void handleCancelApproval()}
+          />
         ) : null}
 
         {phase === "awaiting" && row ? (
@@ -565,7 +681,7 @@ export function PdaxWithdrawModal({
             title="Cashout couldn't complete"
             body={
               row.failure_reason
-                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX. Contact support to recover, or retry from your wallet.`
+                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX. Contact support to recover, or retry from your Sobre.`
                 : "The cashout didn't complete. Your funds are recoverable. Contact support if they're stuck at PDAX."
             }
             footer={
@@ -600,6 +716,10 @@ function InputStep({
   payoutPositive,
   feeInCurrency,
   totalInCurrency,
+  dailyLimitPhp,
+  spentTodayPhp,
+  remainingTodayPhp,
+  overDailyLimit,
   bank,
   onChangeBank,
   onCancel,
@@ -622,6 +742,14 @@ function InputStep({
   payoutPositive: boolean;
   feeInCurrency: number;
   totalInCurrency: number;
+  /** Household daily cash-out ceiling in PHP for one member. Null =
+   *  no limit set. Used to render the "₱X of ₱Y used today" strip. */
+  dailyLimitPhp: number | null;
+  spentTodayPhp: number;
+  remainingTodayPhp: number | null;
+  /** True when the amount entered would push today's total past
+   *  dailyLimitPhp. Blocks Continue. */
+  overDailyLimit: boolean;
   bank: BankRecord;
   onChangeBank: () => void;
   onCancel: () => void;
@@ -722,7 +850,42 @@ function InputStep({
           Available: {symbol}
           {balanceInCurrency.toLocaleString(balanceLocale, balanceLocaleOpts)}
         </div>
+        {dailyLimitPhp !== null ? (
+          <div
+            className="mt-1 text-[12px] tabular"
+            style={{
+              color: overDailyLimit
+                ? "var(--sobre-danger)"
+                : "var(--text-3)",
+            }}
+          >
+            Today: ₱{Math.round(spentTodayPhp).toLocaleString("en-PH")} of ₱
+            {Math.round(dailyLimitPhp).toLocaleString("en-PH")} used
+            {remainingTodayPhp !== null ? (
+              <>
+                {" · ₱"}
+                {Math.round(remainingTodayPhp).toLocaleString("en-PH")} left
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
+
+      {overDailyLimit ? (
+        <div
+          className="rounded-[10px] px-3 py-3 mb-3 text-[12px]"
+          style={{
+            background: "var(--sobre-danger-soft)",
+            border: "1px solid rgba(220,38,38,0.18)",
+            color: "var(--sobre-danger)",
+          }}
+        >
+          <b>Daily limit reached.</b> You&apos;ve got ₱
+          {Math.round(remainingTodayPhp ?? 0).toLocaleString("en-PH")} left in
+          today&apos;s per-member cap. Lower the amount, or wait until
+          tomorrow.
+        </div>
+      ) : null}
 
       {payoutPositive ? (
         <div
@@ -835,9 +998,11 @@ function InputStep({
         <button
           className="sobre-btn sobre-btn-primary"
           onClick={onConfirm}
-          disabled={!validAmount || overspend || pending}
+          disabled={
+            !validAmount || overspend || pending || overDailyLimit
+          }
           style={
-            !validAmount || overspend || pending
+            !validAmount || overspend || pending || overDailyLimit
               ? { opacity: 0.5 }
               : {}
           }
@@ -954,6 +1119,87 @@ function AwaitingStep({
       icon={<Loader2 size={28} className="animate-spin" />}
       title={STATUS_LABELS[status]}
     />
+  );
+}
+
+/** Multi-admin approval-waiting step. Shown after the initiator taps
+ *  Confirm on a locked envelope; sits here polling family_pending_
+ *  requests until every other admin has approved (at which point the
+ *  useEffect above auto-transitions to `signing`) or someone denies
+ *  (returns to input). */
+function AwaitingApprovalStep({
+  envelopeLabel,
+  amountPhp,
+  approvedCount,
+  totalAdmins,
+  approvalsRemaining,
+  error,
+  onCancel,
+}: {
+  envelopeLabel: string;
+  amountPhp: number;
+  approvedCount: number;
+  totalAdmins: number;
+  approvalsRemaining: number;
+  error: string | null;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <h2>Waiting for the other admin{totalAdmins > 2 ? "s" : ""}</h2>
+      <p className="sub">
+        {envelopeLabel} is a locked envelope. Every admin needs to approve
+        before we can pull ₱
+        {Math.round(amountPhp).toLocaleString("en-PH")} out to your bank.
+      </p>
+      <div
+        className="rounded-[10px] px-4 py-4 mt-3 mb-4"
+        style={{
+          background: "var(--surface-alt)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div
+          className="flex items-center gap-3 text-[13px]"
+          style={{ color: "var(--text-1)", fontWeight: 600 }}
+        >
+          <Loader2 size={16} className="animate-spin" />
+          {approvedCount} of {totalAdmins} approved
+          {approvalsRemaining > 0 ? (
+            <span
+              className="text-[12px]"
+              style={{ color: "var(--text-3)", fontWeight: 500 }}
+            >
+              · {approvalsRemaining} to go
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="mt-2 text-[12px]"
+          style={{ color: "var(--text-3)" }}
+        >
+          The other admin{totalAdmins > 2 ? "s" : ""} will see this on their
+          dashboard the next time they open Sobre.
+        </div>
+      </div>
+      {error ? (
+        <p
+          className="text-[12px] mb-3"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="sobre-modal-actions">
+        <button
+          type="button"
+          className="sobre-btn sobre-btn-soft"
+          onClick={onCancel}
+        >
+          Cancel request
+        </button>
+      </div>
+    </>
   );
 }
 

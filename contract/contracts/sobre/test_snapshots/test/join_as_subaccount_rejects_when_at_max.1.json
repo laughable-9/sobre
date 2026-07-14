@@ -106,6 +106,9 @@
               "function_name": "create_subaccount_invite",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "bytes": "92b7eb5290d8d6e3ac79215cb4bdb07fe89629ee720be4332b3daa842b7ec80a"
                 },
                 {
@@ -149,6 +152,9 @@
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "function_name": "create_subaccount_invite",
               "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
                 {
                   "bytes": "22a48051594c1949deed7040850c1f0f8764537f5191be56732d16a54c1d8153"
                 },
@@ -194,6 +200,9 @@
               "function_name": "create_subaccount_invite",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "bytes": "425ed4e4a36b30ea21b90e21c712c649e8214c29b7eaf68089d1039c6e55384c"
                 },
                 {
@@ -238,6 +247,9 @@
               "function_name": "create_subaccount_invite",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "bytes": "4113d54b0b611294b7f595b691c9db541fc0fc719848d6c5c34522eacc0b3a24"
                 },
                 {
@@ -281,6 +293,9 @@
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "function_name": "create_subaccount_invite",
               "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
                 {
                   "bytes": "bb391415c05e39d77ca17381d3be3f7d0cd5e5332e5a579311adaa0aa62106e9"
                 },
@@ -533,12 +548,16 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Admin"
+                            "symbol": "Admins"
                           }
                         ]
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
                       }
                     },
                     {

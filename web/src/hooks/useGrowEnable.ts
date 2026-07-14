@@ -36,6 +36,7 @@ export function useGrowEnable(
     setError(null);
     try {
       const args = [
+        Address.fromString(userAddress).toScVal(),
         Address.fromString(BLEND_POOL_ID).toScVal(),
         Address.fromString(XLM_SAC_ID).toScVal(),
         Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),

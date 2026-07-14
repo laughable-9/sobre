@@ -77,7 +77,11 @@ export interface GrowWithdrawRequest {
 }
 
 export interface WalletState {
-  admin: string;
+  /** Every on-chain admin address. Callers check membership rather than
+   *  equality — any address in this Vec can sign admin-only ops. First
+   *  entry is the wallet's initial admin from `init`; later entries
+   *  were promoted via `add_admin`. Non-empty by construction. */
+  admins: string[];
   payment_token: string;
   /** Wallet display name (Supabase). */
   wallet_name: string;
@@ -150,7 +154,7 @@ export interface UseWalletStateResult {
 }
 
 interface OnChainState {
-  admin: string;
+  admins: string[];
   payment_token: string;
   members: { address: string }[];
   balances: bigint[];
@@ -262,7 +266,7 @@ export function useWalletState(
       };
     });
     return {
-      admin: onChain.admin,
+      admins: onChain.admins,
       payment_token: onChain.payment_token,
       wallet_name: display.walletName,
       envelope_names: display.envelopeNames,
@@ -325,8 +329,18 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
         locked: Boolean(s.locked),
       }))
     : [];
+  // v11 wallets return admins: Vec<Address>; pre-v11 wallets that
+  // haven't run upgrade() yet still return the singular admin field.
+  // Fall back to wrapping the legacy field in a one-element array so
+  // isAdmin checks + the settings gear + every other UI gate keep
+  // working on wallets that haven't been migrated.
+  const rawAdmins = Array.isArray(raw.admins)
+    ? raw.admins
+    : raw.admin != null
+      ? [raw.admin]
+      : [];
   return {
-    admin: String(raw.admin),
+    admins: rawAdmins.map((a) => String(a)),
     payment_token: String(raw.payment_token),
     members,
     balances: (raw.balances as bigint[]) ?? [],

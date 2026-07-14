@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { xdr } from "@stellar/stellar-sdk";
+import { Address, xdr } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 import { hexToBytes } from "@/lib/encoding";
@@ -30,6 +30,7 @@ export interface UseCancelSubaccountInviteResult {
  * manually via the fallback.
  */
 export function useCancelSubaccountInvite(
+  adminAddress: string | null,
   contractId: string | null,
 ): UseCancelSubaccountInviteResult {
   const [pending, setPending] = useState(false);
@@ -37,12 +38,16 @@ export function useCancelSubaccountInvite(
 
   const cancel = useCallback(
     async (inviteTokenHashHex: string): Promise<void> => {
+      if (!adminAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
       setPending(true);
       setError(null);
       try {
         const hashBytes = hexToBytes(inviteTokenHashHex);
-        const args = [xdr.ScVal.scvBytes(Buffer.from(hashBytes))];
+        const args = [
+          Address.fromString(adminAddress).toScVal(),
+          xdr.ScVal.scvBytes(Buffer.from(hashBytes)),
+        ];
         await invokeWrite(contractId, "cancel_subaccount_invite", args);
         const supabase = getSupabaseBrowserClient();
         const { error: delErr } = await supabase
@@ -62,7 +67,7 @@ export function useCancelSubaccountInvite(
         setPending(false);
       }
     },
-    [contractId],
+    [adminAddress, contractId],
   );
 
   return { cancel, pending, error };

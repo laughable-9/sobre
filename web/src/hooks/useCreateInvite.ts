@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { xdr } from "@stellar/stellar-sdk";
+import { Address, xdr } from "@stellar/stellar-sdk";
 
 import { getServer, invokeWrite } from "@/lib/contract";
 import {
@@ -63,6 +63,7 @@ export interface UseCreateInviteResult {
  * hash so a passive Soroban indexer can't intercept and redeem.
  */
 export function useCreateInvite(
+  adminAddress: string | null,
   contractId: string | null,
 ): UseCreateInviteResult {
   const [pending, setPending] = useState(false);
@@ -70,6 +71,7 @@ export function useCreateInvite(
 
   const createInvite = useCallback(
     async (opts?: CreateInviteOptions): Promise<CreateInviteResult> => {
+      if (!adminAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
       const intendedRole = opts?.intendedRole ?? "member";
       setPending(true);
@@ -82,6 +84,7 @@ export function useCreateInvite(
         const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
 
         const args = [
+          Address.fromString(adminAddress).toScVal(),
           xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
           xdr.ScVal.scvU32(expiresAtLedger),
         ];
@@ -119,7 +122,7 @@ export function useCreateInvite(
         setPending(false);
       }
     },
-    [contractId],
+    [adminAddress, contractId],
   );
 
   return { createInvite, pending, error };

@@ -35,6 +35,9 @@
               "function_name": "create_subaccount_invite",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "bytes": "2cf2c6077769e8f910ed119ac8fa288d12817d4fdcef245576c752a076d3217a"
                 },
                 {
@@ -56,6 +59,9 @@
               "contract_address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAK3IM",
               "function_name": "cancel_subaccount_invite",
               "args": [
+                {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
                 {
                   "bytes": "2cf2c6077769e8f910ed119ac8fa288d12817d4fdcef245576c752a076d3217a"
                 }
@@ -178,12 +184,16 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Admin"
+                            "symbol": "Admins"
                           }
                         ]
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
                       }
                     },
                     {

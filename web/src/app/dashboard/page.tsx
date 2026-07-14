@@ -28,6 +28,7 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile, setProfile } from "@/lib/profile";
 import {
+  LOGO_SRC,
   PAYMENT_TOKEN_LABEL,
   PHP_PER_USDC,
   STROOPS_PER_USDC,
@@ -99,7 +100,11 @@ export default function MySobresPage() {
 
   useEffect(() => {
     // External-sync effect: isSobreClosed reads localStorage. Same SSR
-    // deferral as above.
+    // deferral as above. Union of every source that can produce a row on
+    // My Sobres — admin factory, localStorage-joined, and the Supabase
+    // mirror (which is the only way a supplementary-only Sobre reaches
+    // the list). Missing the mirrored branch here would let a closed
+    // supplementary-only Sobre flash a loading skeleton then hide.
     const all = new Set<string>();
     for (const id of adminSobres.sobres) {
       if (isSobreClosed(id)) all.add(id);
@@ -107,9 +112,14 @@ export default function MySobresPage() {
     for (const id of joined) {
       if (isSobreClosed(id)) all.add(id);
     }
+    if (mirroredIds.contractIds) {
+      for (const id of mirroredIds.contractIds) {
+        if (isSobreClosed(id)) all.add(id);
+      }
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setClosedSet(all);
-  }, [adminSobres.sobres, joined]);
+  }, [adminSobres.sobres, joined, mirroredIds.contractIds]);
 
   // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
@@ -119,7 +129,7 @@ export default function MySobresPage() {
           {wallet.status === "signed-out" ? (
             <div className="text-center max-w-md">
               <Image
-                src="/sobre-logo2.svg"
+                src={LOGO_SRC}
                 alt=""
                 width={56}
                 height={56}
@@ -147,11 +157,7 @@ export default function MySobresPage() {
               ) : null}
             </div>
           ) : (
-            <p style={{ color: "var(--text-2)" }}>
-              {wallet.status === "creating"
-                ? "Setting up your wallet…"
-                : "Loading…"}
-            </p>
+            <p style={{ color: "var(--text-2)" }}>Loading…</p>
           )}
         </main>
       </div>
@@ -200,7 +206,7 @@ export default function MySobresPage() {
                   }}
                 >
                   <Image
-                    src="/sobre-logo2.svg"
+                    src={LOGO_SRC}
                     alt=""
                     width={34}
                     height={34}
@@ -298,19 +304,9 @@ export default function MySobresPage() {
         </div>
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-serif text-[36px] font-semibold mb-2">
+            <h1 className="font-serif text-[36px] font-semibold">
               My Sobres
             </h1>
-            {showEmptyState ? null : (
-              <p
-                className="text-[15px]"
-                style={{ color: "var(--text-2)" }}
-              >
-                {allRows.length === 1
-                  ? "Your household wallet."
-                  : `${allRows.length} household wallets.`}
-              </p>
-            )}
           </div>
           {showEmptyState ? null : (
             <div className="flex gap-2 flex-wrap">
@@ -377,7 +373,7 @@ export default function MySobresPage() {
               aria-hidden
             >
               <Image
-                src="/sobre-logo2.svg"
+                src={LOGO_SRC}
                 alt=""
                 width={40}
                 height={40}
@@ -500,6 +496,11 @@ function SobreCard({
   }, [shouldHide, onHide]);
 
   if (shouldHide) return null;
+  // Show a plain skeleton while the summary is loading — mounting the full
+  // card (role pill, ₱0 balance, "Loading…") briefly for a Sobre that turns
+  // out to be an orphan or where the caller isn't a member causes a phantom
+  // card to flash before it hides itself.
+  if (summary === null) return <SobreCardSkeleton />;
 
   // Supplementary cards show the caller's own spendable balance, not
   // the family total — a supplementary has no visibility into the
@@ -515,7 +516,7 @@ function SobreCard({
   const totalUsdc = Number(displayStroops) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 
-  const walletName = summary?.walletName || "Family Wallet";
+  const walletName = summary?.walletName || "Sobre";
 
   return (
     <Link
@@ -523,7 +524,23 @@ function SobreCard({
       className="sobre-card-link block"
     >
       <div className="flex items-start gap-3 mb-4">
-        <Avatar name={walletName} size={44} />
+        <div
+          className="grid place-items-center flex-shrink-0"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: "var(--accent-soft)",
+          }}
+        >
+          <Image
+            src={LOGO_SRC}
+            alt=""
+            width={26}
+            height={26}
+            priority
+          />
+        </div>
         <div className="flex-1 min-w-0">
           <h3
             className="font-serif truncate"
@@ -606,6 +623,7 @@ function SobreCard({
                 <Avatar
                   key={m.address}
                   name={m.name || m.address.slice(1, 3)}
+                  src={m.avatarUrl}
                   size={22}
                 />
               ))}

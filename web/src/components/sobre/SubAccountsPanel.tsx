@@ -21,6 +21,10 @@ interface PanelProps {
   userAddress: string;
   contractId: string;
   familyWalletId: string | null;
+  /** Current admin's wallets.id — threaded into FundSubAccountModal
+   *  so the multi-admin approval flow can insert
+   *  family_pending_requests rows when the source envelope is locked. */
+  memberWalletDbId: string | null;
   rows: FamilySubaccountRow[];
   state: WalletState;
   events: FeedEvent[];
@@ -49,6 +53,7 @@ export function SubAccountsPanel({
   userAddress,
   contractId,
   familyWalletId,
+  memberWalletDbId,
   rows,
   state,
   events,
@@ -130,6 +135,8 @@ export function SubAccountsPanel({
           userAddress={userAddress}
           contractId={contractId}
           state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={memberWalletDbId}
           subRows={rows}
           initialTarget={{
             address: sendTarget.row.walletAddress,
@@ -146,6 +153,7 @@ export function SubAccountsPanel({
 
       {inviteOpen ? (
         <SubAccountInviteModal
+          adminAddress={userAddress}
           contractId={contractId}
           familyWalletId={familyWalletId}
           onClose={() => setInviteOpen(false)}
@@ -181,8 +189,13 @@ function SubCard({
     contractId,
   );
   const { cancel: cancelInvite, pending: cancelPending } =
-    useCancelSubaccountInvite(contractId);
+    useCancelSubaccountInvite(userAddress, contractId);
   const [confirmingCancel, setConfirmingCancel] = useState(false);
+  // Confirm sheet for lock/unlock — both directions get an explicit
+  // sheet explaining what happens on chain. A raw button firing a
+  // passkey prompt with no context reads as scary + irreversible even
+  // though unlock is trivially reversible.
+  const [confirmingLock, setConfirmingLock] = useState(false);
   const { row, chain } = sub;
   // Pending = the invite hasn't been redeemed in Supabase yet (wallet_id
   // is null). Don't conflate this with "chain match missing": once the row
@@ -196,14 +209,18 @@ function SubCard({
   const balancePhp =
     (Number(balanceStroops) / STROOPS_PER_USDC) * PHP_PER_USDC;
 
-  const handleToggle = async () => {
+  const confirmLockToggle = async () => {
     if (!row.walletAddress) return;
     try {
       await toggle(row.walletAddress, isLocked);
-      onFlash(isLocked ? `${row.displayName} unlocked` : `${row.displayName} locked`);
+      onFlash(
+        isLocked ? `${row.displayName} unlocked` : `${row.displayName} locked`,
+      );
+      setConfirmingLock(false);
       onChange();
     } catch {
       // surfaced via the lock hook error state
+      setConfirmingLock(false);
     }
   };
 
@@ -334,7 +351,7 @@ function SubCard({
             </button>
             <button
               type="button"
-              onClick={handleToggle}
+              onClick={() => setConfirmingLock(true)}
               disabled={lockPending}
               className="sobre-btn sobre-btn-soft"
               style={{
@@ -386,6 +403,26 @@ function SubCard({
         pending={cancelPending}
         onConfirm={() => void confirmCancelInvite()}
         onCancel={() => setConfirmingCancel(false)}
+      />
+
+      <ConfirmSheet
+        open={confirmingLock}
+        title={
+          isLocked
+            ? `Unlock ${row.displayName}?`
+            : `Lock ${row.displayName}?`
+        }
+        body={
+          isLocked
+            ? `${row.displayName} will be able to cash out from their own balance again. The remaining balance stays where it is; unlocking doesn't move any money.`
+            : `${row.displayName} won't be able to cash out from their balance until you unlock. The money stays in their supplementary card. It doesn't come back to your envelopes. You can unlock any time.`
+        }
+        confirmLabel={isLocked ? "Unlock" : "Lock"}
+        cancelLabel="Cancel"
+        confirmTone={isLocked ? "default" : "danger"}
+        pending={lockPending}
+        onConfirm={() => void confirmLockToggle()}
+        onCancel={() => setConfirmingLock(false)}
       />
     </div>
   );

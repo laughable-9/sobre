@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -9,19 +9,18 @@ import {
   ClockIcon,
   CurrencyDollarIcon,
   EyeIcon,
+  GithubLogoIcon,
   LockIcon,
   ShieldIcon,
 } from "@phosphor-icons/react";
 
-import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
-import { SiteHeader } from "@/components/sobre/SiteHeader";
-import { WalletMenu } from "@/components/sobre/WalletMenu";
+import { LOGO_SRC, PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
+import { LandingHeader } from "@/components/sobre/LandingHeader";
+import { OpenSobreButton } from "@/components/sobre/OpenSobreButton";
 import { Reveal } from "@/components/sobre/Reveal";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
-import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
 
 /**
  * Sample household state for the landing page's product preview — ₱10,000
@@ -30,7 +29,7 @@ import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
  * in-app design, not a hand-rolled lookalike.
  */
 const PREVIEW_STATE: WalletState = {
-  admin: "",
+  admins: [],
   payment_token: "",
   wallet_name: "Sample family",
   envelope_names: [],
@@ -58,24 +57,6 @@ const PREVIEW_STATE: WalletState = {
   grow_requests: [],
 };
 
-function GithubMark({ size = 18 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-    </svg>
-  );
-}
-
 const STATS = [
   {
     num: "$35.6B",
@@ -100,7 +81,7 @@ const STEPS = [
     num: 1,
     fil: "Open a Sobre.",
     body:
-      "Open a shared wallet from your phone in under 60 seconds. Invite your family with a link.",
+      "Open a shared Sobre from your phone in under 60 seconds. Invite your family with a link.",
   },
   {
     num: 2,
@@ -125,18 +106,18 @@ const STEPS = [
 const TRUST = [
   {
     icon: <ShieldIcon weight="fill" size={18} />,
-    title: "Built on Stellar",
-    body: "Your wallet is a smart contract on Stellar. No bank in the middle.",
+    title: "No bank in the middle",
+    body: "Your money sits in your family's Sobre, not on a bank's books. Only you and the members you invite can move it.",
   },
   {
     icon: <EyeIcon weight="fill" size={18} />,
-    title: "Verifiable on-chain",
-    body: "Every deposit, spend, and approval is a public transaction.",
+    title: "Nothing hidden",
+    body: "Every deposit and every spend shows up in the activity feed for the whole household to see.",
   },
   {
     icon: <CurrencyDollarIcon weight="bold" size={18} />,
-    title: "Fractions of a cent",
-    body: "Stellar charges micro-fees per transaction. Sobre adds zero.",
+    title: "Practically no fees",
+    body: "Sending, splitting, and moving money costs a fraction of a cent. Sobre doesn't add its own charge.",
   },
 ];
 
@@ -150,26 +131,26 @@ const SENDER_POINTS = [
 const FAMILY_POINTS = [
   "No fighting over who spent what.",
   "Big purchases need admin approval, so there's no impulse spending.",
-  "Real-time visibility into the whole wallet.",
+  "Real-time visibility into the whole Sobre.",
   "Savings grows automatically while you focus on family.",
 ];
 
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in XLM, with USDC support on the roadmap. The contract is token-agnostic so other assets can plug in without redeploying.",
+    a: "No. Sobre is a shared account for your family, run by open software on the Stellar network. Your money is held as USDC, a digital dollar backed 1:1 by real US dollars in reserve, so it doesn't lose value like crypto can.",
   },
   {
     q: "What do I need to start?",
-    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No KYC, no minimum deposit.",
+    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No ID upload, no minimum deposit.",
   },
   {
     q: "How do I send money in?",
-    a: "Pay in pesos via PDAX. InstaPay QR from your bank or e-wallet. PDAX converts to XLM and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
+    a: "Pay in pesos via PDAX using InstaPay QR from your bank or e-wallet. PDAX turns it into USDC and drops it into your Sobre automatically. Sobre splits it across your envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
-    a: "Yes. Through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
+    a: "Yes. Through partners like MoneyGram, you can withdraw pesos anywhere in the Philippines.",
   },
   {
     q: "What if the family disagrees?",
@@ -181,8 +162,7 @@ export default function Landing() {
   const [openFaq, setOpenFaq] = useState(0);
   return (
     <>
-      <Nav />
-      <SectionRail />
+      <LandingHeader />
       <Hero />
       <Problem />
       <HowItWorks />
@@ -192,242 +172,29 @@ export default function Landing() {
       <Faq openFaq={openFaq} setOpenFaq={setOpenFaq} />
       <FinalCTA />
       <Footer />
-      <MobileCTABar />
     </>
-  );
-}
-
-/**
- * "Open a Sobre" CTA that plays the envelope fly-out transition before
- * navigating to the dashboard. Renders as a real anchor (so it's still a
- * proper link / right-click-openable / keyboard-activatable) but intercepts
- * the plain click to run the animation first. Modifier-clicks and the reduced-
- * motion path fall through to normal navigation.
- */
-function OpenSobreButton({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const { playFlyout } = useEnvelopeTransition();
-  return (
-    <Link
-      href="/dashboard"
-      className={className}
-      onClick={(e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-        e.preventDefault();
-        playFlyout("/dashboard");
-      }}
-    >
-      {children}
-    </Link>
-  );
-}
-
-/**
- * Thumb-zone CTA pinned to the bottom of the viewport on phones/tablets so
- * "Open a Sobre" is always one tap away while the long marketing page scrolls.
- * Hidden on desktop (CSS), where the top-nav CTA does the job.
- */
-function MobileCTABar() {
-  return (
-    <div className="sobre-bottom-bar">
-      <OpenSobreButton className="sobre-bottom-cta">
-        Open a Sobre
-        <ArrowRightIcon weight="bold" size={18} />
-      </OpenSobreButton>
-    </div>
-  );
-}
-
-const NAV_SECTIONS = [
-  { id: "top", label: "Home" },
-  { id: "problem", label: "The reality" },
-  { id: "how", label: "How it works" },
-  { id: "product", label: "The product" },
-  { id: "trust", label: "Why this works" },
-  { id: "two-sides", label: "Two sides" },
-  { id: "about", label: "FAQ" },
-] as const;
-
-/**
- * Tracks which landing-page section is currently in view, so the nav can
- * show a "you are here" cue as the user scrolls. Recomputes on every scroll
- * by picking whichever section's top is closest to (without passing) a line
- * near the top of the viewport — a plain IntersectionObserver was going
- * silent (and leaving the old section highlighted) whenever an anchor-link
- * jump landed a short section entirely outside its narrow intersection
- * band, so this always has an answer instead of only reacting to crossings.
- */
-function useScrollSpy(ids: readonly string[]): string | null {
-  const [active, setActive] = useState<string | null>(null);
-
-  useEffect(() => {
-    const sections = ids
-      .map((id) => document.getElementById(id))
-      .filter((el): el is HTMLElement => el !== null);
-    if (sections.length === 0) return;
-
-    const ANCHOR_LINE = 0.25; // 25% down the viewport
-
-    const recompute = () => {
-      const line = window.innerHeight * ANCHOR_LINE;
-      let best: HTMLElement | null = null;
-      let bestDelta = -Infinity;
-      for (const el of sections) {
-        const top = el.getBoundingClientRect().top;
-        // Prefer the last section whose top has crossed the anchor line;
-        // if none has (page hasn't scrolled yet), fall back to the first.
-        if (top <= line && top > bestDelta) {
-          bestDelta = top;
-          best = el;
-        }
-      }
-      setActive((best ?? sections[0]).id);
-    };
-
-    recompute();
-    window.addEventListener("scroll", recompute, { passive: true });
-    window.addEventListener("resize", recompute);
-    return () => {
-      window.removeEventListener("scroll", recompute);
-      window.removeEventListener("resize", recompute);
-    };
-  }, [ids]);
-
-  return active;
-}
-
-/**
- * True while the given section is in view. Used by the rail to know when
- * it's scrolled over the dark green Final CTA band, so it can flip its
- * palette — the light-page ticks that read fine on white/gray sections are
- * invisible on green, and vice versa.
- */
-function useSectionInView(id: string): boolean {
-  const [inView, setInView] = useState(false);
-
-  useEffect(() => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => setInView(entry.isIntersecting),
-      { rootMargin: "-50% 0px -50% 0px", threshold: 0 },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [id]);
-
-  return inView;
-}
-
-function Nav() {
-  const wallet = usePasskeyWallet();
-  const { status, address, connect } = wallet;
-  const busy = status === "checking" || status === "creating";
-
-  const connectButton = address ? (
-    <WalletMenu wallet={wallet} />
-  ) : (
-    <button
-      type="button"
-      onClick={() => void connect()}
-      className="sobre-btn-nav sobre-btn-nav-soft"
-      disabled={busy}
-    >
-      {status === "checking"
-        ? "Checking…"
-        : status === "creating"
-          ? "Setting up…"
-          : "Continue with Google"}
-    </button>
-  );
-
-  return (
-    <SiteHeader
-      right={
-        <>
-          <a href="#how" className="sobre-nav-link-text">
-            How it works
-          </a>
-          <a href="#about" className="sobre-nav-link-text">
-            About
-          </a>
-          {connectButton}
-          <Link href="/dashboard" className="sobre-btn-nav">
-            Open Sobre
-          </Link>
-        </>
-      }
-    />
-  );
-}
-
-/**
- * Fixed side rail (desktop only) showing every major landing-page section as
- * a tick; the tick for whichever section is currently in view is highlighted
- * and labeled, so there's always a "you are here" cue while scrolling.
- */
-function SectionRail() {
-  const active = useScrollSpy(NAV_SECTIONS.map((s) => s.id));
-  const onDark = useSectionInView("final-cta");
-
-  return (
-    <nav
-      className={`sobre-rail${onDark ? " on-dark" : ""}`}
-      aria-label="Page sections"
-    >
-      {NAV_SECTIONS.map((s) => (
-        <a
-          key={s.id}
-          href={`#${s.id}`}
-          className={`sobre-rail-item${active === s.id ? " active" : ""}`}
-        >
-          <span className="dot" aria-hidden />
-          <span className="label">{s.label}</span>
-        </a>
-      ))}
-    </nav>
   );
 }
 
 function Hero() {
   return (
     <section id="top" className="sobre-hero">
-      <div className="sobre-hero-grid">
-        <div className="sobre-hero-content">
-          <h1 className="sobre-hero-headline">
-            One Sobre.
-            <br />
-            No matter the{" "}
-            <em className="sobre-hero-accent">distance</em>.
-          </h1>
-          <p className="sobre-hero-subhead">
-            The shared family wallet for overseas workers. Every deposit
-            splits into envelopes the household agreed on, the moment it
-            arrives.
-          </p>
-          <OpenSobreButton className="sobre-hero-cta">
-            Open a Sobre
-            <ArrowRightIcon weight="bold" size={16} />
-          </OpenSobreButton>
-        </div>
-        <div className="sobre-hero-right">
-          <video
-            className="sobre-hero-loop"
-            src="/loop-1.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-            disablePictureInPicture
-            disableRemotePlayback
-            controlsList="nodownload nofullscreen noremoteplayback"
-          />
-        </div>
+      <div className="sobre-hero-content">
+        <h1 className="sobre-hero-headline">
+          One Sobre.
+          <br />
+          No matter the{" "}
+          <em className="sobre-hero-accent">distance</em>.
+        </h1>
+        <p className="sobre-hero-subhead">
+          The shared family wallet for overseas workers. Every deposit
+          splits into envelopes the household agreed on, the moment it
+          arrives.
+        </p>
+        <OpenSobreButton className="sobre-hero-cta">
+          Open a Sobre
+          <ArrowRightIcon weight="bold" size={16} />
+        </OpenSobreButton>
       </div>
     </section>
   );
@@ -442,8 +209,7 @@ function Problem() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">The reality</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Money sent home,{" "}
             <em className="sobre-em">but it&apos;s never enough.</em>
           </h2>
@@ -491,8 +257,7 @@ function HowItWorks() {
     <section id="how" className="sobre-section">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">How it works</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Sending home,{" "}
             <em className="sobre-em">simplified.</em>
           </h2>
@@ -525,9 +290,8 @@ function Product() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">The product</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Not just a wallet.{" "}
+          <h2 className="sobre-h2">
+            Not just an account.{" "}
             <em className="sobre-em">A plan for the family.</em>
           </h2>
         </div>
@@ -580,9 +344,9 @@ function Product() {
             }
             body={
               <>
-                Money in your Savings envelope earns competitive yield from
-                regulated dollar-backed reserves. Better than letting it sit
-                in a regular bank account losing value to inflation.
+                Money in your Savings envelope quietly earns interest while it
+                sits. Better than leaving it in a regular bank account and
+                watching inflation eat it.
               </>
             }
           />
@@ -640,38 +404,24 @@ function MembersVisual() {
       <div className="sobre-policy-stack">
         <PolicyRow
           icon={<ClockIcon weight="fill" size={18} />}
-          title="Daily limit per member"
-          value="₱ 500"
+          title="Daily limit per admin"
+          tint="accent"
+          toggleOn
         />
         <PolicyRow
           icon={<LockIcon weight="fill" size={18} />}
           title="Tuition needs approval"
-          value="Locked"
-          locked
+          tint="muted"
+          toggleOn={false}
         />
         <PolicyRow
           icon={<LockIcon weight="fill" size={18} />}
           title="Savings needs approval"
-          value="Locked"
-          locked
+          subtitle="Always locked"
+          tint="danger"
+          toggleOn
+          toggleDisabled
         />
-        <div
-          className="sobre-card-flat"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            border: "1.5px dashed var(--border-strong)",
-            padding: "14px 16px",
-            marginTop: 6,
-            color: "var(--text-3)",
-            fontSize: 13,
-            lineHeight: 1.4,
-            boxShadow: "none",
-          }}
-        >
-          Groceries stays open for small day-to-day spends.
-        </div>
       </div>
     </div>
   );
@@ -680,14 +430,26 @@ function MembersVisual() {
 function PolicyRow({
   icon,
   title,
-  value,
-  locked,
+  subtitle,
+  tint,
+  toggleOn,
+  toggleDisabled,
 }: {
   icon: React.ReactNode;
   title: string;
-  value: string;
-  locked?: boolean;
+  subtitle?: string;
+  tint: "accent" | "danger" | "muted";
+  toggleOn: boolean;
+  toggleDisabled?: boolean;
 }) {
+  const iconTint =
+    tint === "danger"
+      ? { bg: "var(--sobre-danger-soft)", fg: "var(--sobre-danger)" }
+      : tint === "accent"
+        ? { bg: "var(--accent-soft)", fg: "var(--sobre-accent)" }
+        : { bg: "var(--surface-alt)", fg: "var(--text-3)" };
+  const trackOn =
+    tint === "danger" ? "var(--sobre-danger)" : "var(--sobre-accent)";
   return (
     <div
       className="sobre-card-flat"
@@ -704,28 +466,66 @@ function PolicyRow({
           height: 38,
           flexShrink: 0,
           borderRadius: 10,
-          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
+          background: iconTint.bg,
+          color: iconTint.fg,
           display: "grid",
           placeItems: "center",
-          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
         }}
       >
         {icon}
       </div>
-      <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: "var(--text-1)" }}>
-        {title}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: 14,
+            color: "var(--text-1)",
+            lineHeight: 1.25,
+          }}
+        >
+          {title}
+        </div>
+        {subtitle ? (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-3)",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+              marginTop: 2,
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
       </div>
-      <span
-        className="sobre-pill"
+      {/* Non-interactive visual — the landing page is decorative. */}
+      <div
+        aria-hidden
         style={{
-          fontSize: 12,
-          fontWeight: 600,
-          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
-          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
+          width: 44,
+          height: 26,
+          borderRadius: 999,
+          padding: 2,
+          background: toggleOn ? trackOn : "var(--border-strong)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: toggleOn ? "flex-end" : "flex-start",
+          opacity: toggleDisabled ? 0.75 : 1,
+          flexShrink: 0,
         }}
       >
-        {value}
-      </span>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            display: "block",
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -759,7 +559,7 @@ function SavingsVisual() {
             className="tabular"
             style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}
           >
-            204.43 XLM
+            204.43 USDC
           </div>
         </div>
       </div>
@@ -831,15 +631,15 @@ function Trust() {
     <section id="trust" className="sobre-section">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">Why this works</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Built on infrastructure you can audit.
+          <h2 className="sobre-h2">
+            Money you can <em className="sobre-em">actually trust.</em>
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
-            Sobre is built on Stellar, the same chain used by MoneyGram for
-            cross-border payouts. Your balance lives in XLM today, with USDC
-            on the roadmap, so amounts can settle to a stablecoin without a
-            contract redeploy. Every transaction is public and verifiable.
+            Sobre runs on Stellar, the same network MoneyGram uses to move
+            money worldwide. Your balance is held as USDC, a digital dollar
+            backed 1:1 by real US dollars in reserve, so it doesn&apos;t lose
+            value like crypto can. Every peso in and every peso out is
+            recorded in the family&apos;s activity feed.
           </p>
         </div>
 
@@ -866,22 +666,15 @@ function TwoSides() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">Two sides, one wallet</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             For the sender. For the family.{" "}
             <em className="sobre-em">Same wallet.</em>
           </h2>
         </div>
 
         <Reveal className="sobre-duo">
-          <div className="sobre-duo-col mango">
-            <div
-              className="sobre-eyebrow"
-              style={{ color: "var(--primary-hover)" }}
-            >
-              For the sender
-            </div>
-            <h3 style={{ marginTop: 10 }}>Send home with zero guesswork.</h3>
+          <div className="sobre-duo-col surface">
+            <h3>Send home with zero guesswork.</h3>
             <ul>
               {SENDER_POINTS.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -889,8 +682,7 @@ function TwoSides() {
             </ul>
           </div>
           <div className="sobre-duo-col green">
-            <div className="sobre-eyebrow">For the family at home</div>
-            <h3 style={{ marginTop: 10 }}>Each person has their own envelope.</h3>
+            <h3>Each person has their own envelope.</h3>
             <ul>
               {FAMILY_POINTS.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -914,10 +706,7 @@ function Faq({
     <section className="sobre-section" id="about">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">FAQ</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Frequently asked questions
-          </h2>
+          <h2 className="sobre-h2">Frequently asked questions</h2>
         </div>
         <div className="sobre-faq">
           {FAQS.map((item, i) => (
@@ -957,10 +746,10 @@ function FinalCTA() {
           <em className="sobre-em">Open the Sobre.</em> Open the plan.
         </h2>
         <p className="lede sobre-lede">
-          Open a wallet in 60 seconds. Invite your family. Send your first
+          Open a Sobre in 60 seconds. Invite your family. Send your first
           remittance.
         </p>
-        <OpenSobreButton className="sobre-btn-cream sobre-final-cta-btn">
+        <OpenSobreButton className="sobre-btn-primary sobre-final-cta-btn">
           Start with Sobre, free
           <ArrowRightIcon weight="bold" size={16} />
         </OpenSobreButton>
@@ -973,54 +762,51 @@ function Footer() {
   return (
     <footer className="sobre-footer">
       <div className="sobre-container">
-        <div className="sobre-footer-grid">
-          <div>
-            <div className="sobre-brand">
-              <Image
-                src="/sobre-logo2.svg"
-                alt=""
-                width={32}
-                height={32}
-              />
-              <span className="sobre-brand-name">Sobre</span>
-            </div>
-            <p
-              style={{
-                marginTop: 16,
-                fontSize: 14,
-                maxWidth: "32ch",
-                color: "var(--text-2)",
-              }}
-            >
-              A joint account for families living worlds apart. Made for OFWs,
-              built on Stellar.
-            </p>
+        <div>
+          <div className="sobre-brand">
+            <Image
+              src={LOGO_SRC}
+              alt=""
+              width={32}
+              height={32}
+            />
+            <span className="sobre-brand-name">Sobre</span>
           </div>
-          <div className="sobre-footer-col">
-            <h4>Product</h4>
-            <ul>
-              <li>
-                <a href="#how">How it works</a>
-              </li>
-              <li>
-                <a href="#about">FAQ</a>
-              </li>
-              <li>
-                <Link href="/dashboard">Open Wallet</Link>
-              </li>
-            </ul>
-          </div>
+          <p
+            style={{
+              marginTop: 16,
+              fontSize: 14,
+              maxWidth: "32ch",
+              color: "var(--text-2)",
+            }}
+          >
+            A joint account for families living worlds apart. Made for OFWs,
+            built on Stellar.
+          </p>
         </div>
         <div className="sobre-footer-bottom">
-          <div>© 2026 Sobre. Built for Stellar Philippines Hackathon.</div>
-          <div style={{ display: "flex", gap: 14, color: "var(--text-3)" }}>
+          <div>© 2026 Sobre</div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 20,
+              color: "var(--text-3)",
+            }}
+          >
+            <Link
+              href="/privacy"
+              style={{ color: "var(--text-2)", fontSize: 13 }}
+            >
+              Privacy
+            </Link>
             <a
               href="https://github.com/laughable-9/sobre"
               target="_blank"
               rel="noreferrer"
               aria-label="GitHub"
             >
-              <GithubMark size={18} />
+              <GithubLogoIcon weight="fill" size={18} />
             </a>
           </div>
         </div>

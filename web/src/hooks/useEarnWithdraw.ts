@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { envelopeScVal, invokeWrite } from "@/lib/contract";
 import type { EnvelopeName } from "@/lib/config";
@@ -36,6 +36,7 @@ export function useEarnWithdraw(
       setError(null);
       try {
         const args = [
+          Address.fromString(userAddress).toScVal(),
           envelopeScVal(envelope),
           nativeToScVal(amountStroops, { type: "i128" }),
         ];

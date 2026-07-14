@@ -133,7 +133,16 @@ pub struct SubAccount {
 
 #[contracttype]
 pub enum DataKey {
+    /// Legacy single-admin slot. Kept in the enum ONLY so `upgrade()` can
+    /// read a pre-v11 wallet's admin address once and migrate it into
+    /// `Admins`. New writes never touch this key. Post-migration wallets
+    /// never read it either — `load_admins` reads `Admins`.
     Admin,
+    /// Multi-admin set. `Vec<Address>` of every address allowed to sign
+    /// admin-only ops. Populated at init with `vec![initial_admin]`; grown
+    /// via `add_admin` and shrunk via `remove_admin` (which refuses to
+    /// leave the wallet with zero admins).
+    Admins,
     PaymentToken,
     Members,
     Balances,
@@ -217,7 +226,12 @@ pub enum DataKey {
 #[contracttype]
 #[derive(Clone)]
 pub struct WalletState {
-    pub admin: Address,
+    /// Every address allowed to sign admin-only ops. First entry is the
+    /// initial admin (from `init`); every subsequent entry was promoted
+    /// via `add_admin`. Order is insertion order; not otherwise
+    /// meaningful. Non-empty by construction — `remove_admin` refuses
+    /// to leave this Vec at length 0.
+    pub admins: Vec<Address>,
     pub payment_token: Address,
     pub members: Vec<Member>,
     pub balances: Vec<i128>,
@@ -359,6 +373,25 @@ pub struct MemberJoined {
 pub struct MemberRemoved {
     #[topic]
     pub member: Address,
+}
+
+/// A new admin was promoted via `add_admin`. The admin who signed the
+/// promotion isn't emitted — the tx envelope already carries their
+/// signature on the ledger.
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct AdminAdded {
+    #[topic]
+    pub admin: Address,
+}
+
+/// An admin was demoted via `remove_admin`. Never fires for the last
+/// remaining admin (the contract refuses that removal).
+#[contractevent]
+#[derive(Clone, Debug)]
+pub struct AdminRemoved {
+    #[topic]
+    pub admin: Address,
 }
 
 #[contractevent]
@@ -548,16 +581,27 @@ pub enum Error {
     GrowNotEnabled = 23,
     GrowRequestNotFound = 24,
     GrowTimelockNotElapsed = 25,
+    /// Caller is not in the on-chain admin set. Multi-admin gate.
+    NotAdmin = 26,
+    /// `add_admin` refused because the target is already an admin.
+    AlreadyAdmin = 27,
+    /// `remove_admin` refused because it would leave zero admins on
+    /// the wallet, which would brick every admin-only op forever.
+    CannotRemoveLastAdmin = 28,
 }
 
 // ─── Private helpers ──────────────────────────────────────────────────────
 
 fn init_inner(env: Env, admin: Address, payment_token: Address, factory: Address) {
-    if env.storage().instance().has(&DataKey::Admin) {
+    // Guard on the multi-admin key. Post-v11 wallets never write the
+    // legacy `Admin` slot, so checking it here would let a re-init
+    // through on any freshly-deployed contract.
+    if env.storage().instance().has(&DataKey::Admins) {
         panic_with_error!(&env, Error::AlreadyInitialized);
     }
     let inst = env.storage().instance();
-    inst.set(&DataKey::Admin, &admin);
+    let admins: Vec<Address> = vec![&env, admin.clone()];
+    inst.set(&DataKey::Admins, &admins);
     inst.set(&DataKey::PaymentToken, &payment_token);
     inst.set(&DataKey::Balances, &vec![&env, 0i128, 0i128, 0i128]);
     inst.set(&DataKey::Factory, &factory);
@@ -565,13 +609,43 @@ fn init_inner(env: Env, admin: Address, payment_token: Address, factory: Address
     inst.set(&DataKey::Members, &vec![&env, admin_member]);
 }
 
-fn require_admin_auth(env: &Env) {
-    let admin: Address = env
-        .storage()
-        .instance()
-        .get(&DataKey::Admin)
-        .unwrap_or_else(|| panic_with_error!(env, Error::NotInitialized));
-    admin.require_auth();
+/// Read the on-chain admin set. Falls back to the legacy single-admin
+/// slot for pre-v11 wallets that haven't run `upgrade()` yet — the
+/// migration inside `upgrade` seeds `Admins` from `Admin` on first
+/// upgrade, and every read path after that hits the new key directly.
+fn load_admins(env: &Env) -> Vec<Address> {
+    let inst = env.storage().instance();
+    if let Some(admins) = inst.get::<_, Vec<Address>>(&DataKey::Admins) {
+        return admins;
+    }
+    if let Some(legacy) = inst.get::<_, Address>(&DataKey::Admin) {
+        return vec![env, legacy];
+    }
+    panic_with_error!(env, Error::NotInitialized);
+}
+
+/// True when `addr` is in the admin set. Read-only; no auth required.
+fn is_admin(env: &Env, addr: &Address) -> bool {
+    let admins = load_admins(env);
+    for a in admins.iter() {
+        if &a == addr {
+            return true;
+        }
+    }
+    false
+}
+
+/// Admin auth gate: caller must be in the on-chain `Admins` Vec AND
+/// have signed the transaction. Any admin from the Vec can pass; that
+/// is the whole point of multi-admin. Callers thread their own address
+/// through admin-gated method args because Soroban's `Address::
+/// require_auth` traps if called on an address that DIDN'T sign, so
+/// there is no way to "try each admin" from inside the contract.
+fn require_admin_auth(env: &Env, caller: &Address) {
+    if !is_admin(env, caller) {
+        panic_with_error!(env, Error::NotAdmin);
+    }
+    caller.require_auth();
 }
 
 fn find_member_index(members: &Vec<Member>, addr: &Address) -> Option<u32> {
@@ -599,8 +673,8 @@ fn load_subaccounts(env: &Env) -> Vec<SubAccount> {
         .unwrap_or_else(|| Vec::new(env))
 }
 
-fn set_subaccount_lock(env: &Env, subaccount: &Address, locked: bool) {
-    require_admin_auth(env);
+fn set_subaccount_lock(env: &Env, caller: &Address, subaccount: &Address, locked: bool) {
+    require_admin_auth(env, caller);
     let inst = env.storage().instance();
     let mut subs = load_subaccounts(env);
     let idx = find_subaccount_index(&subs, subaccount)
@@ -1047,8 +1121,13 @@ impl SobreContract {
         init_inner(env, admin, payment_token, factory);
     }
 
-    pub fn create_invite(env: Env, token_hash: BytesN<32>, expires_at_ledger: u32) {
-        require_admin_auth(&env);
+    pub fn create_invite(
+        env: Env,
+        caller: Address,
+        token_hash: BytesN<32>,
+        expires_at_ledger: u32,
+    ) {
+        require_admin_auth(&env, &caller);
         let now = env.ledger().sequence();
         if expires_at_ledger <= now {
             panic_with_error!(&env, Error::InviteExpired);
@@ -1068,8 +1147,8 @@ impl SobreContract {
     /// redeemed even if someone still holds the plaintext. Traps if the
     /// hash isn't present (already redeemed or already expired-and-swept
     /// on a prior read).
-    pub fn cancel_invite(env: Env, token_hash: BytesN<32>) {
-        require_admin_auth(&env);
+    pub fn cancel_invite(env: Env, caller: Address, token_hash: BytesN<32>) {
+        require_admin_auth(&env, &caller);
         let key = DataKey::Invite(token_hash.clone());
         if !env.storage().persistent().has(&key) {
             panic_with_error!(&env, Error::InviteNotFound);
@@ -1083,7 +1162,11 @@ impl SobreContract {
 
     pub fn join_wallet(env: Env, caller: Address, invite_token: BytesN<32>) {
         caller.require_auth();
-        if !env.storage().instance().has(&DataKey::Admin) {
+        // Post-v11 wallets carry Admins; pre-v11 wallets that haven't
+        // run upgrade() yet still carry Admin. Accept either as "this
+        // contract is initialized".
+        let inst = env.storage().instance();
+        if !inst.has(&DataKey::Admins) && !inst.has(&DataKey::Admin) {
             panic_with_error!(&env, Error::NotInitialized);
         }
         let token_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(invite_token)).into();
@@ -1097,7 +1180,6 @@ impl SobreContract {
             env.storage().persistent().remove(&invite_key);
             panic_with_error!(&env, Error::InviteExpired);
         }
-        let inst = env.storage().instance();
         let mut members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         if find_member_index(&members, &caller).is_some() {
             panic_with_error!(&env, Error::DuplicateMember);
@@ -1121,13 +1203,17 @@ impl SobreContract {
         .publish(&env);
     }
 
-    pub fn remove_member(env: Env, member: Address) {
-        require_admin_auth(&env);
-        let inst = env.storage().instance();
-        let admin: Address = inst.get(&DataKey::Admin).unwrap();
-        if member == admin {
+    pub fn remove_member(env: Env, caller: Address, member: Address) {
+        require_admin_auth(&env, &caller);
+        // Refuse to remove an admin via this method — admins have to be
+        // demoted with `remove_admin` first, which forces a separate
+        // decision + event. Prevents a footgun where the parent
+        // "removes" the other parent from the wallet and silently loses
+        // an on-chain admin signer with no AdminRemoved event trail.
+        if is_admin(&env, &member) {
             panic_with_error!(&env, Error::CannotRemoveAdmin);
         }
+        let inst = env.storage().instance();
         let mut members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let idx = find_member_index(&members, &member)
             .unwrap_or_else(|| panic_with_error!(&env, Error::MemberNotFound));
@@ -1136,10 +1222,12 @@ impl SobreContract {
         MemberRemoved { member }.publish(&env);
     }
 
-    pub fn close_wallet(env: Env) {
-        require_admin_auth(&env);
+    pub fn close_wallet(env: Env, caller: Address) {
+        require_admin_auth(&env, &caller);
         let inst = env.storage().instance();
-        let admin: Address = inst.get(&DataKey::Admin).unwrap();
+        // Multi-admin: sweep to whichever admin invoked close. Any
+        // admin from the Vec can sign, so any of them can call this
+        // and receive the total. Was the single `Admin` address in v10.
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
 
         // Sweep every envelope's USDY position back into its cache. Uses
@@ -1215,7 +1303,7 @@ impl SobreContract {
         if total > 0 {
             token::Client::new(&env, &payment_token).transfer(
                 &env.current_contract_address(),
-                &admin,
+                &caller,
                 &total,
             );
         }
@@ -1235,11 +1323,21 @@ impl SobreContract {
         WalletClosed { total }.publish(&env);
     }
 
-    pub fn upgrade(env: Env) {
-        require_admin_auth(&env);
-        let factory: Address = env
-            .storage()
-            .instance()
+    pub fn upgrade(env: Env, caller: Address) {
+        require_admin_auth(&env, &caller);
+        // Multi-admin migration: seed the new Admins Vec from the legacy
+        // single-admin slot the first time upgrade is invoked on a
+        // pre-v11 wallet. Idempotent — subsequent upgrades see Admins
+        // already populated and no-op. Runs BEFORE update_current_
+        // contract_wasm so if the new wasm reads Admins in its own init
+        // path it doesn't trap on missing storage.
+        let inst = env.storage().instance();
+        if !inst.has(&DataKey::Admins) {
+            if let Some(legacy) = inst.get::<_, Address>(&DataKey::Admin) {
+                inst.set(&DataKey::Admins, &vec![&env, legacy]);
+            }
+        }
+        let factory: Address = inst
             .get(&DataKey::Factory)
             .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
         let new_wasm: BytesN<32> = env.invoke_contract(
@@ -1249,6 +1347,50 @@ impl SobreContract {
         );
         env.deployer().update_current_contract_wasm(new_wasm.clone());
         WalletUpgraded { new_wasm }.publish(&env);
+    }
+
+    /// Promote a member to admin. Any existing admin can call this
+    /// (multi-admin gate); the target must already be in the on-chain
+    /// Members Vec. Refuses duplicates.
+    pub fn add_admin(env: Env, caller: Address, new_admin: Address) {
+        require_admin_auth(&env, &caller);
+        let inst = env.storage().instance();
+        let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
+        if find_member_index(&members, &new_admin).is_none() {
+            panic_with_error!(&env, Error::MemberNotFound);
+        }
+        let mut admins = load_admins(&env);
+        for a in admins.iter() {
+            if a == new_admin {
+                panic_with_error!(&env, Error::AlreadyAdmin);
+            }
+        }
+        admins.push_back(new_admin.clone());
+        inst.set(&DataKey::Admins, &admins);
+        AdminAdded { admin: new_admin }.publish(&env);
+    }
+
+    /// Demote an admin. Any admin can call this on any admin — including
+    /// themselves — but the wallet must retain at least one admin
+    /// afterwards. Removing the last admin would brick every admin-only
+    /// op forever, so the contract refuses.
+    pub fn remove_admin(env: Env, caller: Address, target: Address) {
+        require_admin_auth(&env, &caller);
+        let mut admins = load_admins(&env);
+        let mut found: Option<u32> = None;
+        for (i, a) in admins.iter().enumerate() {
+            if a == target {
+                found = Some(i as u32);
+                break;
+            }
+        }
+        let i = found.unwrap_or_else(|| panic_with_error!(&env, Error::NotAdmin));
+        if admins.len() == 1 {
+            panic_with_error!(&env, Error::CannotRemoveLastAdmin);
+        }
+        admins.remove(i);
+        env.storage().instance().set(&DataKey::Admins, &admins);
+        AdminRemoved { admin: target }.publish(&env);
     }
 
     /// Deposit with the per-envelope split already computed off-chain. The
@@ -1401,8 +1543,13 @@ impl SobreContract {
     /// `create_invite` so an indexer reading storage can't grab the token.
     /// Distinct DataKey variant so a member-side invite can never be redeemed
     /// as a sub-account or vice versa.
-    pub fn create_subaccount_invite(env: Env, token_hash: BytesN<32>, expires_at_ledger: u32) {
-        require_admin_auth(&env);
+    pub fn create_subaccount_invite(
+        env: Env,
+        caller: Address,
+        token_hash: BytesN<32>,
+        expires_at_ledger: u32,
+    ) {
+        require_admin_auth(&env, &caller);
         let now = env.ledger().sequence();
         if expires_at_ledger <= now {
             panic_with_error!(&env, Error::InviteExpired);
@@ -1419,8 +1566,8 @@ impl SobreContract {
     }
 
     /// Sub-account equivalent of `cancel_invite`.
-    pub fn cancel_subaccount_invite(env: Env, token_hash: BytesN<32>) {
-        require_admin_auth(&env);
+    pub fn cancel_subaccount_invite(env: Env, caller: Address, token_hash: BytesN<32>) {
+        require_admin_auth(&env, &caller);
         let key = DataKey::SubAccountInvite(token_hash.clone());
         if !env.storage().persistent().has(&key) {
             panic_with_error!(&env, Error::InviteNotFound);
@@ -1438,7 +1585,10 @@ impl SobreContract {
     /// disjoint identity sets.
     pub fn join_as_subaccount(env: Env, caller: Address, invite_token: BytesN<32>) {
         caller.require_auth();
-        if !env.storage().instance().has(&DataKey::Admin) {
+        // Same "initialized" gate shape as join_wallet — accept either
+        // the multi-admin key or the legacy single-admin key.
+        let inst = env.storage().instance();
+        if !inst.has(&DataKey::Admins) && !inst.has(&DataKey::Admin) {
             panic_with_error!(&env, Error::NotInitialized);
         }
         let token_hash: BytesN<32> = env.crypto().sha256(&Bytes::from(invite_token)).into();
@@ -1452,7 +1602,6 @@ impl SobreContract {
             env.storage().persistent().remove(&invite_key);
             panic_with_error!(&env, Error::InviteExpired);
         }
-        let inst = env.storage().instance();
         let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         if find_member_index(&members, &caller).is_some() {
             panic_with_error!(&env, Error::DuplicateSubAccount);
@@ -1485,8 +1634,14 @@ impl SobreContract {
     /// Admin tops up a sub-account from a specific envelope. Internal ledger
     /// transfer: debits the envelope, credits the sub. No token leaves the
     /// contract — custody stays here until the sub-account holder withdraws.
-    pub fn fund_subaccount(env: Env, envelope: Envelope, recipient: Address, amount: i128) {
-        require_admin_auth(&env);
+    pub fn fund_subaccount(
+        env: Env,
+        caller: Address,
+        envelope: Envelope,
+        recipient: Address,
+        amount: i128,
+    ) {
+        require_admin_auth(&env, &caller);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
@@ -1552,12 +1707,12 @@ impl SobreContract {
         .publish(&env);
     }
 
-    pub fn lock_subaccount(env: Env, subaccount: Address) {
-        set_subaccount_lock(&env, &subaccount, true);
+    pub fn lock_subaccount(env: Env, caller: Address, subaccount: Address) {
+        set_subaccount_lock(&env, &caller, &subaccount, true);
     }
 
-    pub fn unlock_subaccount(env: Env, subaccount: Address) {
-        set_subaccount_lock(&env, &subaccount, false);
+    pub fn unlock_subaccount(env: Env, caller: Address, subaccount: Address) {
+        set_subaccount_lock(&env, &caller, &subaccount, false);
     }
 
     /// One-shot opt-in to USDY-yielded Earn. `usdy_contract` is the SAC
@@ -1574,8 +1729,8 @@ impl SobreContract {
     /// `Balances[Savings]` cache into USDY so enabling *immediately*
     /// starts earning yield on the family's existing savings — no
     /// separate "supply" tap required.
-    pub fn earn_enable(env: Env, usdy_contract: Address) {
-        require_admin_auth(&env);
+    pub fn earn_enable(env: Env, caller: Address, usdy_contract: Address) {
+        require_admin_auth(&env, &caller);
         let inst = env.storage().instance();
         if inst.get::<_, bool>(&DataKey::EarnEnabled).unwrap_or(false) {
             panic_with_error!(&env, Error::EarnAlreadyEnabled);
@@ -1617,8 +1772,8 @@ impl SobreContract {
     /// into USDY. Normally callers don't reach for this — Savings gets
     /// auto-supplied on deposit and auto-redeemed on withdraw — but it's kept
     /// as an escape hatch for Groceries/Tuition or for post-hoc migration.
-    pub fn earn_supply(env: Env, envelope: Envelope, amount: i128) {
-        require_admin_auth(&env);
+    pub fn earn_supply(env: Env, caller: Address, envelope: Envelope, amount: i128) {
+        require_admin_auth(&env, &caller);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
@@ -1642,8 +1797,8 @@ impl SobreContract {
     /// Admin explicitly pulls `amount` USDC stroops back from USDY into
     /// `envelope`'s cache. Escape hatch — auto-redeem already covers the
     /// Savings withdraw path.
-    pub fn earn_withdraw(env: Env, envelope: Envelope, amount: i128) {
-        require_admin_auth(&env);
+    pub fn earn_withdraw(env: Env, caller: Address, envelope: Envelope, amount: i128) {
+        require_admin_auth(&env, &caller);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
@@ -1670,11 +1825,12 @@ impl SobreContract {
     /// resolves — an invalid pool traps here, not later on a supply.
     pub fn grow_enable(
         env: Env,
+        caller: Address,
         pool_id: Address,
         xlm_asset: Address,
         soroswap_router: Address,
     ) {
-        require_admin_auth(&env);
+        require_admin_auth(&env, &caller);
         let inst = env.storage().instance();
         if inst.get::<_, bool>(&DataKey::GrowEnabled).unwrap_or(false) {
             panic_with_error!(&env, Error::GrowAlreadyEnabled);
@@ -1698,8 +1854,8 @@ impl SobreContract {
     /// is short, first auto-redeems the shortfall from USDY. Then swaps
     /// USDC → XLM on Soroswap (with a 2% slippage floor) and supplies
     /// the resulting XLM to Blend under Grow's attribution.
-    pub fn grow_transfer_from_savings(env: Env, amount: i128) {
-        require_admin_auth(&env);
+    pub fn grow_transfer_from_savings(env: Env, caller: Address, amount: i128) {
+        require_admin_auth(&env, &caller);
         require_grow_enabled(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
@@ -1732,14 +1888,17 @@ impl SobreContract {
     /// against the total Grow value (cache + Blend underlying valued via
     /// current Soroswap rate) immediately — a second concurrent request
     /// that would over-commit trips InsufficientBalance upfront.
-    pub fn request_grow_withdrawal(env: Env, amount: i128) -> u64 {
-        require_admin_auth(&env);
+    pub fn request_grow_withdrawal(env: Env, caller: Address, amount: i128) -> u64 {
+        require_admin_auth(&env, &caller);
         require_grow_enabled(&env);
         if amount <= 0 {
             panic_with_error!(&env, Error::InvalidAmount);
         }
         let inst = env.storage().instance();
-        let admin: Address = inst.get(&DataKey::Admin).unwrap();
+        // Multi-admin: the requester on the request is the caller (was
+        // the single-admin address in v10). execute_grow_withdrawal
+        // will require_auth on this address, so pinning it to the caller
+        // means whichever admin queued the request also unlocks it.
         let total = grow_total_value_usdc(&env);
         let mut requests = load_grow_requests(&env);
         let reserved: i128 = requests.iter().fold(0i128, |acc, r| acc + r.amount);
@@ -1753,7 +1912,7 @@ impl SobreContract {
         let unlock_at = env.ledger().timestamp() + GROW_TIMELOCK_SECS;
         let req = GrowWithdrawRequest {
             id,
-            requester: admin.clone(),
+            requester: caller.clone(),
             amount,
             unlock_at,
         };
@@ -1762,7 +1921,7 @@ impl SobreContract {
 
         GrowRequest {
             request_id: id,
-            requester: admin,
+            requester: caller,
             amount,
             unlock_at,
         }
@@ -1881,9 +2040,7 @@ impl SobreContract {
     /// dashboard joins them client-side.
     pub fn get_state(env: Env) -> WalletState {
         let inst = env.storage().instance();
-        let admin: Address = inst
-            .get(&DataKey::Admin)
-            .unwrap_or_else(|| panic_with_error!(&env, Error::NotInitialized));
+        let admins = load_admins(&env);
         let payment_token: Address = inst.get(&DataKey::PaymentToken).unwrap();
         let members: Vec<Member> = inst.get(&DataKey::Members).unwrap();
         let balances: Vec<i128> = inst.get(&DataKey::Balances).unwrap();
@@ -1909,7 +2066,7 @@ impl SobreContract {
                 (0i128, Vec::new(&env), 0i128, 0i128)
             };
         WalletState {
-            admin,
+            admins,
             payment_token,
             members,
             balances,

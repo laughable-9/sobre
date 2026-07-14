@@ -226,7 +226,7 @@ impl Fixture {
         let token = BytesN::from_array(&self.env, &[7u8; 32]);
         let hash: BytesN<32> = self.env.crypto().sha256(&Bytes::from(token.clone())).into();
         let expires_at = self.env.ledger().sequence() + 1000;
-        self.client().create_invite(&hash, &expires_at);
+        self.client().create_invite(&self.admin, &hash, &expires_at);
         token
     }
 
@@ -236,7 +236,7 @@ impl Fixture {
         let token = BytesN::from_array(&self.env, &[marker; 32]);
         let hash: BytesN<32> = self.env.crypto().sha256(&Bytes::from(token.clone())).into();
         let expires_at = self.env.ledger().sequence() + 1000;
-        self.client().create_subaccount_invite(&hash, &expires_at);
+        self.client().create_subaccount_invite(&self.admin, &hash, &expires_at);
         token
     }
 
@@ -255,7 +255,8 @@ impl Fixture {
 fn init_seeds_admin_member_and_zero_balances() {
     let f = Fixture::new();
     let state = f.client().get_state();
-    assert_eq!(state.admin, f.admin);
+    assert_eq!(state.admins.len(), 1);
+    assert_eq!(state.admins.get(0).unwrap(), f.admin);
     assert_eq!(state.payment_token, f.payment_token);
     assert_eq!(state.members.len(), 1);
     assert_eq!(state.members.get(0).unwrap().address, f.admin);
@@ -292,7 +293,7 @@ fn join_wallet_rejects_when_at_max() {
     let t2_plain = BytesN::from_array(&f.env, &[9u8; 32]);
     let t2_hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(t2_plain.clone())).into();
     f.client()
-        .create_invite(&t2_hash, &(f.env.ledger().sequence() + 1000));
+        .create_invite(&f.admin, &t2_hash, &(f.env.ledger().sequence() + 1000));
     let m2 = Address::generate(&f.env);
     f.client().join_wallet(&m2, &t2_plain);
 }
@@ -333,7 +334,7 @@ fn create_invite_rejects_past_expiry() {
     let f = Fixture::new();
     let token = BytesN::from_array(&f.env, &[3u8; 32]);
     let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token)).into();
-    f.client().create_invite(&hash, &f.env.ledger().sequence());
+    f.client().create_invite(&f.admin, &hash, &f.env.ledger().sequence());
 }
 
 #[test]
@@ -346,8 +347,8 @@ fn cancel_invite_removes_hash_and_blocks_future_redeem() {
     let token = BytesN::from_array(&f.env, &[7u8; 32]);
     let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token.clone())).into();
     let expires = f.env.ledger().sequence() + 1000;
-    f.client().create_invite(&hash, &expires);
-    f.client().cancel_invite(&hash);
+    f.client().create_invite(&f.admin, &hash, &expires);
+    f.client().cancel_invite(&f.admin, &hash);
     let maria = Address::generate(&f.env);
     f.client().join_wallet(&maria, &token);
 }
@@ -360,7 +361,7 @@ fn cancel_invite_rejects_unknown_hash() {
     // against stale rows they thought were live.
     let f = Fixture::new();
     let bogus = BytesN::from_array(&f.env, &[0xEEu8; 32]);
-    f.client().cancel_invite(&bogus);
+    f.client().cancel_invite(&f.admin, &bogus);
 }
 
 #[test]
@@ -370,8 +371,8 @@ fn cancel_subaccount_invite_removes_hash_and_blocks_future_redeem() {
     let token = BytesN::from_array(&f.env, &[0x51u8; 32]);
     let hash: BytesN<32> = f.env.crypto().sha256(&Bytes::from(token.clone())).into();
     let expires = f.env.ledger().sequence() + 1000;
-    f.client().create_subaccount_invite(&hash, &expires);
-    f.client().cancel_subaccount_invite(&hash);
+    f.client().create_subaccount_invite(&f.admin, &hash, &expires);
+    f.client().cancel_subaccount_invite(&f.admin, &hash);
     let kid = Address::generate(&f.env);
     f.client().join_as_subaccount(&kid, &token);
 }
@@ -381,13 +382,13 @@ fn cancel_subaccount_invite_removes_hash_and_blocks_future_redeem() {
 fn cancel_subaccount_invite_rejects_unknown_hash() {
     let f = Fixture::new();
     let bogus = BytesN::from_array(&f.env, &[0xEFu8; 32]);
-    f.client().cancel_subaccount_invite(&bogus);
+    f.client().cancel_subaccount_invite(&f.admin, &bogus);
 }
 
 #[test]
 fn remove_member_drops_member_and_emits_event() {
     let (f, member) = Fixture::funded_with_member();
-    f.client().remove_member(&member);
+    f.client().remove_member(&f.admin, &member);
     let state = f.client().get_state();
     assert_eq!(state.members.len(), 1);
     assert_eq!(state.members.get(0).unwrap().address, f.admin);
@@ -397,7 +398,7 @@ fn remove_member_drops_member_and_emits_event() {
 #[should_panic(expected = "Error(Contract, #11)")]
 fn remove_member_rejects_removing_admin() {
     let f = Fixture::new();
-    f.client().remove_member(&f.admin);
+    f.client().remove_member(&f.admin, &f.admin);
 }
 
 #[test]
@@ -405,14 +406,126 @@ fn remove_member_rejects_removing_admin() {
 fn remove_member_rejects_unknown_address() {
     let f = Fixture::new();
     let nobody = Address::generate(&f.env);
-    f.client().remove_member(&nobody);
+    f.client().remove_member(&f.admin, &nobody);
+}
+
+// ── Multi-admin gate ─────────────────────────────────────────────────
+//
+// The initial admin from `init` seeds the Admins Vec. `add_admin`
+// promotes another already-registered member; the demoted admin loses
+// the ability to sign admin-only ops. `remove_admin` refuses to leave
+// the wallet with zero admins because that would brick every
+// admin-only method forever.
+
+#[test]
+fn init_seeds_admins_vec_with_initial_admin() {
+    let f = Fixture::new();
+    let state = f.client().get_state();
+    assert_eq!(state.admins.len(), 1);
+    assert_eq!(state.admins.get(0).unwrap(), f.admin);
+}
+
+#[test]
+fn add_admin_promotes_a_member() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().add_admin(&f.admin, &member);
+    let state = f.client().get_state();
+    assert_eq!(state.admins.len(), 2);
+    assert!(state.admins.contains(&f.admin));
+    assert!(state.admins.contains(&member));
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #10)")]
+fn add_admin_rejects_non_member() {
+    let f = Fixture::new();
+    let stranger = Address::generate(&f.env);
+    f.client().add_admin(&f.admin, &stranger);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #27)")]
+fn add_admin_rejects_duplicate() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().add_admin(&f.admin, &member);
+    f.client().add_admin(&f.admin, &member);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn add_admin_rejects_non_admin_caller() {
+    // Non-admin trying to call add_admin traps with NotAdmin (26) even
+    // though the target would otherwise be a valid promotion.
+    let (f, member) = Fixture::funded_with_member();
+    let other = Address::generate(&f.env);
+    f.client().add_admin(&other, &member);
+}
+
+#[test]
+fn second_admin_can_sign_admin_ops() {
+    // The whole point of multi-admin: after promotion, the new admin
+    // can drive admin-only methods on their own. Use remove_member as
+    // the canary — it requires require_admin_auth.
+    let (f, member) = Fixture::funded_with_member();
+    f.client().add_admin(&f.admin, &member);
+    // Use create_invite as the canary — it requires admin auth but
+    // doesn't touch members, so we don't need to work around MAX_MEMBERS.
+    let plain = BytesN::from_array(&f.env, &[9u8; 32]);
+    let hash: BytesN<32> = f
+        .env
+        .crypto()
+        .sha256(&Bytes::from(plain.clone()))
+        .into();
+    f.client().create_invite(
+        &member,
+        &hash,
+        &(f.env.ledger().sequence() + 1000),
+    );
+    // No panic = the second admin was accepted by require_admin_auth.
+}
+
+#[test]
+fn remove_admin_demotes_and_emits_event() {
+    let (f, member) = Fixture::funded_with_member();
+    f.client().add_admin(&f.admin, &member);
+    f.client().remove_admin(&f.admin, &member);
+    let state = f.client().get_state();
+    assert_eq!(state.admins.len(), 1);
+    assert_eq!(state.admins.get(0).unwrap(), f.admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #28)")]
+fn remove_admin_refuses_to_leave_zero_admins() {
+    let f = Fixture::new();
+    f.client().remove_admin(&f.admin, &f.admin);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #26)")]
+fn remove_admin_rejects_unknown_target() {
+    let f = Fixture::new();
+    let stranger = Address::generate(&f.env);
+    f.client().remove_admin(&f.admin, &stranger);
+}
+
+#[test]
+#[should_panic(expected = "Error(Contract, #11)")]
+fn remove_member_refuses_to_remove_a_promoted_admin() {
+    // Once promoted, `remove_member` won't drop the admin — the caller
+    // has to `remove_admin` first. Prevents a footgun where "removing
+    // the other parent as a member" silently loses on-chain admin
+    // status without an AdminRemoved event trail.
+    let (f, member) = Fixture::funded_with_member();
+    f.client().add_admin(&f.admin, &member);
+    f.client().remove_member(&f.admin, &member);
 }
 
 #[test]
 fn close_wallet_sweeps_all_envelopes_to_admin() {
     let f = Fixture::funded();
     let admin_token_before = f.token().balance(&f.admin);
-    f.client().close_wallet();
+    f.client().close_wallet(&f.admin);
     let state = f.client().get_state();
     for b in state.balances.iter() {
         assert_eq!(b, 0);
@@ -427,7 +540,7 @@ fn close_wallet_sweeps_all_envelopes_to_admin() {
 #[test]
 fn close_wallet_with_empty_balances_no_ops_cleanly() {
     let f = Fixture::new();
-    f.client().close_wallet();
+    f.client().close_wallet(&f.admin);
     assert_eq!(f.client().get_state().balances.get(0).unwrap(), 0);
 }
 
@@ -613,7 +726,7 @@ fn join_as_subaccount_rejects_when_at_max() {
 fn fund_subaccount_debits_envelope_and_credits_sub() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 10 * STROOPS_PER_TOKEN;
-    f.client().fund_subaccount(&Envelope::Groceries, &kid, &amount);
+    f.client().fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &amount);
     let state = f.client().get_state();
     assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
     assert_eq!(state.subaccounts.get(0).unwrap().balance, amount);
@@ -623,9 +736,9 @@ fn fund_subaccount_debits_envelope_and_credits_sub() {
 fn fund_subaccount_accumulates_across_envelopes() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(5 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(5 * STROOPS_PER_TOKEN));
     f.client()
-        .fund_subaccount(&Envelope::Tuition, &kid, &(3 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&f.admin, &Envelope::Tuition, &kid, &(3 * STROOPS_PER_TOKEN));
     let state = f.client().get_state();
     assert_eq!(state.balances.get(0).unwrap(), 45 * STROOPS_PER_TOKEN);
     assert_eq!(state.balances.get(1).unwrap(), 27 * STROOPS_PER_TOKEN);
@@ -638,7 +751,7 @@ fn fund_subaccount_rejects_unknown_recipient() {
     let f = Fixture::funded();
     let stranger = Address::generate(&f.env);
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &stranger, &(1 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &stranger, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -646,14 +759,14 @@ fn fund_subaccount_rejects_unknown_recipient() {
 fn fund_subaccount_rejects_envelope_underflow() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(1000 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(1000 * STROOPS_PER_TOKEN));
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #6)")]
 fn fund_subaccount_rejects_zero() {
     let (f, kid) = Fixture::funded_with_subaccount();
-    f.client().fund_subaccount(&Envelope::Groceries, &kid, &0);
+    f.client().fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &0);
 }
 
 #[test]
@@ -661,7 +774,7 @@ fn withdraw_subaccount_transfers_tokens_to_caller() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(2 * amount));
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(2 * amount));
     f.client()
         .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "snack"));
     let state = f.client().get_state();
@@ -675,8 +788,8 @@ fn withdraw_subaccount_rejects_when_locked() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(2 * amount));
-    f.client().lock_subaccount(&kid);
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(2 * amount));
+    f.client().lock_subaccount(&f.admin, &kid);
     f.client()
         .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "x"));
 }
@@ -695,7 +808,7 @@ fn withdraw_subaccount_rejects_unknown_caller() {
 fn withdraw_subaccount_rejects_over_balance() {
     let (f, kid) = Fixture::funded_with_subaccount();
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(2 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(2 * STROOPS_PER_TOKEN));
     f.client().withdraw_subaccount(
         &kid,
         &(3 * STROOPS_PER_TOKEN),
@@ -716,9 +829,9 @@ fn lock_then_unlock_restores_withdraw_ability() {
     let (f, kid) = Fixture::funded_with_subaccount();
     let amount = 5 * STROOPS_PER_TOKEN;
     f.client()
-        .fund_subaccount(&Envelope::Groceries, &kid, &(2 * amount));
-    f.client().lock_subaccount(&kid);
-    f.client().unlock_subaccount(&kid);
+        .fund_subaccount(&f.admin, &Envelope::Groceries, &kid, &(2 * amount));
+    f.client().lock_subaccount(&f.admin, &kid);
+    f.client().unlock_subaccount(&f.admin, &kid);
     f.client()
         .withdraw_subaccount(&kid, &amount, &String::from_str(&f.env, "ok"));
     assert_eq!(f.token().balance(&kid), amount);
@@ -729,7 +842,7 @@ fn lock_then_unlock_restores_withdraw_ability() {
 fn lock_subaccount_rejects_unknown_target() {
     let f = Fixture::funded();
     let stranger = Address::generate(&f.env);
-    f.client().lock_subaccount(&stranger);
+    f.client().lock_subaccount(&f.admin, &stranger);
 }
 
 // ─── Earn: MockUSDY-backed ────────────────────────────────────────────────
@@ -771,7 +884,7 @@ impl UsdyFixture {
     }
 
     fn enable_earn(&self) {
-        self.sobre.client().earn_enable(&self.usdy);
+        self.sobre.client().earn_enable(&self.sobre.admin, &self.usdy);
     }
 
     /// Reads the position for `envelope`, defaulting to zero when absent.
@@ -839,7 +952,7 @@ fn earn_enable_rejects_underlying_mismatch() {
         .address();
     let usdy = f.env.register(MockUSDY, ());
     MockUSDYClient::new(&f.env, &usdy).init(&other_token);
-    f.client().earn_enable(&usdy);
+    f.client().earn_enable(&f.admin, &usdy);
 }
 
 #[test]
@@ -847,7 +960,7 @@ fn earn_enable_rejects_underlying_mismatch() {
 fn earn_supply_rejects_when_disabled() {
     let f = Fixture::funded();
     f.client()
-        .earn_supply(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
+        .earn_supply(&f.admin, &Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -855,7 +968,7 @@ fn earn_supply_rejects_when_disabled() {
 fn earn_withdraw_rejects_when_disabled() {
     let f = Fixture::funded();
     f.client()
-        .earn_withdraw(&Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
+        .earn_withdraw(&f.admin, &Envelope::Groceries, &(5 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -863,7 +976,7 @@ fn earn_withdraw_rejects_when_disabled() {
 fn earn_supply_rejects_zero() {
     let ef = UsdyFixture::new_unfunded();
     ef.enable_earn();
-    ef.sobre.client().earn_supply(&Envelope::Groceries, &0);
+    ef.sobre.client().earn_supply(&ef.sobre.admin, &Envelope::Groceries, &0);
 }
 
 #[test]
@@ -873,7 +986,7 @@ fn earn_supply_rejects_amount_over_envelope_balance() {
     ef.enable_earn();
     ef.sobre
         .client()
-        .earn_supply(&Envelope::Groceries, &(1000 * STROOPS_PER_TOKEN));
+        .earn_supply(&ef.sobre.admin, &Envelope::Groceries, &(1000 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -882,7 +995,7 @@ fn earn_supply_debits_envelope_and_records_principal() {
     ef.enable_earn();
     // Groceries has 50 XLM; move 10 into USDY under Groceries attribution.
     let amount = 10 * STROOPS_PER_TOKEN;
-    ef.sobre.client().earn_supply(&Envelope::Groceries, &amount);
+    ef.sobre.client().earn_supply(&ef.sobre.admin, &Envelope::Groceries, &amount);
     let state = ef.sobre.client().get_state();
     assert_eq!(state.balances.get(0).unwrap(), 40 * STROOPS_PER_TOKEN);
     let pos = ef.position(Envelope::Groceries);
@@ -896,7 +1009,7 @@ fn earn_withdraw_credits_envelope_and_reduces_principal() {
     ef.enable_earn();
     // Savings' 20 XLM already migrated to USDY at enable. Withdraw half.
     let amount = 10 * STROOPS_PER_TOKEN;
-    ef.sobre.client().earn_withdraw(&Envelope::Savings, &amount);
+    ef.sobre.client().earn_withdraw(&ef.sobre.admin, &Envelope::Savings, &amount);
     let state = ef.sobre.client().get_state();
     assert_eq!(state.balances.get(2).unwrap(), amount);
     let pos = ef.position(Envelope::Savings);
@@ -911,7 +1024,7 @@ fn earn_withdraw_rejects_when_no_position() {
     ef.enable_earn();
     ef.sobre
         .client()
-        .earn_withdraw(&Envelope::Groceries, &(1 * STROOPS_PER_TOKEN));
+        .earn_withdraw(&ef.sobre.admin, &Envelope::Groceries, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -926,8 +1039,8 @@ fn earn_supply_then_withdraw_round_trips_principal() {
     let ef = UsdyFixture::new();
     ef.enable_earn();
     let amount = 25 * STROOPS_PER_TOKEN;
-    ef.sobre.client().earn_supply(&Envelope::Groceries, &amount);
-    ef.sobre.client().earn_withdraw(&Envelope::Groceries, &amount);
+    ef.sobre.client().earn_supply(&ef.sobre.admin, &Envelope::Groceries, &amount);
+    ef.sobre.client().earn_withdraw(&ef.sobre.admin, &Envelope::Groceries, &amount);
     let state = ef.sobre.client().get_state();
     // Groceries cache restored (deposit put 50 in, supply moved 25 out, withdraw moved 25 back).
     assert_eq!(state.balances.get(0).unwrap(), 50 * STROOPS_PER_TOKEN);
@@ -943,8 +1056,8 @@ fn earn_supply_isolates_per_envelope_bookkeeping() {
     ef.enable_earn();
     let a = 10 * STROOPS_PER_TOKEN;
     let b = 15 * STROOPS_PER_TOKEN;
-    ef.sobre.client().earn_supply(&Envelope::Groceries, &a);
-    ef.sobre.client().earn_supply(&Envelope::Tuition, &b);
+    ef.sobre.client().earn_supply(&ef.sobre.admin, &Envelope::Groceries, &a);
+    ef.sobre.client().earn_supply(&ef.sobre.admin, &Envelope::Tuition, &b);
     let pg = ef.position(Envelope::Groceries);
     let pt = ef.position(Envelope::Tuition);
     assert_eq!(pg.principal, a);
@@ -962,10 +1075,10 @@ fn earn_withdraw_cannot_drain_sibling_envelope() {
     // withdraw from Tuition — must reject rather than dip into Groceries'.
     ef.sobre
         .client()
-        .earn_supply(&Envelope::Groceries, &(10 * STROOPS_PER_TOKEN));
+        .earn_supply(&ef.sobre.admin, &Envelope::Groceries, &(10 * STROOPS_PER_TOKEN));
     ef.sobre
         .client()
-        .earn_withdraw(&Envelope::Tuition, &(1 * STROOPS_PER_TOKEN));
+        .earn_withdraw(&ef.sobre.admin, &Envelope::Tuition, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -1035,7 +1148,7 @@ fn fund_subaccount_from_savings_auto_withdraws_from_usdy() {
     ef.sobre.client().join_as_subaccount(&kid, &token);
     ef.sobre
         .client()
-        .fund_subaccount(&Envelope::Savings, &kid, &(7 * STROOPS_PER_TOKEN));
+        .fund_subaccount(&ef.sobre.admin, &Envelope::Savings, &kid, &(7 * STROOPS_PER_TOKEN));
     let state = ef.sobre.client().get_state();
     // Post-fund the auto-redeem left the cache at 0 (redeemed exactly the
     // shortfall, then the fund debited it right back to 0).
@@ -1051,7 +1164,7 @@ fn close_wallet_sweeps_usdy_positions_when_earn_on() {
     let ef = UsdyFixture::new();
     ef.enable_earn();
     let admin_before = ef.sobre.token().balance(&ef.sobre.admin);
-    ef.sobre.client().close_wallet();
+    ef.sobre.client().close_wallet(&ef.sobre.admin);
     // Contract's payment-token balance goes to zero; admin receives the sum.
     assert_eq!(ef.sobre.token().balance(&ef.sobre.contract_id), 0);
     assert_eq!(
@@ -1165,7 +1278,7 @@ impl GrowFixture {
     }
 
     fn enable_grow(&self) {
-        self.usdy.sobre.client().grow_enable(
+        self.usdy.sobre.client().grow_enable(&self.usdy.sobre.admin, 
             &self.blend_pool,
             &self.xlm_asset,
             &self.soroswap_router,
@@ -1210,7 +1323,7 @@ fn grow_transfer_from_savings_supplies_via_soroswap_and_blend() {
     gf.enable_grow();
     // Savings has 20 USDC after Fixture::funded. Move 15 into Grow.
     let amount = 15 * STROOPS_PER_TOKEN;
-    gf.sobre().client().grow_transfer_from_savings(&amount);
+    gf.sobre().client().grow_transfer_from_savings(&gf.sobre().admin, &amount);
     let state = gf.sobre().client().get_state();
     // Savings cache drops from 20 → 5.
     assert_eq!(state.balances.get(2).unwrap(), 5 * STROOPS_PER_TOKEN);
@@ -1225,7 +1338,7 @@ fn grow_transfer_from_savings_supplies_via_soroswap_and_blend() {
 #[should_panic(expected = "Error(Contract, #23)")]
 fn grow_transfer_rejects_when_disabled() {
     let f = Fixture::funded();
-    f.client().grow_transfer_from_savings(&(1 * STROOPS_PER_TOKEN));
+    f.client().grow_transfer_from_savings(&f.admin, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -1233,7 +1346,7 @@ fn grow_transfer_rejects_when_disabled() {
 fn grow_transfer_rejects_zero() {
     let gf = GrowFixture::new();
     gf.enable_grow();
-    gf.sobre().client().grow_transfer_from_savings(&0);
+    gf.sobre().client().grow_transfer_from_savings(&gf.sobre().admin, &0);
 }
 
 #[test]
@@ -1243,7 +1356,7 @@ fn grow_transfer_rejects_over_savings_balance() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(1000 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(1000 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -1252,11 +1365,11 @@ fn grow_request_queues_and_reserves_amount() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(15 * STROOPS_PER_TOKEN));
     let id = gf
         .sobre()
         .client()
-        .request_grow_withdrawal(&(5 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(5 * STROOPS_PER_TOKEN));
     let state = gf.sobre().client().get_state();
     assert_eq!(state.grow_requests.len(), 1);
     let r = state.grow_requests.get(0).unwrap();
@@ -1276,22 +1389,22 @@ fn grow_request_rejects_when_reservations_exceed_balance() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(15 * STROOPS_PER_TOKEN));
     // First request reserves 10; second attempt requests 10 more, but the
     // bucket only has ~15 USDC-equivalent (minus a small rounding delta).
     gf.sobre()
         .client()
-        .request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(10 * STROOPS_PER_TOKEN));
     gf.sobre()
         .client()
-        .request_grow_withdrawal(&(10 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(10 * STROOPS_PER_TOKEN));
 }
 
 #[test]
 #[should_panic(expected = "Error(Contract, #23)")]
 fn grow_request_rejects_when_disabled() {
     let f = Fixture::funded();
-    f.client().request_grow_withdrawal(&(1 * STROOPS_PER_TOKEN));
+    f.client().request_grow_withdrawal(&f.admin, &(1 * STROOPS_PER_TOKEN));
 }
 
 #[test]
@@ -1301,11 +1414,11 @@ fn grow_execute_rejects_before_unlock() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(15 * STROOPS_PER_TOKEN));
     let id = gf
         .sobre()
         .client()
-        .request_grow_withdrawal(&(5 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(5 * STROOPS_PER_TOKEN));
     // Same-ledger execute before the 48h wait — must trap.
     gf.sobre().client().execute_grow_withdrawal(&id);
 }
@@ -1317,8 +1430,8 @@ fn grow_execute_at_unlock_transfers_usdc_and_clears_request() {
     let amount = 5 * STROOPS_PER_TOKEN;
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
-    let id = gf.sobre().client().request_grow_withdrawal(&amount);
+        .grow_transfer_from_savings(&gf.sobre().admin, &(15 * STROOPS_PER_TOKEN));
+    let id = gf.sobre().client().request_grow_withdrawal(&gf.sobre().admin, &amount);
     let admin_before = gf.sobre().token().balance(&gf.sobre().admin);
     gf.sobre()
         .env
@@ -1348,11 +1461,11 @@ fn grow_cancel_clears_request_before_unlock() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(15 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(15 * STROOPS_PER_TOKEN));
     let id = gf
         .sobre()
         .client()
-        .request_grow_withdrawal(&(5 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(5 * STROOPS_PER_TOKEN));
     gf.sobre().client().cancel_grow_withdrawal(&id);
     let state = gf.sobre().client().get_state();
     assert_eq!(state.grow_requests.len(), 0);
@@ -1372,15 +1485,15 @@ fn grow_execute_after_multiple_requests_only_clears_target() {
     gf.enable_grow();
     gf.sobre()
         .client()
-        .grow_transfer_from_savings(&(20 * STROOPS_PER_TOKEN));
+        .grow_transfer_from_savings(&gf.sobre().admin, &(20 * STROOPS_PER_TOKEN));
     let id1 = gf
         .sobre()
         .client()
-        .request_grow_withdrawal(&(3 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(3 * STROOPS_PER_TOKEN));
     let id2 = gf
         .sobre()
         .client()
-        .request_grow_withdrawal(&(5 * STROOPS_PER_TOKEN));
+        .request_grow_withdrawal(&gf.sobre().admin, &(5 * STROOPS_PER_TOKEN));
     gf.sobre()
         .env
         .ledger()
@@ -1505,7 +1618,7 @@ fn grow_transfer_from_savings_auto_redeems_usdy_when_short() {
     let state_before = gf.sobre().client().get_state();
     assert_eq!(state_before.balances.get(2).unwrap(), 0);
     let amount = 10 * STROOPS_PER_TOKEN;
-    gf.sobre().client().grow_transfer_from_savings(&amount);
+    gf.sobre().client().grow_transfer_from_savings(&gf.sobre().admin, &amount);
     let state = gf.sobre().client().get_state();
     // Savings USDY principal drops from 20 → 10.
     let pos = gf.usdy.position(Envelope::Savings);

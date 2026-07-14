@@ -224,3 +224,25 @@ export function formatCurrencyLocale(
     maximumFractionDigits: 2,
   })}`;
 }
+
+/** Adaptive-precision formatter for interest micro-accrual. Under 1
+ *  cent of display currency, expands to 6 decimal places so the value
+ *  still reads as non-zero — a fresh Earn/Grow position that hasn't
+ *  had time to accrue a full cent otherwise displays as "$0.00" even
+ *  though the underlying stroops are strictly positive, which reads
+ *  as "broken" instead of "penny still cooking". Above 1 cent, falls
+ *  through to normal 2-decimal money display. */
+export function formatInterestCurrencyLocale(
+  stroops: bigint,
+  currency: "PHP" | "USD",
+): string {
+  const usd = stroopsToUsdc(stroops);
+  const displayVal = currency === "USD" ? usd : usd * PHP_PER_USDC;
+  const decimals = displayVal > 0 && displayVal < 0.01 ? 6 : 2;
+  const symbol = currency === "USD" ? "$" : "₱";
+  const locale = currency === "USD" ? "en-US" : "en-PH";
+  return `${symbol}${displayVal.toLocaleString(locale, {
+    minimumFractionDigits: decimals,
+    maximumFractionDigits: decimals,
+  })}`;
+}

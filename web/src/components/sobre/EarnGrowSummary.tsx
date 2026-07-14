@@ -6,7 +6,7 @@ import type { WalletState } from "@/hooks/useWalletState";
 import { EARN_APY_LABEL, GROW_APY_LABEL, STROOPS_PER_USDC } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
-import { formatCurrencyLocale } from "@/lib/format";
+import { formatInterestCurrencyLocale } from "@/lib/format";
 import { envelopeTotalStroops, growTotalStroops } from "@/lib/walletTotals";
 
 /**
@@ -164,7 +164,7 @@ function YieldCard({
         <div className="sobre-yield-interest">
           Interest earned{" "}
           <span className="tabular">
-            {formatCurrencyLocale(interest, currency)}
+            {formatInterestCurrencyLocale(interest, currency)}
           </span>
         </div>
       ) : null}

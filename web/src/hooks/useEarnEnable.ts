@@ -36,7 +36,10 @@ export function useEarnEnable(
     setPending(true);
     setError(null);
     try {
-      const args = [Address.fromString(MOCK_USDY_ID).toScVal()];
+      const args = [
+        Address.fromString(userAddress).toScVal(),
+        Address.fromString(MOCK_USDY_ID).toScVal(),
+      ];
       const { hash } = await invokeWrite(contractId, "earn_enable", args);
       setLastHash(hash);
       return hash;

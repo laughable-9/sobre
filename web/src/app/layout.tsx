@@ -3,6 +3,7 @@ import { Fraunces, Geist_Mono, Inter, Manrope } from "next/font/google";
 import "./globals.css";
 
 import { EnvelopeTransition } from "@/components/sobre/EnvelopeTransition";
+import { LOGO_SRC } from "@/lib/config";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -32,7 +33,7 @@ const geistMono = Geist_Mono({
 });
 
 const SITE = "https://sobre-mocha.vercel.app";
-const TITLE = "Sobre: joint wallets for OFW families";
+const TITLE = "Sobre";
 const DESC =
   "Remittances auto-split into named envelopes the moment they land. Both members see the same balances in real time, on Stellar.";
 
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: TITLE,
   description: DESC,
-  icons: [{ rel: "icon", url: "/sobre-logo2.svg" }],
+  icons: [{ rel: "icon", url: LOGO_SRC }],
   openGraph: {
     title: TITLE,
     description: DESC,

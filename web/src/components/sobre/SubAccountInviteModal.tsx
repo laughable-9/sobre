@@ -8,6 +8,9 @@ import { INVITE_TTL_MINUTES } from "@/hooks/useCreateInvite";
 import { useCreateSubaccountInvite } from "@/hooks/useCreateSubaccountInvite";
 
 interface Props {
+  /** Signing admin's smart-wallet C-address; passed to the on-chain
+   *  create_subaccount_invite so the multi-admin gate accepts it. */
+  adminAddress: string;
   contractId: string;
   familyWalletId: string | null;
   onClose: () => void;
@@ -20,6 +23,7 @@ interface Props {
  * insert happens in the same call so the URL ships ready to redeem.
  */
 export function SubAccountInviteModal({
+  adminAddress,
   contractId,
   familyWalletId,
   onClose,
@@ -28,6 +32,7 @@ export function SubAccountInviteModal({
   const [copied, setCopied] = useState(false);
 
   const { createInvite, pending, error } = useCreateSubaccountInvite(
+    adminAddress,
     contractId,
     familyWalletId,
   );

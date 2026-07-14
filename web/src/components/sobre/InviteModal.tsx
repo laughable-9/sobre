@@ -17,6 +17,7 @@ export interface InviteSuggestion {
 
 export function InviteModal({
   walletName,
+  adminAddress,
   contractId,
   familyWalletId,
   createdByWalletId,
@@ -26,6 +27,10 @@ export function InviteModal({
   onClose,
 }: {
   walletName: string;
+  /** Signing admin's smart-wallet C-address. Threaded through so the
+   *  on-chain create_invite call carries the right caller for the
+   *  multi-admin gate. */
+  adminAddress: string;
   contractId: string;
   /** family_wallets.id — required so admin-role invites can persist their
    *  Supabase hint row. Non-admin (generic member) invites don't touch
@@ -52,7 +57,10 @@ export function InviteModal({
   const [genericUrl, setGenericUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState<string | null>(null);
   const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const { createInvite, pending, error } = useCreateInvite(contractId);
+  const { createInvite, pending, error } = useCreateInvite(
+    adminAddress,
+    contractId,
+  );
 
   const copy = async (value: string, tag: string) => {
     try {

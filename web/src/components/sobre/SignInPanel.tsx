@@ -36,7 +36,7 @@ export function SignInPanel({
   if (status === "checking" || status === "creating") {
     return (
       <p style={{ color: "var(--text-2)" }}>
-        {status === "creating" ? "Setting up your wallet…" : "Loading…"}
+        Loading…
       </p>
     );
   }

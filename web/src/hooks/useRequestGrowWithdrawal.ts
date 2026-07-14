@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 
@@ -34,7 +34,10 @@ export function useRequestGrowWithdrawal(
       setPending(true);
       setError(null);
       try {
-        const args = [nativeToScVal(amountStroops, { type: "i128" })];
+        const args = [
+          Address.fromString(userAddress).toScVal(),
+          nativeToScVal(amountStroops, { type: "i128" }),
+        ];
         const { hash, returnValue } = await invokeWrite(
           contractId,
           "request_grow_withdrawal",

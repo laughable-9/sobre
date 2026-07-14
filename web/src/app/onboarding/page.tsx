@@ -31,6 +31,7 @@ import {
   createFamilyWallet,
   deriveFamilyName,
 } from "@/lib/familyWallets";
+import { LOGO_SRC } from "@/lib/config";
 import { initialsOf } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -241,7 +242,7 @@ export default function OnboardingFlow() {
 
   async function handleCreate() {
     if (!wallet || !session) {
-      setSetupError("Sign in is required before creating a family wallet.");
+      setSetupError("Sign in is required before creating a Sobre.");
       setSetupStatus("error");
       return;
     }
@@ -311,7 +312,7 @@ export default function OnboardingFlow() {
           <>
             <GoogleCta onClick={handleGoogleSignIn} disabled={busy}>
               <GoogleG size={18} />
-              {busy ? "Setting up your wallet…" : "Continue with Google"}
+              {busy ? "Setting up your Sobre…" : "Continue with Google"}
             </GoogleCta>
             {authError && (
               <p
@@ -586,11 +587,11 @@ export default function OnboardingFlow() {
         <>
           <PrimaryCta onClick={busy ? () => undefined : handleCreate}>
             {busy ? (
-              "Creating your family wallet…"
+              "Creating your Sobre…"
             ) : (
               <>
                 <PaperPlaneTiltIcon weight="bold" size={16} />
-                Create wallet
+                Create Sobre
               </>
             )}
           </PrimaryCta>
@@ -955,7 +956,7 @@ function WelcomeHero() {
     <div className="flex h-full flex-col items-center text-center">
       <div className="min-h-[24px] flex-1" />
       <Image
-        src="/sobre-logo2.svg"
+        src={LOGO_SRC}
         alt="Sobre"
         width={84}
         height={84}

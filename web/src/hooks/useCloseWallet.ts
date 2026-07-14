@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { Address } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 
@@ -32,7 +33,7 @@ export function useCloseWallet(
       const { hash } = await invokeWrite(
         contractId,
         "close_wallet",
-        [],
+        [Address.fromString(adminAddress).toScVal()],
       );
       return hash;
     } catch (e) {

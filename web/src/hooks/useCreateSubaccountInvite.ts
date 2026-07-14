@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { xdr } from "@stellar/stellar-sdk";
+import { Address, xdr } from "@stellar/stellar-sdk";
 
 import { getServer, invokeWrite } from "@/lib/contract";
 import {
@@ -38,6 +38,7 @@ export interface UseCreateSubaccountInviteResult {
  * for ~30 min — admin can retry. We surface a clear error noting that.
  */
 export function useCreateSubaccountInvite(
+  adminAddress: string | null,
   contractId: string | null,
   familyWalletId: string | null,
 ): UseCreateSubaccountInviteResult {
@@ -46,6 +47,7 @@ export function useCreateSubaccountInvite(
 
   const createInvite = useCallback(
     async (): Promise<CreateInviteResult> => {
+      if (!adminAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
       if (!familyWalletId) throw new Error("Family wallet record missing.");
       setPending(true);
@@ -59,6 +61,7 @@ export function useCreateSubaccountInvite(
         const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
 
         const args = [
+          Address.fromString(adminAddress).toScVal(),
           xdr.ScVal.scvBytes(Buffer.from(tokenHashBytes)),
           xdr.ScVal.scvU32(expiresAtLedger),
         ];
@@ -96,7 +99,7 @@ export function useCreateSubaccountInvite(
         setPending(false);
       }
     },
-    [contractId, familyWalletId],
+    [adminAddress, contractId, familyWalletId],
   );
 
   return { createInvite, pending, error };

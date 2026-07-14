@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { nativeToScVal } from "@stellar/stellar-sdk";
+import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 
@@ -33,7 +33,10 @@ export function useGrowTransferFromSavings(
       setPending(true);
       setError(null);
       try {
-        const args = [nativeToScVal(amountStroops, { type: "i128" })];
+        const args = [
+          Address.fromString(userAddress).toScVal(),
+          nativeToScVal(amountStroops, { type: "i128" }),
+        ];
         const { hash } = await invokeWrite(
           contractId,
           "grow_transfer_from_savings",

@@ -15,8 +15,8 @@ import { registerFlyoutTrigger } from "@/hooks/useEnvelopeTransition";
  * Plain orange page-transition overlay. Mounted once in the root layout so it
  * survives route changes and can animate over the destination.
  *
- * A CTA calls `playFlyout(href)` (from `useEnvelopeTransition`) → an orange
- * panel with the brand line "Isang sobre. Isang pamilya." sweeps in to COVER,
+ * A CTA calls `playFlyout(href)` (from `useEnvelopeTransition`) → a green
+ * panel with the brand line "One Sobre. One Family." sweeps in to COVER,
  * holds while the destination route mounts (so a slow connection never reveals
  * a blank page), then sweeps away to REVEAL the dashboard.
  *
@@ -31,8 +31,10 @@ import { registerFlyoutTrigger } from "@/hooks/useEnvelopeTransition";
 type Phase = "idle" | "cover" | "reveal";
 
 // Hard ceiling on how long we hold the cover waiting for a slow/stalled route
-// so the user is never trapped under the orange. Reveals anyway after this.
-const MAX_COVER_MS = 4000;
+// so the user is never trapped under the cover. Reveals anyway after this.
+// Sized for the dashboard: initial mount does Supabase auth + wallets query +
+// on-chain get_state simulation before the skeleton settles.
+const MAX_COVER_MS = 8000;
 
 export function EnvelopeTransition() {
   const router = useRouter();
@@ -127,9 +129,9 @@ export function EnvelopeTransition() {
       {/* Plain orange cover with the brand line. Sweeps in to cover, holds while
           the route loads, then sweeps away to reveal — no envelope graphics. */}
       <p className="sobre-cover-text">
-        Isang sobre.
+        One Sobre.
         <br />
-        Isang pamilya.
+        One Family.
       </p>
     </div>
   );

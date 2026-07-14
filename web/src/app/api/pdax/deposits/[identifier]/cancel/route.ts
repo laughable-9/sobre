@@ -42,53 +42,12 @@ export async function POST(
 
   const admin = getSupabaseAdmin();
 
-  // Pre-check: did PDAX already receive the PHP? If so, we MUST NOT
-  // cancel — doing so leaves the institution balance with money the
-  // user paid for but our pipeline never converts to XLM. Returns 409
-  // so the client can show a "Already paid, completing your deposit"
-  // toast and let poll-status take over.
-  //
-  // Only relevant for status='pending'. funded/credited mean we've
-  // already moved money in our system, and PDAX is no longer the
-  // source of truth for "was this paid".
-  try {
-    const { data: existing } = await admin
-      .from("pdax_deposits")
-      .select("status")
-      .eq("identifier", identifier)
-      .single();
-    if (existing && (existing as { status: string }).status === "pending") {
-      const tx = await getPdaxFiatTx(identifier, "CashIn");
-      if (tx && tx.status === "COMPLETED") {
-        return NextResponse.json(
-          {
-            error: "Payment already received. Cancel refused.",
-            code: "already_paid",
-          },
-          { status: 409 },
-        );
-      }
-    }
-  } catch (e) {
-    // PDAX errored — fail safe. Without a confirmed COMPLETED signal we
-    // proceed with the cancel; the 90s staleness check would mark it
-    // failed anyway if PDAX never surfaces it. Log so we notice
-    // patterns, but don't block.
-    if (e instanceof PdaxError) {
-      console.warn(
-        "[deposit cancel] PDAX pre-check errored:",
-        e.status,
-        JSON.stringify(e.body),
-      );
-    }
-  }
-
-  // Read the row + its claim state. The cancel-vs-trade race is guarded
-  // by withdraw_tx_hash: poll-status sets it to `claiming:<ISO>` before
-  // calling kickOffPdaxWithdraw, so a concurrent cancel here is refused
-  // while the external PDAX trade is in flight (preventing a failed
-  // row with stranded XLM at the relay). A STALE claim (>60s old) is
-  // treated as null — the original handler died, so cancel can proceed.
+  // Read the row FIRST so we can enforce membership + rate limit BEFORE
+  // touching PDAX. Reordered from the previous version, which called
+  // getPdaxFiatTx on an unauthenticated caller — that let anyone with a
+  // leaked identifier distinguish "already paid" (409) from other
+  // statuses (401) via error shape and burn PDAX API quota without ever
+  // passing our rate-limit gate.
   const { data: row } = await admin
     .from("pdax_deposits")
     .select("family_wallet_id, status, withdraw_tx_hash")
@@ -114,6 +73,42 @@ export async function POST(
     perFamily: 60,
   });
   if (rate) return rate;
+
+  // Pre-check: did PDAX already receive the PHP? If so, we MUST NOT
+  // cancel — doing so leaves the institution balance with money the
+  // user paid for but our pipeline never converts to XLM. Returns 409
+  // so the client can show a "Already paid, completing your deposit"
+  // toast and let poll-status take over.
+  //
+  // Only relevant for status='pending'. funded/credited mean we've
+  // already moved money in our system, and PDAX is no longer the
+  // source of truth for "was this paid".
+  if (r.status === "pending") {
+    try {
+      const tx = await getPdaxFiatTx(identifier, "CashIn");
+      if (tx && tx.status === "COMPLETED") {
+        return NextResponse.json(
+          {
+            error: "Payment already received. Cancel refused.",
+            code: "already_paid",
+          },
+          { status: 409 },
+        );
+      }
+    } catch (e) {
+      // PDAX errored — fail safe. Without a confirmed COMPLETED signal we
+      // proceed with the cancel; the 90s staleness check would mark it
+      // failed anyway if PDAX never surfaces it. Log so we notice
+      // patterns, but don't block.
+      if (e instanceof PdaxError) {
+        console.warn(
+          "[deposit cancel] PDAX pre-check errored:",
+          e.status,
+          JSON.stringify(e.body),
+        );
+      }
+    }
+  }
 
   if (r.status !== "pending") {
     return NextResponse.json({ ok: true, noChange: true, status: r.status });

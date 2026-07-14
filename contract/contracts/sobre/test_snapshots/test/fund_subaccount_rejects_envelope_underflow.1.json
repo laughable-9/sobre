@@ -106,6 +106,9 @@
               "function_name": "create_subaccount_invite",
               "args": [
                 {
+                  "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                },
+                {
                   "bytes": "de1349c105ffe29ab10b68492986aa6c081672d045b02d474570fbf5bda3a40d"
                 },
                 {
@@ -272,12 +275,16 @@
                       "key": {
                         "vec": [
                           {
-                            "symbol": "Admin"
+                            "symbol": "Admins"
                           }
                         ]
                       },
                       "val": {
-                        "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                        "vec": [
+                          {
+                            "address": "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAHK3M"
+                          }
+                        ]
                       }
                     },
                     {
