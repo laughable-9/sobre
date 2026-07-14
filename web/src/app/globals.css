@@ -905,7 +905,6 @@
    on the sides so the row doesn't kiss the screen edge. */
 @media (max-width: 760px) {
   .sobre-container { padding: 0 20px; }
-  .sobre-nav-link-text { display: none; }
   .sobre-nav-links { gap: 10px; }
   .sobre-nav-inner { padding-top: 14px; padding-bottom: 14px; }
   .sobre-brand-name { display: none; }
@@ -918,15 +917,9 @@
   }
   .sobre-wallet-menu-pill { padding: 7px 10px; font-size: 12.5px; }
   /* The " Sobre" tail is a nested <span> inside the "Open Sobre" CTA — hide
-     it here so the button reads just "Open" on phones, keeping the pill nav
-     from wrapping onto two rows. Same trick swaps "Continue with Google" for
-     "Sign in" on the signed-out CTA. */
+     it so the button reads just "Open" on phones, keeping the pill nav from
+     wrapping onto two rows. */
   .sobre-btn-nav .sobre-btn-nav-tail { display: none; }
-  .sobre-btn-signin-full { display: none; }
-}
-/* Desktop hides the short version so "Continue with Google" reads in full. */
-@media (min-width: 761px) {
-  .sobre-btn-signin-short { display: none; }
 }
 /* Very narrow phones: tighten the nav further but keep the wordmark — hiding
    it left the row looking lopsided. The brand anchor never shrinks; the nav
@@ -1173,7 +1166,10 @@
 }
 .sobre-hero-cta:active { transform: translateY(0); }
 @media (max-width: 960px) {
-  .sobre-hero { min-height: auto; padding: 48px 24px 40px; }
+  /* Keep the hero eating a big share of the viewport at smaller widths so it
+   * still feels like an opening statement instead of a header + one paragraph
+   * that immediately drops into the next section. */
+  .sobre-hero { min-height: 80vh; padding: 48px 24px 40px; }
   .sobre-hero-headline { font-size: clamp(32px, 9vw, 52px); }
 }
 
