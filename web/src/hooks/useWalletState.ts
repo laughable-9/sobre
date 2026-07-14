@@ -223,6 +223,13 @@ export function useWalletState(
       setError(null);
     } catch (e) {
       if (gen !== generationRef.current) return;
+      // Reset the stale-ledger tracker so the next successful sim is
+      // accepted regardless of what ledger it reports. Without this, a
+      // 5xx followed by a lagging replica's older-ledger success would
+      // silently return at line 214 and the on-chain state stayed frozen
+      // — new deposits + splits invisible until a page refresh.
+      lastLedgerRef.current = 0;
+      lastRetvalXdrRef.current = null;
       setError(e instanceof Error ? e.message : String(e));
     } finally {
       if (gen === generationRef.current && isInitialFetch) setLoading(false);
