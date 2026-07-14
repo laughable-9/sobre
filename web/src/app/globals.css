@@ -2086,13 +2086,6 @@ body { overflow-x: clip; min-width: 320px; }
   margin: 0;
   font-size: clamp(36px, 8vw, 52px);
 }
-.sobre-signin-body {
-  color: var(--text-2);
-  font-size: 16px;
-  line-height: 1.55;
-  margin: -8px 0 0;
-  max-width: 22rem;
-}
 .sobre-signin-cta {
   width: 100%;
   min-height: 52px;
