@@ -45,8 +45,13 @@ export function BalanceHero({
         <AnimatedNumber
           value={totalDisplay}
           format={(n) => {
-            const whole = Math.floor(n).toLocaleString("en-PH");
-            const cents = Math.abs(n).toFixed(2).split(".")[1];
+            // Round to cents FIRST so whole and cents come from the same
+            // rounded number — otherwise `Math.floor(n)` and `n.toFixed(2)`
+            // disagree at float boundaries (n=4999.999 → whole "4,999",
+            // cents "00" → renders as "4,999.00" instead of "5,000.00").
+            const rounded = Math.round(Math.abs(n) * 100) / 100;
+            const whole = Math.floor(rounded).toLocaleString("en-PH");
+            const cents = rounded.toFixed(2).split(".")[1];
             return (
               <>
                 {showUsd ? "$" : "₱"}
