@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import {
@@ -15,7 +15,7 @@ import {
 } from "@phosphor-icons/react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { LOGO_SRC, PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
+import { LOGO_SRC } from "@/lib/config";
 import { LandingHeader } from "@/components/sobre/LandingHeader";
 import { OpenSobreButton } from "@/components/sobre/OpenSobreButton";
 import { Reveal } from "@/components/sobre/Reveal";
@@ -23,10 +23,11 @@ import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
 
 /**
- * Sample household state for the landing page's product preview — ₱10,000
- * in, split 50/30/20. Feeds the real dashboard components (BalanceHero,
- * EnvelopeSplitCard) so the marketing preview always matches the actual
- * in-app design, not a hand-rolled lookalike.
+ * Sample household state for the landing page's product preview — 50/30/20
+ * across Groceries / Tuition / Savings. Feeds the real dashboard components
+ * (BalanceHero, EnvelopeSplitCard) so the marketing preview always matches
+ * the actual in-app design, not a hand-rolled lookalike. `balances` is set
+ * by each consumer (SplitVisual animates its own values).
  */
 const PREVIEW_STATE: WalletState = {
   admins: [],
@@ -36,9 +37,7 @@ const PREVIEW_STATE: WalletState = {
   envelope_icons: [],
   percents: [50, 30, 20],
   members: [],
-  balances: [5000, 3000, 2000].map((php) =>
-    BigInt(Math.round((php / PHP_PER_USDC) * STROOPS_PER_USDC)),
-  ),
+  balances: [0n, 0n, 0n],
   subaccounts: [],
   policy: {
     requireAllSigs: false,
@@ -56,6 +55,73 @@ const PREVIEW_STATE: WalletState = {
   grow_withdrawn_total: 0n,
   grow_requests: [],
 };
+
+/** Fire once when `ref`'s element intersects the viewport. Returns a ref
+ *  to attach + the current in-view boolean. */
+function useInView<T extends HTMLElement>() {
+  const ref = useRef<T | null>(null);
+  const [inView, setInView] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === "undefined") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setInView(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            setInView(true);
+            io.disconnect();
+            return;
+          }
+        }
+      },
+      { rootMargin: "0px 0px -15% 0px", threshold: 0.2 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return [ref, inView] as const;
+}
+
+/** Animate a scalar from 0→1 over `durationMs` after `active` flips true.
+ *  Callers apply their own easing on the returned progress. */
+function useTween(active: boolean, durationMs: number, delayMs = 0) {
+  const [progress, setProgress] = useState(0);
+  useEffect(() => {
+    if (!active) return;
+    let raf = 0;
+    let start = 0;
+    const step = (now: number) => {
+      if (start === 0) start = now + delayMs;
+      // Still inside the pre-start delay window — schedule the next frame
+      // without a setState so React doesn't rerender for a value that's
+      // still 0.
+      if (now < start) {
+        raf = requestAnimationFrame(step);
+        return;
+      }
+      const t = Math.min(1, (now - start) / durationMs);
+      setProgress(t);
+      if (t < 1) raf = requestAnimationFrame(step);
+    };
+    raf = requestAnimationFrame(step);
+    return () => cancelAnimationFrame(raf);
+  }, [active, durationMs, delayMs]);
+  return progress;
+}
+
+const easeOutCubic = (t: number) => 1 - Math.pow(1 - t, 3);
+const easeOutQuart = (t: number) => 1 - Math.pow(1 - t, 4);
+
+function tweenBig(progress: number, target: bigint): bigint {
+  if (progress <= 0) return 0n;
+  if (progress >= 1) return target;
+  return (target * BigInt(Math.round(progress * 1_000_000))) / 1_000_000n;
+}
 
 const STATS = [
   {
@@ -385,19 +451,68 @@ function FeatureCopy({
   );
 }
 
+// Stroop targets calibrated so BalanceHero / EnvelopeSplitCard renders
+// hit clean-integer displays through the float drift in their
+// floor(stroops × PHP_PER_USDC / 1e10) formatter:
+//   - Total 1,607,588,000 stroops   → ₱10,000.00 exactly
+//   - Groceries   803,794,000       → ₱5,000.00
+//   - Tuition     482,276,400       → ₱3,000.00
+//   - Savings     321,517,600       → ₱2,000.00
+const TOTAL_STROOPS_TARGET = 1_607_588_000n;
+const G_STROOPS_TARGET = 803_794_000n;
+const T_STROOPS_TARGET = 482_276_400n;
+const S_STROOPS_TARGET = 321_517_600n;
+
+const PREVIEW_TOTAL_STATE: WalletState = {
+  ...PREVIEW_STATE,
+  balances: [TOTAL_STROOPS_TARGET, 0n, 0n],
+};
+
 function SplitVisual() {
+  const [ref, inView] = useInView<HTMLDivElement>();
+  // Total stays fixed at ₱10,000.00 from the moment the section enters
+  // view. Each envelope row's number counts up 0 → target over a short
+  // 400ms tween with a hard ease-out — quick enough to feel like a
+  // "landing" not a slow tick — and the three rows fire in sequence
+  // so the viewer reads each one as it arrives.
+  const gP = easeOutQuart(useTween(inView, 400, 300));
+  const tP = easeOutQuart(useTween(inView, 400, 900));
+  const sP = easeOutQuart(useTween(inView, 400, 1500));
+  const envelopeState = useMemo<WalletState>(
+    () => ({
+      ...PREVIEW_STATE,
+      balances: [
+        tweenBig(gP, G_STROOPS_TARGET),
+        tweenBig(tP, T_STROOPS_TARGET),
+        tweenBig(sP, S_STROOPS_TARGET),
+      ],
+    }),
+    [gP, tP, sP],
+  );
   return (
-    <div className="sobre-feat-visual">
-      <BalanceHero state={PREVIEW_STATE}>
-        <EnvelopeSplitCard state={PREVIEW_STATE} onOpen={() => {}} />
+    <div ref={ref} className="sobre-feat-visual">
+      <BalanceHero state={PREVIEW_TOTAL_STATE}>
+        <EnvelopeSplitCard state={envelopeState} onOpen={() => {}} />
       </BalanceHero>
     </div>
   );
 }
 
 function MembersVisual() {
+  const [ref, inView] = useInView<HTMLDivElement>();
+  const [dailyOn, setDailyOn] = useState(false);
+  const [savingsOn, setSavingsOn] = useState(false);
+  useEffect(() => {
+    if (!inView) return;
+    const t1 = window.setTimeout(() => setDailyOn(true), 400);
+    const t2 = window.setTimeout(() => setSavingsOn(true), 1100);
+    return () => {
+      window.clearTimeout(t1);
+      window.clearTimeout(t2);
+    };
+  }, [inView]);
   return (
-    <div className="sobre-feat-visual">
+    <div ref={ref} className="sobre-feat-visual">
       <div className="sobre-label" style={{ marginBottom: 14 }}>
         Household policy
       </div>
@@ -406,7 +521,7 @@ function MembersVisual() {
           icon={<ClockIcon weight="fill" size={18} />}
           title="Daily limit per admin"
           tint="accent"
-          toggleOn
+          toggleOn={dailyOn}
         />
         <PolicyRow
           icon={<LockIcon weight="fill" size={18} />}
@@ -419,7 +534,7 @@ function MembersVisual() {
           title="Savings needs approval"
           subtitle="Always locked"
           tint="danger"
-          toggleOn
+          toggleOn={savingsOn}
           toggleDisabled
         />
       </div>
@@ -499,7 +614,9 @@ function PolicyRow({
           </div>
         ) : null}
       </div>
-      {/* Non-interactive visual — the landing page is decorative. */}
+      {/* Non-interactive visual — the landing page is decorative.
+       *  Transitions on background + transform so animated on-scroll
+       *  toggles slide instead of snapping. */}
       <div
         aria-hidden
         style={{
@@ -508,11 +625,10 @@ function PolicyRow({
           borderRadius: 999,
           padding: 2,
           background: toggleOn ? trackOn : "var(--border-strong)",
-          display: "inline-flex",
-          alignItems: "center",
-          justifyContent: toggleOn ? "flex-end" : "flex-start",
+          transition: "background .3s ease",
           opacity: toggleDisabled ? 0.75 : 1,
           flexShrink: 0,
+          position: "relative",
         }}
       >
         <span
@@ -523,6 +639,8 @@ function PolicyRow({
             background: "#fff",
             boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
             display: "block",
+            transform: `translateX(${toggleOn ? 18 : 0}px)`,
+            transition: "transform .3s cubic-bezier(.4,.6,.2,1)",
           }}
         />
       </div>
@@ -531,58 +649,70 @@ function PolicyRow({
 }
 
 function SavingsVisual() {
+  const [ref, inView] = useInView<HTMLDivElement>();
+  // Slow ramps: principal + interest tick up together in step with the
+  // sparkline drawing itself left-to-right. Interest starts slightly
+  // later so it visibly trails the principal — implying return over
+  // time rather than instant.
+  const balP = easeOutCubic(useTween(inView, 2600));
+  const interestP = easeOutCubic(useTween(inView, 3000, 500));
+  const balancePhp = 11856.9 * balP;
+  const interestPhp = 354.62 * interestP;
+  const fmtPhp = (n: number) =>
+    n.toLocaleString("en-PH", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   return (
-    <div className="sobre-feat-visual">
+    <div ref={ref} className="sobre-feat-visual">
+      <div className="sobre-label" style={{ marginBottom: 10 }}>
+        Savings envelope
+      </div>
       <div
+        className="tabular"
         style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "flex-start",
-          gap: 12,
+          fontSize: 34,
+          fontWeight: 700,
+          color: "var(--text-1)",
+          letterSpacing: "-0.01em",
         }}
       >
-        <div>
-          <div className="sobre-label">Savings envelope</div>
-          <div
-            className="tabular"
-            style={{
-              fontSize: 34,
-              fontWeight: 700,
-              color: "var(--text-1)",
-              marginTop: 8,
-              letterSpacing: "-0.01em",
-            }}
-          >
-            ₱11,856.90
-          </div>
-          <div
-            className="tabular"
-            style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}
-          >
-            204.43 USDC
-          </div>
-        </div>
+        ₱{fmtPhp(balancePhp)}
       </div>
+      <div
+        className="tabular"
+        style={{
+          fontSize: 13,
+          color: "var(--sobre-primary)",
+          fontWeight: 600,
+          marginTop: 6,
+        }}
+      >
+        +₱{fmtPhp(interestPhp)} earned this year
+      </div>
+
       <svg
         viewBox="0 0 400 120"
-        style={{ marginTop: 26, width: "100%", height: 140 }}
+        style={{ marginTop: 22, width: "100%", height: 140 }}
         preserveAspectRatio="none"
       >
         <defs>
-          {/* stopColor/stroke moved to style: SVG presentation attributes
-              don't resolve var(), CSS properties do. */}
           <linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1">
             <stop
               offset="0%"
               stopOpacity="0.25"
-              style={{ stopColor: "var(--sobre-accent)" }}
+              style={{ stopColor: "var(--sobre-primary)" }}
             />
             <stop
               offset="100%"
               stopOpacity="0"
-              style={{ stopColor: "var(--sobre-accent)" }}
+              style={{ stopColor: "var(--sobre-primary)" }}
             />
           </linearGradient>
+          {/* Clip the fill so it grows in step with the drawn stroke. */}
+          <clipPath id="sparkclip">
+            <rect x="0" y="0" width={400 * balP} height="120" />
+          </clipPath>
         </defs>
         <line
           x1="0"
@@ -595,16 +725,8 @@ function SavingsVisual() {
         <path
           d="M0,100 L40,92 L80,86 L120,80 L160,70 L200,66 L240,58 L280,50 L320,38 L360,28 L400,18 L400,120 L0,120 Z"
           fill="url(#sparkfill)"
+          clipPath="url(#sparkclip)"
         />
-        <path
-          d="M0,100 L40,92 L80,86 L120,80 L160,70 L200,66 L240,58 L280,50 L320,38 L360,28 L400,18"
-          fill="none"
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          style={{ stroke: "var(--sobre-accent)" }}
-        />
-        <circle cx="400" cy="18" r="4" style={{ fill: "var(--sobre-accent)" }} />
       </svg>
       <div
         style={{
@@ -622,6 +744,17 @@ function SavingsVisual() {
         <span>Sep</span>
         <span>Nov</span>
       </div>
+      <p
+        style={{
+          fontSize: 11,
+          color: "var(--text-3)",
+          marginTop: 14,
+          lineHeight: 1.45,
+        }}
+      >
+        Illustrative growth. Sobre does not guarantee any specific rate of
+        return.
+      </p>
     </div>
   );
 }
