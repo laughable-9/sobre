@@ -164,10 +164,6 @@ export default function MySobresPage() {
                 <br />
                 One Family.
               </h1>
-              <p className="sobre-signin-body">
-                Sign in with Google to open your Sobre, invite your family,
-                and set your split. Sixty seconds, done.
-              </p>
               <Button
                 onClick={() => void wallet.connect()}
                 size="lg"
