@@ -10,6 +10,7 @@ import {
   UsersIcon,
 } from "@phosphor-icons/react";
 
+import { AppTour, hasSeenTour } from "@/components/sobre/AppTour";
 import { Avatar } from "@/components/sobre/Avatar";
 import { BackLink } from "@/components/sobre/BackLink";
 
@@ -48,6 +49,17 @@ export default function MySobresPage() {
   // Filtering these out of allRows lets the empty state trigger when
   // every wallet is broken instead of an empty grid rendering under the
   // header.
+  // null = still hydrating (localStorage is client-only); avoids SSR/client
+  // mismatch by rendering neither the tour nor the sign-in card until we
+  // know for sure whether the user has been through onboarding.
+  const [showTour, setShowTour] = useState<boolean | null>(null);
+  useEffect(() => {
+    // External-sync effect: hasSeenTour reads localStorage, which is
+    // client-only. Deferred until after mount so SSR + first client paint
+    // agree on rendering neither the tour nor the sign-in card.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowTour(!hasSeenTour());
+  }, []);
   const [hiddenIds, setHiddenIds] = useState<Set<string>>(() => new Set());
   const markHidden = useCallback((id: string) => {
     setHiddenIds((prev) => {
@@ -123,6 +135,18 @@ export default function MySobresPage() {
 
   // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
+    // Tour hydration hasn't finished — render nothing to avoid a flash of the
+    // sign-in card that then gets replaced by the tour.
+    if (showTour === null) {
+      return <div className="sobre-app sobre-v2" />;
+    }
+    if (showTour && wallet.status === "signed-out") {
+      return (
+        <div className="sobre-app sobre-v2">
+          <AppTour onFinish={() => setShowTour(false)} />
+        </div>
+      );
+    }
     return (
       <div className="sobre-app sobre-v2">
         <main className="flex-1 grid place-items-center px-6">
@@ -140,12 +164,12 @@ export default function MySobresPage() {
                 className="sobre-cover-text mt-5 mb-3"
                 style={{ color: "var(--text-1)" }}
               >
-                Isang sobre.
+                One Sobre.
                 <br />
-                Isang pamilya.
+                One Family.
               </h1>
               <Button onClick={() => void wallet.connect()} size="lg">
-                Continue with Google
+                Sign in
               </Button>
               {wallet.error ? (
                 <p
