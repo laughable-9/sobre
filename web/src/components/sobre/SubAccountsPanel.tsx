@@ -415,7 +415,7 @@ function SubCard({
         body={
           isLocked
             ? `${row.displayName} will be able to cash out from their own balance again. The remaining balance stays where it is; unlocking doesn't move any money.`
-            : `${row.displayName} won't be able to cash out from their balance until you unlock. The money stays in their supplementary card — it doesn't come back to your envelopes. You can unlock any time.`
+            : `${row.displayName} won't be able to cash out from their balance until you unlock. The money stays in their supplementary card. It doesn't come back to your envelopes. You can unlock any time.`
         }
         confirmLabel={isLocked ? "Unlock" : "Lock"}
         cancelLabel="Cancel"
