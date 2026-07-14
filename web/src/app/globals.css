@@ -1421,6 +1421,17 @@
 .sobre-final-cta h2 { color: var(--primary-text); font-family: var(--serif); font-size: clamp(36px, 4.5vw, 56px); font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
 .sobre-final-cta .lede { color: color-mix(in srgb, var(--primary-text) 85%, transparent); margin: 22px auto 32px; max-width: 60ch; font-size: 18px; }
 .sobre-final-cta .fine { color: color-mix(in srgb, var(--primary-text) 70%, transparent); font-size: 13px; margin-top: 18px; }
+/* Inverse button on the green section — white pill with green text so
+ * it contrasts against the primary-green background. Same sizing +
+ * chrome as the hero CTA, just inverted colors. */
+.sobre-final-cta .sobre-hero-cta {
+  background: #fff;
+  color: var(--sobre-primary);
+}
+.sobre-final-cta .sobre-hero-cta:hover {
+  background: #fff;
+  color: var(--primary-hover);
+}
 
 .sobre-footer {
   background: var(--surface-alt);
@@ -2051,16 +2062,6 @@ body { overflow-x: clip; min-width: 320px; }
 @keyframes sobre-cover-text-out {
   0%   { opacity: 1; }
   100% { opacity: 0; }
-}
-
-/* Final-CTA button sizing (was inline on the old <Link>; moved to a class so
-   the new OpenSobreButton anchor keeps the same look). */
-.sobre-final-cta-btn {
-  font-size: 16px;
-  padding: 16px 28px;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
 }
 
 /* ═══ v2 design system — dashboard-scoped (green board) ═══════════════════
