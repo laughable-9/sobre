@@ -760,6 +760,17 @@ function Dashboard({ contractId }: { contractId: string }) {
             requests={pendingApprovals.requests}
             envelopeNames={state.envelope_names}
             memberDisplayFor={memberDisplayFor}
+            subaccountDisplayFor={(address) => {
+              const s = state.subaccounts.find((x) => x.address === address);
+              if (!s) return null;
+              const row = subRows.find(
+                (r) => r.walletAddress === address,
+              );
+              return {
+                name: row?.displayName ?? "a sub-account",
+                avatarUrl: row?.avatarUrl ?? null,
+              };
+            }}
             onApprove={pendingApprovals.approve}
             onDeny={pendingApprovals.deny}
           />
@@ -1044,6 +1055,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             userAddress={address}
             contractId={contractId}
             familyWalletId={familyWalletId}
+            memberWalletDbId={wallet.wallet?.id ?? null}
             rows={subRows}
             state={state}
             events={txFeed.events}
@@ -1335,6 +1347,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           contractId={contractId}
           state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
           subRows={subRows}
           initialEnvelope={sendToSubFor ?? undefined}
           onClose={() => {

@@ -8,12 +8,18 @@ const POLL_INTERVAL_MS = 2_500;
 
 export interface PendingCashoutRequest {
   id: string;
+  /** Which admin-gated op the request authorises. Drives the banner
+   *  copy ("cash out to bank" vs "send to <sub-account>"). */
+  kind: "cashout" | "subaccount_fund";
   memberWalletId: string;
   envelope: "Groceries" | "Tuition" | "Savings";
   amountStroops: bigint;
   memo: string;
   approversWalletIds: string[];
   createdAt: string;
+  /** Sub-account recipient's smart-wallet C-address. Only populated
+   *  for kind='subaccount_fund'. */
+  recipientAddress: string | null;
 }
 
 /**
@@ -57,30 +63,34 @@ export function usePendingCashoutApprovals(args: {
       const { data } = await supabase
         .from("family_pending_requests")
         .select(
-          "id, member_wallet_id, envelope, amount_stroops, memo, approvers_wallet_ids, created_at",
+          "id, kind, member_wallet_id, envelope, amount_stroops, memo, approvers_wallet_ids, created_at, recipient_address",
         )
         .eq("family_wallet_id", familyWalletId)
-        .eq("kind", "cashout")
+        .in("kind", ["cashout", "subaccount_fund"])
         .eq("status", "pending")
         .order("created_at", { ascending: false });
       const rows = ((data ?? []) as Array<{
         id: string;
+        kind: "cashout" | "subaccount_fund";
         member_wallet_id: string;
         envelope: "Groceries" | "Tuition" | "Savings";
         amount_stroops: string;
         memo: string;
         approvers_wallet_ids: string[] | null;
         created_at: string;
+        recipient_address: string | null;
       }>)
         .filter((r) => !(r.approvers_wallet_ids ?? []).includes(currentId))
         .map((r) => ({
           id: r.id,
+          kind: r.kind,
           memberWalletId: r.member_wallet_id,
           envelope: r.envelope,
           amountStroops: BigInt(r.amount_stroops),
           memo: r.memo ?? "",
           approversWalletIds: r.approvers_wallet_ids ?? [],
           createdAt: r.created_at,
+          recipientAddress: r.recipient_address,
         }));
       setRequests(rows);
     })();

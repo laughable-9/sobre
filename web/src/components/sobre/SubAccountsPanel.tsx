@@ -21,6 +21,10 @@ interface PanelProps {
   userAddress: string;
   contractId: string;
   familyWalletId: string | null;
+  /** Current admin's wallets.id — threaded into FundSubAccountModal
+   *  so the multi-admin approval flow can insert
+   *  family_pending_requests rows when the source envelope is locked. */
+  memberWalletDbId: string | null;
   rows: FamilySubaccountRow[];
   state: WalletState;
   events: FeedEvent[];
@@ -49,6 +53,7 @@ export function SubAccountsPanel({
   userAddress,
   contractId,
   familyWalletId,
+  memberWalletDbId,
   rows,
   state,
   events,
@@ -130,6 +135,8 @@ export function SubAccountsPanel({
           userAddress={userAddress}
           contractId={contractId}
           state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={memberWalletDbId}
           subRows={rows}
           initialTarget={{
             address: sendTarget.row.walletAddress,

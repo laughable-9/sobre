@@ -20,6 +20,7 @@ export function CashoutApprovalBanner({
   requests,
   envelopeNames,
   memberDisplayFor,
+  subaccountDisplayFor,
   onApprove,
   onDeny,
 }: {
@@ -29,6 +30,12 @@ export function CashoutApprovalBanner({
     name: string;
     avatarUrl: string | null;
   };
+  /** Lookup for sub-account recipients by on-chain address. Used
+   *  on subaccount_fund rows to render "send ₱X to <kid>". */
+  subaccountDisplayFor?: (address: string) => {
+    name: string;
+    avatarUrl: string | null;
+  } | null;
   onApprove: (row: PendingCashoutRequest) => Promise<void>;
   onDeny: (row: PendingCashoutRequest) => Promise<void>;
 }) {
@@ -41,6 +48,11 @@ export function CashoutApprovalBanner({
           request={r}
           envelopeNames={envelopeNames}
           memberDisplay={memberDisplayFor(r.memberWalletId)}
+          recipientDisplay={
+            r.kind === "subaccount_fund" && r.recipientAddress
+              ? subaccountDisplayFor?.(r.recipientAddress) ?? null
+              : null
+          }
           onApprove={() => onApprove(r)}
           onDeny={() => onDeny(r)}
         />
@@ -53,12 +65,14 @@ function ApprovalRow({
   request,
   envelopeNames,
   memberDisplay,
+  recipientDisplay,
   onApprove,
   onDeny,
 }: {
   request: PendingCashoutRequest;
   envelopeNames: string[];
   memberDisplay: { name: string; avatarUrl: string | null };
+  recipientDisplay: { name: string; avatarUrl: string | null } | null;
   onApprove: () => Promise<void>;
   onDeny: () => Promise<void>;
 }) {
@@ -126,8 +140,9 @@ function ApprovalRow({
             className="truncate"
             style={{ fontWeight: 500, color: "var(--text-2)" }}
           >
-            wants to cash out ₱{Math.round(php).toLocaleString("en-PH")} from{" "}
-            {envelopeLabel}
+            {request.kind === "subaccount_fund"
+              ? `wants to send ₱${Math.round(php).toLocaleString("en-PH")} to ${recipientDisplay?.name ?? "a sub-account"} from ${envelopeLabel}`
+              : `wants to cash out ₱${Math.round(php).toLocaleString("en-PH")} from ${envelopeLabel}`}
           </span>
         </div>
         <div

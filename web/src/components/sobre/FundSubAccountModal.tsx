@@ -1,7 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Loader2 } from "lucide-react";
 
+import { useCashoutApproval } from "@/hooks/useCashoutApproval";
 import { useFundSubaccount } from "@/hooks/useFundSubaccount";
 import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import type { WalletState } from "@/hooks/useWalletState";
@@ -26,6 +28,13 @@ interface Props {
   userAddress: string;
   contractId: string;
   state: WalletState;
+  /** family_wallets.id + current admin's wallets.id — required for
+   *  the multi-admin approval flow when the source envelope is
+   *  locked. Nulls disable the approval gate (falls back to direct
+   *  fund_subaccount), so callers should always thread these in for
+   *  the real path. */
+  familyWalletId: string | null;
+  memberWalletDbId: string | null;
   /** Sub-account rows from Supabase — used to render display names + avatars
    *  in the recipient picker. Pending (unclaimed) invites are filtered out. */
   subRows: FamilySubaccountRow[];
@@ -57,6 +66,8 @@ export function FundSubAccountModal({
   userAddress,
   contractId,
   state,
+  familyWalletId,
+  memberWalletDbId,
   subRows,
   initialEnvelope,
   initialTarget,
@@ -103,22 +114,129 @@ export function FundSubAccountModal({
   const ok =
     validAmount && parsed <= envelopeBalancePhp && target !== null;
 
-  const handleSend = async () => {
-    if (!ok || !target || stroopsRequested <= 0n) return;
+  // Multi-admin approval gate. Locked source envelope + 2+ admins
+  // means the fund_subaccount call can't fire until every other admin
+  // has approved. Solo-admin families skip approval — the sole
+  // admin's own click IS the approval.
+  const envelopeProtected =
+    target !== null && state.policy.protectedEnvelopes.includes(envelope);
+  const totalAdmins = state.admins.length;
+  const needsApproval = envelopeProtected && totalAdmins > 1;
+  const approval = useCashoutApproval({
+    familyWalletId,
+    memberWalletDbId,
+    envelope,
+    amountStroops: stroopsRequested,
+    kind: "subaccount_fund",
+    recipientAddress: target?.address ?? null,
+  });
+  const [phase, setPhase] = useState<"input" | "awaiting_approval">("input");
+
+  const finishFund = async () => {
+    if (!target || stroopsRequested <= 0n) return;
     try {
       await fund(envelope, target.address, stroopsRequested);
       onFlash(
         `Sent ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} to ${target.displayName}`,
       );
+      approval.reset();
       onSuccess();
     } catch {
       // surfaced via hook error state below
     }
   };
 
+  // When the approval row flips to `approved`, fire fund_subaccount.
+  // Solo-admin path never enters this branch — handleSend calls
+  // finishFund directly.
+  useEffect(() => {
+    if (phase !== "awaiting_approval") return;
+    if (approval.status === "approved") {
+      void finishFund();
+    } else if (approval.status === "denied") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setPhase("input");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [phase, approval.status]);
+
+  const handleSend = async () => {
+    if (!ok || !target || stroopsRequested <= 0n) return;
+    if (!needsApproval) {
+      await finishFund();
+      return;
+    }
+    setPhase("awaiting_approval");
+    const id = await approval.create({ memo: "Sub-account fund" });
+    if (!id) setPhase("input");
+  };
+
+  const handleCancelApproval = async () => {
+    await approval.cancel();
+    setPhase("input");
+  };
+  const approvalsRemaining = Math.max(
+    0,
+    totalAdmins - approval.approvers.length,
+  );
+
   const title = initialTarget
     ? `Send to ${initialTarget.displayName}`
     : "Send to family member";
+
+  if (phase === "awaiting_approval") {
+    const envelopeLabel = displayEnvelopeName(envelope, state.envelope_names);
+    return (
+      <Sheet onClose={onClose} ariaLabel="Waiting for approval">
+        <h2>Waiting for the other admin{totalAdmins > 2 ? "s" : ""}</h2>
+        <p className="sub">
+          {envelopeLabel} is a locked envelope. Every admin needs to approve
+          before ₱{Math.round(parsed).toLocaleString("en-PH")} can move to{" "}
+          {target?.displayName ?? "them"}.
+        </p>
+        <div
+          className="rounded-[10px] px-4 py-4 mt-3 mb-4"
+          style={{
+            background: "var(--surface-alt)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          <div
+            className="flex items-center gap-3 text-[13px]"
+            style={{ color: "var(--text-1)", fontWeight: 600 }}
+          >
+            <Loader2 size={16} className="animate-spin" />
+            {approval.approvers.length} of {totalAdmins} approved
+            {approvalsRemaining > 0 ? (
+              <span
+                className="text-[12px]"
+                style={{ color: "var(--text-3)", fontWeight: 500 }}
+              >
+                · {approvalsRemaining} to go
+              </span>
+            ) : null}
+          </div>
+        </div>
+        {approval.error ? (
+          <p
+            className="text-[12px] mb-3"
+            style={{ color: "var(--sobre-danger)" }}
+          >
+            {approval.error}
+          </p>
+        ) : null}
+        <div className="sobre-modal-actions">
+          <button
+            type="button"
+            className="sobre-btn sobre-btn-soft"
+            onClick={() => void handleCancelApproval()}
+          >
+            Cancel request
+          </button>
+        </div>
+      </Sheet>
+    );
+  }
 
   return (
     <Sheet onClose={onClose} ariaLabel={title}>

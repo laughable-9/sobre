@@ -36,13 +36,13 @@ export interface CashoutApprovalState {
 }
 
 /**
- * Multi-admin cashout approval — initiator side.
+ * Multi-admin approval — initiator side.
  *
- * Creates a `family_pending_requests` row with `kind='cashout'` and
- * seeds `approvers_wallet_ids` with the initiator's own id
- * (auto-appended by the INSERT RLS policy). Polls the row every 2s;
- * the returned `status` reflects the DB state, and consumers should
- * fire the on-chain cashout when it flips to `approved`.
+ * Creates a `family_pending_requests` row (kind = cashout OR
+ * subaccount_fund) and seeds `approvers_wallet_ids` with the
+ * initiator's own id (auto-appended by the INSERT RLS policy). Polls
+ * the row every 2s; the returned `status` reflects the DB state, and
+ * consumers should fire the on-chain op when it flips to `approved`.
  *
  * Solo-admin families should bypass this hook entirely — the sole
  * admin's action IS the approval, so wiring them through here would
@@ -53,6 +53,13 @@ export function useCashoutApproval(args: {
   memberWalletDbId: string | null;
   envelope: EnvelopeName;
   amountStroops: bigint;
+  /** Which op the request will authorize. Defaults to `cashout` for
+   *  back-compat with the PDAX withdraw modal. */
+  kind?: "cashout" | "subaccount_fund";
+  /** Sub-account recipient's smart-wallet C-address. Required when
+   *  kind='subaccount_fund' — the RLS INSERT policy pins the row's
+   *  recipient_address to a claimed family_subaccounts row. */
+  recipientAddress?: string | null;
 }): CashoutApprovalState {
   const [status, setStatus] = useState<CashoutApprovalStatus>("idle");
   const [requestId, setRequestId] = useState<string | null>(null);
@@ -73,20 +80,30 @@ export function useCashoutApproval(args: {
       setStatus("creating");
       try {
         const supabase = getSupabaseBrowserClient();
+        const kind = args.kind ?? "cashout";
+        const insertRow: Record<string, unknown> = {
+          family_wallet_id: args.familyWalletId,
+          member_wallet_id: args.memberWalletDbId,
+          envelope: args.envelope,
+          amount_stroops: args.amountStroops.toString(),
+          approval_mode: "all_admins",
+          kind,
+          memo,
+          // Initiator's wallet_id auto-counts as the first approval;
+          // the RLS INSERT policy requires this exact shape.
+          approvers_wallet_ids: [args.memberWalletDbId],
+        };
+        if (kind === "subaccount_fund") {
+          if (!args.recipientAddress) {
+            throw new Error(
+              "Recipient sub-account address is required for a subaccount_fund request.",
+            );
+          }
+          insertRow.recipient_address = args.recipientAddress;
+        }
         const { data, error: insertErr } = await supabase
           .from("family_pending_requests")
-          .insert({
-            family_wallet_id: args.familyWalletId,
-            member_wallet_id: args.memberWalletDbId,
-            envelope: args.envelope,
-            amount_stroops: args.amountStroops.toString(),
-            approval_mode: "all_admins",
-            kind: "cashout",
-            memo,
-            // Initiator's wallet_id auto-counts as the first approval;
-            // the RLS INSERT policy requires this exact shape.
-            approvers_wallet_ids: [args.memberWalletDbId],
-          })
+          .insert(insertRow)
           .select("id, status, approvers_wallet_ids")
           .single();
         if (insertErr) throw new Error(insertErr.message);
@@ -117,6 +134,8 @@ export function useCashoutApproval(args: {
       args.memberWalletDbId,
       args.envelope,
       args.amountStroops,
+      args.kind,
+      args.recipientAddress,
     ],
   );
 

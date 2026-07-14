@@ -9,12 +9,17 @@ import { PHP_PER_USDC, STROOPS_PER_TOKEN } from "@/lib/config";
 import { phpToStroops } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
-/** Which on-chain envelope slot each row edits. Savings (index 2) is
- *  always-locked by design; index 1 is admin-configurable. Groceries
- *  isn't gatable — it's the day-to-day envelope, and locking it would
- *  block every routine spend behind an approval flow. */
-type LockableSlot = 1 | 2;
-const SLOT_ENVELOPE_KEY: Record<LockableSlot, "Tuition" | "Savings"> = {
+/** Every envelope slot is gatable. Savings (index 2) is
+ *  always-locked as a product invariant; the other two are
+ *  admin-configurable. Locking Groceries is unusual but supported —
+ *  a household that wants two-signature control on every dollar
+ *  leaving the wallet can opt into it. */
+type LockableSlot = 0 | 1 | 2;
+const SLOT_ENVELOPE_KEY: Record<
+  LockableSlot,
+  "Groceries" | "Tuition" | "Savings"
+> = {
+  0: "Groceries",
   1: "Tuition",
   2: "Savings",
 };
@@ -57,13 +62,16 @@ export function PolicySettingsForm({
   const [limitEnabled, setLimitEnabled] = useState<boolean>(
     current.dailyLimit !== null,
   );
-  const [tuitionLocked, setTuitionLocked] = useState<boolean>(
-    current.protectedEnvelopes.includes("Tuition"),
-  );
-  // Savings toggle is a UI-only mirror. The save payload always writes
-  // "Savings" into protected_envelopes regardless of this local value;
-  // the toggle stays disabled-on to make the invariant visible.
-  const [savingsLocked] = useState<boolean>(true);
+  // Draft set of locked slot indices. Savings (index 2) is always
+  // present as a client-enforced invariant — the save path unions it
+  // in regardless of the draft state.
+  const [lockedSet, setLockedSet] = useState<Set<LockableSlot>>(() => {
+    const s = new Set<LockableSlot>();
+    if (current.protectedEnvelopes.includes("Groceries")) s.add(0);
+    if (current.protectedEnvelopes.includes("Tuition")) s.add(1);
+    s.add(2); // Savings, always
+    return s;
+  });
 
   const draftLimitStroops = useMemo<bigint | null>(() => {
     if (!limitEnabled) return null;
@@ -76,10 +84,16 @@ export function PolicySettingsForm({
 
   const draftProtected = useMemo<WalletPolicyShape["protectedEnvelopes"]>(() => {
     const out: WalletPolicyShape["protectedEnvelopes"] = [];
-    if (tuitionLocked) out.push("Tuition");
-    if (savingsLocked) out.push("Savings");
+    // Emit in canonical slot order (Groceries, Tuition, Savings) so
+    // equality comparisons against `current` don't spuriously flip
+    // dirty when the set iteration order differs.
+    ([0, 1, 2] as LockableSlot[]).forEach((slot) => {
+      const key = SLOT_ENVELOPE_KEY[slot];
+      // Savings is always locked, regardless of the draft state.
+      if (slot === 2 || lockedSet.has(slot)) out.push(key);
+    });
     return out;
-  }, [tuitionLocked, savingsLocked]);
+  }, [lockedSet]);
 
   const dirty = useMemo(() => {
     if (draftLimitStroops !== current.dailyLimit) return true;
@@ -192,10 +206,10 @@ export function PolicySettingsForm({
         </div>
       ) : null}
 
-      {([1, 2] as LockableSlot[]).map((slot) => {
+      {([0, 1, 2] as LockableSlot[]).map((slot) => {
         const label = envelopeNames[slot] ?? SLOT_ENVELOPE_KEY[slot];
         const alwaysLocked = slot === 2;
-        const locked = alwaysLocked ? true : tuitionLocked;
+        const locked = alwaysLocked ? true : lockedSet.has(slot);
         return (
           <PolicyRow
             key={slot}
@@ -208,7 +222,12 @@ export function PolicySettingsForm({
                 checked={locked}
                 onCheckedChange={(v) => {
                   if (!isAdmin || alwaysLocked) return;
-                  setTuitionLocked(v);
+                  setLockedSet((prev) => {
+                    const next = new Set(prev);
+                    if (v) next.add(slot);
+                    else next.delete(slot);
+                    return next;
+                  });
                 }}
                 disabled={!isAdmin || alwaysLocked}
                 ariaLabel={`Lock ${label}`}
