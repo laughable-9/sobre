@@ -62,7 +62,9 @@ export interface UseActiveCashoutsResult {
   refresh: () => Promise<void>;
 }
 
-const HEARTBEAT_MS = 8000;
+// 20s cadence to stay under the 3000/day perUser rate cap on
+// /poll-status. Realtime pushes state anyway; this is a fallback.
+const HEARTBEAT_MS = 20_000;
 /** /recoverable is a Soroban event scan (~1-2s). We only need it for
  *  orphan-detection — an already-discovered orphan keeps showing via
  *  the cache below. Every 4th tick (~32s) is more than fresh enough
@@ -242,9 +244,15 @@ export function useActiveCashouts(
   useEffect(() => {
     // Polling driver — refresh() feeds setState from a fetch. Heartbeat
     // catches missed realtime updates; intentional external-sync effect.
+    // Skip ticks while the tab is hidden so a backgrounded tab doesn't
+    // consume the shared per-user rate-limit budget for a modal the user
+    // isn't looking at.
     // eslint-disable-next-line react-hooks/set-state-in-effect
     void refresh();
-    const t = setInterval(() => void refresh(), HEARTBEAT_MS);
+    const t = setInterval(() => {
+      if (document.hidden) return;
+      void refresh();
+    }, HEARTBEAT_MS);
     return () => clearInterval(t);
   }, [refresh]);
 

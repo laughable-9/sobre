@@ -55,6 +55,22 @@ export async function GET(req: Request) {
   if (ctx instanceof NextResponse) return ctx;
   const { memberId } = ctx;
 
+  // Sweep cashouts stuck at "converted" for > 6h — the sell-side trade
+  // landed at PDAX but /fiat/withdraw never surfaced a CashOut tx.
+  // Without this the row polls forever and the user sees a "processing"
+  // chip they can't resolve. Mirror of the deposit sweep.
+  const convertedCutoff = new Date(Date.now() - 6 * 60 * 60_000).toISOString();
+  await admin
+    .from("pdax_withdrawals")
+    .update({
+      status: "failed",
+      failure_reason: "PHP payout timed out — PDAX support has been notified.",
+    })
+    .eq("family_wallet_id", familyWalletId)
+    .eq("member_id", memberId)
+    .eq("status", "converted")
+    .lt("created_at", convertedCutoff);
+
   const { data: rows, error } = await admin
     .from("pdax_withdrawals")
     .select(

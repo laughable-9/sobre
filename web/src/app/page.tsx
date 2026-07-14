@@ -697,17 +697,11 @@ function SavingsVisual() {
         preserveAspectRatio="none"
       >
         <defs>
+          {/* Hard-coded hex on <stop> so Safari <16.4 (which doesn't
+              resolve CSS var() on SVG paints) still shows the green fill. */}
           <linearGradient id="sparkfill" x1="0" x2="0" y1="0" y2="1">
-            <stop
-              offset="0%"
-              stopOpacity="0.25"
-              style={{ stopColor: "var(--sobre-primary)" }}
-            />
-            <stop
-              offset="100%"
-              stopOpacity="0"
-              style={{ stopColor: "var(--sobre-primary)" }}
-            />
+            <stop offset="0%" stopColor="#22A45C" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#22A45C" stopOpacity="0" />
           </linearGradient>
           {/* Clip the fill so it grows in step with the drawn stroke. */}
           <clipPath id="sparkclip">
