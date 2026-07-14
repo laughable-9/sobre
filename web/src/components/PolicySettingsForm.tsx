@@ -201,23 +201,8 @@ export function PolicySettingsForm({
             key={slot}
             tint={locked ? "danger" : "muted"}
             icon={<Lock size={18} strokeWidth={2.2} />}
-            title={
-              <>
-                {label} needs approval
-                {alwaysLocked ? (
-                  <span
-                    className="ml-2 text-[11px]"
-                    style={{
-                      color: "var(--text-3)",
-                      fontWeight: 500,
-                      letterSpacing: "0.01em",
-                    }}
-                  >
-                    always locked
-                  </span>
-                ) : null}
-              </>
-            }
+            title={`${label} needs approval`}
+            subtitle={alwaysLocked ? "Always locked" : undefined}
             control={
               <Toggle
                 checked={locked}
@@ -270,11 +255,13 @@ export function PolicySettingsForm({
 function PolicyRow({
   icon,
   title,
+  subtitle,
   control,
   tint,
 }: {
   icon: React.ReactNode;
   title: React.ReactNode;
+  subtitle?: React.ReactNode;
   control: React.ReactNode;
   tint: "accent" | "danger" | "muted";
 }) {
@@ -283,11 +270,25 @@ function PolicyRow({
       <div className={`sobre-policy-ic ${tint}`} aria-hidden>
         {icon}
       </div>
-      <div
-        className="flex-1 min-w-0 text-[14px] flex items-center flex-wrap"
-        style={{ color: "var(--text-1)", fontWeight: 600 }}
-      >
-        {title}
+      <div className="flex-1 min-w-0">
+        <div
+          className="text-[14px]"
+          style={{ color: "var(--text-1)", fontWeight: 600, lineHeight: 1.25 }}
+        >
+          {title}
+        </div>
+        {subtitle ? (
+          <div
+            className="text-[11px] mt-0.5"
+            style={{
+              color: "var(--text-3)",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
       </div>
       <div className="shrink-0">{control}</div>
     </div>

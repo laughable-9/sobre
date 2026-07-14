@@ -108,18 +108,18 @@ const STEPS = [
 const TRUST = [
   {
     icon: <ShieldIcon weight="fill" size={18} />,
-    title: "Built on Stellar",
-    body: "Your wallet is a smart contract on Stellar. No bank in the middle.",
+    title: "No bank in the middle",
+    body: "Your money sits in your family's wallet, not on a bank's books. Only you and the members you invite can move it.",
   },
   {
     icon: <EyeIcon weight="fill" size={18} />,
-    title: "Verifiable on-chain",
-    body: "Every deposit, spend, and approval is a public transaction.",
+    title: "Nothing hidden",
+    body: "Every deposit and every spend shows up in the activity feed for the whole household to see.",
   },
   {
     icon: <CurrencyDollarIcon weight="bold" size={18} />,
-    title: "Fractions of a cent",
-    body: "Stellar charges micro-fees per transaction. Sobre adds zero.",
+    title: "Practically no fees",
+    body: "Sending, splitting, and moving money costs a fraction of a cent. Sobre doesn't add its own charge.",
   },
 ];
 
@@ -140,19 +140,19 @@ const FAMILY_POINTS = [
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is a smart contract wallet on the Stellar blockchain. Your balances live on-chain in XLM, with USDC support on the roadmap. The contract is token-agnostic so other assets can plug in without redeploying.",
+    a: "No. Sobre is your family's wallet, run by open software on the Stellar network. Your money is held as USDC, a digital dollar backed 1:1 by real US dollars in reserve, so it doesn't lose value like crypto can.",
   },
   {
     q: "What do I need to start?",
-    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No KYC, no minimum deposit.",
+    a: "Just a phone. Sobre works on iPhone, Android, and any web browser. No ID upload, no minimum deposit.",
   },
   {
     q: "How do I send money in?",
-    a: "Pay in pesos via PDAX. InstaPay QR from your bank or e-wallet. PDAX converts to XLM and credits your Sobre wallet automatically; the contract splits across envelopes the moment it lands.",
+    a: "Pay in pesos via PDAX using InstaPay QR from your bank or e-wallet. PDAX turns it into USDC and drops it into your Sobre wallet automatically. Sobre splits it across your envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
-    a: "Yes. Through off-ramp partners like MoneyGram, you can cash out anywhere in the Philippines.",
+    a: "Yes. Through partners like MoneyGram, you can withdraw pesos anywhere in the Philippines.",
   },
   {
     q: "What if the family disagrees?",
@@ -457,9 +457,9 @@ function Product() {
             }
             body={
               <>
-                Money in your Savings envelope earns competitive yield from
-                regulated dollar-backed reserves. Better than letting it sit
-                in a regular bank account losing value to inflation.
+                Money in your Savings envelope quietly earns interest while it
+                sits. Better than leaving it in a regular bank account and
+                watching inflation eat it.
               </>
             }
           />
@@ -517,38 +517,24 @@ function MembersVisual() {
       <div className="sobre-policy-stack">
         <PolicyRow
           icon={<ClockIcon weight="fill" size={18} />}
-          title="Daily limit per member"
-          value="₱ 500"
+          title="Daily limit per admin"
+          tint="accent"
+          toggleOn
         />
         <PolicyRow
           icon={<LockIcon weight="fill" size={18} />}
           title="Tuition needs approval"
-          value="Locked"
-          locked
+          tint="muted"
+          toggleOn={false}
         />
         <PolicyRow
           icon={<LockIcon weight="fill" size={18} />}
           title="Savings needs approval"
-          value="Locked"
-          locked
+          subtitle="Always locked"
+          tint="danger"
+          toggleOn
+          toggleDisabled
         />
-        <div
-          className="sobre-card-flat"
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 14,
-            border: "1.5px dashed var(--border-strong)",
-            padding: "14px 16px",
-            marginTop: 6,
-            color: "var(--text-3)",
-            fontSize: 13,
-            lineHeight: 1.4,
-            boxShadow: "none",
-          }}
-        >
-          Groceries stays open for small day-to-day spends.
-        </div>
       </div>
     </div>
   );
@@ -557,14 +543,26 @@ function MembersVisual() {
 function PolicyRow({
   icon,
   title,
-  value,
-  locked,
+  subtitle,
+  tint,
+  toggleOn,
+  toggleDisabled,
 }: {
   icon: React.ReactNode;
   title: string;
-  value: string;
-  locked?: boolean;
+  subtitle?: string;
+  tint: "accent" | "danger" | "muted";
+  toggleOn: boolean;
+  toggleDisabled?: boolean;
 }) {
+  const iconTint =
+    tint === "danger"
+      ? { bg: "var(--sobre-danger-soft)", fg: "var(--sobre-danger)" }
+      : tint === "accent"
+        ? { bg: "var(--accent-soft)", fg: "var(--sobre-accent)" }
+        : { bg: "var(--surface-alt)", fg: "var(--text-3)" };
+  const trackOn =
+    tint === "danger" ? "var(--sobre-danger)" : "var(--sobre-accent)";
   return (
     <div
       className="sobre-card-flat"
@@ -581,28 +579,66 @@ function PolicyRow({
           height: 38,
           flexShrink: 0,
           borderRadius: 10,
-          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
+          background: iconTint.bg,
+          color: iconTint.fg,
           display: "grid",
           placeItems: "center",
-          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
         }}
       >
         {icon}
       </div>
-      <div style={{ flex: 1, fontWeight: 600, fontSize: 14, color: "var(--text-1)" }}>
-        {title}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontWeight: 600,
+            fontSize: 14,
+            color: "var(--text-1)",
+            lineHeight: 1.25,
+          }}
+        >
+          {title}
+        </div>
+        {subtitle ? (
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-3)",
+              fontWeight: 500,
+              letterSpacing: "0.02em",
+              marginTop: 2,
+            }}
+          >
+            {subtitle}
+          </div>
+        ) : null}
       </div>
-      <span
-        className="sobre-pill"
+      {/* Non-interactive visual — the landing page is decorative. */}
+      <div
+        aria-hidden
         style={{
-          fontSize: 12,
-          fontWeight: 600,
-          background: locked ? "var(--sobre-danger-soft)" : "var(--accent-soft)",
-          color: locked ? "var(--sobre-danger)" : "var(--sobre-accent)",
+          width: 44,
+          height: 26,
+          borderRadius: 999,
+          padding: 2,
+          background: toggleOn ? trackOn : "var(--border-strong)",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: toggleOn ? "flex-end" : "flex-start",
+          opacity: toggleDisabled ? 0.75 : 1,
+          flexShrink: 0,
         }}
       >
-        {value}
-      </span>
+        <span
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: "50%",
+            background: "#fff",
+            boxShadow: "0 1px 2px rgba(0,0,0,0.2)",
+            display: "block",
+          }}
+        />
+      </div>
     </div>
   );
 }
@@ -636,7 +672,7 @@ function SavingsVisual() {
             className="tabular"
             style={{ fontSize: 12, color: "var(--text-3)", marginTop: 2 }}
           >
-            204.43 XLM
+            204.43 USDC
           </div>
         </div>
       </div>
@@ -710,13 +746,14 @@ function Trust() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">Why this works</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Built on infrastructure you can audit.
+            Money you can <em className="sobre-em">actually trust.</em>
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
-            Sobre is built on Stellar, the same chain used by MoneyGram for
-            cross-border payouts. Your balance lives in XLM today, with USDC
-            on the roadmap, so amounts can settle to a stablecoin without a
-            contract redeploy. Every transaction is public and verifiable.
+            Sobre runs on Stellar, the same network MoneyGram uses to move
+            money worldwide. Your balance is held as USDC, a digital dollar
+            backed 1:1 by real US dollars in reserve, so it doesn&apos;t lose
+            value like crypto can. Every peso in and every peso out is
+            recorded in the family&apos;s activity feed.
           </p>
         </div>
 
