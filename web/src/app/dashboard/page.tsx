@@ -524,7 +524,23 @@ function SobreCard({
       className="sobre-card-link block"
     >
       <div className="flex items-start gap-3 mb-4">
-        <Avatar name={walletName} size={44} />
+        <div
+          className="grid place-items-center flex-shrink-0"
+          style={{
+            width: 44,
+            height: 44,
+            borderRadius: "50%",
+            background: "var(--accent-soft)",
+          }}
+        >
+          <Image
+            src={LOGO_SRC}
+            alt=""
+            width={26}
+            height={26}
+            priority
+          />
+        </div>
         <div className="flex-1 min-w-0">
           <h3
             className="font-serif truncate"
@@ -607,6 +623,7 @@ function SobreCard({
                 <Avatar
                   key={m.address}
                   name={m.name || m.address.slice(1, 3)}
+                  src={m.avatarUrl}
                   size={22}
                 />
               ))}
