@@ -83,7 +83,7 @@ const STEPS = [
     num: 1,
     fil: "Open a Sobre.",
     body:
-      "Open a shared wallet from your phone in under 60 seconds. Invite your family with a link.",
+      "Open a shared Sobre from your phone in under 60 seconds. Invite your family with a link.",
   },
   {
     num: 2,
@@ -109,7 +109,7 @@ const TRUST = [
   {
     icon: <ShieldIcon weight="fill" size={18} />,
     title: "No bank in the middle",
-    body: "Your money sits in your family's wallet, not on a bank's books. Only you and the members you invite can move it.",
+    body: "Your money sits in your family's Sobre, not on a bank's books. Only you and the members you invite can move it.",
   },
   {
     icon: <EyeIcon weight="fill" size={18} />,
@@ -133,14 +133,14 @@ const SENDER_POINTS = [
 const FAMILY_POINTS = [
   "No fighting over who spent what.",
   "Big purchases need admin approval, so there's no impulse spending.",
-  "Real-time visibility into the whole wallet.",
+  "Real-time visibility into the whole Sobre.",
   "Savings grows automatically while you focus on family.",
 ];
 
 const FAQS = [
   {
     q: "Is Sobre a bank?",
-    a: "No. Sobre is your family's wallet, run by open software on the Stellar network. Your money is held as USDC, a digital dollar backed 1:1 by real US dollars in reserve, so it doesn't lose value like crypto can.",
+    a: "No. Sobre is a shared account for your family, run by open software on the Stellar network. Your money is held as USDC, a digital dollar backed 1:1 by real US dollars in reserve, so it doesn't lose value like crypto can.",
   },
   {
     q: "What do I need to start?",
@@ -148,7 +148,7 @@ const FAQS = [
   },
   {
     q: "How do I send money in?",
-    a: "Pay in pesos via PDAX using InstaPay QR from your bank or e-wallet. PDAX turns it into USDC and drops it into your Sobre wallet automatically. Sobre splits it across your envelopes the moment it lands.",
+    a: "Pay in pesos via PDAX using InstaPay QR from your bank or e-wallet. PDAX turns it into USDC and drops it into your Sobre automatically. Sobre splits it across your envelopes the moment it lands.",
   },
   {
     q: "Can I cash out to pesos?",
@@ -404,7 +404,7 @@ function Product() {
         <div className="sobre-section-head">
           <div className="sobre-eyebrow">The product</div>
           <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Not just a wallet.{" "}
+            Not just an account.{" "}
             <em className="sobre-em">A plan for the family.</em>
           </h2>
         </div>
@@ -871,7 +871,7 @@ function FinalCTA() {
           <em className="sobre-em">Open the Sobre.</em> Open the plan.
         </h2>
         <p className="lede sobre-lede">
-          Open a wallet in 60 seconds. Invite your family. Send your first
+          Open a Sobre in 60 seconds. Invite your family. Send your first
           remittance.
         </p>
         <OpenSobreButton className="sobre-btn-cream sobre-final-cta-btn">

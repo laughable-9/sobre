@@ -271,7 +271,7 @@ function ProfileJoin({
             opacity: !valid || pending ? 0.5 : 1,
           }}
         >
-          {pending ? "Joining…" : "Join wallet"}
+          {pending ? "Joining…" : "Join Sobre"}
         </button>
       </div>
     </form>

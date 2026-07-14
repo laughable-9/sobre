@@ -241,7 +241,7 @@ export default function OnboardingFlow() {
 
   async function handleCreate() {
     if (!wallet || !session) {
-      setSetupError("Sign in is required before creating a family wallet.");
+      setSetupError("Sign in is required before creating a Sobre.");
       setSetupStatus("error");
       return;
     }
@@ -311,7 +311,7 @@ export default function OnboardingFlow() {
           <>
             <GoogleCta onClick={handleGoogleSignIn} disabled={busy}>
               <GoogleG size={18} />
-              {busy ? "Setting up your wallet…" : "Continue with Google"}
+              {busy ? "Setting up your Sobre…" : "Continue with Google"}
             </GoogleCta>
             {authError && (
               <p
@@ -586,11 +586,11 @@ export default function OnboardingFlow() {
         <>
           <PrimaryCta onClick={busy ? () => undefined : handleCreate}>
             {busy ? (
-              "Creating your family wallet…"
+              "Creating your Sobre…"
             ) : (
               <>
                 <PaperPlaneTiltIcon weight="bold" size={16} />
-                Create wallet
+                Create Sobre
               </>
             )}
           </PrimaryCta>

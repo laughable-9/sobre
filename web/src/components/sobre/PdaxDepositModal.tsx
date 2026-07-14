@@ -60,7 +60,7 @@ const PENDING_MESSAGES = [
 const FUNDED_MESSAGES = [
   "Almost there…",
   "Locking in the rate…",
-  "Sending to your wallet…",
+  "Sending to your Sobre…",
 ];
 
 function rotatingTitlesFor(status: DepositStatus): string[] {

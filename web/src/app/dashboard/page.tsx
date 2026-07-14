@@ -149,7 +149,7 @@ export default function MySobresPage() {
           ) : (
             <p style={{ color: "var(--text-2)" }}>
               {wallet.status === "creating"
-                ? "Setting up your wallet…"
+                ? "Setting up your Sobre…"
                 : "Loading…"}
             </p>
           )}
@@ -307,8 +307,8 @@ export default function MySobresPage() {
                 style={{ color: "var(--text-2)" }}
               >
                 {allRows.length === 1
-                  ? "Your household wallet."
-                  : `${allRows.length} household wallets.`}
+                  ? "Your household Sobre."
+                  : `${allRows.length} household Sobres.`}
               </p>
             )}
           </div>

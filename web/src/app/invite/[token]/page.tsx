@@ -114,7 +114,7 @@ function Landing({ token }: { token: string }) {
           <SignInPanel
             wallet={wallet}
             title="You're invited to a Sobre"
-            subtitle="Sign in to accept the invite and join the wallet."
+            subtitle="Sign in to accept the invite and join the Sobre."
           />
         </main>
       </div>
