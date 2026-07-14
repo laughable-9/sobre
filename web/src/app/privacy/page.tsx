@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { LandingHeader } from "@/components/sobre/LandingHeader";
 
 export const metadata: Metadata = {
-  title: "Privacy Policy — Sobre",
+  title: "Sobre",
   description:
     "What data Sobre collects, why, and who we share it with. Plain English.",
 };

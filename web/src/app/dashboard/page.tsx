@@ -100,7 +100,11 @@ export default function MySobresPage() {
 
   useEffect(() => {
     // External-sync effect: isSobreClosed reads localStorage. Same SSR
-    // deferral as above.
+    // deferral as above. Union of every source that can produce a row on
+    // My Sobres — admin factory, localStorage-joined, and the Supabase
+    // mirror (which is the only way a supplementary-only Sobre reaches
+    // the list). Missing the mirrored branch here would let a closed
+    // supplementary-only Sobre flash a loading skeleton then hide.
     const all = new Set<string>();
     for (const id of adminSobres.sobres) {
       if (isSobreClosed(id)) all.add(id);
@@ -108,9 +112,14 @@ export default function MySobresPage() {
     for (const id of joined) {
       if (isSobreClosed(id)) all.add(id);
     }
+    if (mirroredIds.contractIds) {
+      for (const id of mirroredIds.contractIds) {
+        if (isSobreClosed(id)) all.add(id);
+      }
+    }
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setClosedSet(all);
-  }, [adminSobres.sobres, joined]);
+  }, [adminSobres.sobres, joined, mirroredIds.contractIds]);
 
   // ─── Phase 1: not signed in / wallet bootstrapping ──────────────────
   if (!address) {
@@ -148,11 +157,7 @@ export default function MySobresPage() {
               ) : null}
             </div>
           ) : (
-            <p style={{ color: "var(--text-2)" }}>
-              {wallet.status === "creating"
-                ? "Setting up your Sobre…"
-                : "Loading…"}
-            </p>
+            <p style={{ color: "var(--text-2)" }}>Loading…</p>
           )}
         </main>
       </div>
@@ -491,6 +496,11 @@ function SobreCard({
   }, [shouldHide, onHide]);
 
   if (shouldHide) return null;
+  // Show a plain skeleton while the summary is loading — mounting the full
+  // card (role pill, ₱0 balance, "Loading…") briefly for a Sobre that turns
+  // out to be an orphan or where the caller isn't a member causes a phantom
+  // card to flash before it hides itself.
+  if (summary === null) return <SobreCardSkeleton />;
 
   // Supplementary cards show the caller's own spendable balance, not
   // the family total — a supplementary has no visibility into the
