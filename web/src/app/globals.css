@@ -1638,22 +1638,6 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-step-panel { animation: none; }
 }
 
-/* ─── App-first hero (phone/tablet) ─────────────────────────────────────
-   Lead with the product, not a wall of copy: the split card moves up under a
-   tighter headline, the inline CTA is dropped (the sticky bottom bar carries
-   it), and everything centers in a single column. Desktop hero is unchanged. */
-@media (max-width: 900px) {
-  .sobre-hero { min-height: auto; padding: 24px 20px 28px; }
-  .sobre-hero-grid { display: flex; flex-direction: column; gap: 22px; }
-  .sobre-hero-content { gap: 12px; }
-  .sobre-hero-cta { display: none; } /* sticky bottom bar carries the CTA */
-  /* Product art follows the headline on small screens so the value
-     proposition is visible without scrolling. */
-  .sobre-hero-right { min-height: 0; max-height: 280px; overflow: hidden; }
-  .sobre-hero-loop { max-height: 260px; }
-}
-
-
 /* ─── Bottom dock (mobile-first primary nav) ────────────────────────────
    Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
    Sits pinned to the safe-area bottom. Center slot is a raised mango tile
