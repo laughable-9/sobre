@@ -329,7 +329,16 @@ function normalizeOnChainState(raw: Record<string, unknown>): OnChainState {
         locked: Boolean(s.locked),
       }))
     : [];
-  const rawAdmins = Array.isArray(raw.admins) ? raw.admins : [];
+  // v11 wallets return admins: Vec<Address>; pre-v11 wallets that
+  // haven't run upgrade() yet still return the singular admin field.
+  // Fall back to wrapping the legacy field in a one-element array so
+  // isAdmin checks + the settings gear + every other UI gate keep
+  // working on wallets that haven't been migrated.
+  const rawAdmins = Array.isArray(raw.admins)
+    ? raw.admins
+    : raw.admin != null
+      ? [raw.admin]
+      : [];
   return {
     admins: rawAdmins.map((a) => String(a)),
     payment_token: String(raw.payment_token),
