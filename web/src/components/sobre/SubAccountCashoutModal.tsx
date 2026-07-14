@@ -124,103 +124,89 @@ export function SubAccountCashoutModal({
   const [recoverySnapshot, setRecoverySnapshot] =
     useState<CashoutRecoverySnapshot | null>(null);
 
-  // Recovery: if a sub-account snapshot exists for this contract +
-  // sub-account, route the modal to recovery_prompt instead of the
-  // input form. localStorage wins because it carries the bank fields
-  // verbatim; the server /recoverable endpoint is the fallback for
-  // cross-tab / cross-device recovery.
+  // Recovery scan + bank load, sequenced in ONE effect so the modal
+  // can't flip to phase="input" and let the user tap Confirm before
+  // the recovery scan has had a chance to override with
+  // "recovery_prompt". Previously these were two parallel effects and
+  // a bank-first response fired a second spend_from_subaccount on a
+  // rapid Confirm.
   useEffect(() => {
     if (resumeIdentifier) return;
     let cancelled = false;
-    const snap = readCashoutRecovery();
-    if (
-      snap &&
-      snap.kind === "subaccount" &&
-      snap.contractId === contractId &&
-      snap.subaccountId === subaccountId
-    ) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setRecoverySnapshot(snap);
-      setPhase("recovery_prompt");
-      return;
-    }
-    // Server fallback for callers without a snapshot. Scan
-    // pdax_withdrawals + on-chain SubAccountWithdraw events for any
-    // pending row whose spend already landed on chain.
     void (async () => {
+      // Phase A: check the local snapshot.
+      const local = readCashoutRecovery();
+      if (
+        local &&
+        local.kind === "subaccount" &&
+        local.contractId === contractId &&
+        local.subaccountId === subaccountId
+      ) {
+        if (cancelled) return;
+        setRecoverySnapshot(local);
+        setPhase("recovery_prompt");
+        return;
+      }
+      // Phase B: server-side recoverable scan for cross-tab/cross-device.
       try {
         const res = await fetch(
           `/api/pdax/subaccount/cashouts/recoverable?contract_id=${encodeURIComponent(contractId)}`,
         );
-        if (!res.ok || cancelled) return;
-        const json = (await res.json()) as {
-          recoverable: Array<{
-            identifier: string;
-            subaccountId: string;
-            amountStroops: string;
-            amountPhp: number;
-            amountToken: number;
-            beneficiary_bank_code: string;
-            beneficiary_account_name: string;
-            beneficiary_account_number: string;
-            spendTxHash: string;
-          }>;
-        };
-        const r = (json.recoverable ?? []).find(
-          (x) => x.subaccountId === subaccountId,
-        );
-        if (!r || cancelled) return;
-        // Reconstruct a CashoutRecoverySnapshot from the server row so
-        // the same resume path handles both sources.
-        setRecoverySnapshot({
-          kind: "subaccount",
-          identifier: r.identifier,
-          contractId,
-          spendTxHash: r.spendTxHash,
-          amountStroops: r.amountStroops,
-          relayG: "",
-          envelope: null,
-          subaccountId: r.subaccountId,
-          amountPhp: r.amountPhp,
-          amountToken: r.amountToken,
-          bankCode: r.beneficiary_bank_code,
-          accountName: r.beneficiary_account_name,
-          accountNumber: r.beneficiary_account_number,
-          savedAt: Date.now(),
-        });
-        setPhase("recovery_prompt");
-      } catch {
-        // No server fallback available — fall through to the normal
-        // input/bank-setup flow. Nothing to surface to the user.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [resumeIdentifier, contractId, subaccountId]);
-
-  // Load bank on mount — skipped when resuming an existing cashout (we
-  // jump straight to the awaiting phase to poll the row) OR when a
-  // recovery snapshot is present (its bank fields carry the row's
-  // snapshotted values, so no re-fetch needed).
-  //
-  // recoverySnapshot deliberately excluded from deps: the guard only
-  // needs the mount-time value; once the effect skipped the fetch, a
-  // later snapshot from the server fallback doesn't need to re-run
-  // the load.
-  useEffect(() => {
-    if (resumeIdentifier) return;
-    if (recoverySnapshot) return;
-    let cancelled = false;
-    void fetch("/api/member/bank")
-      .then(async (res) => {
         if (cancelled) return;
-        if (!res.ok) {
+        if (res.ok) {
+          const json = (await res.json()) as {
+            recoverable: Array<{
+              identifier: string;
+              subaccountId: string;
+              amountStroops: string;
+              amountPhp: number;
+              amountToken: number;
+              beneficiary_bank_code: string;
+              beneficiary_account_name: string;
+              beneficiary_account_number: string;
+              spendTxHash: string;
+            }>;
+          };
+          const r = (json.recoverable ?? []).find(
+            (x) => x.subaccountId === subaccountId,
+          );
+          if (r) {
+            if (cancelled) return;
+            setRecoverySnapshot({
+              kind: "subaccount",
+              identifier: r.identifier,
+              contractId,
+              spendTxHash: r.spendTxHash,
+              amountStroops: r.amountStroops,
+              relayG: "",
+              envelope: null,
+              subaccountId: r.subaccountId,
+              amountPhp: r.amountPhp,
+              amountToken: r.amountToken,
+              bankCode: r.beneficiary_bank_code,
+              accountName: r.beneficiary_account_name,
+              accountNumber: r.beneficiary_account_number,
+              savedAt: Date.now(),
+            });
+            setPhase("recovery_prompt");
+            return;
+          }
+        }
+      } catch {
+        // No server fallback available — fall through to bank load.
+      }
+      // Phase C: only NOW load the bank. If we route to input here,
+      // there's no pending recovery that could override us into
+      // recovery_prompt after a Confirm tap.
+      try {
+        const bankRes = await fetch("/api/member/bank");
+        if (cancelled) return;
+        if (!bankRes.ok) {
           setErrMsg("Couldn't read your bank details. Try again.");
           setPhase("error");
           return;
         }
-        const { bank: b } = (await res.json()) as {
+        const { bank: b } = (await bankRes.json()) as {
           bank: BankRecord | null;
         };
         if (b) {
@@ -229,17 +215,16 @@ export function SubAccountCashoutModal({
         } else {
           setPhase("bank_setup");
         }
-      })
-      .catch(() => {
+      } catch {
         if (cancelled) return;
         setErrMsg("Couldn't read your bank details. Try again.");
         setPhase("error");
-      });
+      }
+    })();
     return () => {
       cancelled = true;
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [resumeIdentifier]);
+  }, [resumeIdentifier, contractId, subaccountId]);
 
   // Drive the server-side pipeline forward while we're in the awaiting
   // phase. usePollStatus fires the poll-status route on a cadence; Realtime
