@@ -172,24 +172,7 @@ export default function Landing() {
       <Faq openFaq={openFaq} setOpenFaq={setOpenFaq} />
       <FinalCTA />
       <Footer />
-      <MobileCTABar />
     </>
-  );
-}
-
-/**
- * Thumb-zone CTA pinned to the bottom of the viewport on phones/tablets so
- * "Open a Sobre" is always one tap away while the long marketing page scrolls.
- * Hidden on desktop (CSS), where the top-nav CTA does the job.
- */
-function MobileCTABar() {
-  return (
-    <div className="sobre-bottom-bar">
-      <OpenSobreButton className="sobre-bottom-cta">
-        Open a Sobre
-        <ArrowRightIcon weight="bold" size={18} />
-      </OpenSobreButton>
-    </div>
   );
 }
 

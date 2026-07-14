@@ -31,11 +31,18 @@ export function LandingHeader() {
       className="sobre-btn-nav sobre-btn-nav-soft"
       disabled={busy}
     >
-      {status === "checking"
-        ? "Checking…"
-        : status === "creating"
-          ? "Setting up…"
-          : "Continue with Google"}
+      {status === "checking" ? (
+        "Checking…"
+      ) : status === "creating" ? (
+        "Setting up…"
+      ) : (
+        <>
+          <span className="sobre-btn-signin-short">Sign in</span>
+          <span className="sobre-btn-signin-full">
+            Continue with Google
+          </span>
+        </>
+      )}
     </button>
   );
 

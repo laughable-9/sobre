@@ -919,8 +919,14 @@
   .sobre-wallet-menu-pill { padding: 7px 10px; font-size: 12.5px; }
   /* The " Sobre" tail is a nested <span> inside the "Open Sobre" CTA — hide
      it here so the button reads just "Open" on phones, keeping the pill nav
-     from wrapping onto two rows. */
+     from wrapping onto two rows. Same trick swaps "Continue with Google" for
+     "Sign in" on the signed-out CTA. */
   .sobre-btn-nav .sobre-btn-nav-tail { display: none; }
+  .sobre-btn-signin-full { display: none; }
+}
+/* Desktop hides the short version so "Continue with Google" reads in full. */
+@media (min-width: 761px) {
+  .sobre-btn-signin-short { display: none; }
 }
 /* Very narrow phones: tighten the nav further but keep the wordmark — hiding
    it left the row looking lopsided. The brand anchor never shrinks; the nav
@@ -1546,12 +1552,10 @@
    untouched. Colors stay on the design tokens; nothing hardcoded.
    ════════════════════════════════════════════════════════════════════════ */
 
-/* Safe-area + no-horizontal-scroll guards. The bottom variable feeds the
-   sticky CTA bar's padding so it sits above the iOS home indicator. */
+/* Safe-area guard for notched viewports. */
 :root {
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
-  --sobre-bottom-bar-h: 0px; /* set to a real height when a bottom bar mounts */
 }
 /* Clip horizontal overflow without turning <html>/<body> into a scroll
    container. `overflow-x: hidden` on these elements can wedge vertical
@@ -1592,43 +1596,6 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-nav { padding-top: var(--safe-top); }
   .sobre-topbar:not(.sobre-topbar-flap) { padding-top: calc(14px + var(--safe-top)); }
   .sobre-topbar.sobre-topbar-flap { padding-top: calc(12px + var(--safe-top)); }
-}
-
-/* ─── Sticky bottom action bar (thumb zone) ─────────────────────────────
-   The signature app-first affordance: the primary CTA stays pinned to the
-   bottom of the viewport, one thumb-tap away, while the page scrolls. Mirrors
-   the Expo app's ctaBar. Hidden on desktop where a top-nav CTA is the norm. */
-.sobre-bottom-bar {
-  position: sticky;
-  bottom: 0;
-  z-index: 45;
-  display: none;
-  padding: 12px 18px calc(14px + var(--safe-bottom));
-  background: color-mix(in srgb, var(--sobre-bg) 90%, transparent);
-  border-top: 1px solid var(--border);
-}
-@supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
-  .sobre-bottom-bar {
-    -webkit-backdrop-filter: blur(14px);
-    backdrop-filter: blur(14px);
-  }
-}
-.sobre-bottom-bar .sobre-bottom-cta {
-  display: flex; align-items: center; justify-content: center; gap: 8px;
-  width: 100%;
-  padding: 15px 20px;
-  border-radius: var(--r-btn);
-  background: var(--sobre-primary);
-  color: #fff;
-  font-size: 16px; font-weight: 600;
-  box-shadow: 0 8px 20px rgba(232, 146, 60, 0.32);
-  border: 0; cursor: pointer;
-  transition: background .15s ease, transform .1s ease;
-}
-.sobre-bottom-bar .sobre-bottom-cta:active { transform: scale(0.985); }
-.sobre-bottom-bar .sobre-bottom-cta:hover { background: var(--primary-hover); }
-@media (max-width: 900px) {
-  .sobre-bottom-bar { display: block; }
 }
 
 /* ─── On-scroll section reveals ─────────────────────────────────────────
@@ -1687,19 +1654,6 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-hero-loop { max-height: 260px; }
 }
 
-/* ─── Bottom tab/action bar variant used inside the dashboard shell ─────
-   Same chrome as the marketing bottom bar but lays out a row of equal
-   actions (e.g. Add money / Invite) instead of one CTA. */
-.sobre-bottom-bar .sobre-bottom-actions {
-  display: flex; gap: 10px;
-}
-.sobre-bottom-bar .sobre-bottom-actions > * { flex: 1; }
-
-/* Reserve space so the last content isn't hidden behind the sticky bar.
-   Pages that render a bottom bar add `.has-bottom-bar` to their scroll root. */
-@media (max-width: 900px) {
-  .has-bottom-bar { padding-bottom: 88px; }
-}
 
 /* ─── Bottom dock (mobile-first primary nav) ────────────────────────────
    Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
@@ -1952,7 +1906,6 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-btn,
 .sobre-btn-nav,
 .sobre-hero-cta,
-.sobre-bottom-cta,
 .sobre-step-num,
 .sobre-quick-amts button,
 .sobre-card-link {
@@ -1962,7 +1915,6 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-btn:active,
 .sobre-btn-nav:active,
 .sobre-hero-cta:active,
-.sobre-bottom-cta:active,
 .sobre-quick-amts button:active {
   transform: scale(0.96);
 }
@@ -2019,7 +1971,7 @@ body { overflow-x: clip; min-width: 320px; }
 
 /* Honor reduced-motion: strip every transform/transition added above. */
 @media (prefers-reduced-motion: reduce) {
-  .sobre-btn, .sobre-btn-nav, .sobre-hero-cta, .sobre-bottom-cta,
+  .sobre-btn, .sobre-btn-nav, .sobre-hero-cta,
   .sobre-quick-amts button, .sobre-card-link,
   .sobre-stat-card, .sobre-step, .sobre-trust-card,
   .sobre-trust-card .icon, .sobre-brand img,
