@@ -2,6 +2,8 @@ import { ImageResponse } from "next/og";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+import { LOGO_FILENAME } from "@/lib/config";
+
 export const alt = "Sobre — one Sobre, no matter the distance.";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
@@ -32,7 +34,7 @@ export default async function OpengraphImage() {
   let logoSrc: string | null = null;
   try {
     const logo = readFileSync(
-      join(process.cwd(), "public", "sobre-logo2.svg"),
+      join(process.cwd(), "public", LOGO_FILENAME),
     ).toString("base64");
     logoSrc = `data:image/svg+xml;base64,${logo}`;
   } catch {

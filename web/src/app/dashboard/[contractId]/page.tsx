@@ -68,7 +68,7 @@ import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
-import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
+import { ENVELOPE_LABELS, LOGO_SRC, type EnvelopeName } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { expenseLogsToFeedEvents } from "@/lib/expenseLogFeed";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
@@ -537,7 +537,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo2.svg"
+              src={LOGO_SRC}
               alt=""
               width={56}
               height={56}
@@ -683,7 +683,7 @@ function Dashboard({ contractId }: { contractId: string }) {
         <main className="flex-1 grid place-items-center px-6">
           <div className="text-center max-w-md">
             <Image
-              src="/sobre-logo2.svg"
+              src={LOGO_SRC}
               alt=""
               width={56}
               height={56}

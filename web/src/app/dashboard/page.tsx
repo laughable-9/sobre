@@ -28,6 +28,7 @@ import { isSobreClosed } from "@/lib/closedSobres";
 import { forgetJoinedSobre, getJoinedSobres } from "@/lib/joinedSobres";
 import { getProfile, setProfile } from "@/lib/profile";
 import {
+  LOGO_SRC,
   PAYMENT_TOKEN_LABEL,
   PHP_PER_USDC,
   STROOPS_PER_USDC,
@@ -119,7 +120,7 @@ export default function MySobresPage() {
           {wallet.status === "signed-out" ? (
             <div className="text-center max-w-md">
               <Image
-                src="/sobre-logo2.svg"
+                src={LOGO_SRC}
                 alt=""
                 width={56}
                 height={56}
@@ -200,7 +201,7 @@ export default function MySobresPage() {
                   }}
                 >
                   <Image
-                    src="/sobre-logo2.svg"
+                    src={LOGO_SRC}
                     alt=""
                     width={34}
                     height={34}
@@ -377,7 +378,7 @@ export default function MySobresPage() {
               aria-hidden
             >
               <Image
-                src="/sobre-logo2.svg"
+                src={LOGO_SRC}
                 alt=""
                 width={40}
                 height={40}

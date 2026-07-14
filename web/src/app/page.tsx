@@ -16,7 +16,7 @@ import {
 
 import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import type { WalletState } from "@/hooks/useWalletState";
-import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
+import { LOGO_SRC, PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
 import { SiteHeader } from "@/components/sobre/SiteHeader";
 import { WalletMenu } from "@/components/sobre/WalletMenu";
 import { Reveal } from "@/components/sobre/Reveal";
@@ -890,7 +890,7 @@ function Footer() {
         <div>
           <div className="sobre-brand">
             <Image
-              src="/sobre-logo2.svg"
+              src={LOGO_SRC}
               alt=""
               width={32}
               height={32}

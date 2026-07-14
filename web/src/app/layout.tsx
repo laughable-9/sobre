@@ -3,6 +3,7 @@ import { Fraunces, Geist_Mono, Inter, Manrope } from "next/font/google";
 import "./globals.css";
 
 import { EnvelopeTransition } from "@/components/sobre/EnvelopeTransition";
+import { LOGO_SRC } from "@/lib/config";
 
 const inter = Inter({
   variable: "--font-sans",
@@ -40,7 +41,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE),
   title: TITLE,
   description: DESC,
-  icons: [{ rel: "icon", url: "/sobre-logo2.svg" }],
+  icons: [{ rel: "icon", url: LOGO_SRC }],
   openGraph: {
     title: TITLE,
     description: DESC,

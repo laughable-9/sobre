@@ -31,6 +31,7 @@ import {
   createFamilyWallet,
   deriveFamilyName,
 } from "@/lib/familyWallets";
+import { LOGO_SRC } from "@/lib/config";
 import { initialsOf } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import {
@@ -955,7 +956,7 @@ function WelcomeHero() {
     <div className="flex h-full flex-col items-center text-center">
       <div className="min-h-[24px] flex-1" />
       <Image
-        src="/sobre-logo2.svg"
+        src={LOGO_SRC}
         alt="Sobre"
         width={84}
         height={84}

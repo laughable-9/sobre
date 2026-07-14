@@ -5,6 +5,8 @@ import { ViewTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+import { LOGO_SRC } from "@/lib/config";
+
 /**
  * The one site header. Both the landing page nav and the app TopBar render
  * through this shell so the brand, height, border, and container metrics are
@@ -51,7 +53,7 @@ export function SiteHeader({
           {showBrand ? (
             <Link href="/" className="sobre-brand">
               <Image
-                src="/sobre-logo2.svg"
+                src={LOGO_SRC}
                 alt=""
                 width={28}
                 height={28}

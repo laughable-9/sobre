@@ -16,6 +16,16 @@
 export const FACTORY_CONTRACT_ID =
   "CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ";
 
+/** Public path for the Sobre logo asset. Referenced from every splash /
+ *  header / OG-image site; keeping it here means the next brand
+ *  refresh is a one-line edit instead of a grep-and-replace.
+ *
+ *  `LOGO_FILENAME` is the bare name (no leading slash) so Node-side
+ *  callers (OG image) can `join(process.cwd(), "public", ...)`.
+ *  `LOGO_SRC` is the browser-facing HTTP path for `<Image src>` etc. */
+export const LOGO_FILENAME = "newlogo.svg";
+export const LOGO_SRC = `/${LOGO_FILENAME}`;
+
 /**
  * USDC on Stellar — the SEP-41 SAC for Circle's testnet USDC.
  *
