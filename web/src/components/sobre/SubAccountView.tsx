@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, Trash2 } from "lucide-react";
+import { Clock, Lock, Trash2 } from "lucide-react";
 import {
   ArrowSquareOutIcon,
   HouseIcon,
@@ -163,6 +163,60 @@ export function SubAccountView({
               </span>
             </div>
           </section>
+
+          {locked ? (
+            <section
+              className="sobre-card-flat"
+              style={{
+                marginTop: 16,
+                padding: "14px 16px",
+                background: "var(--sobre-danger-soft)",
+                borderColor: "rgba(220,38,38,0.22)",
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+              }}
+              aria-live="polite"
+            >
+              <div
+                className="grid place-items-center"
+                style={{
+                  width: 34,
+                  height: 34,
+                  flexShrink: 0,
+                  borderRadius: 10,
+                  background: "rgba(220,38,38,0.14)",
+                  color: "var(--sobre-danger)",
+                }}
+                aria-hidden
+              >
+                <Lock size={16} strokeWidth={2.4} />
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: 14,
+                    fontWeight: 600,
+                    color: "var(--sobre-danger)",
+                    lineHeight: 1.25,
+                  }}
+                >
+                  Your balance is locked
+                </div>
+                <div
+                  style={{
+                    fontSize: 12,
+                    color: "var(--text-2)",
+                    marginTop: 2,
+                    lineHeight: 1.45,
+                  }}
+                >
+                  You can&apos;t cash out until an admin unlocks you. The
+                  money stays here, safe.
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           <section style={{ marginTop: 28 }}>
             <h2
