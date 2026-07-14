@@ -39,6 +39,11 @@ export interface CashoutRecoverySnapshot {
   bankCode: string;
   accountName: string;
   accountNumber: string;
+  /** Set once the SAC transfer (leg 2) has landed on chain. Presence of
+   *  this is the "don't fire another transfer" flag: retryForward reads
+   *  it and skips the invoke, returning the cached hash. Prevents a
+   *  Supabase 5xx on /confirmed from double-forwarding funds. */
+  forwardTxHash?: string;
   /** When the snapshot was written. Used for "started X minutes ago" copy
    *  and a hard expiry so we don't surface week-old snapshots. */
   savedAt: number;
@@ -103,5 +108,20 @@ export function clearCashoutRecovery(): void {
     window.localStorage.removeItem(KEY);
   } catch {
     // best effort
+  }
+}
+
+/** Stamp forwardTxHash on the existing snapshot so a subsequent retry knows
+ *  leg 2 has landed and MUST NOT invoke a second SAC transfer. Called from
+ *  useCashoutSignatures the moment the transfer's tx hash comes back. */
+export function markForwardComplete(forwardTxHash: string): void {
+  const current = readCashoutRecovery();
+  if (!current) return;
+  const updated: CashoutRecoverySnapshot = { ...current, forwardTxHash };
+  memorySnapshot = updated;
+  try {
+    window.localStorage.setItem(KEY, JSON.stringify(updated));
+  } catch {
+    // best effort — memory mirror still gates the retry.
   }
 }

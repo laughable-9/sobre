@@ -1,10 +1,16 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { envelopeScVal, invokeWrite } from "@/lib/contract";
 import type { EnvelopeName } from "@/lib/config";
+import {
+  clearTransferRecovery,
+  readTransferRecovery,
+  saveTransferRecovery,
+  transferSnapshotMatches,
+} from "@/lib/transferRecovery";
 
 export interface UseTransferBetweenEnvelopesResult {
   transfer: (args: {
@@ -43,6 +49,10 @@ export function useTransferBetweenEnvelopes(
   const [step, setStep] = useState<"idle" | "withdrawing" | "depositing">(
     "idle",
   );
+  // Re-entrancy guard against a rapid double-tap that fires two concurrent
+  // transfers before React state disables the button. `pending` state alone
+  // lags one render tick behind the click.
+  const inFlightRef = useRef(false);
 
   const transfer = useCallback(
     async (args: {
@@ -55,22 +65,58 @@ export function useTransferBetweenEnvelopes(
       if (args.sourceEnvelope === args.destinationEnvelope) {
         throw new Error("Source and destination envelopes are the same.");
       }
+      if (inFlightRef.current) {
+        throw new Error("A transfer is already in progress.");
+      }
+      inFlightRef.current = true;
       setPending(true);
       setError(null);
       try {
-        setStep("withdrawing");
-        const memo = `Move to ${args.destinationEnvelope}`;
-        const withdrawArgs = [
-          Address.fromString(userAddress).toScVal(),
-          envelopeScVal(args.sourceEnvelope),
-          nativeToScVal(args.amountStroops, { type: "i128" }),
-          nativeToScVal(memo, { type: "string" }),
-        ];
-        const withdrawResult = await invokeWrite(
-          args.contractId,
-          "withdraw",
-          withdrawArgs,
-        );
+        // If a prior attempt's withdraw already succeeded (this args tuple
+        // matches a snapshot), skip leg 1 — re-running withdraw would
+        // double-debit the source envelope. Leg 2 is always safe to retry:
+        // deposit_with_split debits the SIGNER's wallet, so if it failed
+        // last time nothing moved.
+        const priorSnapshot = readTransferRecovery();
+        const skipWithdraw =
+          priorSnapshot &&
+          transferSnapshotMatches(priorSnapshot, {
+            contractId: args.contractId,
+            userAddress,
+            sourceEnvelope: args.sourceEnvelope,
+            destinationEnvelope: args.destinationEnvelope,
+            amountStroops: args.amountStroops,
+          });
+
+        let withdrawTxHash: string;
+        if (skipWithdraw) {
+          withdrawTxHash = priorSnapshot.withdrawTxHash;
+        } else {
+          setStep("withdrawing");
+          const memo = `Move to ${args.destinationEnvelope}`;
+          const withdrawArgs = [
+            Address.fromString(userAddress).toScVal(),
+            envelopeScVal(args.sourceEnvelope),
+            nativeToScVal(args.amountStroops, { type: "i128" }),
+            nativeToScVal(memo, { type: "string" }),
+          ];
+          const withdrawResult = await invokeWrite(
+            args.contractId,
+            "withdraw",
+            withdrawArgs,
+          );
+          withdrawTxHash = withdrawResult.hash;
+          // Snapshot BEFORE the deposit call — if leg 2 (or anything after)
+          // fails, the next call will find this snapshot and skip leg 1.
+          saveTransferRecovery({
+            contractId: args.contractId,
+            userAddress,
+            sourceEnvelope: args.sourceEnvelope,
+            destinationEnvelope: args.destinationEnvelope,
+            amountStroops: args.amountStroops.toString(),
+            withdrawTxHash,
+          });
+        }
 
         setStep("depositing");
         // Zero for every slot except the destination — deposit_with_split
@@ -94,8 +140,10 @@ export function useTransferBetweenEnvelopes(
           depositArgs,
         );
 
+        // Both legs landed — the snapshot has served its purpose.
+        clearTransferRecovery();
         return {
-          withdrawTxHash: withdrawResult.hash,
+          withdrawTxHash,
           depositTxHash: depositResult.hash,
         };
       } catch (e) {
@@ -105,6 +153,7 @@ export function useTransferBetweenEnvelopes(
       } finally {
         setStep("idle");
         setPending(false);
+        inFlightRef.current = false;
       }
     },
     [userAddress],
