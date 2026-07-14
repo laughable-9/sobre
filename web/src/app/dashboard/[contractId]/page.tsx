@@ -785,7 +785,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               <div className="hero-title-row">
                 <div className="hero-title-left">
                   <span className="hero-title-name">
-                    {state.wallet_name || "Family Wallet"}
+                    {state.wallet_name || "Sobre"}
                   </span>
                   {isAdmin ? (
                     <button

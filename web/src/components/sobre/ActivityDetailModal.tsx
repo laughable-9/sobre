@@ -231,14 +231,14 @@ function DetailBody({
       return (
         <>
           <KVRow k="Who" v={ev.name || nameOf(ev.member)} />
-          <KVRow k="Joined" v="Family wallet" />
+          <KVRow k="Joined" v="Sobre" />
         </>
       );
     case "MemberRemoved":
       return (
         <>
           <KVRow k="Who" v={nameOf(ev.member)} />
-          <KVRow k="Removed from" v="Family wallet" />
+          <KVRow k="Removed from" v="Sobre" />
         </>
       );
     case "SubAccountJoined":
@@ -1035,9 +1035,9 @@ function kindLabel(ev: FeedEvent): string {
     case "RequestDenied":
       return "Request denied";
     case "MemberJoined":
-      return "Joined the wallet";
+      return "Joined Sobre";
     case "MemberRemoved":
-      return "Removed from wallet";
+      return "Removed from Sobre";
     case "SubAccountJoined":
       return "Sub-account added";
     case "SubAccountFunded":

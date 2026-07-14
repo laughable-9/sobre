@@ -44,7 +44,7 @@ export function JoinForm({
     <main className="flex-1 grid place-items-center px-6">
       <div className="text-center max-w-md w-full">
         <Avatar
-          name={state.wallet_name || "Family Wallet"}
+          name={state.wallet_name || "Sobre"}
           size={72}
           style={{ margin: "0 auto" }}
         />

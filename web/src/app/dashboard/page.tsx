@@ -299,19 +299,9 @@ export default function MySobresPage() {
         </div>
         <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
           <div>
-            <h1 className="font-serif text-[36px] font-semibold mb-2">
+            <h1 className="font-serif text-[36px] font-semibold">
               My Sobres
             </h1>
-            {showEmptyState ? null : (
-              <p
-                className="text-[15px]"
-                style={{ color: "var(--text-2)" }}
-              >
-                {allRows.length === 1
-                  ? "Your household Sobre."
-                  : `${allRows.length} household Sobres.`}
-              </p>
-            )}
           </div>
           {showEmptyState ? null : (
             <div className="flex gap-2 flex-wrap">
@@ -516,7 +506,7 @@ function SobreCard({
   const totalUsdc = Number(displayStroops) / STROOPS_PER_USDC;
   const totalPhp = totalUsdc * PHP_PER_USDC;
 
-  const walletName = summary?.walletName || "Family Wallet";
+  const walletName = summary?.walletName || "Sobre";
 
   return (
     <Link

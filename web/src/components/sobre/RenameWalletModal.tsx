@@ -54,14 +54,14 @@ export function RenameWalletModal({
   };
 
   return (
-    <Sheet onClose={onClose} ariaLabel="Rename wallet">
-        <h2>Rename this wallet</h2>
+    <Sheet onClose={onClose} ariaLabel="Rename Sobre">
+        <h2>Rename this Sobre</h2>
         <p className="sub">
           The new name shows for every member the moment it saves.
         </p>
 
         <div className="sobre-input-group">
-          <label htmlFor="rename-wallet">Wallet name</label>
+          <label htmlFor="rename-wallet">Sobre name</label>
           <input
             id="rename-wallet"
             className="sobre-input"

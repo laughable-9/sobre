@@ -262,9 +262,9 @@ function Nav() {
             FAQ
           </a>
           {connectButton}
-          <Link href="/dashboard" className="sobre-btn-nav">
+          <OpenSobreButton className="sobre-btn-nav">
             Open Sobre
-          </Link>
+          </OpenSobreButton>
         </>
       }
     />

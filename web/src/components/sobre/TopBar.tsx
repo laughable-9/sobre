@@ -154,7 +154,7 @@ function WalletNamePill({
 
   return (
     <div className="sobre-wallet-pill">
-      {walletName || "Family Wallet"}
+      {walletName || "Sobre"}
       {canRename ? (
         <button
           onClick={() => {
@@ -168,8 +168,8 @@ function WalletNamePill({
             borderRadius: 6,
             color: "var(--text-3)",
           }}
-          aria-label="Rename wallet"
-          title="Rename wallet"
+          aria-label="Rename Sobre"
+          title="Rename Sobre"
         >
           <Pencil size={12} strokeWidth={2} />
         </button>

@@ -47,7 +47,7 @@ export function BottomDock({
           type="button"
           onClick={onOpenSobre}
           className="sobre-dock-fab"
-          aria-label="Open wallet actions"
+          aria-label="Open Sobre actions"
         >
           <EnvelopeSimpleIcon weight="fill" size={26} />
         </button>
