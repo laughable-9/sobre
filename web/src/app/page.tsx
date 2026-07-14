@@ -673,7 +673,7 @@ function TwoSides() {
         </div>
 
         <Reveal className="sobre-duo">
-          <div className="sobre-duo-col mango">
+          <div className="sobre-duo-col surface">
             <h3>Send home with zero guesswork.</h3>
             <ul>
               {SENDER_POINTS.map((p, i) => (
@@ -749,7 +749,7 @@ function FinalCTA() {
           Open a Sobre in 60 seconds. Invite your family. Send your first
           remittance.
         </p>
-        <OpenSobreButton className="sobre-btn-cream sobre-final-cta-btn">
+        <OpenSobreButton className="sobre-btn-primary sobre-final-cta-btn">
           Start with Sobre, free
           <ArrowRightIcon weight="bold" size={16} />
         </OpenSobreButton>

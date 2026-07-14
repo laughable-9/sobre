@@ -49,8 +49,8 @@ export function UpgradeAvailableCard({
     <div
       className="sobre-card-flat mb-5"
       style={{
-        borderColor: "#e8b9b0",
-        background: "#fffaf3",
+        borderColor: "var(--sobre-border)",
+        background: "var(--sobre-accent-soft)",
       }}
     >
       <div className="flex items-start gap-3">
@@ -60,14 +60,14 @@ export function UpgradeAvailableCard({
             width: 36,
             height: 36,
             borderRadius: 10,
-            background: "var(--sobre-cream)",
-            color: "var(--sobre-warning)",
+            background: "var(--sobre-surface)",
+            color: "var(--sobre-primary)",
           }}
         >
           <Sparkles size={18} strokeWidth={2.2} />
         </div>
         <div className="flex-1 min-w-0">
-          <h3 className="font-serif" style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>
+          <h3 style={{ fontSize: 17, fontWeight: 600, margin: 0 }}>
             A new version of Sobre is available
           </h3>
           <p
@@ -95,7 +95,7 @@ export function UpgradeAvailableCard({
               target="_blank"
               rel="noreferrer"
               className="inline-flex items-center gap-1"
-              style={{ color: "var(--sobre-accent)" }}
+              style={{ color: "var(--sobre-primary)" }}
             >
               Verify on stellar.expert
               <ExternalLink size={10} strokeWidth={2.4} />
