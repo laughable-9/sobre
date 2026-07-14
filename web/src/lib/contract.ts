@@ -120,6 +120,32 @@ export async function invokeWrite(
 }
 
 /**
+ * Invoke an admin-gated method that adopted the v11 caller-first signature.
+ * Tries the new shape `[caller, ...rest]` first; if the pre-simulation
+ * traps with `MismatchingParameterLen` — the signal that this wallet is
+ * still on the v10 wasm — retry with just `rest` and hope the older
+ * signature was `[...rest]`.
+ *
+ * A wallet that hasn't run `upgrade()` yet still expects the v10 shape.
+ * The retry happens BEFORE any passkey prompt (the mismatch trips on
+ * simulate), so the user only signs once regardless of which path wins.
+ */
+export async function invokeAdminWithFallback(
+  contractId: string,
+  method: string,
+  callerScVal: xdr.ScVal,
+  restArgs: xdr.ScVal[],
+): Promise<WriteResult> {
+  try {
+    return await invokeWrite(contractId, method, [callerScVal, ...restArgs]);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!msg.includes("MismatchingParameterLen")) throw e;
+    return await invokeWrite(contractId, method, restArgs);
+  }
+}
+
+/**
  * Simulate a read-only call against any contract. Returns the decoded native
  * value (whatever scValToNative produces for the contract's return type).
  * Throws on simulation error or missing retval.

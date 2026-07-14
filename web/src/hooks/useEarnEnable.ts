@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
 import { MOCK_USDY_ID } from "@/lib/config";
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseEarnEnableResult {
   enable: () => Promise<string>;
@@ -36,11 +36,12 @@ export function useEarnEnable(
     setPending(true);
     setError(null);
     try {
-      const args = [
+      const { hash } = await invokeAdminWithFallback(
+        contractId,
+        "earn_enable",
         Address.fromString(userAddress).toScVal(),
-        Address.fromString(MOCK_USDY_ID).toScVal(),
-      ];
-      const { hash } = await invokeWrite(contractId, "earn_enable", args);
+        [Address.fromString(MOCK_USDY_ID).toScVal()],
+      );
       setLastHash(hash);
       return hash;
     } catch (e) {

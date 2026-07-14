@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
-import { envelopeScVal, invokeWrite } from "@/lib/contract";
+import { envelopeScVal, invokeAdminWithFallback } from "@/lib/contract";
 import type { EnvelopeName } from "@/lib/config";
 
 export interface UseEarnSupplyResult {
@@ -34,12 +34,15 @@ export function useEarnSupply(
       setPending(true);
       setError(null);
       try {
-        const args = [
+        const { hash } = await invokeAdminWithFallback(
+          contractId,
+          "earn_supply",
           Address.fromString(userAddress).toScVal(),
-          envelopeScVal(envelope),
-          nativeToScVal(amountStroops, { type: "i128" }),
-        ];
-        const { hash } = await invokeWrite(contractId, "earn_supply", args);
+          [
+            envelopeScVal(envelope),
+            nativeToScVal(amountStroops, { type: "i128" }),
+          ],
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {

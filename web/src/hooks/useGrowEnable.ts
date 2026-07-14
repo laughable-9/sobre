@@ -4,7 +4,7 @@ import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
 import { BLEND_POOL_ID, SOROSWAP_ROUTER_ID, XLM_SAC_ID } from "@/lib/config";
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseGrowEnableResult {
   enable: () => Promise<string>;
@@ -35,13 +35,16 @@ export function useGrowEnable(
     setPending(true);
     setError(null);
     try {
-      const args = [
+      const { hash } = await invokeAdminWithFallback(
+        contractId,
+        "grow_enable",
         Address.fromString(userAddress).toScVal(),
-        Address.fromString(BLEND_POOL_ID).toScVal(),
-        Address.fromString(XLM_SAC_ID).toScVal(),
-        Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
-      ];
-      const { hash } = await invokeWrite(contractId, "grow_enable", args);
+        [
+          Address.fromString(BLEND_POOL_ID).toScVal(),
+          Address.fromString(XLM_SAC_ID).toScVal(),
+          Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+        ],
+      );
       setLastHash(hash);
       return hash;
     } catch (e) {

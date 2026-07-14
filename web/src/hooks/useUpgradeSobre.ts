@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseUpgradeSobreResult {
   upgrade: () => Promise<string>;
@@ -26,24 +26,16 @@ export function useUpgradeSobre(
     setPending(true);
     setError(null);
     try {
-      // Try the v11 signature first (upgrade takes caller: Address).
-      // Pre-v11 wallets' upgrade takes no args and will trap on
-      // MismatchingParameterLen — catch that specific case and retry
-      // with the 0-arg shape so the user only pays one passkey prompt
-      // regardless of which wasm the wallet is currently running.
-      try {
-        const { hash } = await invokeWrite(
-          contractId,
-          "upgrade",
-          [Address.fromString(adminAddress).toScVal()],
-        );
-        return hash;
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        if (!msg.includes("MismatchingParameterLen")) throw e;
-        const { hash } = await invokeWrite(contractId, "upgrade", []);
-        return hash;
-      }
+      // v11 upgrade takes caller; pre-v11 took no args. Helper handles
+      // the fallback so the user only pays one passkey prompt regardless
+      // of which wasm the wallet is currently running.
+      const { hash } = await invokeAdminWithFallback(
+        contractId,
+        "upgrade",
+        Address.fromString(adminAddress).toScVal(),
+        [],
+      );
+      return hash;
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       throw e;
