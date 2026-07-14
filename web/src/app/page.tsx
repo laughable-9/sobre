@@ -749,7 +749,7 @@ function FinalCTA() {
           Open a Sobre in 60 seconds. Invite your family. Send your first
           remittance.
         </p>
-        <OpenSobreButton className="sobre-btn-primary sobre-final-cta-btn">
+        <OpenSobreButton className="sobre-hero-cta">
           Start with Sobre, free
           <ArrowRightIcon weight="bold" size={16} />
         </OpenSobreButton>
