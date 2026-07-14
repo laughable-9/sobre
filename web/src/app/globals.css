@@ -1109,8 +1109,13 @@
    art/animation that Kyle is building separately. */
 .sobre-hero {
   background: var(--sobre-bg);
-  min-height: calc(100vh - 68px);
-  padding: clamp(48px, 10vh, 120px) 32px 80px;
+  /* Full viewport minus the sticky flap-pill topbar. `dvh` collapses in step
+   * with mobile browser chrome so we don't over-shoot the fold on Safari /
+   * Chrome iOS. Vertical padding scales with viewport height so tall
+   * monitors get generous breathing room without shoving CTAs off-screen
+   * on short laptops. */
+  min-height: 100dvh;
+  padding: clamp(96px, 18vh, 240px) 32px clamp(64px, 10vh, 120px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1166,10 +1171,8 @@
 }
 .sobre-hero-cta:active { transform: translateY(0); }
 @media (max-width: 960px) {
-  /* Keep the hero eating a big share of the viewport at smaller widths so it
-   * still feels like an opening statement instead of a header + one paragraph
-   * that immediately drops into the next section. */
-  .sobre-hero { min-height: 80vh; padding: 48px 24px 40px; }
+  /* Same 100dvh floor as desktop — tighten the horizontal padding only. */
+  .sobre-hero { padding-left: 24px; padding-right: 24px; }
   .sobre-hero-headline { font-size: clamp(32px, 9vw, 52px); }
 }
 
