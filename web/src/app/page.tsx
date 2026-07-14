@@ -9,6 +9,7 @@ import {
   ClockIcon,
   CurrencyDollarIcon,
   EyeIcon,
+  GithubLogoIcon,
   LockIcon,
   ShieldIcon,
 } from "@phosphor-icons/react";
@@ -57,24 +58,6 @@ const PREVIEW_STATE: WalletState = {
   grow_withdrawn_total: 0n,
   grow_requests: [],
 };
-
-function GithubMark({ size = 18 }: { size?: number }) {
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.8}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden
-    >
-      <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22" />
-    </svg>
-  );
-}
 
 const STATS = [
   {
@@ -867,46 +850,30 @@ function Footer() {
   return (
     <footer className="sobre-footer">
       <div className="sobre-container">
-        <div className="sobre-footer-grid">
-          <div>
-            <div className="sobre-brand">
-              <Image
-                src="/sobre-logo2.svg"
-                alt=""
-                width={32}
-                height={32}
-              />
-              <span className="sobre-brand-name">Sobre</span>
-            </div>
-            <p
-              style={{
-                marginTop: 16,
-                fontSize: 14,
-                maxWidth: "32ch",
-                color: "var(--text-2)",
-              }}
-            >
-              A joint account for families living worlds apart. Made for OFWs,
-              built on Stellar.
-            </p>
+        <div>
+          <div className="sobre-brand">
+            <Image
+              src="/sobre-logo2.svg"
+              alt=""
+              width={32}
+              height={32}
+            />
+            <span className="sobre-brand-name">Sobre</span>
           </div>
-          <div className="sobre-footer-col">
-            <h4>Product</h4>
-            <ul>
-              <li>
-                <a href="#how">How it works</a>
-              </li>
-              <li>
-                <a href="#about">FAQ</a>
-              </li>
-              <li>
-                <Link href="/dashboard">Open Wallet</Link>
-              </li>
-            </ul>
-          </div>
+          <p
+            style={{
+              marginTop: 16,
+              fontSize: 14,
+              maxWidth: "32ch",
+              color: "var(--text-2)",
+            }}
+          >
+            A joint account for families living worlds apart. Made for OFWs,
+            built on Stellar.
+          </p>
         </div>
         <div className="sobre-footer-bottom">
-          <div>© 2026 Sobre. Built for Stellar Philippines Hackathon.</div>
+          <div>© 2026 Sobre</div>
           <div
             style={{
               display: "flex",
@@ -927,7 +894,7 @@ function Footer() {
               rel="noreferrer"
               aria-label="GitHub"
             >
-              <GithubMark size={18} />
+              <GithubLogoIcon weight="fill" size={18} />
             </a>
           </div>
         </div>

@@ -210,6 +210,55 @@
   .sobre-topbar-inner { padding: 0 16px; gap: 12px; }
   .sobre-topbar-center { display: none; }
 }
+
+/* ─── Landing envelope-flap nav ────────────────────────────────────────────
+   Floating white pill inset from the top of the viewport, with a subtle
+   downward V-notch on the bottom edge suggesting the fold of an envelope
+   flap. The outer <header> becomes a transparent sticky wrapper; the actual
+   chrome (fill / border / shadow) lives on `.sobre-topbar-inner`, which lets
+   the notch pseudo attach directly to the visible pill.
+
+   Uses v2 tokens (white surface, Ink 900 text, Green 600 for the CTA which
+   is inherited from `.sobre-btn-nav`). Pure white — no cream, no gradient. */
+.sobre-topbar.sobre-topbar-flap {
+  background: transparent;
+  border-bottom: none;
+  padding: 16px 20px 0;
+}
+.sobre-topbar.sobre-topbar-flap .sobre-topbar-inner {
+  max-width: 1200px;
+  padding: 10px 16px 10px 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-sm);
+  position: relative;
+}
+/* The envelope V-notch: rotated square tucked halfway under the pill so only
+   its two lower edges are visible, matching the pill's fill + border. Sits
+   behind the pill (`z-index: -1`) so the pill's straight bottom edge hides
+   the top half; only the flap peeks out below. */
+.sobre-topbar.sobre-topbar-flap .sobre-topbar-inner::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 14px;
+  height: 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-top-color: transparent;
+  border-left-color: transparent;
+  transform: translateX(-50%) rotate(45deg);
+  border-bottom-right-radius: 3px;
+}
+@media (max-width: 760px) {
+  .sobre-topbar.sobre-topbar-flap { padding: 12px 12px 0; }
+  .sobre-topbar.sobre-topbar-flap .sobre-topbar-inner {
+    padding: 8px 12px;
+    border-radius: 14px;
+  }
+}
 .sobre-wallet-pill {
   display: inline-flex; align-items: center;
   background: var(--surface);
@@ -1335,8 +1384,8 @@
 }
 .sobre-step-num {
   font-family: var(--serif);
-  font-size: 24px; font-weight: 600; color: var(--sobre-primary);
-  width: 40px; height: 40px; background: #fbe7d2;
+  font-size: 24px; font-weight: 600; color: var(--sobre-accent);
+  width: 40px; height: 40px; background: var(--accent-soft);
   border-radius: 50%; display: grid; place-items: center;
 }
 .sobre-step h3 { font-family: var(--serif); font-size: 20px; font-weight: 600; }
@@ -1372,7 +1421,7 @@
 }
 @media (max-width: 800px) { .sobre-duo { grid-template-columns: 1fr; } }
 .sobre-duo-col { padding: 40px; }
-.sobre-duo-col.mango { background: #fbe7d2; }
+.sobre-duo-col.mango { background: var(--surface); }
 .sobre-duo-col.green { background: var(--accent-soft); }
 .sobre-duo-col h3 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
 .sobre-duo-col ul { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; gap: 14px; }
@@ -1385,10 +1434,6 @@
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%232E6B4C' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
   background-repeat: no-repeat; background-size: contain;
 }
-.sobre-duo-col.mango li::before {
-  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23D67E28' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>");
-}
-
 .sobre-faq { margin-top: 36px; max-width: 820px; }
 .sobre-faq-item { border-bottom: 1px solid var(--border); }
 .sobre-faq-item:first-child { border-top: 1px solid var(--border); }
@@ -1412,39 +1457,81 @@
 .sobre-faq-item.open .sobre-faq-a { max-height: 360px; }
 
 .sobre-final-cta {
-  background: linear-gradient(160deg, #F0A85B 0%, var(--sobre-primary) 45%, #C97224 100%);
-  color: #FFF8EC;
+  background: var(--sobre-primary);
+  color: var(--primary-text);
   text-align: center;
   padding: 110px 24px;
 }
-.sobre-final-cta h2 { color: #FFF8EC; font-family: var(--serif); font-size: clamp(36px, 4.5vw, 56px); font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
-.sobre-final-cta .lede { color: rgba(255, 248, 236, 0.85); margin: 22px auto 32px; max-width: 60ch; font-size: 18px; }
-.sobre-final-cta .fine { color: rgba(255, 248, 236, 0.7); font-size: 13px; margin-top: 18px; }
+.sobre-final-cta h2 { color: var(--primary-text); font-family: var(--serif); font-size: clamp(36px, 4.5vw, 56px); font-weight: 600; letter-spacing: -0.01em; margin: 0; text-wrap: balance; }
+.sobre-final-cta .lede { color: color-mix(in srgb, var(--primary-text) 85%, transparent); margin: 22px auto 32px; max-width: 60ch; font-size: 18px; }
+.sobre-final-cta .fine { color: color-mix(in srgb, var(--primary-text) 70%, transparent); font-size: 13px; margin-top: 18px; }
 
 .sobre-footer {
-  background: #F4EDDC;
-  border-top: 1px solid var(--border-strong);
+  background: var(--surface-alt);
+  border-top: 1px solid var(--border);
   padding: 64px 0 32px;
 }
-.sobre-footer-grid {
-  display: grid; grid-template-columns: 2fr 1fr;
-  gap: 40px;
-}
-@media (max-width: 800px) { .sobre-footer-grid { grid-template-columns: 1fr 1fr; } }
-.sobre-footer-col h4 {
-  font-family: var(--font-sans), system-ui;
-  font-size: 12px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--text-2); margin: 0 0 14px;
-}
-.sobre-footer-col ul { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 10px; }
-.sobre-footer-col a { color: var(--text-1); font-size: 14px; }
-.sobre-footer-col a:hover { color: var(--sobre-primary); }
 .sobre-footer-bottom {
   margin-top: 48px; padding-top: 24px; border-top: 1px solid var(--border-strong);
   display: flex; align-items: center; justify-content: space-between;
   font-size: 13px; color: var(--text-2);
   flex-wrap: wrap; gap: 12px;
+}
+
+/* ─── Privacy / static prose page ──────────────────────────────────────────
+   Narrow reading column on a white page. Eyebrow, h1, and lede reuse the
+   shared marketing classes (`.sobre-eyebrow`, `.sobre-h1`, `.sobre-lede`);
+   only prose-specific rhythm and the dated tagline live here. */
+.sobre-privacy { padding: 40px 20px 96px; background: var(--surface); }
+.sobre-privacy-inner { max-width: 720px; margin: 0 auto; color: var(--text-1); }
+.sobre-privacy-updated { margin: 12px 0 0; font-size: 14px; color: var(--text-3); }
+.sobre-privacy-lede { margin-top: 32px; line-height: 1.6; }
+.sobre-privacy h2 {
+  font-family: var(--serif);
+  font-size: 24px; font-weight: 700; letter-spacing: -0.01em;
+  color: var(--text-1);
+  margin: 48px 0 12px;
+}
+.sobre-privacy h3 {
+  font-size: 15px; font-weight: 600;
+  color: var(--text-1);
+  margin: 24px 0 8px;
+}
+.sobre-privacy p {
+  font-size: 16px; line-height: 1.65; color: var(--text-2);
+  margin: 12px 0;
+}
+.sobre-privacy ul {
+  list-style: none; padding: 0; margin: 12px 0;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.sobre-privacy li {
+  position: relative; padding-left: 20px;
+  font-size: 16px; line-height: 1.6; color: var(--text-2);
+}
+.sobre-privacy li::before {
+  content: "";
+  position: absolute; left: 4px; top: 10px;
+  width: 5px; height: 5px; border-radius: 50%;
+  background: var(--sobre-primary);
+}
+.sobre-privacy strong { color: var(--text-1); font-weight: 600; }
+.sobre-privacy a {
+  color: var(--sobre-accent);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
+}
+.sobre-privacy a:hover { color: var(--sobre-primary); }
+.sobre-privacy p.sobre-privacy-back {
+  margin-top: 56px;
+  padding-top: 24px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+}
+@media (max-width: 640px) {
+  .sobre-privacy { padding: 28px 18px 72px; }
+  .sobre-privacy h2 { margin-top: 40px; }
 }
 
 .sobre-section-head { max-width: 720px; }
@@ -1529,7 +1616,7 @@ body { overflow-x: clip; min-width: 320px; }
    cream where backdrop-filter is unsupported. */
 @supports (backdrop-filter: blur(12px)) or (-webkit-backdrop-filter: blur(12px)) {
   .sobre-nav,
-  .sobre-topbar {
+  .sobre-topbar:not(.sobre-topbar-flap) {
     background: color-mix(in srgb, var(--sobre-bg) 82%, transparent);
     -webkit-backdrop-filter: saturate(1.4) blur(14px);
     backdrop-filter: saturate(1.4) blur(14px);
@@ -1538,7 +1625,8 @@ body { overflow-x: clip; min-width: 320px; }
 /* Clear the notch on phones so the bar isn't tucked under the status bar. */
 @media (max-width: 900px) {
   .sobre-nav { padding-top: var(--safe-top); }
-  .sobre-topbar { padding-top: calc(14px + var(--safe-top)); }
+  .sobre-topbar:not(.sobre-topbar-flap) { padding-top: calc(14px + var(--safe-top)); }
+  .sobre-topbar.sobre-topbar-flap { padding-top: calc(12px + var(--safe-top)); }
 }
 
 /* ─── Sticky bottom action bar (thumb zone) ─────────────────────────────

@@ -20,6 +20,7 @@ import Link from "next/link";
  */
 export function SiteHeader({
   showBrand = true,
+  variant = "app",
   center,
   right,
   children,
@@ -29,6 +30,11 @@ export function SiteHeader({
    *  hide it — identity is implicit and the wordmark just competes with the
    *  page title. */
   showBrand?: boolean;
+  /** "app" (default) renders the flat sticky bar used across the dashboard.
+   *  "landing" swaps to the floating envelope-flap pill treatment — a
+   *  rounded rectangle inset from the top with a subtle V-notch on its
+   *  bottom edge, echoing the fold of an envelope flap. */
+  variant?: "app" | "landing";
   /** Middle slot (e.g. wallet-name pill). Hidden on narrow viewports. */
   center?: React.ReactNode;
   /** Right-aligned cluster (nav links, wallet menu, CTAs). */
@@ -38,7 +44,9 @@ export function SiteHeader({
 }) {
   return (
     <ViewTransition name="sobre-header">
-      <header className="sobre-topbar">
+      <header
+        className={`sobre-topbar${variant === "landing" ? " sobre-topbar-flap" : ""}`}
+      >
         <div className="sobre-topbar-inner">
           {showBrand ? (
             <Link href="/" className="sobre-brand">
