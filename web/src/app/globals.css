@@ -1890,7 +1890,54 @@ body { overflow-x: clip; min-width: 320px; }
   .sobre-incoming-row .sobre-incoming-arrow { transform: rotate(90deg); align-self: center; }
 }
 
-.sobre-policy-stack { display: flex; flex-direction: column; gap: 14px; }
+.sobre-policy-stack { display: flex; flex-direction: column; gap: 12px; }
+.sobre-policy-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 14px 16px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: var(--shadow-xs);
+}
+.sobre-policy-ic {
+  width: 38px;
+  height: 38px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  display: grid;
+  place-items: center;
+}
+.sobre-policy-ic.accent { background: var(--accent-soft); color: var(--sobre-accent); }
+.sobre-policy-ic.danger { background: var(--sobre-danger-soft); color: var(--sobre-danger); }
+.sobre-policy-ic.muted  { background: var(--surface-alt);      color: var(--text-3); }
+.sobre-policy-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: none;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
+.sobre-policy-pill:disabled { cursor: default; opacity: 0.85; }
+.sobre-policy-pill.accent { background: var(--accent-soft);      color: var(--sobre-accent); }
+.sobre-policy-pill.danger { background: var(--sobre-danger-soft); color: var(--sobre-danger); }
+.sobre-policy-pill.muted  { background: var(--surface-alt);      color: var(--text-2); }
+.sobre-policy-hint {
+  margin-top: 4px;
+  padding: 14px 16px;
+  border: 1.5px dashed var(--border-strong);
+  border-radius: 14px;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 1.45;
+  background: transparent;
+}
 
 /* ─── Modals → bottom sheets on phones ──────────────────────────────────
    Every Sobre modal shares .sobre-modal-bg + .sobre-modal, so converting

@@ -10,6 +10,7 @@ import {
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
+import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
@@ -1064,6 +1065,20 @@ function Dashboard({ contractId }: { contractId: string }) {
               onProposalSent={() => {
                 void splitProposals.refresh();
                 flash("Proposal sent to the other admin", "ok");
+              }}
+            />
+          </div>
+
+          <div className="sobre-admin-section sobre-card-flat">
+            <h3>Household policy</h3>
+            <PolicySettingsForm
+              familyWalletId={familyWalletId}
+              isAdmin={isAdmin}
+              current={state.policy}
+              envelopeNames={state.envelope_names}
+              onSuccess={() => {
+                refresh();
+                flash("Policy saved", "ok");
               }}
             />
           </div>
