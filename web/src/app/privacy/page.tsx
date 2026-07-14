@@ -1,7 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 
-import { SiteHeader } from "@/components/sobre/SiteHeader";
+import { LandingHeader } from "@/components/sobre/LandingHeader";
 
 export const metadata: Metadata = {
   title: "Privacy Policy — Sobre",
@@ -12,23 +12,10 @@ export const metadata: Metadata = {
 export default function PrivacyPage() {
   return (
     <>
-      <SiteHeader
-        variant="landing"
-        right={
-          <>
-            <Link href="/" className="sobre-nav-link-text">
-              Home
-            </Link>
-            <Link href="/dashboard" className="sobre-btn-nav">
-              Open Sobre
-            </Link>
-          </>
-        }
-      />
+      <LandingHeader />
 
       <main className="sobre-privacy">
         <div className="sobre-privacy-inner">
-          <p className="sobre-eyebrow">Legal</p>
           <h1 className="sobre-h1">Privacy Policy</h1>
           <p className="sobre-privacy-updated">Last updated: July 14, 2026</p>
 

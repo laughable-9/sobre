@@ -14,15 +14,13 @@ import {
   ShieldIcon,
 } from "@phosphor-icons/react";
 
-import { usePasskeyWallet } from "@/hooks/usePasskeyWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { LOGO_SRC, PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
-import { SiteHeader } from "@/components/sobre/SiteHeader";
-import { WalletMenu } from "@/components/sobre/WalletMenu";
+import { LandingHeader } from "@/components/sobre/LandingHeader";
+import { OpenSobreButton } from "@/components/sobre/OpenSobreButton";
 import { Reveal } from "@/components/sobre/Reveal";
 import { BalanceHero } from "@/components/sobre/BalanceHero";
 import { EnvelopeSplitCard } from "@/components/sobre/EnvelopeSplitCard";
-import { useEnvelopeTransition } from "@/hooks/useEnvelopeTransition";
 
 /**
  * Sample household state for the landing page's product preview — ₱10,000
@@ -164,7 +162,7 @@ export default function Landing() {
   const [openFaq, setOpenFaq] = useState(0);
   return (
     <>
-      <Nav />
+      <LandingHeader />
       <Hero />
       <Problem />
       <HowItWorks />
@@ -176,36 +174,6 @@ export default function Landing() {
       <Footer />
       <MobileCTABar />
     </>
-  );
-}
-
-/**
- * "Open a Sobre" CTA that plays the envelope fly-out transition before
- * navigating to the dashboard. Renders as a real anchor (so it's still a
- * proper link / right-click-openable / keyboard-activatable) but intercepts
- * the plain click to run the animation first. Modifier-clicks and the reduced-
- * motion path fall through to normal navigation.
- */
-function OpenSobreButton({
-  className,
-  children,
-}: {
-  className?: string;
-  children: React.ReactNode;
-}) {
-  const { playFlyout } = useEnvelopeTransition();
-  return (
-    <Link
-      href="/dashboard"
-      className={className}
-      onClick={(e) => {
-        if (e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
-        e.preventDefault();
-        playFlyout("/dashboard");
-      }}
-    >
-      {children}
-    </Link>
   );
 }
 
@@ -225,86 +193,25 @@ function MobileCTABar() {
   );
 }
 
-function Nav() {
-  const wallet = usePasskeyWallet();
-  const { status, address, connect } = wallet;
-  const busy = status === "checking" || status === "creating";
-
-  const connectButton = address ? (
-    <WalletMenu wallet={wallet} />
-  ) : (
-    <button
-      type="button"
-      onClick={() => void connect()}
-      className="sobre-btn-nav sobre-btn-nav-soft"
-      disabled={busy}
-    >
-      {status === "checking"
-        ? "Checking…"
-        : status === "creating"
-          ? "Setting up…"
-          : "Continue with Google"}
-    </button>
-  );
-
-  return (
-    <SiteHeader
-      variant="landing"
-      right={
-        <>
-          <a href="#how" className="sobre-nav-link-text">
-            How it works
-          </a>
-          <a href="#product" className="sobre-nav-link-text">
-            The product
-          </a>
-          <a href="#about" className="sobre-nav-link-text">
-            FAQ
-          </a>
-          {connectButton}
-          <OpenSobreButton className="sobre-btn-nav">
-            Open Sobre
-          </OpenSobreButton>
-        </>
-      }
-    />
-  );
-}
-
 function Hero() {
   return (
     <section id="top" className="sobre-hero">
-      <div className="sobre-hero-grid">
-        <div className="sobre-hero-content">
-          <h1 className="sobre-hero-headline">
-            One Sobre.
-            <br />
-            No matter the{" "}
-            <em className="sobre-hero-accent">distance</em>.
-          </h1>
-          <p className="sobre-hero-subhead">
-            The shared family wallet for overseas workers. Every deposit
-            splits into envelopes the household agreed on, the moment it
-            arrives.
-          </p>
-          <OpenSobreButton className="sobre-hero-cta">
-            Open a Sobre
-            <ArrowRightIcon weight="bold" size={16} />
-          </OpenSobreButton>
-        </div>
-        <div className="sobre-hero-right">
-          <video
-            className="sobre-hero-loop"
-            src="/loop-1.mp4"
-            autoPlay
-            muted
-            loop
-            playsInline
-            disablePictureInPicture
-            disableRemotePlayback
-            controlsList="nodownload nofullscreen noremoteplayback"
-          />
-        </div>
+      <div className="sobre-hero-content">
+        <h1 className="sobre-hero-headline">
+          One Sobre.
+          <br />
+          No matter the{" "}
+          <em className="sobre-hero-accent">distance</em>.
+        </h1>
+        <p className="sobre-hero-subhead">
+          The shared family wallet for overseas workers. Every deposit
+          splits into envelopes the household agreed on, the moment it
+          arrives.
+        </p>
+        <OpenSobreButton className="sobre-hero-cta">
+          Open a Sobre
+          <ArrowRightIcon weight="bold" size={16} />
+        </OpenSobreButton>
       </div>
     </section>
   );
@@ -319,8 +226,7 @@ function Problem() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">The reality</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Money sent home,{" "}
             <em className="sobre-em">but it&apos;s never enough.</em>
           </h2>
@@ -368,8 +274,7 @@ function HowItWorks() {
     <section id="how" className="sobre-section">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">How it works</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Sending home,{" "}
             <em className="sobre-em">simplified.</em>
           </h2>
@@ -402,8 +307,7 @@ function Product() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">The product</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Not just an account.{" "}
             <em className="sobre-em">A plan for the family.</em>
           </h2>
@@ -744,8 +648,7 @@ function Trust() {
     <section id="trust" className="sobre-section">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">Why this works</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             Money you can <em className="sobre-em">actually trust.</em>
           </h2>
           <p className="sobre-lede" style={{ marginTop: 16 }}>
@@ -780,8 +683,7 @@ function TwoSides() {
     >
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">Two sides, one wallet</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
+          <h2 className="sobre-h2">
             For the sender. For the family.{" "}
             <em className="sobre-em">Same wallet.</em>
           </h2>
@@ -789,13 +691,7 @@ function TwoSides() {
 
         <Reveal className="sobre-duo">
           <div className="sobre-duo-col mango">
-            <div
-              className="sobre-eyebrow"
-              style={{ color: "var(--primary-hover)" }}
-            >
-              For the sender
-            </div>
-            <h3 style={{ marginTop: 10 }}>Send home with zero guesswork.</h3>
+            <h3>Send home with zero guesswork.</h3>
             <ul>
               {SENDER_POINTS.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -803,8 +699,7 @@ function TwoSides() {
             </ul>
           </div>
           <div className="sobre-duo-col green">
-            <div className="sobre-eyebrow">For the family at home</div>
-            <h3 style={{ marginTop: 10 }}>Each person has their own envelope.</h3>
+            <h3>Each person has their own envelope.</h3>
             <ul>
               {FAMILY_POINTS.map((p, i) => (
                 <li key={i}>{p}</li>
@@ -828,10 +723,7 @@ function Faq({
     <section className="sobre-section" id="about">
       <div className="sobre-container">
         <div className="sobre-section-head">
-          <div className="sobre-eyebrow">FAQ</div>
-          <h2 className="sobre-h2" style={{ marginTop: 10 }}>
-            Frequently asked questions
-          </h2>
+          <h2 className="sobre-h2">Frequently asked questions</h2>
         </div>
         <div className="sobre-faq">
           {FAQS.map((item, i) => (

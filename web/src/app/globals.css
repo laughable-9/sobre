@@ -197,7 +197,10 @@
   border-bottom: 1px solid var(--border);
   padding: 14px 0;
   position: sticky; top: 0; z-index: 30;
+  transition: transform 220ms ease;
+  will-change: transform;
 }
+.sobre-topbar.sobre-topbar-hidden { transform: translateY(-105%); }
 .sobre-topbar-inner {
   max-width: 1320px; margin: 0 auto; padding: 0 28px;
   display: flex; align-items: center; gap: 24px;
@@ -825,13 +828,6 @@
 .sobre-btn-cream { background: var(--bg); color: var(--text-1); padding: 14px 22px; border-radius: var(--r-btn); font-weight: 500; font-size: 15px; }
 .sobre-btn-cream:hover { background: #fff; }
 
-.sobre-eyebrow {
-  font-family: var(--font-sans), system-ui;
-  font-size: 13px; font-weight: 600;
-  letter-spacing: 0.08em; text-transform: uppercase;
-  color: var(--sobre-accent);
-}
-
 .sobre-section { padding: 96px 0; }
 @media (max-width: 720px) { .sobre-section { padding: 64px 0; } }
 
@@ -911,7 +907,7 @@
   .sobre-nav-link-text { display: none; }
   .sobre-nav-links { gap: 10px; }
   .sobre-nav-inner { padding-top: 14px; padding-bottom: 14px; }
-  .sobre-brand-name { font-size: 18px; }
+  .sobre-brand-name { display: none; }
   .sobre-nav-links a.sobre-btn-nav,
   .sobre-btn-nav,
   .sobre-nav-links a.sobre-btn-nav-soft,
@@ -1106,22 +1102,16 @@
   padding: clamp(48px, 10vh, 120px) 32px 80px;
   display: flex;
   align-items: center;
-}
-.sobre-hero-grid {
-  width: 100%;
-  max-width: 1200px;
-  margin: 0 auto;
-  display: grid;
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: 48px;
-  align-items: center;
+  justify-content: center;
 }
 .sobre-hero-content {
-  max-width: 36rem;
+  width: 100%;
+  max-width: 44rem;
+  margin: 0 auto;
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  text-align: left;
+  align-items: center;
+  text-align: center;
 }
 .sobre-hero-headline {
   font-family: var(--serif);
@@ -1164,45 +1154,8 @@
   transform: translateY(-1px);
 }
 .sobre-hero-cta:active { transform: translateY(0); }
-.sobre-hero-right {
-  min-height: 320px;
-  padding-right: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-.sobre-hero-loop {
-  width: 100%;
-  height: auto;
-  max-height: 70vh;
-  display: block;
-  border-radius: 16px;
-  object-fit: contain;
-}
 @media (max-width: 960px) {
   .sobre-hero { min-height: auto; padding: 48px 24px 40px; }
-  .sobre-hero-grid { grid-template-columns: 1fr; gap: 32px; }
-  .sobre-hero-content {
-    max-width: 100%;
-    align-items: center;
-    text-align: center;
-    margin: 0 auto;
-  }
-  .sobre-hero-subhead { margin-left: auto; margin-right: auto; }
-  .sobre-hero-right {
-    /* Force an explicit min-height so the slot survives even before video
-       metadata loads; without this the container can collapse to 0 on
-       narrow viewports and the video never paints. */
-    min-height: 240px;
-    padding: 0;
-    width: 100%;
-    max-width: 480px;
-    margin: 0 auto;
-  }
-  .sobre-hero-loop {
-    max-height: 60vh;
-    width: 100%;
-  }
   .sobre-hero-headline { font-size: clamp(32px, 9vw, 52px); }
 }
 
@@ -1479,9 +1432,9 @@
 }
 
 /* ─── Privacy / static prose page ──────────────────────────────────────────
-   Narrow reading column on a white page. Eyebrow, h1, and lede reuse the
-   shared marketing classes (`.sobre-eyebrow`, `.sobre-h1`, `.sobre-lede`);
-   only prose-specific rhythm and the dated tagline live here. */
+   Narrow reading column on a white page. h1 and lede reuse the shared
+   marketing classes (`.sobre-h1`, `.sobre-lede`); only prose-specific
+   rhythm and the dated tagline live here. */
 .sobre-privacy { padding: 40px 20px 96px; background: var(--surface); }
 .sobre-privacy-inner { max-width: 720px; margin: 0 auto; color: var(--text-1); }
 .sobre-privacy-updated { margin: 12px 0 0; font-size: 14px; color: var(--text-3); }
