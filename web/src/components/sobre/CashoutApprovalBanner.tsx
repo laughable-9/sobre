@@ -140,9 +140,29 @@ function ApprovalRow({
             className="truncate"
             style={{ fontWeight: 500, color: "var(--text-2)" }}
           >
-            {request.kind === "subaccount_fund"
-              ? `wants to send ₱${Math.round(php).toLocaleString("en-PH")} to ${recipientDisplay?.name ?? "a sub-account"} from ${envelopeLabel}`
-              : `wants to cash out ₱${Math.round(php).toLocaleString("en-PH")} from ${envelopeLabel}`}
+            {(() => {
+              const amt = `₱${Math.round(php).toLocaleString("en-PH")}`;
+              if (request.kind === "subaccount_fund") {
+                return `wants to send ${amt} to ${recipientDisplay?.name ?? "a sub-account"} from ${envelopeLabel}`;
+              }
+              if (request.kind === "transfer") {
+                // recipient_address on transfer rows is "envelope:<Name>"
+                // — surface the destination envelope name so the copy
+                // reads naturally.
+                const destRaw = request.recipientAddress ?? "";
+                const destKey = destRaw.startsWith("envelope:")
+                  ? destRaw.slice("envelope:".length)
+                  : "";
+                const destLabel =
+                  destKey === "Groceries" || destKey === "Tuition" || destKey === "Savings"
+                    ? envelopeNames[
+                        destKey === "Groceries" ? 0 : destKey === "Tuition" ? 1 : 2
+                      ] ?? destKey
+                    : "another envelope";
+                return `wants to move ${amt} from ${envelopeLabel} to ${destLabel}`;
+              }
+              return `wants to cash out ${amt} from ${envelopeLabel}`;
+            })()}
           </span>
         </div>
         <div

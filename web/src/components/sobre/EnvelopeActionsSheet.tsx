@@ -125,8 +125,8 @@ export function EnvelopeActionsSheet({
         {isAdmin ? (
           <ActionRow
             icon={<ArrowLeftRight size={20} strokeWidth={2} />}
-            title="Send to another Sobre"
-            subtitle="Move money to a different family wallet you help run"
+            title="Move to another envelope"
+            subtitle="Shift money between envelopes inside this Sobre"
             disabled={isEmpty}
             onClick={onTransfer}
           />

@@ -11,7 +11,7 @@ import {
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { CashoutApprovalBanner } from "@/components/sobre/CashoutApprovalBanner";
-import { TransferBetweenSobresModal } from "@/components/sobre/TransferBetweenSobresModal";
+import { TransferBetweenEnvelopesModal } from "@/components/sobre/TransferBetweenEnvelopesModal";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { usePendingCashoutApprovals } from "@/hooks/usePendingCashoutApprovals";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
@@ -792,8 +792,8 @@ function Dashboard({ contractId }: { contractId: string }) {
                       type="button"
                       className="hero-title-edit"
                       onClick={() => setRenameOpen(true)}
-                      aria-label="Rename wallet"
-                      title="Rename wallet"
+                      aria-label="Rename Sobre"
+                      title="Rename Sobre"
                     >
                       <PencilSimpleIcon weight="bold" size={12} />
                     </button>
@@ -1353,7 +1353,7 @@ function Dashboard({ contractId }: { contractId: string }) {
       ) : null}
 
       {transferForEnvelope ? (
-        <TransferBetweenSobresModal
+        <TransferBetweenEnvelopesModal
           userAddress={address}
           contractId={contractId}
           state={state}

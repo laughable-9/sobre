@@ -1,17 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 
-import { Avatar } from "@/components/sobre/Avatar";
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { Sheet } from "@/components/sobre/Sheet";
 import { useCashoutApproval } from "@/hooks/useCashoutApproval";
-import { useTransferBetweenSobres } from "@/hooks/useTransferBetweenSobres";
-import {
-  useTransferDestinations,
-  type TransferDestination,
-} from "@/hooks/useTransferDestinations";
+import { useTransferBetweenEnvelopes } from "@/hooks/useTransferBetweenEnvelopes";
 import type { WalletState } from "@/hooks/useWalletState";
 import {
   ENVELOPE_LABELS,
@@ -21,25 +16,26 @@ import {
   type EnvelopeName,
 } from "@/lib/config";
 import { isEnvelopeApprovalGated } from "@/lib/contract";
-import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+import { useCurrency } from "@/lib/currency";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 /**
- * Inter-Sobre transfer.
+ * Move money between envelopes inside the same Sobre.
  *
- *  Two passkey prompts:
- *    1. `withdraw(caller, envelope, amount, memo)` on the source Sobre —
- *       envelope debits, tokens land in the user's smart wallet.
- *    2. `deposit_with_split(from, g, t, s)` on the destination Sobre —
- *       user's smart wallet debits, destination envelopes credit per its
- *       own split percentages (fetched at pick-time).
+ *   1. `withdraw(caller, source, amount, memo)` on this contract —
+ *      source envelope debits, tokens land in the user's smart wallet.
+ *   2. `deposit_with_split(from=caller, g, t, s)` on the same contract
+ *      with only the destination envelope's slot non-zero — user
+ *      smart wallet debits, that envelope credits. Net movement is
+ *      a pure envelope reallocation.
  *
  *  Multi-admin approval: if the source envelope sits in
- *  `state.policy.protectedEnvelopes` AND the family has 2+ admins, the
- *  transfer routes through `family_pending_requests` with kind='transfer'
- *  first — same shape as the cashout gate. Solo-admin skips the wait.
+ *  `state.policy.protectedEnvelopes` AND the family has 2+ admins,
+ *  the move routes through `family_pending_requests` with
+ *  `kind='transfer'` first — same infrastructure the cashout and
+ *  sub-account gates already use. Solo-admin families skip the wait.
  */
-export function TransferBetweenSobresModal({
+export function TransferBetweenEnvelopesModal({
   userAddress,
   contractId,
   state,
@@ -61,87 +57,62 @@ export function TransferBetweenSobresModal({
   onSuccess: () => void;
   onFlash: (msg: string, kind?: "ok" | "warn") => void;
 }) {
-  const [envelope, setEnvelope] = useState<EnvelopeName>(
+  const [source, setSource] = useState<EnvelopeName>(
     initialEnvelope ?? "Groceries",
   );
-  const [destination, setDestination] = useState<TransferDestination | null>(
-    null,
-  );
-  const [amount, setAmount] = useState<string>("500");
-  const [destPercents, setDestPercents] = useState<
-    [number, number, number] | null
-  >(null);
+  const [destination, setDestination] = useState<EnvelopeName | null>(null);
+  // No default value — an amount pre-filled with "500" reads as a
+  // suggested number and users tap Send without changing it.
+  const [amount, setAmount] = useState<string>("");
   const [phase, setPhase] = useState<
     "input" | "awaiting_approval" | "signing" | "done" | "error"
   >("input");
   const [flashMsg, setFlashMsg] = useState<string | null>(null);
 
-  const { destinations, loading: destsLoading } = useTransferDestinations(
-    contractId,
-  );
+  const { currency } = useCurrency();
+  const isUsd = currency === "USD";
+  const symbol = isUsd ? "$" : "₱";
+  const numberLocale = isUsd ? "en-US" : "en-PH";
   const { transfer, pending: transferPending, error: transferError, step } =
-    useTransferBetweenSobres(userAddress);
+    useTransferBetweenEnvelopes(userAddress);
 
-  // Load the destination Sobre's percents whenever a new destination
-  // is picked — the on-chain deposit_with_split needs [g, t, s] and
-  // we prefer the household's own split over any client fallback.
-  useEffect(() => {
-    // External-sync effect: fetches the destination Sobre's percents
-    // whenever the picker changes.
-    if (!destination) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setDestPercents(null);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      const supabase = getSupabaseBrowserClient();
-      const { data } = await supabase
-        .from("family_wallets")
-        .select("percents")
-        .eq("contract_id", destination.contractId)
-        .maybeSingle();
-      if (cancelled) return;
-      const raw = (data as { percents: number[] | null } | null)?.percents;
-      if (raw && raw.length === 3) {
-        setDestPercents([raw[0]!, raw[1]!, raw[2]!]);
-      } else {
-        setDestPercents([50, 30, 20]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [destination]);
-
-  const envIdx = ENVELOPE_LABELS.indexOf(envelope);
-  const envelopeBalancePhp =
-    (Number(envelopeTotalStroops(state, envIdx)) / STROOPS_PER_USDC) *
-    PHP_PER_USDC;
+  const envIdx = ENVELOPE_LABELS.indexOf(source);
+  const sourceBalanceToken =
+    Number(envelopeTotalStroops(state, envIdx)) / STROOPS_PER_USDC;
+  const sourceBalanceDisplay = isUsd
+    ? sourceBalanceToken
+    : sourceBalanceToken * PHP_PER_USDC;
   const parsed = Number(amount);
   const validAmount = parsed > 0 && Number.isFinite(parsed);
+  // Amount typed is in whatever the currency toggle is set to; convert
+  // through USDC (the on-chain unit) before turning into stroops.
+  const amountUsdc = validAmount ? (isUsd ? parsed : parsed / PHP_PER_USDC) : 0;
   const stroopsRequested = validAmount
-    ? BigInt(Math.round((parsed / PHP_PER_USDC) * STROOPS_PER_USDC))
+    ? BigInt(Math.round(amountUsdc * STROOPS_PER_USDC))
     : 0n;
   const canSubmit =
     validAmount &&
-    parsed <= envelopeBalancePhp &&
+    parsed <= sourceBalanceDisplay &&
     destination !== null &&
-    destPercents !== null;
+    destination !== source;
 
   const totalAdmins = state.admins.length;
   const needsApproval = isEnvelopeApprovalGated(
     state.policy,
-    envelope,
+    source,
     totalAdmins,
   );
   const approval = useCashoutApproval({
     familyWalletId,
     memberWalletDbId,
-    envelope,
+    envelope: source,
     amountStroops: stroopsRequested,
     kind: "transfer",
-    recipientAddress: destination?.contractId ?? null,
+    // recipient_address on transfer rows carries the destination
+    // envelope for envelope-to-envelope moves. The RLS INSERT policy
+    // just requires it to be non-null; the exact shape is a client
+    // convention that the approval banner reads back out.
+    recipientAddress: destination ? `envelope:${destination}` : null,
   });
   const approvalsRemaining = Math.max(
     0,
@@ -149,20 +120,20 @@ export function TransferBetweenSobresModal({
   );
 
   const runOnChain = async () => {
-    if (!destination || !destPercents || stroopsRequested <= 0n) return;
+    if (!destination || destination === source || stroopsRequested <= 0n) return;
     setPhase("signing");
     try {
       await transfer({
-        sourceContractId: contractId,
-        sourceEnvelope: envelope,
-        destinationContractId: destination.contractId,
-        destinationPercents: destPercents,
+        contractId,
+        sourceEnvelope: source,
+        destinationEnvelope: destination,
         amountStroops: stroopsRequested,
-        destinationDisplayName: destination.displayName,
       });
       approval.reset();
+      const sourceLabel = displayEnvelopeName(source, state.envelope_names);
+      const destLabel = displayEnvelopeName(destination, state.envelope_names);
       onFlash(
-        `Sent ₱${parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} to ${destination.displayName}`,
+        `Moved ${symbol}${parsed.toLocaleString(numberLocale, { minimumFractionDigits: 2 })} from ${sourceLabel} to ${destLabel}`,
       );
       onSuccess();
       setPhase("done");
@@ -173,7 +144,6 @@ export function TransferBetweenSobresModal({
   };
 
   useEffect(() => {
-    // External-sync effect: approval.status polls Supabase.
     if (phase !== "awaiting_approval") return;
     if (approval.status === "approved") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -191,11 +161,14 @@ export function TransferBetweenSobresModal({
       return;
     }
     setPhase("awaiting_approval");
-    const id = await approval.create({ memo: "Inter-Sobre transfer" });
+    const id = await approval.create({ memo: "Envelope-to-envelope transfer" });
     if (!id) setPhase("input");
   };
 
-  const envelopeLabel = displayEnvelopeName(envelope, state.envelope_names);
+  const sourceLabel = displayEnvelopeName(source, state.envelope_names);
+  const destinationLabel = destination
+    ? displayEnvelopeName(destination, state.envelope_names)
+    : null;
   const availableEnvelopes = useMemo(() => ENVELOPE_LABELS, []);
 
   if (phase === "awaiting_approval") {
@@ -203,9 +176,13 @@ export function TransferBetweenSobresModal({
       <Sheet onClose={onClose} ariaLabel="Waiting for approval">
         <h2>Waiting for the other admin{totalAdmins > 2 ? "s" : ""}</h2>
         <p className="sub">
-          {envelopeLabel} is a locked envelope. Every admin needs to approve
-          before ₱{Math.round(parsed).toLocaleString("en-PH")} can move to{" "}
-          {destination?.displayName ?? "the other Sobre"}.
+          {sourceLabel} is a locked envelope. Every admin needs to approve
+          before {symbol}
+          {parsed.toLocaleString(numberLocale, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}{" "}
+          can move to {destinationLabel}.
         </p>
         <div
           className="rounded-[10px] px-4 py-4 mt-3 mb-4"
@@ -256,7 +233,7 @@ export function TransferBetweenSobresModal({
 
   if (phase === "signing") {
     return (
-      <Sheet onClose={onClose} ariaLabel="Transferring">
+      <Sheet onClose={onClose} ariaLabel="Moving money">
         <CenteredCopy
           icon={<Loader2 size={28} className="animate-spin" />}
           title={
@@ -271,11 +248,15 @@ export function TransferBetweenSobresModal({
 
   if (phase === "done") {
     return (
-      <Sheet onClose={onClose} ariaLabel="Transfer complete">
-        <h2>Transferred</h2>
+      <Sheet onClose={onClose} ariaLabel="Moved">
+        <h2>Moved</h2>
         <p className="sub">
-          ₱{parsed.toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed
-          in {destination?.displayName}.
+          {symbol}
+          {parsed.toLocaleString(numberLocale, {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          })}{" "}
+          landed in {destinationLabel}.
         </p>
         <div className="sobre-modal-actions">
           <button
@@ -292,13 +273,13 @@ export function TransferBetweenSobresModal({
 
   if (phase === "error") {
     return (
-      <Sheet onClose={onClose} ariaLabel="Transfer failed">
+      <Sheet onClose={onClose} ariaLabel="Move failed">
         <h2>Something went wrong</h2>
         <p
           className="sub"
           style={{ color: "var(--sobre-danger)" }}
         >
-          {flashMsg ?? transferError ?? "The transfer couldn't complete."}
+          {flashMsg ?? transferError ?? "The move couldn't complete."}
         </p>
         <div className="sobre-modal-actions">
           <button
@@ -321,33 +302,37 @@ export function TransferBetweenSobresModal({
   }
 
   return (
-    <Sheet onClose={onClose} ariaLabel="Transfer to another Sobre">
-      <h2>Send to another Sobre</h2>
-      <p className="sub">
-        Move money from this Sobre to another one you help run. Two quick
-        passkey prompts.
-      </p>
+    <Sheet onClose={onClose} ariaLabel="Move between envelopes">
+      <h2>Move to another envelope</h2>
 
       <div className="sobre-input-group">
         <label>From envelope</label>
-        <div className="grid grid-cols-3 gap-2 mt-1">
+        <div
+          key={`from-${source}`}
+          className="grid grid-cols-3 gap-2 mt-1 sobre-fade-in"
+        >
           {availableEnvelopes.map((e) => (
             <button
               key={e}
               type="button"
-              onClick={() => setEnvelope(e)}
+              onClick={() => {
+                setSource(e);
+                if (destination === e) setDestination(null);
+              }}
               className="rounded-[10px] text-[13px] px-3 py-2"
               style={{
                 border:
-                  envelope === e
+                  source === e
                     ? "1.5px solid var(--sobre-accent)"
                     : "1px solid var(--border)",
                 background:
-                  envelope === e ? "var(--accent-soft)" : "var(--surface)",
+                  source === e ? "var(--accent-soft)" : "var(--surface)",
                 color:
-                  envelope === e ? "var(--sobre-accent)" : "var(--text-1)",
+                  source === e ? "var(--sobre-accent)" : "var(--text-1)",
                 fontWeight: 600,
                 cursor: "pointer",
+                transition:
+                  "background 160ms ease, color 160ms ease, border-color 160ms ease",
               }}
             >
               {displayEnvelopeName(e, state.envelope_names)}
@@ -358,70 +343,55 @@ export function TransferBetweenSobresModal({
           className="mt-2 text-[12px] tabular"
           style={{ color: "var(--text-3)" }}
         >
-          Available: ₱
-          {envelopeBalancePhp.toLocaleString("en-PH", {
+          Available: {symbol}
+          {sourceBalanceDisplay.toLocaleString(numberLocale, {
             maximumFractionDigits: 2,
           })}
         </div>
       </div>
 
       <div className="sobre-input-group">
-        <label>To Sobre</label>
-        {destsLoading ? (
-          <div
-            className="text-[12px] mt-1"
-            style={{ color: "var(--text-3)" }}
-          >
-            Loading your other Sobres…
-          </div>
-        ) : destinations.length === 0 ? (
-          <div
-            style={{
-              padding: "12px",
-              borderRadius: 10,
-              border: "1px dashed var(--border)",
-              fontSize: 12,
-              color: "var(--text-3)",
-            }}
-          >
-            You don&apos;t have another Sobre to transfer to yet. Open a
-            second Sobre from the My Sobres page.
-          </div>
-        ) : (
-          <div style={{ display: "grid", gap: 6, marginTop: 6 }}>
-            {destinations.map((d) => {
-              const active = destination?.contractId === d.contractId;
-              return (
-                <button
-                  key={d.contractId}
-                  type="button"
-                  onClick={() => setDestination(d)}
-                  className="flex items-center gap-3 p-3 rounded-[10px] text-left"
-                  style={{
-                    border: active
-                      ? "1.5px solid var(--sobre-accent)"
-                      : "1px solid var(--border)",
-                    background: active
-                      ? "var(--accent-soft)"
-                      : "var(--surface-alt)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <Avatar src={null} name={d.displayName} size={32} />
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 600,
-                      color: "var(--text-1)",
-                    }}
-                  >
-                    {d.displayName}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-        )}
+        <label>To envelope</label>
+        <div
+          key={`to-${destination ?? "none"}`}
+          className="grid grid-cols-3 gap-2 mt-1 sobre-fade-in"
+        >
+          {availableEnvelopes.map((e) => {
+            const disabled = e === source;
+            const active = destination === e;
+            return (
+              <button
+                key={e}
+                type="button"
+                onClick={() => !disabled && setDestination(e)}
+                disabled={disabled}
+                className="rounded-[10px] text-[13px] px-3 py-2"
+                style={{
+                  border: active
+                    ? "1.5px solid var(--sobre-accent)"
+                    : "1px solid var(--border)",
+                  background: active
+                    ? "var(--accent-soft)"
+                    : disabled
+                      ? "var(--surface-alt)"
+                      : "var(--surface)",
+                  color: active
+                    ? "var(--sobre-accent)"
+                    : disabled
+                      ? "var(--text-3)"
+                      : "var(--text-1)",
+                  fontWeight: 600,
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  opacity: disabled ? 0.55 : 1,
+                  transition:
+                    "background 160ms ease, color 160ms ease, border-color 160ms ease, opacity 160ms ease",
+                }}
+              >
+                {displayEnvelopeName(e, state.envelope_names)}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       <div className="sobre-input-group">
@@ -431,14 +401,14 @@ export function TransferBetweenSobresModal({
             style={{ color: "var(--text-3)", fontSize: 16 }}
             aria-hidden
           >
-            ₱
+            {symbol}
           </span>
           <input
             type="text"
             inputMode="numeric"
             value={amount}
             onChange={(e) => setAmount(e.target.value)}
-            aria-label="Transfer amount in pesos"
+            aria-label={`Move amount in ${isUsd ? "USD" : "PHP"}`}
             style={{
               flex: 1,
               fontSize: 20,
@@ -452,40 +422,15 @@ export function TransferBetweenSobresModal({
             }}
           />
         </div>
-        {parsed > envelopeBalancePhp && validAmount ? (
+        {parsed > sourceBalanceDisplay && validAmount ? (
           <div
             className="mt-1 text-[12px]"
             style={{ color: "var(--sobre-danger)" }}
           >
-            More than the envelope holds.
+            More than {sourceLabel} holds.
           </div>
         ) : null}
       </div>
-
-      {destination ? (
-        <div
-          className="rounded-[10px] px-3 py-3 mb-3 text-[12px] flex items-center gap-2"
-          style={{
-            background: "var(--surface-alt)",
-            border: "1px solid var(--border)",
-            color: "var(--text-2)",
-          }}
-        >
-          <span>{envelopeLabel}</span>
-          <ArrowRight size={12} strokeWidth={2.2} />
-          <span>
-            {destination.displayName}
-            {destPercents ? (
-              <span
-                className="ml-2 tabular"
-                style={{ color: "var(--text-3)" }}
-              >
-                {destPercents[0]}% / {destPercents[1]}% / {destPercents[2]}%
-              </span>
-            ) : null}
-          </span>
-        </div>
-      ) : null}
 
       <div className="sobre-modal-actions">
         <button
@@ -505,7 +450,7 @@ export function TransferBetweenSobresModal({
             !canSubmit || transferPending ? { opacity: 0.5 } : undefined
           }
         >
-          {needsApproval ? "Request approval" : "Transfer"}
+          {needsApproval ? "Request approval" : "Move"}
         </button>
       </div>
     </Sheet>
