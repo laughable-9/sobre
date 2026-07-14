@@ -18,6 +18,7 @@ import { useCurrency } from "@/lib/currency";
 import {
   formatCountdown,
   formatCurrencyLocale,
+  formatInterestCurrencyLocale,
   phpToStroops,
 } from "@/lib/format";
 
@@ -254,7 +255,7 @@ export function GrowPanel({
               <p className="sobre-earn-card-sub sobre-grow-interest">
                 Interest earned{" "}
                 <span className="tabular">
-                  {formatCurrencyLocale(growInterestEarned, currency)}
+                  {formatInterestCurrencyLocale(growInterestEarned, currency)}
                 </span>
               </p>
             ) : null}

@@ -9,7 +9,7 @@ import {
 } from "@/lib/config";
 import { PHP_PER_USDC } from "@/lib/config";
 import { renderEnvelopeIcon } from "@/lib/envelopeIcons";
-import { formatCurrencyLocale } from "@/lib/format";
+import { formatInterestCurrencyLocale } from "@/lib/format";
 import { AnimatedNumber } from "@/components/sobre/AnimatedNumber";
 
 /**
@@ -92,7 +92,7 @@ export function EnvelopeCard({
           <span className="sobre-env-earn-interest">
             Interest earned{" "}
             <span className="tabular">
-              {formatCurrencyLocale(earn.interestEarnedStroops, currency)}
+              {formatInterestCurrencyLocale(earn.interestEarnedStroops, currency)}
             </span>
           </span>
         </div>
