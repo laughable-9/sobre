@@ -34,6 +34,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { isEnvelopeApprovalGated } from "@/lib/contract";
 import {
   readCashoutRecovery,
   type CashoutRecoverySnapshot,
@@ -379,13 +380,16 @@ export function PdaxWithdrawModal({
   const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
   const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
-  // Multi-admin approval mechanic. Locked envelope + 2+ admins in the
-  // family means the initiator's cashout can't fire until every other
-  // admin appends to approvers_wallet_ids. Solo-admin families short-
-  // circuit — the sole admin's own click IS the approval.
-  const envelopeProtected = state.policy.protectedEnvelopes.includes(envelope);
+  // Multi-admin approval mechanic. Solo-admin families short-circuit —
+  // the sole admin's own click IS the approval. isEnvelopeApprovalGated
+  // is the single source of truth across the three admin-outflow
+  // modals; keep the local names for readability at the callsite.
   const totalAdmins = state.admins.length;
-  const needsApproval = envelopeProtected && totalAdmins > 1;
+  const needsApproval = isEnvelopeApprovalGated(
+    state.policy,
+    envelope,
+    totalAdmins,
+  );
   const approval = useCashoutApproval({
     familyWalletId,
     memberWalletDbId,
@@ -677,7 +681,7 @@ export function PdaxWithdrawModal({
             title="Cashout couldn't complete"
             body={
               row.failure_reason
-                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX. Contact support to recover, or retry from your wallet.`
+                ? `${row.failure_reason}. The ₱${Number(row.amount_php ?? 0).toLocaleString("en-PH")} is still at PDAX. Contact support to recover, or retry from your Sobre.`
                 : "The cashout didn't complete. Your funds are recoverable. Contact support if they're stuck at PDAX."
             }
             footer={

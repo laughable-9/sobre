@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Clock, Lock } from "lucide-react";
 
 import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
-import type { WalletPolicyShape } from "@/lib/contract";
+import { envelopeLocksActive, type WalletPolicyShape } from "@/lib/contract";
 import { PHP_PER_USDC, STROOPS_PER_TOKEN } from "@/lib/config";
 import { phpToStroops } from "@/lib/format";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
@@ -36,6 +36,7 @@ const SLOT_ENVELOPE_KEY: Record<
 export function PolicySettingsForm({
   familyWalletId,
   isAdmin,
+  adminCount,
   current,
   envelopeNames,
   onSuccess,
@@ -43,6 +44,12 @@ export function PolicySettingsForm({
 }: {
   familyWalletId: string | null;
   isAdmin: boolean;
+  /** Live count of on-chain admins for this family. Approval-gated
+   *  locks are meaningful only when 2+ admins can sign — a solo
+   *  admin's own action already IS the approval, so the toggles are
+   *  disabled below the threshold to head off a confusing "why does
+   *  nothing wait for approval?" experience. */
+  adminCount: number;
   current: WalletPolicyShape;
   /** Display labels [Groceries, Tuition, Savings] from Supabase. Used
    *  for the row headings — if the admin renamed "Tuition" to "School",
@@ -53,6 +60,7 @@ export function PolicySettingsForm({
    *  gate tab-switch / Back navigation on a "save your changes?" confirm. */
   onDirtyChange?: (dirty: boolean) => void;
 }) {
+  const locksAvailable = envelopeLocksActive(adminCount);
   // Draft state. Populated from `current` on mount and any time a save
   // completes (via `resetDraftFrom`). Not synced back to `current` on
   // every render — that would clobber in-progress edits.
@@ -153,6 +161,23 @@ export function PolicySettingsForm({
 
   return (
     <div className="sobre-policy-stack">
+      {!locksAvailable ? (
+        <div
+          className="rounded-[10px] px-3 py-3 text-[12px] leading-relaxed"
+          style={{
+            background: "var(--surface-alt)",
+            border: "1px dashed var(--border-strong)",
+            color: "var(--text-3)",
+          }}
+        >
+          <b style={{ color: "var(--text-2)" }}>
+            Envelope locks need a second admin.
+          </b>{" "}
+          When only one person can approve, locking an envelope has no
+          effect. Invite another admin from the Members section, then come
+          back to turn locks on.
+        </div>
+      ) : null}
       <PolicyRow
         tint="accent"
         icon={<Clock size={18} strokeWidth={2.2} />}
@@ -210,18 +235,30 @@ export function PolicySettingsForm({
         const label = envelopeNames[slot] ?? SLOT_ENVELOPE_KEY[slot];
         const alwaysLocked = slot === 2;
         const locked = alwaysLocked ? true : lockedSet.has(slot);
+        // Groceries + Tuition: enable requires 2+ admins. Existing
+        // locks can still be turned OFF when adminCount drops — the
+        // asymmetry is an intentional escape hatch so a household
+        // that loses its second admin isn't stuck with a lock they
+        // can no longer satisfy. Savings stays disabled-on regardless
+        // because the always-locked invariant is client-enforced.
+        const toggleDisabled =
+          !isAdmin || alwaysLocked || (!locksAvailable && !locked);
+        // Subtitle carries a single row-level fact: whether Savings is
+        // always locked. The "needs a second admin" story lives in the
+        // banner above so it's said once instead of four times.
+        const subtitle = alwaysLocked ? "Always locked" : undefined;
         return (
           <PolicyRow
             key={slot}
             tint={locked ? "danger" : "muted"}
             icon={<Lock size={18} strokeWidth={2.2} />}
             title={`${label} needs approval`}
-            subtitle={alwaysLocked ? "Always locked" : undefined}
+            subtitle={subtitle}
             control={
               <Toggle
                 checked={locked}
                 onCheckedChange={(v) => {
-                  if (!isAdmin || alwaysLocked) return;
+                  if (toggleDisabled) return;
                   setLockedSet((prev) => {
                     const next = new Set(prev);
                     if (v) next.add(slot);
@@ -229,7 +266,7 @@ export function PolicySettingsForm({
                     return next;
                   });
                 }}
-                disabled={!isAdmin || alwaysLocked}
+                disabled={toggleDisabled}
                 ariaLabel={`Lock ${label}`}
                 tint="danger"
               />

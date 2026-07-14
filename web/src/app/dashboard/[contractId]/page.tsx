@@ -1151,6 +1151,7 @@ function Dashboard({ contractId }: { contractId: string }) {
             <PolicySettingsForm
               familyWalletId={familyWalletId}
               isAdmin={isAdmin}
+              adminCount={state.admins.length}
               current={state.policy}
               envelopeNames={state.envelope_names}
               onDirtyChange={setPolicyDirty}

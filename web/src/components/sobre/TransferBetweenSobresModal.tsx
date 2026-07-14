@@ -20,6 +20,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { isEnvelopeApprovalGated } from "@/lib/contract";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
@@ -128,9 +129,12 @@ export function TransferBetweenSobresModal({
     destination !== null &&
     destPercents !== null;
 
-  const envelopeProtected = state.policy.protectedEnvelopes.includes(envelope);
   const totalAdmins = state.admins.length;
-  const needsApproval = envelopeProtected && totalAdmins > 1;
+  const needsApproval = isEnvelopeApprovalGated(
+    state.policy,
+    envelope,
+    totalAdmins,
+  );
   const approval = useCashoutApproval({
     familyWalletId,
     memberWalletDbId,

@@ -14,6 +14,7 @@ import {
   displayEnvelopeName,
   type EnvelopeName,
 } from "@/lib/config";
+import { isEnvelopeApprovalGated } from "@/lib/contract";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 import { Avatar } from "./Avatar";
@@ -114,14 +115,14 @@ export function FundSubAccountModal({
   const ok =
     validAmount && parsed <= envelopeBalancePhp && target !== null;
 
-  // Multi-admin approval gate. Locked source envelope + 2+ admins
-  // means the fund_subaccount call can't fire until every other admin
-  // has approved. Solo-admin families skip approval — the sole
-  // admin's own click IS the approval.
-  const envelopeProtected =
-    target !== null && state.policy.protectedEnvelopes.includes(envelope);
+  // Multi-admin approval gate. Solo-admin families skip approval —
+  // the sole admin's own click IS the approval. Shared selector in
+  // lib/contract keeps the rule aligned with the cashout and
+  // transfer modals.
   const totalAdmins = state.admins.length;
-  const needsApproval = envelopeProtected && totalAdmins > 1;
+  const needsApproval =
+    target !== null &&
+    isEnvelopeApprovalGated(state.policy, envelope, totalAdmins);
   const approval = useCashoutApproval({
     familyWalletId,
     memberWalletDbId,

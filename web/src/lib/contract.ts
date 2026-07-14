@@ -170,6 +170,29 @@ export interface WalletPolicyShape {
   protectedEnvelopes: ("Groceries" | "Tuition" | "Savings")[];
 }
 
+/** True when a cash-out / send / transfer from `envelope` needs the
+ *  multi-admin approval gate to fire. Single source of truth for the
+ *  three modals (PdaxWithdraw, FundSubAccount, TransferBetweenSobres)
+ *  and the settings form's "locks available" banner. Solo-admin
+ *  families short-circuit — with only one signer, the row's approvers
+ *  vec would fill immediately, so the approval flow is a no-op and we
+ *  skip creating a family_pending_requests row entirely. */
+export function isEnvelopeApprovalGated(
+  policy: WalletPolicyShape,
+  envelope: "Groceries" | "Tuition" | "Savings",
+  adminCount: number,
+): boolean {
+  return adminCount >= 2 && policy.protectedEnvelopes.includes(envelope);
+}
+
+/** True when the household has enough admins to make an envelope lock
+ *  meaningful. Threshold matches `isEnvelopeApprovalGated`. Used by
+ *  the settings form to disable the enable-lock toggles below the
+ *  threshold. */
+export function envelopeLocksActive(adminCount: number): boolean {
+  return adminCount >= 2;
+}
+
 /**
  * Fetch the wasm hash a deployed contract is currently executing. We can't
  * ask the contract for this directly because Soroban exposes no env API for
