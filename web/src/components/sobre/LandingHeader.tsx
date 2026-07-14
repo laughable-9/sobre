@@ -55,7 +55,7 @@ export function LandingHeader() {
           </Link>
           {connectButton}
           <OpenSobreButton className="sobre-btn-nav">
-            Open Sobre
+            Open<span className="sobre-btn-nav-tail"> Sobre</span>
           </OpenSobreButton>
         </>
       }

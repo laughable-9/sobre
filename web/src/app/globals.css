@@ -915,7 +915,13 @@
     padding: 8px 14px;
     font-size: 12.5px;
   }
-  .sobre-wallet-menu-pill { padding: 7px 12px; font-size: 12.5px; }
+  .sobre-wallet-menu-pill { padding: 7px 10px; font-size: 12.5px; }
+  .sobre-wallet-menu-pill .addr,
+  .sobre-wallet-menu-pill .chev { display: none; }
+  /* The " Sobre" tail is a nested <span> inside the "Open Sobre" CTA — hide
+     it here so the button reads just "Open" on phones, keeping the pill nav
+     from wrapping onto two rows. */
+  .sobre-btn-nav .sobre-btn-nav-tail { display: none; }
 }
 /* Very narrow phones: tighten the nav further but keep the wordmark — hiding
    it left the row looking lopsided. The brand anchor never shrinks; the nav
