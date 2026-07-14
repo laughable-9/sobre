@@ -1216,6 +1216,8 @@ function Dashboard({ contractId }: { contractId: string }) {
           userAddress={address}
           state={state}
           contractId={contractId}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
           resumeIdentifier={resumeCashoutId ?? undefined}
           onActiveIdentifierChange={setActiveCashoutId}
           initialEnvelope={cashoutInitialEnvelope}

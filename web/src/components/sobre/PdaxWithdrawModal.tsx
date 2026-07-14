@@ -21,6 +21,7 @@ import {
   usePdaxWithdraw,
   type WithdrawStatus,
 } from "@/hooks/usePdaxWithdraw";
+import { useDailyCashoutTotal } from "@/hooks/useDailyCashoutTotal";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
 import type { WalletState } from "@/hooks/useWalletState";
@@ -102,6 +103,8 @@ export function PdaxWithdrawModal({
   userAddress,
   state,
   contractId,
+  familyWalletId,
+  memberWalletDbId,
   onClose,
   onSuccess,
   resumeIdentifier,
@@ -111,6 +114,11 @@ export function PdaxWithdrawModal({
   userAddress: string;
   state: WalletState;
   contractId: string;
+  /** family_wallets.id + wallets.id for the current caller. Threaded
+   *  through so the daily-limit gate can sum today's pdax_withdrawals
+   *  for this member from Supabase. Null disables the limit check. */
+  familyWalletId: string | null;
+  memberWalletDbId: string | null;
   onClose: () => void;
   onSuccess: (info: { php: number }) => void;
   /** Re-open the modal at the awaiting view for an existing cashout. */
@@ -326,6 +334,26 @@ export function PdaxWithdrawModal({
   const balancePhp = balanceToken * phpPerToken;
   const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
 
+  // Household-policy gates. isAdmin is derived from state.admins so
+  // callers don't need to thread it in — the modal already reads
+  // state. Locked envelopes refuse cashouts by non-admins; the daily
+  // limit is a wall-clock per-member ceiling.
+  const isAdmin = state.admins.includes(userAddress);
+  const envelopeLocked =
+    state.policy.protectedEnvelopes.includes(envelope) && !isAdmin;
+  const dailyLimitPhp =
+    state.policy.dailyLimit === null
+      ? null
+      : (Number(state.policy.dailyLimit) / STROOPS_PER_TOKEN) * phpPerToken;
+  const { totalPhp: spentTodayPhp } = useDailyCashoutTotal(
+    familyWalletId,
+    memberWalletDbId,
+  );
+  const remainingTodayPhp =
+    dailyLimitPhp === null
+      ? null
+      : Math.max(0, dailyLimitPhp - spentTodayPhp);
+
   const amountEntered = Number(amountStr);
   const validAmount = Number.isFinite(amountEntered) && amountEntered > 0;
   // The amount the user types is what lands at their bank. PDAX's
@@ -347,12 +375,20 @@ export function PdaxWithdrawModal({
   const amountPhp = payoutPhp;
   const amountStroops = BigInt(Math.round(amountToken * STROOPS_PER_TOKEN));
   const overspend = amountStroops > balanceStroops;
+  const overDailyLimit =
+    remainingTodayPhp !== null && validAmount && payoutPhp > remainingTodayPhp;
+  const policyBlocked = envelopeLocked || overDailyLimit;
   const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
   const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
   // ─── Action handlers ──────────────────────────────────────────────────
   const handleConfirm = async () => {
     if (!validAmount || overspend || !bank) return;
+    // Household-policy gates: refuse the on-chain call outright if the
+    // envelope's locked for this caller or the daily limit's spent.
+    // Same reason a form doesn't submit invalid data — cheaper to
+    // catch here than after two passkey prompts.
+    if (policyBlocked) return;
     setLocalPhase("signing");
     try {
       const { identifier, relayG } = await initiate({
@@ -536,6 +572,11 @@ export function PdaxWithdrawModal({
             payoutPositive={payoutPhp > 0}
             feeInCurrency={feeInCurrency}
             totalInCurrency={totalInCurrency}
+            envelopeLocked={envelopeLocked}
+            dailyLimitPhp={dailyLimitPhp}
+            spentTodayPhp={spentTodayPhp}
+            remainingTodayPhp={remainingTodayPhp}
+            overDailyLimit={overDailyLimit}
             bank={bank}
             onChangeBank={() => setLocalPhase("register_bank")}
             onCancel={handleClose}
@@ -610,6 +651,11 @@ function InputStep({
   payoutPositive,
   feeInCurrency,
   totalInCurrency,
+  envelopeLocked,
+  dailyLimitPhp,
+  spentTodayPhp,
+  remainingTodayPhp,
+  overDailyLimit,
   bank,
   onChangeBank,
   onCancel,
@@ -632,6 +678,18 @@ function InputStep({
   payoutPositive: boolean;
   feeInCurrency: number;
   totalInCurrency: number;
+  /** True when the selected envelope sits in policy.protectedEnvelopes
+   *  AND the caller isn't in the on-chain admins set. Blocks Continue
+   *  with a "This envelope needs admin approval" explanation. */
+  envelopeLocked: boolean;
+  /** Household daily cash-out ceiling in PHP for one member. Null =
+   *  no limit set. Used to render the "₱X of ₱Y used today" strip. */
+  dailyLimitPhp: number | null;
+  spentTodayPhp: number;
+  remainingTodayPhp: number | null;
+  /** True when the amount entered would push today's total past
+   *  dailyLimitPhp. Blocks Continue. */
+  overDailyLimit: boolean;
   bank: BankRecord;
   onChangeBank: () => void;
   onCancel: () => void;
@@ -732,7 +790,56 @@ function InputStep({
           Available: {symbol}
           {balanceInCurrency.toLocaleString(balanceLocale, balanceLocaleOpts)}
         </div>
+        {dailyLimitPhp !== null ? (
+          <div
+            className="mt-1 text-[12px] tabular"
+            style={{
+              color: overDailyLimit
+                ? "var(--sobre-danger)"
+                : "var(--text-3)",
+            }}
+          >
+            Today: ₱{Math.round(spentTodayPhp).toLocaleString("en-PH")} of ₱
+            {Math.round(dailyLimitPhp).toLocaleString("en-PH")} used
+            {remainingTodayPhp !== null ? (
+              <>
+                {" · ₱"}
+                {Math.round(remainingTodayPhp).toLocaleString("en-PH")} left
+              </>
+            ) : null}
+          </div>
+        ) : null}
       </div>
+
+      {envelopeLocked ? (
+        <div
+          className="rounded-[10px] px-3 py-3 mb-3 text-[12px]"
+          style={{
+            background: "var(--sobre-danger-soft)",
+            border: "1px solid rgba(220,38,38,0.18)",
+            color: "var(--sobre-danger)",
+          }}
+        >
+          <b>Locked envelope.</b> Only an admin can cash out from{" "}
+          {displayEnvelopeName(envelope, envelopeNames)}. Ask them to send you
+          money instead, or pick a different envelope above.
+        </div>
+      ) : null}
+      {overDailyLimit ? (
+        <div
+          className="rounded-[10px] px-3 py-3 mb-3 text-[12px]"
+          style={{
+            background: "var(--sobre-danger-soft)",
+            border: "1px solid rgba(220,38,38,0.18)",
+            color: "var(--sobre-danger)",
+          }}
+        >
+          <b>Daily limit reached.</b> You&apos;ve got ₱
+          {Math.round(remainingTodayPhp ?? 0).toLocaleString("en-PH")} left in
+          today&apos;s per-member cap. Lower the amount, or wait until
+          tomorrow.
+        </div>
+      ) : null}
 
       {payoutPositive ? (
         <div
@@ -845,9 +952,19 @@ function InputStep({
         <button
           className="sobre-btn sobre-btn-primary"
           onClick={onConfirm}
-          disabled={!validAmount || overspend || pending}
+          disabled={
+            !validAmount ||
+            overspend ||
+            pending ||
+            envelopeLocked ||
+            overDailyLimit
+          }
           style={
-            !validAmount || overspend || pending
+            !validAmount ||
+            overspend ||
+            pending ||
+            envelopeLocked ||
+            overDailyLimit
               ? { opacity: 0.5 }
               : {}
           }
