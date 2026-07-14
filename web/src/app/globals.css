@@ -1084,13 +1084,13 @@
    art/animation that Kyle is building separately. */
 .sobre-hero {
   background: var(--sobre-bg);
-  /* Full viewport (dvh so mobile browser chrome doesn't overshoot the
-   * fold on iOS Safari / Chrome). Symmetric vertical padding so
-   * `align-items: center` actually centers the content optically — the
-   * old clamp(96–240px) top vs clamp(64–120px) bottom left it
-   * bottom-biased on tall monitors. */
-  min-height: 100dvh;
-  padding: 40px 32px;
+  /* Fill the space UNDER the sticky flap-pill topbar (~68px tall + its
+   * ~16px top padding) so `align-items: center` centers content in the
+   * VISIBLE fold, not in an area that extends 84px past the viewport.
+   * `dvh` collapses in step with mobile browser chrome so we don't
+   * overshoot on iOS Safari / Chrome. */
+  min-height: calc(100dvh - 84px);
+  padding: 24px 32px;
   display: flex;
   align-items: center;
   justify-content: center;
