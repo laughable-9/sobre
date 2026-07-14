@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, use, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, use, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import {
   GearSixIcon,
@@ -10,7 +10,9 @@ import {
 
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
+import { CashoutApprovalBanner } from "@/components/sobre/CashoutApprovalBanner";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
+import { usePendingCashoutApprovals } from "@/hooks/usePendingCashoutApprovals";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
@@ -215,6 +217,28 @@ function Dashboard({ contractId }: { contractId: string }) {
           avatarUrl: r.avatarUrl,
         })),
     [subRows],
+  );
+
+  // Multi-admin cashout approvals: any pending request the CURRENT
+  // admin still owes their sign-off on. Non-admins get an empty
+  // array. Renders as a stack of banners at the top of the Home tab.
+  const pendingApprovals = usePendingCashoutApprovals({
+    familyWalletId,
+    currentWalletDbId: wallet.wallet?.id ?? null,
+    currentIsAdmin: Boolean(
+      state && address && state.admins.includes(address),
+    ),
+    totalAdmins: state?.admins.length ?? 0,
+  });
+  const memberDisplayFor = useCallback(
+    (walletDbId: string): { name: string; avatarUrl: string | null } => {
+      const m = state?.members.find((mem) => mem.walletDbId === walletDbId);
+      return {
+        name: m?.name ?? "An admin",
+        avatarUrl: m?.avatarUrl ?? null,
+      };
+    },
+    [state],
   );
 
   const refresh = () => void walletState.refresh();
@@ -732,6 +756,13 @@ function Dashboard({ contractId }: { contractId: string }) {
         style={{ maxWidth: 640 }}
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
+          <CashoutApprovalBanner
+            requests={pendingApprovals.requests}
+            envelopeNames={state.envelope_names}
+            memberDisplayFor={memberDisplayFor}
+            onApprove={pendingApprovals.approve}
+            onDeny={pendingApprovals.deny}
+          />
           <BalanceHero
             state={state}
             header={

@@ -21,6 +21,7 @@ import {
   usePdaxWithdraw,
   type WithdrawStatus,
 } from "@/hooks/usePdaxWithdraw";
+import { useCashoutApproval } from "@/hooks/useCashoutApproval";
 import { useDailyCashoutTotal } from "@/hooks/useDailyCashoutTotal";
 import { usePollStatus } from "@/hooks/usePollStatus";
 import { useTokenRate } from "@/hooks/useTokenRate";
@@ -59,6 +60,7 @@ type LocalPhase =
   | "register_bank"
   | "input"
   | "signing"
+  | "awaiting_approval"
   | "recovery_prompt";
 
 type Phase = LocalPhase | "awaiting" | "done" | "failed";
@@ -377,14 +379,24 @@ export function PdaxWithdrawModal({
   const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
   const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
+  // Multi-admin approval mechanic. Locked envelope + 2+ admins in the
+  // family means the initiator's cashout can't fire until every other
+  // admin appends to approvers_wallet_ids. Solo-admin families short-
+  // circuit — the sole admin's own click IS the approval.
+  const envelopeProtected = state.policy.protectedEnvelopes.includes(envelope);
+  const totalAdmins = state.admins.length;
+  const needsApproval = envelopeProtected && totalAdmins > 1;
+  const approval = useCashoutApproval({
+    familyWalletId,
+    memberWalletDbId,
+    envelope,
+    amountStroops,
+  });
+  const approvalsRemaining = Math.max(0, totalAdmins - approval.approvers.length);
+
   // ─── Action handlers ──────────────────────────────────────────────────
-  const handleConfirm = async () => {
-    if (!validAmount || overspend || !bank) return;
-    // Household-policy gates: refuse the on-chain call outright if the
-    // envelope's locked for this caller or the daily limit's spent.
-    // Same reason a form doesn't submit invalid data — cheaper to
-    // catch here than after two passkey prompts.
-    if (policyBlocked) return;
+  const runOnChainCashout = async (): Promise<void> => {
+    if (!bank) return;
     setLocalPhase("signing");
     try {
       const { identifier, relayG } = await initiate({
@@ -412,6 +424,7 @@ export function PdaxWithdrawModal({
       // /confirmed landed the row at status='spent' — the recovery
       // snapshot is no longer load-bearing.
       clearCashoutRecovery();
+      approval.reset();
     } catch {
       // CRITICAL: if signAndForward saved a snapshot (i.e. the spend
       // landed before whatever failed), DO NOT route back to the input
@@ -427,6 +440,47 @@ export function PdaxWithdrawModal({
         setLocalPhase("input");
       }
     }
+  };
+
+  const handleConfirm = async () => {
+    if (!validAmount || overspend || !bank || policyBlocked) return;
+    if (!needsApproval) {
+      // Solo admin or open envelope: fire the on-chain cashout inline.
+      await runOnChainCashout();
+      return;
+    }
+    // Multi-admin protected envelope: create the approval request
+    // instead. The awaiting_approval effect below auto-continues into
+    // signing when the request flips to `approved`.
+    setLocalPhase("awaiting_approval");
+    const id = await approval.create({ memo: "PDAX cashout" });
+    if (!id) {
+      setLocalPhase("input");
+    }
+  };
+
+  // Once every other admin has appended themselves to
+  // approvers_wallet_ids the row flips to `approved` and this effect
+  // fires the actual on-chain cashout. The initiator only signed the
+  // request row so far; the passkey prompts happen NOW.
+  useEffect(() => {
+    // External-sync effect: approval.status is driven by the polling
+    // interval inside useCashoutApproval, so this is the correct
+    // place to react to it. Both branches call setLocalPhase
+    // (runOnChainCashout does it internally).
+    if (localPhase !== "awaiting_approval") return;
+    if (approval.status === "approved") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      void runOnChainCashout();
+    } else if (approval.status === "denied") {
+      setLocalPhase("input");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [localPhase, approval.status]);
+
+  const handleCancelApproval = async () => {
+    await approval.cancel();
+    setLocalPhase("input");
   };
 
   // Recovery path: skip the spend (it already landed) and re-attempt only
@@ -583,6 +637,18 @@ export function PdaxWithdrawModal({
 
         {phase === "signing" ? (
           <SigningStep step={signStep} />
+        ) : null}
+
+        {phase === "awaiting_approval" ? (
+          <AwaitingApprovalStep
+            envelopeLabel={displayEnvelopeName(envelope, state.envelope_names)}
+            amountPhp={amountPhp}
+            approvedCount={approval.approvers.length}
+            totalAdmins={totalAdmins}
+            approvalsRemaining={approvalsRemaining}
+            error={approval.error}
+            onCancel={() => void handleCancelApproval()}
+          />
         ) : null}
 
         {phase === "awaiting" && row ? (
@@ -1049,6 +1115,87 @@ function AwaitingStep({
       icon={<Loader2 size={28} className="animate-spin" />}
       title={STATUS_LABELS[status]}
     />
+  );
+}
+
+/** Multi-admin approval-waiting step. Shown after the initiator taps
+ *  Confirm on a locked envelope; sits here polling family_pending_
+ *  requests until every other admin has approved (at which point the
+ *  useEffect above auto-transitions to `signing`) or someone denies
+ *  (returns to input). */
+function AwaitingApprovalStep({
+  envelopeLabel,
+  amountPhp,
+  approvedCount,
+  totalAdmins,
+  approvalsRemaining,
+  error,
+  onCancel,
+}: {
+  envelopeLabel: string;
+  amountPhp: number;
+  approvedCount: number;
+  totalAdmins: number;
+  approvalsRemaining: number;
+  error: string | null;
+  onCancel: () => void;
+}) {
+  return (
+    <>
+      <h2>Waiting for the other admin{totalAdmins > 2 ? "s" : ""}</h2>
+      <p className="sub">
+        {envelopeLabel} is a locked envelope. Every admin needs to approve
+        before we can pull ₱
+        {Math.round(amountPhp).toLocaleString("en-PH")} out to your bank.
+      </p>
+      <div
+        className="rounded-[10px] px-4 py-4 mt-3 mb-4"
+        style={{
+          background: "var(--surface-alt)",
+          border: "1px solid var(--border)",
+        }}
+      >
+        <div
+          className="flex items-center gap-3 text-[13px]"
+          style={{ color: "var(--text-1)", fontWeight: 600 }}
+        >
+          <Loader2 size={16} className="animate-spin" />
+          {approvedCount} of {totalAdmins} approved
+          {approvalsRemaining > 0 ? (
+            <span
+              className="text-[12px]"
+              style={{ color: "var(--text-3)", fontWeight: 500 }}
+            >
+              · {approvalsRemaining} to go
+            </span>
+          ) : null}
+        </div>
+        <div
+          className="mt-2 text-[12px]"
+          style={{ color: "var(--text-3)" }}
+        >
+          The other admin{totalAdmins > 2 ? "s" : ""} will see this on their
+          dashboard the next time they open Sobre.
+        </div>
+      </div>
+      {error ? (
+        <p
+          className="text-[12px] mb-3"
+          style={{ color: "var(--sobre-danger)" }}
+        >
+          {error}
+        </p>
+      ) : null}
+      <div className="sobre-modal-actions">
+        <button
+          type="button"
+          className="sobre-btn sobre-btn-soft"
+          onClick={onCancel}
+        >
+          Cancel request
+        </button>
+      </div>
+    </>
   );
 }
 
