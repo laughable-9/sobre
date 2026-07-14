@@ -20,8 +20,8 @@ import { envelopeTotalStroops } from "@/lib/walletTotals";
  *  chip strip on activity rows, so a Groceries deposit reads as the same
  *  color everywhere it appears. */
 export const BAR_COLORS = [
-  "#22A45C", // Groceries — brand green
-  "#E8923C", // Tuition   — mango (v1 accent)
+  "#22A45C", // Groceries — Green 600 (brand)
+  "#C68A2E", // Tuition   — amber (v2 warning tone)
   "#2E6BAA", // Savings   — slate blue
   "#8C4EB8", // 4th slot  — violet
   "#0F9E8A", // 5th slot  — teal

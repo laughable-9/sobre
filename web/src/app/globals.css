@@ -4,36 +4,36 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* ─── Sobre design tokens (warm cream + mango + palm green) ──────────────── */
+/* ─── Sobre design tokens (v2 "Green Board" — pure white + Green 600) ────── */
 :root {
   /* Background + surface */
-  --sobre-bg: #FDFAF3;
+  --sobre-bg: #FFFFFF;
   --sobre-surface: #FFFFFF;
-  --sobre-surface-alt: #F4EDDC;
+  --sobre-surface-alt: #F4F4F2;
 
-  /* Mango (primary CTA) */
-  --sobre-primary: #E8923C;
-  --sobre-primary-hover: #D67E28;
+  /* Green 600 (primary CTA) */
+  --sobre-primary: #22A45C;
+  --sobre-primary-hover: #0F6B3A;
   --sobre-primary-text: #FFFFFF;
 
-  /* Palm green (accent / trust / success) */
-  --sobre-accent: #2E6B4C;
-  --sobre-accent-soft: #E8F0EA;
+  /* Green 700 (accent / trust) */
+  --sobre-accent: #0F6B3A;
+  --sobre-accent-soft: #E8F5EE;
 
-  /* Warm-tinted text */
-  --sobre-text-1: #1F1B16;
-  --sobre-text-2: #6B5F50;
-  --sobre-text-3: #A89888;
+  /* Neutral text (no sage/olive lean) */
+  --sobre-text-1: #0F1A14;
+  --sobre-text-2: #3D4A42;
+  --sobre-text-3: #9C9C97;
 
-  --sobre-success: #2E6B4C;
-  --sobre-warning: #E8923C;
-  --sobre-danger:  #C44536;
+  --sobre-success: #1A8F52;
+  --sobre-warning: #C68A2E;
+  --sobre-danger:  #C4443B;
 
-  --sobre-border: #EDE3D2;
-  --sobre-border-strong: #D9CBB3;
+  --sobre-border: #E9E9E6;
+  --sobre-border-strong: #D6D6D1;
 
-  --sobre-shadow-sm: 0 2px 8px rgba(31, 27, 22, 0.04), 0 1px 2px rgba(31, 27, 22, 0.06);
-  --sobre-shadow-md: 0 8px 24px rgba(31, 27, 22, 0.08);
+  --sobre-shadow-sm: 0 2px 8px rgba(15, 26, 20, 0.05), 0 1px 2px rgba(15, 26, 20, 0.06);
+  --sobre-shadow-md: 0 8px 24px rgba(15, 26, 20, 0.09);
 
   --r-card: 12px;
   --r-btn: 8px;
@@ -116,9 +116,9 @@
   html {
     font-family: var(--font-sans), system-ui, -apple-system, sans-serif;
     scroll-behavior: smooth;
-    /* Paint the warm cream on <html> too so the whole canvas stays cream even
-       where <body> doesn't cover it (overscroll bounce, frosted bars over the
-       top edge). Without this the browser's default grey shows through. */
+    /* Paint the page BG on <html> too so the canvas stays on-brand even
+       where <body> doesn't cover it (overscroll bounce, frosted bars over
+       the top edge). Without this the browser's default grey shows through. */
     background: var(--sobre-bg);
   }
   body {
@@ -672,10 +672,10 @@
   animation: sobre-hero-pulse 1.4s ease-out;
 }
 /* Bottom-anchored confirmation toast. Sits above the dock (or above the
-   safe-area home indicator on dock-less screens). White pill with a
-   green success icon or a warning icon on the warn variant — no solid
+   safe-area home indicator on dock-less screens). White pill with a green
+   success icon or an amber warning icon on the warn variant — no solid
    fill, so it doesn't fight the balance hero's green or shout on top of
-   content the way a mango pill in the header used to. */
+   content. */
 .sobre-celebration {
   position: fixed;
   bottom: calc(var(--sobre-dock-h, 0px) + var(--safe-bottom) + 20px);
@@ -825,9 +825,6 @@
 .sobre-pill-cream { background: var(--surface-alt); color: var(--text-1); }
 .sobre-pill-soft-green { background: var(--accent-soft); color: var(--sobre-accent); }
 
-.sobre-btn-cream { background: var(--bg); color: var(--text-1); padding: 14px 22px; border-radius: var(--r-btn); font-weight: 500; font-size: 15px; }
-.sobre-btn-cream:hover { background: #fff; }
-
 .sobre-section { padding: 96px 0; }
 @media (max-width: 720px) { .sobre-section { padding: 64px 0; } }
 
@@ -857,7 +854,7 @@
 .sobre-h4 { font-family: var(--serif); font-size: 19px; font-weight: 500; margin: 0; color: var(--text-1); }
 .sobre-em { font-style: italic; }
 
-/* Sticky cream nav. Solid background blends with the page; the hero
+/* Sticky white nav. Solid background blends with the page; the hero
    illustration sits *below* the nav in normal document flow. */
 .sobre-nav {
   position: sticky;
@@ -951,8 +948,8 @@
 .sobre-nav-links a.sobre-btn-nav:hover,
 .sobre-btn-nav:hover { background: var(--primary-hover); color: #fff; }
 
-/* Cream/soft variant for "Connect Wallet" — secondary affordance next to
-   the primary mango "Open Sobre" CTA in the landing nav. */
+/* Soft/ghost variant for "Sign in" — secondary affordance next to the
+   primary green "Open Sobre" CTA in the landing nav. */
 .sobre-nav-links a.sobre-btn-nav-soft,
 .sobre-btn-nav-soft {
   background: var(--surface);
@@ -1402,7 +1399,7 @@
 }
 @media (max-width: 800px) { .sobre-duo { grid-template-columns: 1fr; } }
 .sobre-duo-col { padding: 40px; }
-.sobre-duo-col.mango { background: var(--surface); }
+.sobre-duo-col.surface { background: var(--surface); }
 .sobre-duo-col.green { background: var(--accent-soft); }
 .sobre-duo-col h3 { font-family: var(--serif); font-size: 22px; font-weight: 600; }
 .sobre-duo-col ul { list-style: none; padding: 0; margin: 22px 0 0; display: flex; flex-direction: column; gap: 14px; }
@@ -1651,7 +1648,7 @@ body { overflow-x: clip; min-width: 320px; }
 
 /* ─── Bottom dock (mobile-first primary nav) ────────────────────────────
    Native-app-style dock: Home / Envelopes / [Sobre FAB] / Activity / Profile.
-   Sits pinned to the safe-area bottom. Center slot is a raised mango tile
+   Sits pinned to the safe-area bottom. Center slot is a raised green tile
    that opens the "action sheet" — the app's only action surface. */
 /* Scoped to .has-dock so descendants of a dock-less shell (e.g. the
    sub-account view, which still uses the top bar) see the variable as
@@ -1997,23 +1994,23 @@ body { overflow-x: clip; min-width: 320px; }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   PAGE TRANSITION — plain orange cover with the brand line
-   A full-screen mango panel sweeps in to COVER the page, carrying the line
-   "Isang sobre. Isang pamilya." styled + positioned to MATCH the dashboard's
+   PAGE TRANSITION — flat green cover with the brand line
+   A full-screen green panel sweeps in to COVER the page, carrying the line
+   "One Sobre. One Family." styled + positioned to MATCH the dashboard's
    connect screen heading, so when the cover lifts the text reads as morphing
    into place. Holds while the destination route mounts (slow connection never
    flashes blank), then sweeps away to REVEAL. Skipped under reduced-motion.
    ════════════════════════════════════════════════════════════════════════ */
 /* The overlay itself NEVER moves — it just holds the centered text in place.
-   The sliding orange panel is the ::before behind the text, so the text stays
-   put while the orange sweeps in/out around it. */
+   The sliding green panel is the ::before behind the text, so the text stays
+   put while the green sweeps in/out around it. */
 .sobre-env-overlay {
   position: fixed; inset: 0; z-index: 200;
   display: grid; place-items: center;
   background: transparent;
   pointer-events: none;
 }
-/* Sliding orange panel (behind the text). */
+/* Sliding green panel (behind the text). */
 .sobre-env-overlay::before {
   content: "";
   position: fixed;
@@ -2040,7 +2037,7 @@ body { overflow-x: clip; min-width: 320px; }
   padding: 0 24px;
 }
 
-/* COVER: orange panel slides in from the left to fully cover, then HOLDS. The
+/* COVER: green panel slides in from the left to fully cover, then HOLDS. The
    text fades in and stays centered. */
 .sobre-env-overlay.cover::before {
   transform: translateX(-101%);
@@ -2050,7 +2047,7 @@ body { overflow-x: clip; min-width: 320px; }
   opacity: 0;
   animation: sobre-cover-text-in .4s ease .2s forwards;
 }
-/* REVEAL: orange panel glides off to the right. A long, gentle ease-out
+/* REVEAL: green panel glides off to the right. A long, gentle ease-out
    (ease-out-expo-ish) so it decelerates smoothly with no snap at the end. */
 .sobre-env-overlay.reveal::before {
   transform: translateX(0);
@@ -2611,7 +2608,7 @@ body { overflow-x: clip; min-width: 320px; }
   top: 6px; right: 6px;
   width: 8px; height: 8px;
   border-radius: 50%;
-  background: #E8923C;
+  background: var(--sobre-warning);
   box-shadow: 0 0 0 2px var(--sobre-surface);
 }
 
@@ -3599,7 +3596,7 @@ body { overflow-x: clip; min-width: 320px; }
   flex-shrink: 0;
 }
 .sobre-activity-detail-split-row .swatch.c0 { background: #22A45C; }
-.sobre-activity-detail-split-row .swatch.c1 { background: #E8923C; }
+.sobre-activity-detail-split-row .swatch.c1 { background: #C68A2E; }
 .sobre-activity-detail-split-row .swatch.c2 { background: #2E6BAA; }
 .sobre-activity-detail-split-row .name {
   color: var(--sobre-text-1);
