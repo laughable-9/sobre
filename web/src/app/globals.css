@@ -2056,6 +2056,54 @@ body { overflow-x: clip; min-width: 320px; }
   100% { transform: translateX(101%); }
 }
 
+/* ─── Sign-in card (post-tour / returning users) ──────────────────────
+   Shown at /dashboard once the first-run tour has been dismissed. Same
+   vertical rhythm and Manrope display as the tour so the two surfaces
+   feel like one flow — big logo, headline, a real sentence of body,
+   then a prominent CTA that fills the card. */
+.sobre-signin {
+  flex: 1;
+  display: grid;
+  place-items: center;
+  padding: 32px 24px calc(48px + var(--safe-bottom));
+  min-height: 100dvh;
+}
+.sobre-signin-card {
+  width: 100%;
+  max-width: 26rem;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 28px;
+}
+.sobre-signin-title {
+  font-family: var(--serif);
+  font-weight: 700;
+  color: var(--text-1);
+  letter-spacing: -0.02em;
+  line-height: 1.05;
+  margin: 0;
+  font-size: clamp(36px, 8vw, 52px);
+}
+.sobre-signin-body {
+  color: var(--text-2);
+  font-size: 16px;
+  line-height: 1.55;
+  margin: -8px 0 0;
+  max-width: 22rem;
+}
+.sobre-signin-cta {
+  width: 100%;
+  min-height: 52px;
+  font-size: 16px;
+}
+.sobre-signin-error {
+  font-size: 12px;
+  color: var(--sobre-danger);
+  margin: -12px 0 0;
+}
+
 /* ─── First-run app tour ──────────────────────────────────────────────
    Full-viewport carousel that shows on the /dashboard signed-out state
    before the OAuth prompt. Native swipe on mobile via `scroll-snap`;
