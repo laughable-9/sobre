@@ -1928,15 +1928,16 @@ body { overflow-x: clip; min-width: 320px; }
 .sobre-policy-pill.accent { background: var(--accent-soft);      color: var(--sobre-accent); }
 .sobre-policy-pill.danger { background: var(--sobre-danger-soft); color: var(--sobre-danger); }
 .sobre-policy-pill.muted  { background: var(--surface-alt);      color: var(--text-2); }
-.sobre-policy-hint {
-  margin-top: 4px;
-  padding: 14px 16px;
-  border: 1.5px dashed var(--border-strong);
-  border-radius: 14px;
-  color: var(--text-3);
-  font-size: 13px;
-  line-height: 1.45;
-  background: transparent;
+.sobre-policy-inline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  margin-top: -6px;
+  background: var(--surface-alt);
+  border: 1px solid var(--border);
+  border-radius: 12px;
 }
 
 /* ─── Modals → bottom sheets on phones ──────────────────────────────────

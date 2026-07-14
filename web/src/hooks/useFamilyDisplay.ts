@@ -61,7 +61,9 @@ const DEFAULT_POLICY: WalletPolicyShape = {
   requireAllSigs: false,
   dailyLimit: null,
   perTxThreshold: null,
-  protectedEnvelopes: [],
+  // Savings is always locked as a product invariant; the normaliser
+  // below unions this default with any stored value.
+  protectedEnvelopes: ["Savings"],
 };
 
 interface FamilyRow {
@@ -79,14 +81,23 @@ interface FamilyRow {
 }
 
 function normalizePolicy(raw: FamilyRow["policy_json"]): WalletPolicyShape {
-  if (!raw) return DEFAULT_POLICY;
   const optBigint = (v: string | number | null | undefined) =>
     v === null || v === undefined ? null : BigInt(v);
+  // Savings is always locked by product decision — enforce it here so
+  // every downstream consumer (cashout modal gate, policy form
+  // render, activity narration) reads the invariant without every one
+  // needing to re-add it. If a stale DB row omits Savings, we still
+  // treat it as locked.
+  const stored = raw?.protected_envelopes ?? [];
+  const protectedEnvelopes: WalletPolicyShape["protectedEnvelopes"] = Array.from(
+    new Set([...stored, "Savings"] as const),
+  ) as WalletPolicyShape["protectedEnvelopes"];
+  if (!raw) return { ...DEFAULT_POLICY, protectedEnvelopes };
   return {
     requireAllSigs: Boolean(raw.require_all_sigs),
     dailyLimit: optBigint(raw.daily_limit_stroops),
     perTxThreshold: optBigint(raw.per_tx_threshold_stroops),
-    protectedEnvelopes: raw.protected_envelopes ?? [],
+    protectedEnvelopes,
   };
 }
 

@@ -319,6 +319,11 @@ function Dashboard({ contractId }: { contractId: string }) {
   // picker instead of pinning to a specific envelope.
   const [sendToSubOpen, setSendToSubOpen] = useState(false);
   const [inviteOpen, setInviteOpen] = useState(false);
+  // Household-policy dirty flag. Set true whenever PolicySettingsForm
+  // carries unsaved changes; used to gate tab switches + BackLink with
+  // a "save your changes?" confirm so an accidental navigation doesn't
+  // lose an edit that wasn't yet posted to Supabase.
+  const [policyDirty, setPolicyDirty] = useState(false);
   // "Log expense" quick-action tile → the off-chain note field in a modal.
   const [logExpenseOpen, setLogExpenseOpen] = useState(false);
   // Dock's center Sobre FAB opens the action sheet.
@@ -397,8 +402,32 @@ function Dashboard({ contractId }: { contractId: string }) {
     window.addEventListener("hashchange", handler);
     return () => window.removeEventListener("hashchange", handler);
   }, []);
+  // Browser-level guard for unsaved policy edits. The dashboard's own
+  // `switchTab` handles in-app navigation; this catches refresh, tab
+  // close, and hard back-button-out.
+  useEffect(() => {
+    if (!policyDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      // Modern browsers ignore custom text and show their own copy, but
+      // the return value is still required to trip the dialog.
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [policyDirty]);
   const switchTab = (next: Tab) => {
     if (next === tab) return;
+    // Guard: unsaved policy edits stay put unless the admin confirms.
+    // Only fires when leaving the settings tab — every other switch
+    // sees the dirty flag as harmless residual state.
+    if (tab === "settings" && policyDirty) {
+      const ok = window.confirm(
+        "You have unsaved changes on the household policy. Leave without saving?",
+      );
+      if (!ok) return;
+      setPolicyDirty(false);
+    }
     setTab(next);
     const hash =
       next === "settings"
@@ -1076,7 +1105,9 @@ function Dashboard({ contractId }: { contractId: string }) {
               isAdmin={isAdmin}
               current={state.policy}
               envelopeNames={state.envelope_names}
+              onDirtyChange={setPolicyDirty}
               onSuccess={() => {
+                setPolicyDirty(false);
                 refresh();
                 flash("Policy saved", "ok");
               }}

@@ -334,13 +334,9 @@ export function PdaxWithdrawModal({
   const balancePhp = balanceToken * phpPerToken;
   const balanceInCurrency = currency === "USD" ? balanceToken : balancePhp;
 
-  // Household-policy gates. isAdmin is derived from state.admins so
-  // callers don't need to thread it in — the modal already reads
-  // state. Locked envelopes refuse cashouts by non-admins; the daily
-  // limit is a wall-clock per-member ceiling.
-  const isAdmin = state.admins.includes(userAddress);
-  const envelopeLocked =
-    state.policy.protectedEnvelopes.includes(envelope) && !isAdmin;
+  // Household-policy daily limit is a per-caller wall-clock ceiling.
+  // The locked-envelope gate is a different mechanism (multi-admin
+  // approval flow, separate hook) — not enforced in this file.
   const dailyLimitPhp =
     state.policy.dailyLimit === null
       ? null
@@ -377,7 +373,7 @@ export function PdaxWithdrawModal({
   const overspend = amountStroops > balanceStroops;
   const overDailyLimit =
     remainingTodayPhp !== null && validAmount && payoutPhp > remainingTodayPhp;
-  const policyBlocked = envelopeLocked || overDailyLimit;
+  const policyBlocked = overDailyLimit;
   const feeInCurrency = currency === "USD" ? feePhp / phpPerToken : feePhp;
   const totalInCurrency = currency === "USD" ? totalToken : totalPhp;
 
@@ -572,7 +568,6 @@ export function PdaxWithdrawModal({
             payoutPositive={payoutPhp > 0}
             feeInCurrency={feeInCurrency}
             totalInCurrency={totalInCurrency}
-            envelopeLocked={envelopeLocked}
             dailyLimitPhp={dailyLimitPhp}
             spentTodayPhp={spentTodayPhp}
             remainingTodayPhp={remainingTodayPhp}
@@ -651,7 +646,6 @@ function InputStep({
   payoutPositive,
   feeInCurrency,
   totalInCurrency,
-  envelopeLocked,
   dailyLimitPhp,
   spentTodayPhp,
   remainingTodayPhp,
@@ -678,10 +672,6 @@ function InputStep({
   payoutPositive: boolean;
   feeInCurrency: number;
   totalInCurrency: number;
-  /** True when the selected envelope sits in policy.protectedEnvelopes
-   *  AND the caller isn't in the on-chain admins set. Blocks Continue
-   *  with a "This envelope needs admin approval" explanation. */
-  envelopeLocked: boolean;
   /** Household daily cash-out ceiling in PHP for one member. Null =
    *  no limit set. Used to render the "₱X of ₱Y used today" strip. */
   dailyLimitPhp: number | null;
@@ -811,20 +801,6 @@ function InputStep({
         ) : null}
       </div>
 
-      {envelopeLocked ? (
-        <div
-          className="rounded-[10px] px-3 py-3 mb-3 text-[12px]"
-          style={{
-            background: "var(--sobre-danger-soft)",
-            border: "1px solid rgba(220,38,38,0.18)",
-            color: "var(--sobre-danger)",
-          }}
-        >
-          <b>Locked envelope.</b> Only an admin can cash out from{" "}
-          {displayEnvelopeName(envelope, envelopeNames)}. Ask them to send you
-          money instead, or pick a different envelope above.
-        </div>
-      ) : null}
       {overDailyLimit ? (
         <div
           className="rounded-[10px] px-3 py-3 mb-3 text-[12px]"
@@ -953,18 +929,10 @@ function InputStep({
           className="sobre-btn sobre-btn-primary"
           onClick={onConfirm}
           disabled={
-            !validAmount ||
-            overspend ||
-            pending ||
-            envelopeLocked ||
-            overDailyLimit
+            !validAmount || overspend || pending || overDailyLimit
           }
           style={
-            !validAmount ||
-            overspend ||
-            pending ||
-            envelopeLocked ||
-            overDailyLimit
+            !validAmount || overspend || pending || overDailyLimit
               ? { opacity: 0.5 }
               : {}
           }
