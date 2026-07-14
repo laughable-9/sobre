@@ -58,7 +58,18 @@ export function EnvelopeTransition() {
   // Register the fly-out trigger for the CTA hook while mounted.
   useEffect(() => {
     registerFlyoutTrigger((href: string) => {
-      // 1. Cover the screen with the orange envelope panel, and start the
+      // Clear any timers left over from a prior trigger (rapid double-click
+      // on "Open a Sobre" used to leave the previous cycle's router.push
+      // and force-reveal timers armed, so they'd fire during the new one).
+      if (navTimer.current) {
+        clearTimeout(navTimer.current);
+        navTimer.current = null;
+      }
+      if (capTimer.current) {
+        clearTimeout(capTimer.current);
+        capTimer.current = null;
+      }
+      // 1. Cover the screen with the green envelope panel, and start the
       //    navigation. The cover HOLDS (CSS keeps the panel on-screen) until the
       //    route is ready — see the readiness watcher below — so a slow load
       //    stays hidden behind the cover instead of revealing a blank page.
@@ -69,13 +80,13 @@ export function EnvelopeTransition() {
       router.prefetch?.(href);
       // Kick navigation off once the cover is fully down. The beats are
       // sequenced: beat 0 (~0.75s) then the panel sweep (0.55s, delayed 0.7s),
-      // so the screen is fully orange around ~1.25s — navigate then so the heavy
+      // so the screen is fully green around ~1.25s — navigate then so the heavy
       // route mount is hidden behind the cover.
       navTimer.current = window.setTimeout(() => {
         startTransition(() => router.push(href));
       }, 1250);
       // Safety cap: never hold the cover longer than MAX_COVER_MS. Force both
-      // gates open and reveal so the user is never trapped under the orange.
+      // gates open and reveal so the user is never trapped under the cover.
       capTimer.current = window.setTimeout(() => {
         targetPath.current = null;
         coveredRef.current = true;
@@ -94,9 +105,13 @@ export function EnvelopeTransition() {
   // destination has mounted), mark the route ready and reveal IF the cover has
   // also finished sweeping in. Gating on coveredRef prevents revealing from a
   // half-covered panel (the "giant V stuck mid-screen" bug).
+  //
+  // If pathname changes to ANYTHING (e.g. the user hits Back mid-cover) that
+  // still counts as "route settled" — force route-ready so the cover unmounts
+  // instead of hanging around for the full MAX_COVER_MS.
   useEffect(() => {
     if (phase !== "cover") return;
-    if (!targetPath.current || pathname !== targetPath.current) return;
+    if (!targetPath.current) return;
     targetPath.current = null;
     routeReadyRef.current = true;
     maybeReveal();
@@ -117,6 +132,17 @@ export function EnvelopeTransition() {
       setPhase("idle");
     }
   };
+
+  // Safety net for the reveal phase: if the sweep-out animation is
+  // interrupted (tab hidden mid-animation, browser suspends timers under
+  // memory pressure, reduced-motion kicks in), animationend never fires
+  // and the overlay stays mounted forever. Force-unmount 2s after the
+  // reveal begins — the sweep itself is ~1.1s + a bit of margin.
+  useEffect(() => {
+    if (phase !== "reveal") return;
+    const t = window.setTimeout(() => setPhase("idle"), 2000);
+    return () => clearTimeout(t);
+  }, [phase]);
 
   if (phase === "idle") return null;
 

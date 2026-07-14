@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseGrowTransferFromSavingsResult {
   transfer: (amountStroops: bigint) => Promise<string>;
@@ -33,14 +33,11 @@ export function useGrowTransferFromSavings(
       setPending(true);
       setError(null);
       try {
-        const args = [
-          Address.fromString(userAddress).toScVal(),
-          nativeToScVal(amountStroops, { type: "i128" }),
-        ];
-        const { hash } = await invokeWrite(
+        const { hash } = await invokeAdminWithFallback(
           contractId,
           "grow_transfer_from_savings",
-          args,
+          Address.fromString(userAddress).toScVal(),
+          [nativeToScVal(amountStroops, { type: "i128" })],
         );
         setLastHash(hash);
         return hash;

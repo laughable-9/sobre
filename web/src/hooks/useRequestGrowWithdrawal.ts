@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseRequestGrowWithdrawalResult {
   request: (amountStroops: bigint) => Promise<{ hash: string; id: bigint }>;
@@ -34,14 +34,11 @@ export function useRequestGrowWithdrawal(
       setPending(true);
       setError(null);
       try {
-        const args = [
-          Address.fromString(userAddress).toScVal(),
-          nativeToScVal(amountStroops, { type: "i128" }),
-        ];
-        const { hash, returnValue } = await invokeWrite(
+        const { hash, returnValue } = await invokeAdminWithFallback(
           contractId,
           "request_grow_withdrawal",
-          args,
+          Address.fromString(userAddress).toScVal(),
+          [nativeToScVal(amountStroops, { type: "i128" })],
         );
         setLastHash(hash);
         const id =

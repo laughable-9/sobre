@@ -1,12 +1,14 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
 import { envelopeScVal, invokeWrite } from "@/lib/contract";
 import { PAYMENT_TOKEN_SAC_ID, type EnvelopeName } from "@/lib/config";
 import {
   clearCashoutRecovery,
+  markForwardComplete,
+  readCashoutRecovery,
   saveCashoutRecovery,
 } from "@/lib/cashoutRecovery";
 
@@ -99,6 +101,10 @@ export function useCashoutSignatures(
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [step, setStep] = useState<"idle" | "spending" | "forwarding">("idle");
+  // Synchronous re-entrancy guard against a rapid double-tap firing two
+  // concurrent cashout runs before React state disables the button.
+  // Applies to every entry point that fires an on-chain invokeWrite.
+  const inFlightRef = useRef(false);
 
   const signAndForward = useCallback(
     async (
@@ -106,6 +112,10 @@ export function useCashoutSignatures(
     ): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
+      if (inFlightRef.current) {
+        throw new Error("A cashout is already in progress.");
+      }
+      inFlightRef.current = true;
       setPending(true);
       setError(null);
       try {
@@ -150,8 +160,12 @@ export function useCashoutSignatures(
           transferArgs,
         );
 
-        // SAC transfer landed too — modal's /confirmed call will clear
-        // the snapshot once it lands the row at status='spent'.
+        // SAC transfer landed too — stamp the snapshot so a subsequent
+        // retryForward (e.g. from a /confirmed 5xx that routes the modal
+        // back through recovery) sees leg 2 is already done and MUST NOT
+        // fire another SAC transfer. Full clear happens in confirmSigned
+        // once the row lands at status='spent'.
+        markForwardComplete(forwardResult.hash);
         return {
           spendTxHash: spendResult.hash,
           forwardTxHash: forwardResult.hash,
@@ -163,6 +177,7 @@ export function useCashoutSignatures(
       } finally {
         setStep("idle");
         setPending(false);
+        inFlightRef.current = false;
       }
     },
     [userAddress, contractId],
@@ -176,6 +191,20 @@ export function useCashoutSignatures(
     }): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
+      // If the snapshot already knows the SAC transfer landed, retryForward
+      // must NOT fire a second one. Return the cached hash so the caller
+      // can re-run its /confirmed API call idempotently.
+      const cached = readCashoutRecovery();
+      if (cached?.forwardTxHash) {
+        return {
+          spendTxHash: args.spendTxHash,
+          forwardTxHash: cached.forwardTxHash,
+        };
+      }
+      if (inFlightRef.current) {
+        throw new Error("A cashout is already in progress.");
+      }
+      inFlightRef.current = true;
       setPending(true);
       setError(null);
       try {
@@ -190,6 +219,7 @@ export function useCashoutSignatures(
           "transfer",
           transferArgs,
         );
+        markForwardComplete(forwardResult.hash);
         return {
           spendTxHash: args.spendTxHash,
           forwardTxHash: forwardResult.hash,
@@ -201,6 +231,7 @@ export function useCashoutSignatures(
       } finally {
         setStep("idle");
         setPending(false);
+        inFlightRef.current = false;
       }
     },
     [userAddress, contractId],
@@ -212,6 +243,10 @@ export function useCashoutSignatures(
     ): Promise<{ spendTxHash: string; forwardTxHash: string }> => {
       if (!userAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
+      if (inFlightRef.current) {
+        throw new Error("A cashout is already in progress.");
+      }
+      inFlightRef.current = true;
       setPending(true);
       setError(null);
       try {
@@ -258,6 +293,7 @@ export function useCashoutSignatures(
           transferArgs,
         );
 
+        markForwardComplete(forwardResult.hash);
         return {
           spendTxHash: spendResult.hash,
           forwardTxHash: forwardResult.hash,
@@ -269,6 +305,7 @@ export function useCashoutSignatures(
       } finally {
         setStep("idle");
         setPending(false);
+        inFlightRef.current = false;
       }
     },
     [userAddress, contractId],

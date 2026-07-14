@@ -211,6 +211,12 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
     // "PDAX marked failed" from "Horizon hasn't caught up yet"), and we
     // preserve the tx hash + amount for later reconciliation.
     if (p.status === "failed") {
+      // Accept the failure signal from any non-terminal row. If the FAILED
+      // event races ahead of the COMPLETED (or of the poll advancing
+      // pending → funded), gating strictly on status='funded' silently
+      // drops the failure and the row later marches to funded on the
+      // delayed event as if nothing happened. Terminal statuses (`spent`,
+      // `credited`, `failed`) are still excluded via .in() below.
       await admin
         .from("pdax_deposits")
         .update({
@@ -219,7 +225,7 @@ async function handleCrypto(p: PdaxCryptoWebhook): Promise<void> {
           withdraw_tx_hash: p.transaction_hash,
         })
         .eq("identifier", p.identifier)
-        .eq("status", "funded");
+        .in("status", ["pending", "funded"]);
       return;
     }
     // Stamp metadata without advancing status. `amount_usdc` and

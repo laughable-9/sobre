@@ -36,12 +36,18 @@ export function getProfile(address: string): UserProfile | null {
   }
 }
 
-export function setProfile(address: string, profile: UserProfile): void {
+/** Returns `true` when the write actually landed, `false` if
+ *  localStorage was disabled (Safari private, quota exhausted). Callers
+ *  should surface a "couldn't save" affordance on `false` instead of
+ *  quietly moving on — the user would otherwise be re-prompted on their
+ *  next refresh with no explanation. */
+export function setProfile(address: string, profile: UserProfile): boolean {
   const storage = safeLocalStorage();
-  if (!storage) return;
+  if (!storage) return false;
   try {
     storage.setItem(key(address), JSON.stringify(profile));
+    return true;
   } catch {
-    // quota or refused; skip
+    return false;
   }
 }

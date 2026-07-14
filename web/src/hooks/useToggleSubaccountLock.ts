@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address } from "@stellar/stellar-sdk";
 
-import { invokeWrite } from "@/lib/contract";
+import { invokeAdminWithFallback } from "@/lib/contract";
 
 export interface UseToggleSubaccountLockResult {
   toggle: (subaccount: string, currentlyLocked: boolean) => Promise<string>;
@@ -33,27 +33,12 @@ export function useToggleSubaccountLock(
       setError(null);
       try {
         const method = currentlyLocked ? "unlock_subaccount" : "lock_subaccount";
-        const callerScVal = Address.fromString(adminAddress).toScVal();
-        const subaccountScVal = Address.fromString(subaccount).toScVal();
-        // v11 signature: lock_subaccount(caller, subaccount). v10 was
-        // lock_subaccount(subaccount) — a wallet that hasn't run
-        // upgrade() yet still expects one arg. Simulate v11 first;
-        // fall back to the v10 shape on MismatchingParameterLen.
-        // Simulation catches the shape mismatch before any passkey
-        // prompt, so the user only signs once regardless.
-        let hash: string;
-        try {
-          ({ hash } = await invokeWrite(contractId, method, [
-            callerScVal,
-            subaccountScVal,
-          ]));
-        } catch (e) {
-          const msg = e instanceof Error ? e.message : String(e);
-          if (!msg.includes("MismatchingParameterLen")) throw e;
-          ({ hash } = await invokeWrite(contractId, method, [
-            subaccountScVal,
-          ]));
-        }
+        const { hash } = await invokeAdminWithFallback(
+          contractId,
+          method,
+          Address.fromString(adminAddress).toScVal(),
+          [Address.fromString(subaccount).toScVal()],
+        );
         setLastHash(hash);
         return hash;
       } catch (e) {
