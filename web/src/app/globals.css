@@ -1175,6 +1175,17 @@
   .sobre-hero { padding-left: 24px; padding-right: 24px; }
   .sobre-hero-headline { font-size: clamp(32px, 9vw, 52px); }
 }
+/* Portrait phones are tall + narrow, so a full 100dvh hero reads as a mostly
+ * empty screen with the headline floating in the middle. Shrink to ~72% and
+ * tighten the vertical padding so the content sits closer to the top of the
+ * fold without the section still ending under the header. */
+@media (max-width: 640px) {
+  .sobre-hero {
+    min-height: 72dvh;
+    padding-top: clamp(56px, 10vh, 96px);
+    padding-bottom: clamp(40px, 6vh, 72px);
+  }
+}
 
 
 .sobre-btn-primary-large {
