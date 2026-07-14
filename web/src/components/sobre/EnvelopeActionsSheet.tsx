@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowDownToLine, Send } from "lucide-react";
+import { ArrowDownToLine, ArrowLeftRight, Send } from "lucide-react";
 
 import {
   PHP_PER_USDC,
@@ -22,6 +22,9 @@ interface Props {
   onClose: () => void;
   onCashOut: () => void;
   onSendToSub: () => void;
+  /** Kicks off the inter-Sobre transfer flow with this envelope
+   *  pre-selected as the source. Admin-only. */
+  onTransfer: () => void;
 }
 
 /**
@@ -51,6 +54,7 @@ export function EnvelopeActionsSheet({
   onClose,
   onCashOut,
   onSendToSub,
+  onTransfer,
 }: Props) {
   const displayName = displayEnvelopeName(envelope, envelopeNames);
   const iconKey = envelopeIcons?.[envelopeIndex];
@@ -116,6 +120,15 @@ export function EnvelopeActionsSheet({
             subtitle="Top up a supplementary account"
             disabled={isEmpty}
             onClick={onSendToSub}
+          />
+        ) : null}
+        {isAdmin ? (
+          <ActionRow
+            icon={<ArrowLeftRight size={20} strokeWidth={2} />}
+            title="Send to another Sobre"
+            subtitle="Move money to a different family wallet you help run"
+            disabled={isEmpty}
+            onClick={onTransfer}
           />
         ) : null}
       </div>

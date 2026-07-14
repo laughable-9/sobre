@@ -11,6 +11,7 @@ import {
 import { EnvelopeNamesForm } from "@/components/EnvelopeNamesForm";
 import { EnvelopeSplitForm } from "@/components/EnvelopeSplitForm";
 import { CashoutApprovalBanner } from "@/components/sobre/CashoutApprovalBanner";
+import { TransferBetweenSobresModal } from "@/components/sobre/TransferBetweenSobresModal";
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { usePendingCashoutApprovals } from "@/hooks/usePendingCashoutApprovals";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
@@ -342,6 +343,10 @@ function Dashboard({ contractId }: { contractId: string }) {
   // Distinct from `sendToSubFor` so the modal knows to render the envelope
   // picker instead of pinning to a specific envelope.
   const [sendToSubOpen, setSendToSubOpen] = useState(false);
+  // Inter-Sobre transfer entry — envelope pre-selected from the
+  // envelope actions sheet. Null closes the modal.
+  const [transferForEnvelope, setTransferForEnvelope] =
+    useState<EnvelopeName | null>(null);
   const [inviteOpen, setInviteOpen] = useState(false);
   // Household-policy dirty flag. Set true whenever PolicySettingsForm
   // carries unsaved changes; used to gate tab switches + BackLink with
@@ -1339,6 +1344,27 @@ function Dashboard({ contractId }: { contractId: string }) {
             setSendToSubFor(envActionsFor);
             setEnvActionsFor(null);
           }}
+          onTransfer={() => {
+            setTransferForEnvelope(envActionsFor);
+            setEnvActionsFor(null);
+          }}
+        />
+      ) : null}
+
+      {transferForEnvelope ? (
+        <TransferBetweenSobresModal
+          userAddress={address}
+          contractId={contractId}
+          state={state}
+          familyWalletId={familyWalletId}
+          memberWalletDbId={wallet.wallet?.id ?? null}
+          initialEnvelope={transferForEnvelope}
+          onClose={() => setTransferForEnvelope(null)}
+          onSuccess={() => {
+            setTransferForEnvelope(null);
+            refreshAll();
+          }}
+          onFlash={flash}
         />
       ) : null}
 

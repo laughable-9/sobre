@@ -55,10 +55,10 @@ export function useCashoutApproval(args: {
   amountStroops: bigint;
   /** Which op the request will authorize. Defaults to `cashout` for
    *  back-compat with the PDAX withdraw modal. */
-  kind?: "cashout" | "subaccount_fund";
-  /** Sub-account recipient's smart-wallet C-address. Required when
-   *  kind='subaccount_fund' — the RLS INSERT policy pins the row's
-   *  recipient_address to a claimed family_subaccounts row. */
+  kind?: "cashout" | "subaccount_fund" | "transfer";
+  /** Recipient's on-chain address. Required for `subaccount_fund`
+   *  (claimed sub-account's smart wallet) and `transfer` (destination
+   *  Sobre contract C-address). Absent for `cashout`. */
   recipientAddress?: string | null;
 }): CashoutApprovalState {
   const [status, setStatus] = useState<CashoutApprovalStatus>("idle");
@@ -93,10 +93,10 @@ export function useCashoutApproval(args: {
           // the RLS INSERT policy requires this exact shape.
           approvers_wallet_ids: [args.memberWalletDbId],
         };
-        if (kind === "subaccount_fund") {
+        if (kind === "subaccount_fund" || kind === "transfer") {
           if (!args.recipientAddress) {
             throw new Error(
-              "Recipient sub-account address is required for a subaccount_fund request.",
+              `Recipient address is required for a ${kind} request.`,
             );
           }
           insertRow.recipient_address = args.recipientAddress;

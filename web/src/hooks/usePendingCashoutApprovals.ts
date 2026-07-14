@@ -10,7 +10,7 @@ export interface PendingCashoutRequest {
   id: string;
   /** Which admin-gated op the request authorises. Drives the banner
    *  copy ("cash out to bank" vs "send to <sub-account>"). */
-  kind: "cashout" | "subaccount_fund";
+  kind: "cashout" | "subaccount_fund" | "transfer";
   memberWalletId: string;
   envelope: "Groceries" | "Tuition" | "Savings";
   amountStroops: bigint;
@@ -66,12 +66,12 @@ export function usePendingCashoutApprovals(args: {
           "id, kind, member_wallet_id, envelope, amount_stroops, memo, approvers_wallet_ids, created_at, recipient_address",
         )
         .eq("family_wallet_id", familyWalletId)
-        .in("kind", ["cashout", "subaccount_fund"])
+        .in("kind", ["cashout", "subaccount_fund", "transfer"])
         .eq("status", "pending")
         .order("created_at", { ascending: false });
       const rows = ((data ?? []) as Array<{
         id: string;
-        kind: "cashout" | "subaccount_fund";
+        kind: "cashout" | "subaccount_fund" | "transfer";
         member_wallet_id: string;
         envelope: "Groceries" | "Tuition" | "Savings";
         amount_stroops: string;
