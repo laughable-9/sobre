@@ -96,12 +96,32 @@ export function usePasskeyWallet(): WalletConnectionState {
     bootstrappingRef.current = true;
     setStatus("creating");
     setError(null);
+    let settled = false;
+    // Race the wallet bootstrap against a hard timeout. A hung network
+    // used to pin status='creating' forever, and the "Loading…" screen
+    // in the signed-in branch had no retry affordance.
+    const timeoutMs = 20_000;
+    const timeout = window.setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      setError(
+        "Sign-in is taking longer than expected. Check your connection and try again.",
+      );
+      setStatus("error");
+      bootstrappingRef.current = false;
+    }, timeoutMs);
     findOrCreateWallet(session)
       .then(({ wallet: row }) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         setWallet(row);
         setStatus("connected");
       })
       .catch((e: unknown) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timeout);
         setError(e instanceof Error ? e.message : String(e));
         setStatus("error");
         bootstrappingRef.current = false;

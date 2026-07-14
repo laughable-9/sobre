@@ -4,15 +4,25 @@
 import { ViewTransition, useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 import { LOGO_SRC } from "@/lib/config";
 
 /** Hide the topbar when the user scrolls DOWN past a small buffer, show it the
  *  moment they scroll UP. Ignores tiny jitters (< 4px), and always keeps the
  *  bar visible in the first 40px so a "scroll to top" click always lands on a
- *  visible chrome. Same behavior on every surface — landing + app. */
+ *  visible chrome. Same behavior on every surface — landing + app.
+ *
+ *  Reset to visible on route change so the new page never mounts with the
+ *  header pre-hidden (landing → dashboard while scrolled down used to strand
+ *  the dashboard's sticky header off-screen until the user scrolled again). */
 function useHideOnScrollDown() {
   const [hidden, setHidden] = useState(false);
+  const pathname = usePathname();
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setHidden(false);
+  }, [pathname]);
   useEffect(() => {
     let lastY = window.scrollY;
     let ticking = false;

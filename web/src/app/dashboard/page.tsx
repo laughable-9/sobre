@@ -175,6 +175,27 @@ export default function MySobresPage() {
                 <p className="sobre-signin-error">{wallet.error}</p>
               ) : null}
             </div>
+          ) : wallet.status === "error" ? (
+            <div className="sobre-signin-card">
+              <Image
+                src={LOGO_SRC}
+                alt=""
+                width={88}
+                height={88}
+                priority
+              />
+              <h1 className="sobre-signin-title">Something went wrong</h1>
+              <p className="sobre-signin-error">
+                {wallet.error ?? "Couldn't finish signing you in."}
+              </p>
+              <Button
+                onClick={() => void wallet.connect()}
+                size="lg"
+                className="sobre-signin-cta"
+              >
+                Try again
+              </Button>
+            </div>
           ) : (
             <p style={{ color: "var(--text-2)" }}>Loading…</p>
           )}
