@@ -76,12 +76,37 @@ export function AppTour({ onFinish }: { onFinish: () => void }) {
   const total = SLIDES.length;
   const isLast = index === total - 1;
 
+  const isSmoothScrollingRef = useRef(false);
+  const smoothScrollResetRef = useRef<number | null>(null);
   const goTo = useCallback((i: number) => {
     const clamped = Math.max(0, Math.min(SLIDES.length - 1, i));
     setIndex(clamped);
     const el = scrollerRef.current;
-    if (!el) return;
+    // clientWidth === 0 when the scroller mounted inside a hidden ancestor —
+    // scrollTo would silently no-op and leave the dot advanced past the visible
+    // slide. Bail so the caller can retry after layout settles.
+    if (!el || el.clientWidth === 0) return;
+    // Suppress the onScroll dot-sync while the browser smooth-scrolls between
+    // slides, otherwise every intermediate scrollLeft flicker fights the click
+    // and the dot bounces through slides we're passing over. Reset ref is
+    // cancel-safe so a rapid double-goTo doesn't stack overlapping timers.
+    isSmoothScrollingRef.current = true;
+    if (smoothScrollResetRef.current !== null) {
+      clearTimeout(smoothScrollResetRef.current);
+    }
     el.scrollTo({ left: clamped * el.clientWidth, behavior: "smooth" });
+    smoothScrollResetRef.current = window.setTimeout(() => {
+      isSmoothScrollingRef.current = false;
+      smoothScrollResetRef.current = null;
+    }, 500);
+  }, []);
+  // Cancel the pending reset on unmount so it doesn't fire on a stale ref.
+  useEffect(() => {
+    return () => {
+      if (smoothScrollResetRef.current !== null) {
+        clearTimeout(smoothScrollResetRef.current);
+      }
+    };
   }, []);
 
   const finish = useCallback(() => {
@@ -91,11 +116,14 @@ export function AppTour({ onFinish }: { onFinish: () => void }) {
 
   const primary = () => (isLast ? finish() : goTo(index + 1));
 
-  // Keep dots in sync with native swipe / trackpad scrolling.
+  // Keep dots in sync with native swipe / trackpad scrolling. Skip while a
+  // programmatic smooth-scroll is in flight so intermediate scrollLeft
+  // frames don't drag the dot back through slides being swept past.
   useEffect(() => {
     const el = scrollerRef.current;
     if (!el) return;
     const onScroll = () => {
+      if (isSmoothScrollingRef.current) return;
       const w = el.clientWidth;
       if (w === 0) return;
       const next = Math.round(el.scrollLeft / w);
@@ -104,6 +132,36 @@ export function AppTour({ onFinish }: { onFinish: () => void }) {
     el.addEventListener("scroll", onScroll, { passive: true });
     return () => el.removeEventListener("scroll", onScroll);
   }, [index]);
+
+  // Realign scroll offset to the active index on viewport resize / rotation
+  // so the visible slide and the active dot don't desync after the user
+  // rotates their phone mid-tour.
+  useEffect(() => {
+    const el = scrollerRef.current;
+    if (!el) return;
+    const onResize = () => {
+      if (el.clientWidth === 0) return;
+      el.scrollLeft = index * el.clientWidth;
+    };
+    window.addEventListener("resize", onResize);
+    window.addEventListener("orientationchange", onResize);
+    return () => {
+      window.removeEventListener("resize", onResize);
+      window.removeEventListener("orientationchange", onResize);
+    };
+  }, [index]);
+
+  // Cross-tab: if another tab completes the tour, mark this one done too
+  // so both tabs stop showing it. Uses the storage event which fires only
+  // in OTHER tabs of the same origin.
+  useEffect(() => {
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== TOUR_SEEN_KEY) return;
+      if (e.newValue === "1") onFinish();
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [onFinish]);
 
   return (
     <div className="sobre-tour">

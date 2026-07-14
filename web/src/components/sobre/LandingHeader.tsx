@@ -13,7 +13,7 @@ import { WalletMenu } from "@/components/sobre/WalletMenu";
  */
 export function LandingHeader() {
   const wallet = usePasskeyWallet();
-  const { status, address, connect } = wallet;
+  const { status, address, connect, error } = wallet;
   const busy = status === "checking" || status === "creating";
 
   const connectButton = address ? (
@@ -46,6 +46,22 @@ export function LandingHeader() {
           </OpenSobreButton>
         </>
       }
-    />
+    >
+      {error ? (
+        <p
+          role="alert"
+          style={{
+            margin: "8px auto 0",
+            maxWidth: 480,
+            padding: "6px 10px",
+            fontSize: 12,
+            color: "var(--sobre-danger)",
+            textAlign: "center",
+          }}
+        >
+          {error}
+        </p>
+      ) : null}
+    </SiteHeader>
   );
 }

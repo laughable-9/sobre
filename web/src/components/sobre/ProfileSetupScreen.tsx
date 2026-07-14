@@ -17,12 +17,19 @@ export function ProfileSetupScreen({
   onDone: () => void;
 }) {
   const [name, setName] = useState(defaultName ?? "");
+  const [saveError, setSaveError] = useState<string | null>(null);
   const valid = name.trim().length > 0;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!valid) return;
-    setProfile(address, { name: name.trim() });
+    const ok = setProfile(address, { name: name.trim() });
+    if (!ok) {
+      setSaveError(
+        "Couldn't save your name. Storage may be full or disabled.",
+      );
+      return;
+    }
     onDone();
   };
 
@@ -81,6 +88,14 @@ export function ProfileSetupScreen({
           Save profile
         </button>
 
+        {saveError ? (
+          <p
+            className="text-[12px] text-center mt-3"
+            style={{ color: "var(--sobre-danger)" }}
+          >
+            {saveError}
+          </p>
+        ) : null}
         <p
           className="text-[12px] text-center mt-3"
           style={{ color: "var(--text-3)" }}
