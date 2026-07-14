@@ -879,9 +879,10 @@
    box and the text's bounding box are both `align-items: center` here, but
    the icon's optical mass (envelope plus sprout) sits a couple px above its
    box center, which makes the wordmark look like it's hanging below. A
-   small translateY nudges the icon down so the two read as aligned. */
-.sobre-brand img,
-.sobre-topbar img {
+   small translateY nudges the icon down so the two read as aligned. Scoped
+   to the brand mark only — a broad `.sobre-topbar img` rule cascaded into
+   the wallet-menu avatar and knocked it 3px above the name. */
+.sobre-brand img {
   filter: none;
   box-shadow: none;
   transform: translateY(-3px);
@@ -916,8 +917,6 @@
     font-size: 12.5px;
   }
   .sobre-wallet-menu-pill { padding: 7px 10px; font-size: 12.5px; }
-  .sobre-wallet-menu-pill .addr,
-  .sobre-wallet-menu-pill .chev { display: none; }
   /* The " Sobre" tail is a nested <span> inside the "Open Sobre" CTA — hide
      it here so the button reads just "Open" on phones, keeping the pill nav
      from wrapping onto two rows. */
@@ -1003,6 +1002,13 @@
 .sobre-wallet-menu-pill .chev {
   display: block;
   color: var(--text-3);
+}
+/* Phones: collapse the wallet pill to the avatar only. Must live AFTER the
+ * base `display: block` rules above so the cascade picks this override —
+ * putting it in an earlier @media block let the base rule win. */
+@media (max-width: 760px) {
+  .sobre-wallet-menu-pill .addr,
+  .sobre-wallet-menu-pill .chev { display: none; }
 }
 
 .sobre-wallet-menu-panel {
