@@ -259,11 +259,18 @@ export function useWalletState(
 
   const state = useMemo<WalletState | null>(() => {
     if (!onChain) return null;
-    let adminCount = 0;
+    // On-chain admins[] is the source of truth for who's an admin.
+    // Supabase family_members.role can lag — e.g. a member invitee whose
+    // family_members row was upserted with role='recipient' but who the
+    // contract added to admins[] (v11 flattened admin/member on join for
+    // some flows). Deriving from Supabase produced "0 of 2 admins" on
+    // the profile menu even when the on-chain list showed both admins.
+    const adminSet = new Set(onChain.admins);
     const members: Member[] = onChain.members.map((m) => {
       const d = display.membersByAddress.get(m.address);
-      const role = d?.role ?? "recipient";
-      if (role === "admin") adminCount += 1;
+      const role = adminSet.has(m.address)
+        ? "admin"
+        : (d?.role ?? "recipient");
       return {
         address: m.address,
         name: d?.name ?? "",
@@ -284,7 +291,7 @@ export function useWalletState(
       subaccounts: onChain.subaccounts,
       policy: display.policy,
       savings_lock_all_admins: display.savingsLockAllAdmins,
-      admin_count: adminCount,
+      admin_count: onChain.admins.length,
       admin_cap: display.adminCap,
       earn: onChain.earn,
       grow_enabled: onChain.grow_enabled,

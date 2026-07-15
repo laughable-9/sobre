@@ -1,13 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 
 import { useJoinWallet } from "@/hooks/useJoinWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { Avatar } from "@/components/sobre/Avatar";
-import { LOGO_SRC } from "@/lib/config";
 import { getProfile } from "@/lib/profile";
 
 export function JoinForm({
@@ -51,13 +49,11 @@ export function JoinForm({
   return (
     <main className="flex-1 grid place-items-center px-6">
       <div className="text-center max-w-md w-full">
-        <Image
-          src={LOGO_SRC}
-          alt=""
-          width={72}
-          height={72}
-          className="mx-auto"
-          priority
+        <Avatar
+          src={avatarUrl ?? undefined}
+          name={resolvedName || "You"}
+          size={72}
+          style={{ margin: "0 auto" }}
         />
         <h1 className="font-serif text-[36px] font-semibold mt-5 mb-3">
           You&apos;re invited
