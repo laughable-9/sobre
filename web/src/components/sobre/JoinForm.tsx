@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 
 import { useJoinWallet } from "@/hooks/useJoinWallet";
 import type { WalletState } from "@/hooks/useWalletState";
 import { Avatar } from "@/components/sobre/Avatar";
+import { LOGO_SRC } from "@/lib/config";
 import { getProfile } from "@/lib/profile";
 
 export function JoinForm({
@@ -40,20 +42,29 @@ export function JoinForm({
   // bounces to the dashboard before this form ever renders.
   const isFull = state.members.length >= 2;
 
+  // wallet_name comes from the family_wallets.display_name Supabase row,
+  // which the RLS policy only reveals to existing members — the invitee
+  // hasn't joined yet, so display_name reads as empty. Fall back to a
+  // neutral phrase so the copy doesn't render as "join ." (trailing
+  // period with no name).
+  const walletLabel = state.wallet_name || "this Sobre";
   return (
     <main className="flex-1 grid place-items-center px-6">
       <div className="text-center max-w-md w-full">
-        <Avatar
-          name={state.wallet_name || "Sobre"}
-          size={72}
-          style={{ margin: "0 auto" }}
+        <Image
+          src={LOGO_SRC}
+          alt=""
+          width={72}
+          height={72}
+          className="mx-auto"
+          priority
         />
         <h1 className="font-serif text-[36px] font-semibold mt-5 mb-3">
           You&apos;re invited
         </h1>
         <p className="text-[16px] mb-6" style={{ color: "var(--text-2)" }}>
           You&apos;ve been invited to join{" "}
-          <b style={{ color: "var(--text-1)" }}>{state.wallet_name}</b>.
+          <b style={{ color: "var(--text-1)" }}>{walletLabel}</b>.
         </p>
 
         {isFull ? (
@@ -62,7 +73,7 @@ export function JoinForm({
               <div>
                 <b>This family is already full.</b> Sobre caps each wallet at
                 2 members and{" "}
-                <b>{state.wallet_name}</b> already has two. Ask the admin to
+                <b>{walletLabel}</b> already has two. Ask the admin to
                 remove someone before you try again.
               </div>
             </div>

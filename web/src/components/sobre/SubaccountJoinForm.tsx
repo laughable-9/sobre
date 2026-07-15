@@ -54,7 +54,7 @@ export function SubaccountJoinForm({
           className="sobre-btn sobre-btn-primary w-full justify-center"
           style={{ padding: "14px 22px", fontSize: 15 }}
         >
-          Open {state.wallet_name}
+          Open {(state.wallet_name || "this Sobre")}
         </Link>
       </InviteCard>
     );
@@ -67,7 +67,7 @@ export function SubaccountJoinForm({
       body={
         <>
           Join{" "}
-          <b style={{ color: "var(--text-1)" }}>{state.wallet_name}</b>{" "}
+          <b style={{ color: "var(--text-1)" }}>{(state.wallet_name || "this Sobre")}</b>{" "}
           as a supplementary account. You&apos;ll see your own spendable
           balance and can cash out anytime.
         </>
