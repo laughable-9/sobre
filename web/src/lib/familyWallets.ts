@@ -144,12 +144,21 @@ export async function createFamilyWallet(
   const signedAuth = (
     assembledTx.built?.operations[0] as { auth?: unknown[] } | undefined
   )?.auth;
+  // stellar-sdk 16 AT.simulate({restore:true}) hard-throws when the RPC
+  // returns a restorePreamble unless the AT carries a signTransaction
+  // option — which we can't wire up for a passkey-signed tx. Swallow
+  // the specific restore-related throw and proceed; the submit-time
+  // trap will surface a clearer error if archived state was actually
+  // the issue.
   try {
     await assembledTx.simulate({ restore: true });
   } catch (err) {
-    throw new Error(
-      `[create_sobre step 3b] re-simulate after sign failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/signTransaction|restore|automatic restore/i.test(msg)) {
+      throw new Error(
+        `[create_sobre step 3b] re-simulate after sign failed: ${msg}`,
+      );
+    }
   }
   if (signedAuth && assembledTx.built) {
     (assembledTx.built.operations[0] as { auth?: unknown }).auth = signedAuth;

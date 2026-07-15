@@ -64,6 +64,14 @@ export function usePasskeyWallet(): WalletConnectionState {
   // Guard against double-bootstrap when both the initial getSession and the
   // onAuthStateChange callback fire with the same session.
   const bootstrappingRef = useRef(false);
+  // Remember which Supabase user we've already tried to bootstrap for.
+  // Supabase auto-refreshes tokens (~every 55min, and on visibility change)
+  // which produces a new session OBJECT for the same user. Without this
+  // guard the bootstrap effect re-fires on every refresh; if the previous
+  // attempt failed (user cancelled FaceID, network blip, etc), it re-runs
+  // findOrCreateWallet which re-prompts WebAuthn — the passkey-spam bug
+  // Kyle hit on the dashboard. Only reset on sign-out or explicit retry().
+  const lastAttemptedUserIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     const supabase = getSupabaseBrowserClient();
@@ -81,6 +89,7 @@ export function usePasskeyWallet(): WalletConnectionState {
         setWallet(null);
         setStatus("signed-out");
         bootstrappingRef.current = false;
+        lastAttemptedUserIdRef.current = null;
       }
     });
 
@@ -93,6 +102,11 @@ export function usePasskeyWallet(): WalletConnectionState {
   useEffect(() => {
     if (!session) return;
     if (wallet || bootstrappingRef.current) return;
+    // If we've already attempted bootstrap for this user (whether it
+    // succeeded or errored), don't re-fire on a token refresh. The user
+    // can drive an explicit retry via the retry() method.
+    if (lastAttemptedUserIdRef.current === session.user.id) return;
+    lastAttemptedUserIdRef.current = session.user.id;
     bootstrappingRef.current = true;
     setStatus("creating");
     setError(null);
@@ -129,6 +143,10 @@ export function usePasskeyWallet(): WalletConnectionState {
   }, [session, wallet]);
 
   const connect = useCallback(async (opts?: { redirectTo?: string }) => {
+    // User-driven retry: clear the last-attempted guard so if they end
+    // up back on the same Supabase user (typical for "click Continue
+    // with Google after an error"), the bootstrap effect will re-fire.
+    lastAttemptedUserIdRef.current = null;
     setError(null);
     const supabase = getSupabaseBrowserClient();
     // Carry the current page through OAuth so the callback bounces back
@@ -158,6 +176,7 @@ export function usePasskeyWallet(): WalletConnectionState {
     setError(null);
     setStatus("signed-out");
     bootstrappingRef.current = false;
+    lastAttemptedUserIdRef.current = null;
   }, []);
 
   const refresh = useCallback(async () => {
