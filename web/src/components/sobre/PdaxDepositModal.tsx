@@ -193,7 +193,21 @@ export function PdaxDepositModal({
     return () => onActiveIdentifierChange?.(null);
   }, [row?.identifier, onActiveIdentifierChange]);
 
-  // Watch for status transitions to fire celebrations.
+  // Keep onSuccess in a ref so the transition effect below doesn't
+  // subscribe to its identity. Parents pass an inline arrow, whose
+  // reference changes on every render — subscribing would let a
+  // mid-celebration re-render fire the cleanup (clearTimeout) BEFORE
+  // the 1.5s clear ran, stranding the modal on "Payment confirmed!"
+  // with no way out (the effect body's next run wouldn't re-enter
+  // either branch since `last` had already advanced to "funded").
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  }, [onSuccess]);
+
+  // Watch for status transitions to fire celebrations. Dep is
+  // [row?.status] only — amount_usdc and onSuccess are read from
+  // refs so an unstable parent can't retrigger this effect.
   useEffect(() => {
     const current = row?.status;
     if (!current) return;
@@ -209,15 +223,18 @@ export function PdaxDepositModal({
       // Fire onSuccess exactly once on the funded → credited transition
       // so the parent can trigger the hero animation and refresh chains.
       // row.amount_usdc is populated by phase-2 before we flip credited.
-      if (row?.amount_usdc && onSuccess) {
-        const usdc = Number(row.amount_usdc);
+      const amount = row?.amount_usdc;
+      const cb = onSuccessRef.current;
+      if (amount && cb) {
+        const usdc = Number(amount);
         const stroops = BigInt(Math.round(usdc * 10_000_000));
-        onSuccess({ usdc, stroops });
+        cb({ usdc, stroops });
       }
       const t = setTimeout(() => setCelebration(null), 1500);
       return () => clearTimeout(t);
     }
-  }, [row?.status, row?.amount_usdc, onSuccess]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [row?.status]);
 
   // Modal mounts → focus the amount input so the user can type immediately.
   useEffect(() => {
