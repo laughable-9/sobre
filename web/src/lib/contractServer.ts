@@ -57,3 +57,48 @@ export async function simulateReadServer<T>(
     return null;
   }
 }
+
+/** Delay schedule (ms between attempts) for a Soroban read that races the
+ *  RPC pool's async indexing. The client polled its own tx to SUCCESS on
+ *  one backend, but our server-side simulate can land on a lagging replica.
+ *  ~6.2s total budget across 4 waits — well under the wall clock the user
+ *  already spent on FaceID prompts. Front-loaded (300ms first) because the
+ *  common lag is short and a fat first wait is dead time. */
+export const RPC_INDEXER_LAG_BACKOFF = [300, 900, 2000, 3000] as const;
+
+/**
+ * Retry {@link simulateReadServer} until `ready` returns true or the delay
+ * schedule runs out. Returns the last-read value regardless — callers
+ * decide whether "not ready after N attempts" is a 404 or a 500.
+ *
+ * When the caller already ran the first attempt (typically raced with a
+ * rate-limit check so the happy path pays zero extra latency), pass it as
+ * `initial` — a passing initial short-circuits the whole retry loop.
+ */
+export async function simulateReadServerRetry<T>(
+  contractId: string,
+  method: string,
+  args: xdr.ScVal[] = [],
+  opts?: {
+    /** Predicate for "the RPC has caught up." Default: any non-null value. */
+    ready?: (value: T | null) => boolean;
+    /** Wait schedule between attempts, in ms. Default: RPC_INDEXER_LAG_BACKOFF. */
+    delaysMs?: readonly number[];
+    /** Skip the first attempt if it already ran outside this helper. */
+    initial?: T | null;
+  },
+): Promise<T | null> {
+  const ready = opts?.ready ?? ((v: T | null) => v !== null);
+  const delays = opts?.delaysMs ?? RPC_INDEXER_LAG_BACKOFF;
+  let value =
+    opts?.initial !== undefined
+      ? opts.initial
+      : await simulateReadServer<T>(contractId, method, args);
+  if (ready(value)) return value;
+  for (const delayMs of delays) {
+    await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+    value = await simulateReadServer<T>(contractId, method, args);
+    if (ready(value)) return value;
+  }
+  return value;
+}

@@ -18,7 +18,7 @@ import { Address } from "@stellar/stellar-sdk";
 import { NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
-import { simulateReadServer } from "@/lib/contractServer";
+import { simulateReadServerRetry } from "@/lib/contractServer";
 import { base64UrlDecode } from "@/lib/encoding";
 import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
@@ -91,42 +91,30 @@ export async function POST(req: Request) {
 
   // Soroban RPC replicas index ledger writes asynchronously — the joiner's
   // join_as_subaccount tx may have landed seconds ago but the replica
-  // serving our simulate hasn't picked it up yet. Without this retry the
+  // serving our simulate hasn't picked it up yet. Without the retry the
   // race surfaces as a one-shot 403, which the joiner's form swallows
   // (auto-bounce on alreadySubaccount still fires from the dashboard's
   // own polled state) — leaving the family_subaccounts row pending
-  // forever. Total budget ~4s; in practice the second or third attempt
-  // hits an indexed replica.
+  // forever. Uses the shared backoff schedule from contractServer.
   const callerStrkey = Address.fromString(ctx.contractId).toString();
-  const ATTEMPTS = 5;
-  let lastError: "no_state" | "no_hit" | null = "no_state";
-  for (let i = 0; i < ATTEMPTS; i++) {
-    const onChainState = await simulateReadServer<OnChainStateShape>(
-      body.contract_id,
-      "get_state",
-    );
-    if (!onChainState?.subaccounts) {
-      lastError = "no_state";
-    } else {
-      const hit = onChainState.subaccounts.some((s) => {
-        if (!s?.address) return false;
-        try {
-          return Address.fromString(s.address).toString() === callerStrkey;
-        } catch {
-          return false;
-        }
-      });
-      if (hit) {
-        lastError = null;
-        break;
+  const hasCallerHit = (v: OnChainStateShape | null): boolean =>
+    !!v?.subaccounts?.some((s) => {
+      if (!s?.address) return false;
+      try {
+        return Address.fromString(s.address).toString() === callerStrkey;
+      } catch {
+        return false;
       }
-      lastError = "no_hit";
-    }
-    if (i < ATTEMPTS - 1) {
-      await new Promise((r) => setTimeout(r, 800));
-    }
-  }
-  if (lastError === "no_state") {
+    });
+
+  const onChainState = await simulateReadServerRetry<OnChainStateShape>(
+    body.contract_id,
+    "get_state",
+    [],
+    { ready: hasCallerHit },
+  );
+
+  if (!onChainState?.subaccounts) {
     return NextResponse.json(
       {
         error:
@@ -135,7 +123,7 @@ export async function POST(req: Request) {
       { status: 404 },
     );
   }
-  if (lastError === "no_hit") {
+  if (!hasCallerHit(onChainState)) {
     return NextResponse.json(
       {
         error:

@@ -18,7 +18,10 @@ import { Address } from "@stellar/stellar-sdk";
 import { NextResponse } from "next/server";
 
 import { requireWallet } from "@/lib/auth/familyMember";
-import { simulateReadServer } from "@/lib/contractServer";
+import {
+  simulateReadServer,
+  simulateReadServerRetry,
+} from "@/lib/contractServer";
 import { enforceDailyLimit } from "@/lib/rateLimit";
 import { getSupabaseAdmin } from "@/lib/supabase/admin";
 
@@ -154,20 +157,19 @@ export async function POST(req: Request) {
   ]);
   if (rate) return rate;
 
-  // The client polled its own tx to SUCCESS before POSTing here, but the
-  // public RPC (`soroban-testnet.stellar.org`) is load-balanced across
-  // backends whose ledger tips drift by a few seconds. If we hit a lagging
-  // backend, the fresh contract's `get_state` returns nothing. Backoff-retry
-  // covers the drift invisibly; ~6.2s total, first retry lands ~500ms sooner
-  // than a naive doubling schedule for the common short-lag case.
-  let onChainState = initialState;
-  if (!onChainState?.admin) {
-    for (const delayMs of [300, 900, 2000, 3000]) {
-      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
-      onChainState = await readAdmin();
-      if (onChainState?.admin) break;
-    }
-  }
+  // Retry the on-chain read past RPC replica lag — see
+  // simulateReadServerRetry / RPC_INDEXER_LAG_BACKOFF for the schedule.
+  // `initial` short-circuits when the parallel first attempt above
+  // already saw the admin (happy path pays zero extra latency).
+  const onChainState = await simulateReadServerRetry<{ admin?: string }>(
+    body.contract_id,
+    "get_state",
+    [],
+    {
+      initial: initialState,
+      ready: (v) => !!v?.admin,
+    },
+  );
 
   if (!onChainState?.admin) {
     return NextResponse.json(
