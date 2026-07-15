@@ -115,7 +115,20 @@ export async function invokeWrite(
   // Widen the footprint to cover signer-storage reads __check_auth performs.
   // The initial sim passkey-kit ran was unsigned, so it never executed
   // __check_auth — the footprint missed the smart wallet's signer reads.
-  await signedAT.simulate({ restore: true });
+  //
+  // stellar-sdk 16's AT.simulate({restore:true}) hard-throws if the RPC
+  // returns a restorePreamble AND the AT wasn't built with a
+  // signTransaction option — which we don't set because our sign path
+  // is passkey, not a G-key wallet. Swallow that specific error and
+  // proceed to submit: if the tx really did touch archived state, the
+  // submit-time trap surfaces a clearer LEDGER_ENTRY_ARCHIVED error;
+  // otherwise the widened footprint we do have is enough.
+  try {
+    await signedAT.simulate({ restore: true });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (!/signTransaction|restore|automatic restore/i.test(msg)) throw err;
+  }
 
   // Restore the captured signatures over whatever the re-simulate wrote.
   if (signedAuth && signedAT.built) {
