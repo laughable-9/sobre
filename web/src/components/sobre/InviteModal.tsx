@@ -117,14 +117,17 @@ export function InviteModal({
   const hasSuggestions = suggestions.length > 0;
   const anyAdminSuggestion = suggestions.some((s) => s.role === "admin");
   const showAdminCapFull = anyAdminSuggestion && !canMintAdmin;
+  // Fallback so a first-render race (wallet_name empty before display data
+  // lands) doesn't produce "…added to ." with a bare trailing period.
+  const walletLabel = walletName || "this Sobre";
 
   return (
     <Sheet onClose={onClose} ariaLabel="Invite family member">
         <h2>Invite {hasSuggestions ? "your members" : "a family member"}</h2>
         <p className="sub">
           {hasSuggestions
-            ? `Generate a one-time link for each person you added to ${walletName}. Each link works for one person and expires in ${INVITE_TTL_MINUTES} minutes.`
-            : `Generate a one-time link to add a member to ${walletName}. The link works for one person, expires in ${INVITE_TTL_MINUTES} minutes, and can't be reused.`}
+            ? `Generate a one-time link for each person you added to ${walletLabel}. Each link works for one person and expires in ${INVITE_TTL_MINUTES} minutes.`
+            : `Generate a one-time link to add a member to ${walletLabel}. The link works for one person, expires in ${INVITE_TTL_MINUTES} minutes, and can't be reused.`}
         </p>
         {showAdminCapFull ? (
           <p

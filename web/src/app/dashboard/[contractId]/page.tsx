@@ -690,7 +690,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               className="mx-auto"
             />
             <h1 className="font-serif text-[28px] font-semibold mt-5 mb-3">
-              You&apos;re not in <em>{state.wallet_name}</em>
+              You&apos;re not in <em>{state.wallet_name || "this Sobre"}</em>
             </h1>
             <p
               className="text-[14px] mb-5"
