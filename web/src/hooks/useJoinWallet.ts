@@ -5,7 +5,14 @@ import { Address, xdr } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 import { rememberJoinedSobre } from "@/lib/joinedSobres";
+import { makeMarkerSlot } from "@/lib/pendingMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+/** Marker checkpoint. Presence means `join_wallet` already landed on chain
+ *  for this (user, contract) pair; the retry should skip the on-chain call
+ *  (which traps with "already member") and re-run only the Supabase mirror
+ *  writes below. */
+const joinSlot = makeMarkerSlot("sobre.pendingJoin");
 
 export interface UseJoinWalletResult {
   /** `inviteToken` is the 32-byte plaintext token from the invite URL,
@@ -50,16 +57,26 @@ export function useJoinWallet(
       setPending(true);
       setError(null);
       try {
-        const args = [
-          Address.fromString(userAddress).toScVal(),
-          xdr.ScVal.scvBytes(Buffer.from(inviteToken)),
-        ];
-        const { hash } = await invokeWrite(contractId, "join_wallet", args);
+        // Owner key includes contractId so a user with multiple in-flight
+        // joins across different families doesn't collide checkpoints.
+        const slotOwner = `${userAddress}:${contractId}`;
+        const resumed = joinSlot.read(slotOwner);
+        let hash = "";
+        if (!resumed) {
+          const args = [
+            Address.fromString(userAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(inviteToken)),
+          ];
+          ({ hash } = await invokeWrite(contractId, "join_wallet", args));
+          // Checkpoint immediately so a Supabase failure below is
+          // recoverable — a second `join_wallet` would trap and strand
+          // the user with on-chain membership but no family_members row.
+          joinSlot.write(slotOwner, true);
+        }
 
         // Local-state mirror of the on-chain membership — pairs with the
         // dashboard's `forgetJoinedSobre` cleanup when the user is later
-        // kicked. Owning this here keeps the side-effect adjacent to the
-        // mutation that justifies it.
+        // kicked. Idempotent (dedupes via `includes`), safe on resume.
         rememberJoinedSobre(userAddress, contractId);
 
         // Off-chain: insert a family_members row so display name surfaces
@@ -110,6 +127,7 @@ export function useJoinWallet(
             `Joined on chain but Supabase mirror failed: ${upsertErr.message}`,
           );
         }
+        joinSlot.clear(slotOwner);
 
         return hash;
       } catch (e) {

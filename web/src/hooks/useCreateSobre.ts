@@ -13,6 +13,7 @@ import {
 } from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
 import { mirrorFamilyCreate } from "@/lib/familyWallets";
+import { isRecord, makePendingSlot } from "@/lib/pendingMutation";
 
 export type CreateSobrePhase =
   | "idle"
@@ -30,58 +31,14 @@ interface CreateProgress {
   growEnabled: boolean;
 }
 
-function progressKey(userAddress: string): string {
-  return `sobre.pendingCreate:${userAddress}`;
-}
-
-function safeSessionStorage(): Storage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.sessionStorage;
-  } catch {
-    return null;
-  }
-}
-
-function readProgress(userAddress: string): CreateProgress | null {
-  const storage = safeSessionStorage();
-  if (!storage) return null;
-  try {
-    const raw = storage.getItem(progressKey(userAddress));
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<CreateProgress>;
-    if (
-      typeof parsed?.contractId === "string" &&
-      parsed.contractId.startsWith("C") &&
-      typeof parsed.growEnabled === "boolean"
-    ) {
-      return { contractId: parsed.contractId, growEnabled: parsed.growEnabled };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function writeProgress(userAddress: string, p: CreateProgress): void {
-  const storage = safeSessionStorage();
-  if (!storage) return;
-  try {
-    storage.setItem(progressKey(userAddress), JSON.stringify(p));
-  } catch {
-    // sessionStorage full — retries just cost a redeploy.
-  }
-}
-
-function clearProgress(userAddress: string): void {
-  const storage = safeSessionStorage();
-  if (!storage) return;
-  try {
-    storage.removeItem(progressKey(userAddress));
-  } catch {
-    // Best-effort cleanup.
-  }
-}
+const createSlot = makePendingSlot<CreateProgress>(
+  "sobre.pendingCreate",
+  (v): v is CreateProgress =>
+    isRecord(v) &&
+    typeof v.contractId === "string" &&
+    v.contractId.startsWith("C") &&
+    typeof v.growEnabled === "boolean",
+);
 
 export interface CreateSobreArgs {
   walletName: string;
@@ -128,7 +85,7 @@ export function useCreateSobre(
       // Resume in-flight create if a previous attempt succeeded on chain
       // but tripped later (mirror race, tab reload, etc). Skips redeploying
       // and any FaceID prompts already done — critical for demo retries.
-      const resumed = readProgress(userAddress);
+      const resumed = createSlot.read(userAddress);
       let newContractId = resumed?.contractId ?? "";
       if (!resumed) {
         onPhase?.("deploying");
@@ -144,7 +101,7 @@ export function useCreateSobre(
           throw new Error("create_sobre returned no contract address");
         }
         newContractId = returnValue;
-        writeProgress(userAddress, { contractId: newContractId, growEnabled: false });
+        createSlot.write(userAddress, { contractId: newContractId, growEnabled: false });
       }
 
       if (!resumed?.growEnabled) {
@@ -158,7 +115,7 @@ export function useCreateSobre(
           Address.fromString(XLM_SAC_ID).toScVal(),
           Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
         ]);
-        writeProgress(userAddress, { contractId: newContractId, growEnabled: true });
+        createSlot.write(userAddress, { contractId: newContractId, growEnabled: true });
       }
 
       onPhase?.("mirroring");
@@ -170,7 +127,7 @@ export function useCreateSobre(
         envelopeNames,
         envelopeIcons,
       });
-      clearProgress(userAddress);
+      createSlot.clear(userAddress);
       onPhase?.("done");
       return newContractId;
     },

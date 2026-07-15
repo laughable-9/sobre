@@ -6,6 +6,12 @@ import { Address, xdr } from "@stellar/stellar-sdk";
 import { invokeWrite } from "@/lib/contract";
 import { base64UrlEncode } from "@/lib/encoding";
 import { rememberJoinedSobre } from "@/lib/joinedSobres";
+import { makeMarkerSlot } from "@/lib/pendingMutation";
+
+/** Marker checkpoint. Presence means `join_as_subaccount` already landed
+ *  on chain for this (user, contract) pair; retry should skip the chain
+ *  call (traps as `AlreadySubaccount`) and re-POST /api/subaccount/join. */
+const subaccountJoinSlot = makeMarkerSlot("sobre.pendingSubaccountJoin");
 
 export interface UseJoinAsSubaccountResult {
   /** `inviteToken` is the 32-byte plaintext from the URL, base64url-decoded
@@ -44,15 +50,23 @@ export function useJoinAsSubaccount(
       setPending(true);
       setError(null);
       try {
-        const args = [
-          Address.fromString(userAddress).toScVal(),
-          xdr.ScVal.scvBytes(Buffer.from(inviteToken)),
-        ];
-        const { hash } = await invokeWrite(
-          contractId,
-          "join_as_subaccount",
-          args,
-        );
+        const slotOwner = `${userAddress}:${contractId}`;
+        const resumed = subaccountJoinSlot.read(slotOwner);
+        let hash = "";
+        if (!resumed) {
+          const args = [
+            Address.fromString(userAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(inviteToken)),
+          ];
+          ({ hash } = await invokeWrite(
+            contractId,
+            "join_as_subaccount",
+            args,
+          ));
+          // Checkpoint before the server POST so a fetch failure below
+          // resumes just the POST — the chain call would trap on retry.
+          subaccountJoinSlot.write(slotOwner, true);
+        }
         rememberJoinedSobre(userAddress, contractId);
 
         const res = await fetch("/api/subaccount/join", {
@@ -71,6 +85,7 @@ export function useJoinAsSubaccount(
             }`,
           );
         }
+        subaccountJoinSlot.clear(slotOwner);
         return hash;
       } catch (e) {
         setError(e instanceof Error ? e.message : String(e));

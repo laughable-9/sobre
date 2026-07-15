@@ -10,7 +10,33 @@ import {
   byteaLiteral,
   sha256,
 } from "@/lib/encoding";
+import { isRecord, makePendingSlot } from "@/lib/pendingMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+/** Checkpoint after the on-chain `create_invite` lands but before the
+ *  admin-role hint insert. If the insert throws, retrying without this
+ *  would mint a fresh invite (orphaning the first, still-redeemable one)
+ *  AND still race the Supabase insert. With the checkpoint we resume the
+ *  insert against the already-minted token. Only admin-role invites need
+ *  this — member invites have no Supabase side-effect. */
+interface AdminInviteProgress {
+  /** base64url of the plaintext token — needed to rebuild the share URL. */
+  tokenB64: string;
+  /** Postgres bytea literal (`\x<hex>`) of sha256(token) — the exact value
+   *  the resumed insert writes to admin_invite_hints.token_hash. */
+  tokenHashLiteral: string;
+  expiresAtLedger: number;
+}
+
+const adminInviteSlot = makePendingSlot<AdminInviteProgress>(
+  "sobre.pendingAdminInvite",
+  (v): v is AdminInviteProgress =>
+    isRecord(v) &&
+    typeof v.tokenB64 === "string" &&
+    typeof v.tokenHashLiteral === "string" &&
+    v.tokenHashLiteral.startsWith("\\x") &&
+    typeof v.expiresAtLedger === "number",
+);
 
 /** Stellar ledgers close every ~5s on testnet. 360 ledgers ≈ 30 min — the
  *  expiry window the admin's invite link is valid for. Keep short so a
@@ -73,45 +99,79 @@ export function useCreateInvite(
     async (opts?: CreateInviteOptions): Promise<CreateInviteResult> => {
       if (!adminAddress) throw new Error("Wallet not connected.");
       if (!contractId) throw new Error("No wallet selected.");
-      const intendedRole = opts?.intendedRole ?? "member";
       setPending(true);
       setError(null);
       try {
-        const token = crypto.getRandomValues(new Uint8Array(32));
-        const tokenHash = await sha256(token);
-
-        const latest = await getServer().getLatestLedger();
-        const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
-
-        const args = [
-          Address.fromString(adminAddress).toScVal(),
-          xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
-          xdr.ScVal.scvU32(expiresAtLedger),
-        ];
-        await invokeWrite(contractId, "create_invite", args);
-
-        // Admin-role hint. Insert AFTER the on-chain mint so we never
-        // leave a Supabase hint pointing at a hash that never made it
-        // to chain. RLS enforces admin-only insert; the caller supplies
-        // family_wallets.id + wallets.id so we skip a round-trip.
-        if (opts?.intendedRole === "admin") {
-          const supabase = getSupabaseBrowserClient();
-          const { error: insertErr } = await supabase
-            .from("admin_invite_hints")
-            .insert({
-              token_hash: byteaLiteral(tokenHash),
-              family_wallet_id: opts.familyWalletId,
-              created_by: opts.createdByWalletId,
-            });
-          if (insertErr) throw new Error(insertErr.message);
+        // Member invites go straight from chain to URL — no Supabase
+        // side-effect means no orphan risk, no checkpoint needed.
+        if (opts?.intendedRole !== "admin") {
+          const token = crypto.getRandomValues(new Uint8Array(32));
+          const tokenHash = await sha256(token);
+          const latest = await getServer().getLatestLedger();
+          const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+          await invokeWrite(contractId, "create_invite", [
+            Address.fromString(adminAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
+            xdr.ScVal.scvU32(expiresAtLedger),
+          ]);
+          return {
+            url: buildInviteUrl(contractId, base64UrlEncode(token), "member"),
+            expiresAtLedger,
+          };
         }
 
+        // Admin-role branch: checkpoint the token between the on-chain
+        // mint and the Supabase hint insert. A failure in the insert
+        // without this would either strand the on-chain invite (still
+        // redeemable by anyone with the URL) or, on retry, silently
+        // downgrade the invitee from admin to recipient.
+        //
+        // Owner key includes familyWalletId so an admin re-inviting to
+        // a different family after a failure can't accidentally resume
+        // the wrong token.
+        const slotOwner = `${adminAddress}:${contractId}:${opts.familyWalletId}`;
+        const resumed = adminInviteSlot.read(slotOwner);
+
+        let tokenB64: string;
+        let tokenHashLiteral: string;
+        let expiresAtLedger: number;
+
+        if (resumed) {
+          tokenB64 = resumed.tokenB64;
+          tokenHashLiteral = resumed.tokenHashLiteral;
+          expiresAtLedger = resumed.expiresAtLedger;
+        } else {
+          const token = crypto.getRandomValues(new Uint8Array(32));
+          const tokenHash = await sha256(token);
+          const latest = await getServer().getLatestLedger();
+          expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+          await invokeWrite(contractId, "create_invite", [
+            Address.fromString(adminAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(tokenHash)),
+            xdr.ScVal.scvU32(expiresAtLedger),
+          ]);
+          tokenB64 = base64UrlEncode(token);
+          tokenHashLiteral = byteaLiteral(tokenHash);
+          adminInviteSlot.write(slotOwner, {
+            tokenB64,
+            tokenHashLiteral,
+            expiresAtLedger,
+          });
+        }
+
+        const supabase = getSupabaseBrowserClient();
+        const { error: insertErr } = await supabase
+          .from("admin_invite_hints")
+          .insert({
+            token_hash: tokenHashLiteral,
+            family_wallet_id: opts.familyWalletId,
+            created_by: opts.createdByWalletId,
+          });
+        if (insertErr) throw new Error(insertErr.message);
+        adminInviteSlot.clear(slotOwner);
+
         return {
-          url: buildInviteUrl(
-            contractId,
-            base64UrlEncode(token),
-            intendedRole,
-          ),
+          url: buildInviteUrl(contractId, tokenB64, "admin"),
           expiresAtLedger,
         };
       } catch (e) {
