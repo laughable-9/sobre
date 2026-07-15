@@ -130,31 +130,53 @@ export async function POST(req: Request) {
     );
   }
 
-  // Auth first so we can key the rate limit on the caller. The Soroban
-  // simulate below can burn RPC quota if we let unlimited junk contract_id
-  // posts through; race the limit against the simulate to keep the wall
-  // clock similar while still gating the RPC call on today's cap.
+  // Auth first so we can key the rate limit on the caller.
   const ctxOrRes = await requireWallet();
   if (ctxOrRes instanceof NextResponse) return ctxOrRes;
   const ctx = ctxOrRes;
 
+  const admin = getSupabaseAdmin();
   const readAdmin = () =>
     simulateReadServer<{ admin?: string }>(body.contract_id, "get_state");
 
-  // Per-wallet cap. Real users create maybe one Sobre a lifetime, so 5/day
-  // stops loop abuse without ever tripping legitimate flows. No family
-  // scope yet at this point (that's what this route creates).
-  const [rate, initialState] = await Promise.all([
-    enforceDailyLimit({
-      endpoint: "family_create",
-      walletId: ctx.memberId,
-      familyWalletId: null,
-      callerEmail: ctx.email,
-      perUser: 5,
-      perFamily: 5,
-    }),
+  // Idempotency + first on-chain read fire together — both are cheap
+  // reads that don't touch the rate-limit counter, so a resumed retry
+  // that finds its existing row costs zero slots. Every retry the
+  // client-side checkpoint drives here has to be free; otherwise a
+  // 5-6-retry storm against a laggy RPC exhausts today's cap.
+  const [existingRes, initialState] = await Promise.all([
+    admin
+      .from("family_wallets")
+      .select("id, created_by")
+      .eq("contract_id", body.contract_id)
+      .maybeSingle(),
     readAdmin(),
   ]);
+
+  const existing = existingRes.data as
+    | { id: string; created_by: string }
+    | null;
+  if (existing) {
+    if (existing.created_by !== ctx.memberId) {
+      return NextResponse.json(
+        { error: "Someone else has already claimed that wallet." },
+        { status: 403 },
+      );
+    }
+    return NextResponse.json({ family_wallet_id: existing.id });
+  }
+
+  // Genuinely new mirror below — now charge the rate-limit slot.
+  // 30/day covers dev iteration + retry storms without opening
+  // bot-loop abuse.
+  const rate = await enforceDailyLimit({
+    endpoint: "family_create",
+    walletId: ctx.memberId,
+    familyWalletId: null,
+    callerEmail: ctx.email,
+    perUser: 30,
+    perFamily: 30,
+  });
   if (rate) return rate;
 
   // Retry the on-chain read past RPC replica lag — see
@@ -196,8 +218,6 @@ export async function POST(req: Request) {
       { status: 500 },
     );
   }
-
-  const admin = getSupabaseAdmin();
 
   // Insert family_wallets first — the bootstrap_family_admin trigger
   // creates the admin's family_members row with role='admin'. Then seed
