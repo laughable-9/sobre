@@ -5,7 +5,14 @@ import { Address, xdr } from "@stellar/stellar-sdk";
 
 import { invokeWrite } from "@/lib/contract";
 import { hexToBytes } from "@/lib/encoding";
+import { makeMarkerSlot } from "@/lib/pendingMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
+
+/** Marker checkpoint. Presence means `cancel_subaccount_invite` already
+ *  landed on chain for this token hash; retry should skip the chain call
+ *  (contract errors on second cancel — the hash slot is already gone) and
+ *  re-run only the Supabase row delete. */
+const cancelSlot = makeMarkerSlot("sobre.pendingSubaccountCancel");
 
 export interface UseCancelSubaccountInviteResult {
   /** Cancels one pending sub-account invite: on-chain hash removal +
@@ -43,12 +50,22 @@ export function useCancelSubaccountInvite(
       setPending(true);
       setError(null);
       try {
-        const hashBytes = hexToBytes(inviteTokenHashHex);
-        const args = [
-          Address.fromString(adminAddress).toScVal(),
-          xdr.ScVal.scvBytes(Buffer.from(hashBytes)),
-        ];
-        await invokeWrite(contractId, "cancel_subaccount_invite", args);
+        // Per-token so an admin cancelling multiple invites in flight
+        // doesn't collide checkpoints. Owner scope stops at the token
+        // hash because it uniquely identifies the invite globally.
+        const slotOwner = `${adminAddress}:${inviteTokenHashHex}`;
+        const resumed = cancelSlot.read(slotOwner);
+        if (!resumed) {
+          const hashBytes = hexToBytes(inviteTokenHashHex);
+          const args = [
+            Address.fromString(adminAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(hashBytes)),
+          ];
+          await invokeWrite(contractId, "cancel_subaccount_invite", args);
+          // Checkpoint before the Supabase delete — a delete failure
+          // now resumes only the delete on retry.
+          cancelSlot.write(slotOwner, true);
+        }
         const supabase = getSupabaseBrowserClient();
         const { error: delErr } = await supabase
           .from("family_subaccounts")
@@ -59,6 +76,7 @@ export function useCancelSubaccountInvite(
             `Invite cancelled on chain but the pending tile stayed: ${delErr.message}`,
           );
         }
+        cancelSlot.clear(slotOwner);
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         setError(msg);

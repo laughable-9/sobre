@@ -10,12 +10,33 @@ import {
   bytesToHex,
   sha256,
 } from "@/lib/encoding";
+import { isRecord, makePendingSlot } from "@/lib/pendingMutation";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import {
   INVITE_TTL_LEDGERS,
   type CreateInviteResult,
 } from "@/hooks/useCreateInvite";
+
+/** Checkpoint after the on-chain `create_subaccount_invite` lands but
+ *  before the family_subaccounts row insert. Without this, a Supabase
+ *  failure leaves the on-chain invite live but with no admin-side revoke
+ *  tile — the retry would mint a second on-chain invite AND leave the
+ *  first one dangling. Resume re-runs only the row insert. */
+interface SubaccountInviteProgress {
+  tokenB64: string;
+  tokenHashHex: string;
+  expiresAtLedger: number;
+}
+
+const subaccountInviteSlot = makePendingSlot<SubaccountInviteProgress>(
+  "sobre.pendingSubaccountInvite",
+  (v): v is SubaccountInviteProgress =>
+    isRecord(v) &&
+    typeof v.tokenB64 === "string" &&
+    typeof v.tokenHashHex === "string" &&
+    typeof v.expiresAtLedger === "number",
+);
 
 export interface UseCreateSubaccountInviteResult {
   createInvite: () => Promise<CreateInviteResult>;
@@ -53,19 +74,42 @@ export function useCreateSubaccountInvite(
       setPending(true);
       setError(null);
       try {
-        const token = crypto.getRandomValues(new Uint8Array(32));
-        const tokenHashBytes = await sha256(token);
-        const tokenHashHex = bytesToHex(tokenHashBytes);
+        const slotOwner = `${adminAddress}:${contractId}:${familyWalletId}`;
+        const resumed = subaccountInviteSlot.read(slotOwner);
 
-        const latest = await getServer().getLatestLedger();
-        const expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+        let tokenB64: string;
+        let tokenHashHex: string;
+        let expiresAtLedger: number;
 
-        const args = [
-          Address.fromString(adminAddress).toScVal(),
-          xdr.ScVal.scvBytes(Buffer.from(tokenHashBytes)),
-          xdr.ScVal.scvU32(expiresAtLedger),
-        ];
-        await invokeWrite(contractId, "create_subaccount_invite", args);
+        if (resumed) {
+          tokenB64 = resumed.tokenB64;
+          tokenHashHex = resumed.tokenHashHex;
+          expiresAtLedger = resumed.expiresAtLedger;
+        } else {
+          const token = crypto.getRandomValues(new Uint8Array(32));
+          const tokenHashBytes = await sha256(token);
+          tokenHashHex = bytesToHex(tokenHashBytes);
+          tokenB64 = base64UrlEncode(token);
+
+          const latest = await getServer().getLatestLedger();
+          expiresAtLedger = latest.sequence + INVITE_TTL_LEDGERS;
+
+          const args = [
+            Address.fromString(adminAddress).toScVal(),
+            xdr.ScVal.scvBytes(Buffer.from(tokenHashBytes)),
+            xdr.ScVal.scvU32(expiresAtLedger),
+          ];
+          await invokeWrite(contractId, "create_subaccount_invite", args);
+
+          // Checkpoint immediately — a Supabase failure below would
+          // otherwise leave the on-chain invite live with no admin
+          // revoke tile, and retry would mint a second invite.
+          subaccountInviteSlot.write(slotOwner, {
+            tokenB64,
+            tokenHashHex,
+            expiresAtLedger,
+          });
+        }
 
         const supabase = getSupabaseBrowserClient();
         const { error: insertErr } = await supabase
@@ -82,13 +126,10 @@ export function useCreateSubaccountInvite(
             `Invite minted on chain but couldn't save display data: ${insertErr.message}. The share link still works.`,
           );
         }
+        subaccountInviteSlot.clear(slotOwner);
 
         return {
-          url: buildInviteUrl(
-            contractId,
-            base64UrlEncode(token),
-            "subaccount",
-          ),
+          url: buildInviteUrl(contractId, tokenB64, "subaccount"),
           expiresAtLedger,
         };
       } catch (e) {
