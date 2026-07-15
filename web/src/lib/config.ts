@@ -173,8 +173,15 @@ export const NETWORK = {
  * NETWORK when promoting to mainnet.
  */
 export const PASSKEY_KIT = {
+  // Protocol-27-compatible smart-wallet wasm published by kalepail
+  // alongside passkey-kit 0.14 (README recommends this exact hash).
+  // The prior 0.12-era hash `ecd990f0…c4cd90` is still deployed on
+  // testnet but testnet's protocol-27 upgrade rejects new deploys
+  // against it (submit fails with unknown TransactionResultCode).
+  // Existing users on the old hash aren't affected — they connect,
+  // not signup. Only fresh signups touch this constant.
   walletWasmHash:
-    "ecd990f0b45ca6817149b6175f79b32efb442f35731985a084131e8265c4cd90",
+    "fdefad64b96837147e1c333e51f537b696eab925e9f147e63d597c04e3c903f0",
 } as const;
 
 /** Stellar's on-chain unit for SEP-41 tokens is 10^7 sub-units per token.
