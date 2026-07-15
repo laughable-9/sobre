@@ -21,6 +21,68 @@ export type CreateSobrePhase =
   | "mirroring"
   | "done";
 
+/** Session-scoped resume checkpoint. If a create fails after the on-chain
+ *  contract lands (RPC lag on the mirror, grow_enable trap, tab reload
+ *  between steps), the next attempt resumes from the last completed step
+ *  instead of deploying a fresh contract and orphaning the old one. */
+interface CreateProgress {
+  contractId: string;
+  growEnabled: boolean;
+}
+
+function progressKey(userAddress: string): string {
+  return `sobre.pendingCreate:${userAddress}`;
+}
+
+function safeSessionStorage(): Storage | null {
+  if (typeof window === "undefined") return null;
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readProgress(userAddress: string): CreateProgress | null {
+  const storage = safeSessionStorage();
+  if (!storage) return null;
+  try {
+    const raw = storage.getItem(progressKey(userAddress));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CreateProgress>;
+    if (
+      typeof parsed?.contractId === "string" &&
+      parsed.contractId.startsWith("C") &&
+      typeof parsed.growEnabled === "boolean"
+    ) {
+      return { contractId: parsed.contractId, growEnabled: parsed.growEnabled };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function writeProgress(userAddress: string, p: CreateProgress): void {
+  const storage = safeSessionStorage();
+  if (!storage) return;
+  try {
+    storage.setItem(progressKey(userAddress), JSON.stringify(p));
+  } catch {
+    // sessionStorage full — retries just cost a redeploy.
+  }
+}
+
+function clearProgress(userAddress: string): void {
+  const storage = safeSessionStorage();
+  if (!storage) return;
+  try {
+    storage.removeItem(progressKey(userAddress));
+  } catch {
+    // Best-effort cleanup.
+  }
+}
+
 export interface CreateSobreArgs {
   walletName: string;
   adminName: string;
@@ -62,30 +124,43 @@ export function useCreateSobre(
       onPhase,
     }: CreateSobreArgs): Promise<string> => {
       if (!userAddress) throw new Error("Wallet not connected.");
-      onPhase?.("deploying");
-      const args = [
-        Address.fromString(userAddress).toScVal(),
-        Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
-      ];
-      const { returnValue } = await invokeWrite(
-        FACTORY_CONTRACT_ID,
-        "create_sobre",
-        args,
-      );
-      if (typeof returnValue !== "string") {
-        throw new Error("create_sobre returned no contract address");
+
+      // Resume in-flight create if a previous attempt succeeded on chain
+      // but tripped later (mirror race, tab reload, etc). Skips redeploying
+      // and any FaceID prompts already done — critical for demo retries.
+      const resumed = readProgress(userAddress);
+      let newContractId = resumed?.contractId ?? "";
+      if (!resumed) {
+        onPhase?.("deploying");
+        const { returnValue } = await invokeWrite(
+          FACTORY_CONTRACT_ID,
+          "create_sobre",
+          [
+            Address.fromString(userAddress).toScVal(),
+            Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
+          ],
+        );
+        if (typeof returnValue !== "string") {
+          throw new Error("create_sobre returned no contract address");
+        }
+        newContractId = returnValue;
+        writeProgress(userAddress, { contractId: newContractId, growEnabled: false });
       }
-      const newContractId = returnValue;
-      // Auto-enable Grow so PDAX deposits work on first try — the
-      // contract's deposit_from_xlm reads Blend + Soroswap addresses
-      // out of Grow storage. Second FaceID prompt is the trade-off.
-      onPhase?.("enabling-grow");
-      await invokeWrite(newContractId, "grow_enable", [
-        Address.fromString(userAddress).toScVal(),
-        Address.fromString(BLEND_POOL_ID).toScVal(),
-        Address.fromString(XLM_SAC_ID).toScVal(),
-        Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
-      ]);
+
+      if (!resumed?.growEnabled) {
+        // Auto-enable Grow so PDAX deposits work on first try — the
+        // contract's deposit_from_xlm reads Blend + Soroswap addresses
+        // out of Grow storage. Second FaceID prompt is the trade-off.
+        onPhase?.("enabling-grow");
+        await invokeWrite(newContractId, "grow_enable", [
+          Address.fromString(userAddress).toScVal(),
+          Address.fromString(BLEND_POOL_ID).toScVal(),
+          Address.fromString(XLM_SAC_ID).toScVal(),
+          Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+        ]);
+        writeProgress(userAddress, { contractId: newContractId, growEnabled: true });
+      }
+
       onPhase?.("mirroring");
       await mirrorFamilyCreate({
         contractId: newContractId,
@@ -95,6 +170,7 @@ export function useCreateSobre(
         envelopeNames,
         envelopeIcons,
       });
+      clearProgress(userAddress);
       onPhase?.("done");
       return newContractId;
     },

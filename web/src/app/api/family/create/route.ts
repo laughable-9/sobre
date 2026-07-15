@@ -135,10 +135,13 @@ export async function POST(req: Request) {
   if (ctxOrRes instanceof NextResponse) return ctxOrRes;
   const ctx = ctxOrRes;
 
+  const readAdmin = () =>
+    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state");
+
   // Per-wallet cap. Real users create maybe one Sobre a lifetime, so 5/day
   // stops loop abuse without ever tripping legitimate flows. No family
   // scope yet at this point (that's what this route creates).
-  const [rate, onChainState] = await Promise.all([
+  const [rate, initialState] = await Promise.all([
     enforceDailyLimit({
       endpoint: "family_create",
       walletId: ctx.memberId,
@@ -147,9 +150,24 @@ export async function POST(req: Request) {
       perUser: 5,
       perFamily: 5,
     }),
-    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state"),
+    readAdmin(),
   ]);
   if (rate) return rate;
+
+  // The client polled its own tx to SUCCESS before POSTing here, but the
+  // public RPC (`soroban-testnet.stellar.org`) is load-balanced across
+  // backends whose ledger tips drift by a few seconds. If we hit a lagging
+  // backend, the fresh contract's `get_state` returns nothing. Backoff-retry
+  // covers the drift invisibly; ~6.2s total, first retry lands ~500ms sooner
+  // than a naive doubling schedule for the common short-lag case.
+  let onChainState = initialState;
+  if (!onChainState?.admin) {
+    for (const delayMs of [300, 900, 2000, 3000]) {
+      await new Promise<void>((resolve) => setTimeout(resolve, delayMs));
+      onChainState = await readAdmin();
+      if (onChainState?.admin) break;
+    }
+  }
 
   if (!onChainState?.admin) {
     return NextResponse.json(
