@@ -15,6 +15,7 @@ import { TransferBetweenEnvelopesModal } from "@/components/sobre/TransferBetwee
 import { PolicySettingsForm } from "@/components/PolicySettingsForm";
 import { usePendingCashoutApprovals } from "@/hooks/usePendingCashoutApprovals";
 import { UpgradeAvailableCard } from "@/components/UpgradeAvailableCard";
+import { OutdatedSobreBanner } from "@/components/sobre/OutdatedSobreBanner";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
@@ -761,6 +762,11 @@ function Dashboard({ contractId }: { contractId: string }) {
         style={{ maxWidth: 640 }}
       >
         <Reveal as="div" data-stagger className="sobre-wallet-col">
+          <OutdatedSobreBanner
+            contractId={contractId}
+            isAdmin={isAdmin}
+            onGoToSettings={() => switchTab("settings")}
+          />
           <CashoutApprovalBanner
             requests={pendingApprovals.requests}
             envelopeNames={state.envelope_names}
