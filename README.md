@@ -253,7 +253,7 @@ You'll need Supabase credentials in `web/.env.local` for the family metadata + P
 | Name | Role | GitHub |
 |---|---|---|
 | Clarence Kyle Pagunsan | Co-founder, lead developer (contract + frontend) | [@laughable-9](https://github.com/laughable-9) |
-| Elfritz Angelo Peralta | Co-founder, project manager | [@elfrtz](https://github.com/elfrtz) |
+| Elfritz Angelo Peralta | Co-founder, product manager & business dev | [@elfrtz](https://github.com/elfrtz) |
 | Lance Gabriel Sacdalan | Co-founder, QA | [@sacdalance](https://github.com/sacdalance) |
 
 ## 📜 License
