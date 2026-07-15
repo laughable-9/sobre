@@ -135,8 +135,43 @@ export async function signup(
     "Sobre",
     userIdentifier,
   );
-  const result = await submit(signedTx);
+  const patched = bumpDeployFeeAndResign(signedTx);
+  const result = await submit(patched);
   return { keyIdBase64, contractId, hash: result.hash, ledger: result.ledger };
+}
+
+/** passkey-kit 0.14.0's SubmissionManager.signDeploy sets the tx fee to the
+ *  Soroban resource_fee ONLY, missing the per-op inclusion fee (min 100
+ *  stroops). Network rejects with txInsufficientFee. Because our deployer
+ *  keypair is derived from the public "kalepail" seed, we have the private
+ *  key here — parse the signed XDR, bump the fee, drop the invalidated
+ *  envelope signature, and re-sign. Passkey Soroban auth entries live in
+ *  the operation (not the envelope), so they survive intact. */
+function bumpDeployFeeAndResign(signedXdr: string): string {
+  const envelope = xdr.TransactionEnvelope.fromXDR(signedXdr, "base64");
+  if (envelope.switch().name !== "envelopeTypeTx") return signedXdr;
+  const v1 = envelope.v1();
+  const inner = v1.tx();
+  const sorobanData = inner.ext().sorobanData();
+  const resourceFee = Number(sorobanData.resourceFee().toString());
+  // Add a generous inclusion buffer so surge pricing / a slightly-off
+  // resource_fee estimate can't cause a second insufficient-fee bounce.
+  // 10_000 stroops = 0.001 XLM, negligible next to the ~0.14 XLM resource fee.
+  const targetFee = resourceFee + 10_000;
+  if (Number(inner.fee()) >= targetFee) return signedXdr;
+
+  // Transaction.fee is a Uint32 in the XDR schema. Set via the js-xdr
+  // struct accessor.
+  inner.fee(targetFee);
+
+  // Wipe the now-invalid deployer sig, re-sign the fresh envelope XDR.
+  v1.signatures([]);
+  const tx = TransactionBuilder.fromXDR(
+    envelope.toXDR("base64"),
+    NETWORK.passphrase,
+  );
+  tx.sign(DEPLOYER_KEYPAIR);
+  return tx.toEnvelope().toXDR("base64");
 }
 
 /**
