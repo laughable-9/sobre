@@ -10,6 +10,7 @@ import {
   scValToNative,
   xdr,
 } from "@stellar/stellar-sdk";
+import { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 
 import { NETWORK } from "@/lib/config";
 import {
@@ -69,27 +70,36 @@ export async function invokeWrite(
   method: string,
   args: xdr.ScVal[],
 ): Promise<WriteResult> {
-  const server = getServer();
-  const contract = new Contract(contractId);
-
-  const source = await server.getAccount(getDeployerAddress());
-  const built = new TransactionBuilder(source, {
-    fee: BASE_FEE,
+  // passkey-kit 0.14's kit.sign(txn) unconditionally calls
+  // txn.signAuthEntries({...}), a method that only exists on
+  // AssembledTransaction — not on the plain Transaction we used to build
+  // via TransactionBuilder + Contract.call. Build an AssembledTransaction
+  // instead; its ctor auto-simulates (which is what prepareTransaction did
+  // for us before) and populates the recording-mode auth entries the
+  // passkey sign step needs to see.
+  //
+  // parseResultXdr is required by the type but we don't have a Spec — pass
+  // through the raw ScVal and let the caller decode via scValToNative
+  // below, matching the shape callers already expected from WriteResult.
+  const built = (await AssembledTransaction.build<xdr.ScVal>({
+    contractId,
+    method,
+    args,
     networkPassphrase: NETWORK.passphrase,
-  })
-    .addOperation(contract.call(method, ...args))
-    .setTimeout(30)
-    .build();
-
-  // Pre-simulate to populate the auth entry with recording-mode credentials.
-  // Without this, passkey-kit's sign() takes a fromXDR fast path that doesn't
-  // simulate internally, leaves the AT with zero auth entries, and
-  // signAuthEntries no-ops — no FaceID prompt, submit fails at require_auth.
-  const prepared = await server.prepareTransaction(built);
+    rpcUrl: NETWORK.rpcUrl,
+    publicKey: getDeployerAddress(),
+    fee: BASE_FEE,
+    timeoutInSeconds: 30,
+    parseResultXdr: (v) => v,
+  })) as unknown as ATWithSim;
 
   // FaceID prompt fires inside signTransaction. See the gotcha note in
   // passkey.ts:signTransaction — we MUST use the return value.
-  const signedAT = (await signTransaction<unknown>(prepared)) as ATWithSim;
+  const signedAT = (await signTransaction<unknown>(
+    built as unknown as import(
+      "@stellar/stellar-sdk/contract"
+    ).AssembledTransaction<unknown>,
+  )) as ATWithSim;
 
   // Capture the signed auth entries — the re-simulate below applies the
   // RPC's auth response back to .built.operations[0].auth and would wipe
