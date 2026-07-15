@@ -10,7 +10,8 @@ import {
   type Transaction,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
-import { PasskeyClient, PasskeyKit, PasskeyServer } from "passkey-kit";
+import { PasskeyClient, PasskeyKit } from "passkey-kit";
+import { PasskeyServer } from "passkey-kit/server";
 
 import { NETWORK, PASSKEY_KIT } from "@/lib/config";
 
@@ -93,10 +94,15 @@ function getServer(): rpc.Server {
  */
 function getRelayerServer(): PasskeyServer {
   if (!relayer) {
+    // passkey-kit 0.14 moved relayer config under a nested `relayer` bag
+    // (was `relayerUrl` / `relayerApiKey` at the top level in 0.12).
     relayer = new PasskeyServer({
+      networkPassphrase: NETWORK.passphrase,
       rpcUrl: NETWORK.rpcUrl,
-      relayerUrl: `${window.location.origin}/api/passkey/relayer`,
-      relayerApiKey: "proxied-server-side",
+      relayer: {
+        baseUrl: `${window.location.origin}/api/passkey/relayer`,
+        apiKey: "proxied-server-side",
+      },
     });
   }
   return relayer;
@@ -191,9 +197,15 @@ export async function signTransaction<T>(
   // (~8 minutes) is well beyond any reasonable sign→submit→include
   // pipeline without becoming a replay-attack risk for the demo.
   const { sequence } = await getServer().getLatestLedger();
-  return (await kit.sign(txn as unknown as Parameters<typeof kit.sign>[0], {
-    expiration: sequence + SIG_EXPIRATION_WINDOW_LEDGERS,
-  })) as unknown as import(
+  // passkey-kit 0.14 changed the sign signature to
+  // `sign(txn, signer?, options?)` — the options bag (with `expiration`)
+  // moved from the 2nd arg to the 3rd, and the signer defaults to the
+  // connected passkey when undefined.
+  return (await kit.sign(
+    txn as unknown as Parameters<typeof kit.sign>[0],
+    undefined,
+    { expiration: sequence + SIG_EXPIRATION_WINDOW_LEDGERS },
+  )) as unknown as import(
     "@stellar/stellar-sdk/contract"
   ).AssembledTransaction<T>;
 }
