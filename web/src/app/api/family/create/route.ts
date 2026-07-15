@@ -136,8 +136,15 @@ export async function POST(req: Request) {
   const ctx = ctxOrRes;
 
   const admin = getSupabaseAdmin();
-  const readAdmin = () =>
-    simulateReadServer<{ admin?: string }>(body.contract_id, "get_state");
+  // Contract v11 (2026-07-14) swapped singleton `admin: Address` for
+  // `admins: Vec<Address>` so multiple admins can co-sign. The route
+  // used to key on `.admin` which is always undefined on v11 — the
+  // retry loop then exhausted every call, and every attempt 404'd with
+  // "Couldn't read the new wallet from the network" even when the
+  // contract was perfectly readable. Read the array now and match the
+  // caller against any entry.
+  const readAdmins = () =>
+    simulateReadServer<{ admins?: string[] }>(body.contract_id, "get_state");
 
   // Idempotency + first on-chain read fire together — both are cheap
   // reads that don't touch the rate-limit counter, so a resumed retry
@@ -150,7 +157,7 @@ export async function POST(req: Request) {
       .select("id, created_by")
       .eq("contract_id", body.contract_id)
       .maybeSingle(),
-    readAdmin(),
+    readAdmins(),
   ]);
 
   const existing = existingRes.data as
@@ -182,18 +189,18 @@ export async function POST(req: Request) {
   // Retry the on-chain read past RPC replica lag — see
   // simulateReadServerRetry / RPC_INDEXER_LAG_BACKOFF for the schedule.
   // `initial` short-circuits when the parallel first attempt above
-  // already saw the admin (happy path pays zero extra latency).
-  const onChainState = await simulateReadServerRetry<{ admin?: string }>(
+  // already saw at least one admin (happy path pays zero extra latency).
+  const onChainState = await simulateReadServerRetry<{ admins?: string[] }>(
     body.contract_id,
     "get_state",
     [],
     {
       initial: initialState,
-      ready: (v) => !!v?.admin,
+      ready: (v) => !!v?.admins?.length,
     },
   );
 
-  if (!onChainState?.admin) {
+  if (!onChainState?.admins?.length) {
     return NextResponse.json(
       {
         error:
@@ -203,12 +210,13 @@ export async function POST(req: Request) {
     );
   }
   try {
-    if (
-      Address.fromString(onChainState.admin).toString() !==
-      Address.fromString(ctx.contractId).toString()
-    ) {
+    const callerStrkey = Address.fromString(ctx.contractId).toString();
+    const isAdmin = onChainState.admins.some(
+      (a) => Address.fromString(a).toString() === callerStrkey,
+    );
+    if (!isAdmin) {
       return NextResponse.json(
-        { error: "You aren't the admin of that wallet on chain." },
+        { error: "You aren't an admin of that wallet on chain." },
         { status: 403 },
       );
     }
