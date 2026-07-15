@@ -71,7 +71,7 @@ Below is what currently runs on the deployed testnet contract + the live web app
 - **One-click Earn.** Admin toggles Earn on. Every future deposit's Savings portion routes straight into USDY inside the same transaction; the existing Savings cache also migrates. No separate "supply" step, no manual staking.
 - **On-read interest.** USDY's balance rebases on ledger time, so the interest ticks up between reads with no writes. The dashboard shows the current value, principal, and lifetime interest earned.
 - **Transparent redeem.** When the family spends from Savings, the contract's `ensure_envelope_liquidity` helper redeems the shortfall from USDY inside the same tx via `withdraw` or `fund_subaccount`. No user-visible "unstake" wait — the family just sees Savings behave like a regular envelope, only with a growing balance.
-- **On testnet we use MockUSDY**, a Rust contract that implements the exact same interface as [Ondo Finance USDY](https://ondo.finance/usdy) will expose on Stellar (`deposit`, `redeem`, `balance_of`, `underlying`). MockUSDY simulates 5% linear APY on ledger time. When Ondo's real USDY ships on Stellar, promotion to mainnet is a single address swap on `earn_enable`.
+- **On testnet we use MockUSDY**, a Rust contract that implements the exact same interface as [Ondo Finance USDY](https://ondo.finance/usdy) exposes on Stellar mainnet (`deposit`, `redeem`, `balance_of`, `underlying`). MockUSDY simulates 5% linear APY on ledger time. Real Ondo USDY is already live on Stellar mainnet — promotion is a single address swap on `earn_enable`.
 
 ### Savings + Grow (48-hour-timelocked lending on Blend)
 - **Opt-in Grow bucket.** Admin can move a chosen amount out of Savings and into a Grow bucket that supplies into [Blend Protocol](https://www.blend.capital/)'s Testnet V2 XLM lending pool. Because Blend's testnet depth is on the XLM reserve (not USDC), the contract does a Soroswap sandwich internally: USDC → XLM → Blend supply on the way in, Blend withdraw → XLM → USDC on the way out. The Grow bucket is USDC-denominated end-to-end from the user's perspective.
@@ -87,10 +87,9 @@ Below is what currently runs on the deployed testnet contract + the live web app
 
 ### Not yet built (roadmap)
 
-- **Mainnet promotion of the v10 wasm** — waiting on Ondo Finance to ship real USDY on Stellar so the Earn address swap is meaningful.
+- **Mainnet promotion of the v11 wasm** — blocked on two things: PDAX only granting UAT (testnet) access for the hackathon, and a security audit of the contract. Sobre will hold real family remittances on mainnet, so an independent audit is a hard prerequisite before any production deploy — no exceptions. Once PDAX issues production credentials and the audit is clean, the same wasm ships to mainnet with Circle mainnet USDC + real Ondo USDY at `earn_enable`.
 - **Multi-token payment support.** The contract's `init(payment_token)` is token-agnostic; adding EURC or another SEP-41 asset is a factory-side deploy, not a code change.
 - **MoneyGram Ramps.** Alternative off-ramp path documented in `docs/pdax-moneygram-integration.md`. Deferred until PDAX-side flows are polished.
-- **Real Ondo Finance USDY** on Stellar mainnet. Interface-compatible with our MockUSDY; a single address swap on `earn_enable` promotes.
 
 ## 🏗️ Architecture
 
@@ -133,6 +132,14 @@ USDC SAC     Router      (Ondo USDY       (Testnet V2         Smart
 
 ## 🛠️ Tech Stack
 
+- **Frontend:** Next.js 16 (App Router), React 19, TypeScript, Tailwind v4, shadcn/ui
+- **Backend:** Supabase (Postgres + Realtime), Next.js API route handlers on Vercel
+- **Blockchain:** Stellar (Soroban / Stellar SDK / passkey-kit smart wallets)
+- **Other tools:** PDAX Institutional API (fiat ramp), Blend Protocol (yield), Soroswap (DEX), Circle USDC, Ondo USDY interface (MockUSDY on testnet)
+- **Other tools:** Google OAuth via NextAuth, Stellar CLI 26.0, Vercel
+
+Full detail below.
+
 **Smart contracts** — Rust with `soroban-sdk` v25, compiled to `wasm32v1-none`. Three crates in `contract/`:
 - `sobre` — per-family wallet contract (~60KB wasm, 27 exports)
 - `sobre_factory` — deploys per-family instances via `deploy_v2`
@@ -153,7 +160,7 @@ USDC SAC     Router      (Ondo USDY       (Testnet V2         Smart
 - **[Blend Protocol](https://www.blend.capital/) Testnet V2** — non-collateral lending pool for the Grow feature. We supply into the XLM reserve for b-rate yield.
 - **[Soroswap](https://soroswap.finance/)** — DEX for USDC ↔ XLM swaps sandwiching the Blend supply/withdraw calls.
 - **[Circle USDC](https://www.circle.com/en/usdc)** — real Circle-issued USDC on Stellar testnet, wrapped as a SAC.
-- **[Ondo Finance USDY](https://ondo.finance/usdy)** — the intended production yield source for Savings; not yet live on Stellar. Our `contract/contracts/mock-usdy/` stands in with the exact interface Ondo's real USDY will expose.
+- **[Ondo Finance USDY](https://ondo.finance/usdy)** — the production yield source for Savings, already live on Stellar mainnet. Testnet has no USDY deployment, so `contract/contracts/mock-usdy/` stands in with the exact interface real USDY exposes.
 
 **Tooling** — Stellar CLI 26.0, Friendbot for testnet funding, Vercel for hosting.
 
@@ -161,7 +168,9 @@ USDC SAC     Router      (Ondo USDY       (Testnet V2         Smart
 
 ### Testnet (current)
 
-Current testnet deploy is the **v10 wasm** shipped 2026-07-13.
+- **Contract / App Address:** [`CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ`](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ) (SobreFactory)
+
+Current testnet deploy is the **v11 wasm** shipped 2026-07-14 (multi-admin on chain — the single `admin` slot became `admins: Vec<Address>`, and new methods `add_admin` / `remove_admin` handle promotion + demotion, with `remove_admin` refusing to leave the wallet with zero admins).
 
 | Item | Value |
 |---|---|
@@ -174,7 +183,7 @@ Current testnet deploy is the **v10 wasm** shipped 2026-07-13.
 | Contract | Address / Hash | Purpose |
 |---|---|---|
 | `SobreFactory` | [`CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ`](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ) | Deploys per-family `SobreContract` instances |
-| `SobreContract` wasm v10 | `4d02bebd601537b8e29cc2654a675f0d14e4b8fa79ab53d16f382311d878c6fb` (59,681 bytes) | Per-family wallet — envelopes, Earn, Grow, sub-accounts |
+| `SobreContract` wasm v11 | `1431c2848bd29fdb0b5d5ac698c968f882a3e3abec0352206afbf64772e57046` (63,704 bytes) | Per-family wallet — envelopes, Earn, Grow, sub-accounts, multi-admin |
 | `MockUSDY` instance | [`CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA`](https://stellar.expert/explorer/testnet/contract/CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA) | Testnet stand-in for Ondo USDY. 5% simulated APY. Underlying = Circle testnet USDC |
 | `MockUSDY` wasm | `9f543de035faaad0bc85f6071b1c8917aa8739e9ea69580876e0e140efaf81d6` (~20KB) | Same interface as Ondo's real USDY — mainnet promotion is a single address swap |
 
@@ -189,9 +198,10 @@ Current testnet deploy is the **v10 wasm** shipped 2026-07-13.
 
 **How to verify the Earn position is real:** open MockUSDY's contract page on stellar.expert. Its `Contract balances` tab shows the total USDC MockUSDY holds across all depositors (the collateral backing every USDY position). The `Events` tab logs every `deposit(from, amount)` and `redeem(from, amount)`; filter by any `SobreContract` address to see just that family's supplies. The `Interface` tab lets you call `balance_of(owner)` right in the browser — pass a family's `SobreContract` address to get their current USDY position in USDC stroops. This is the same query the frontend uses.
 
-**SobreContract exports (v10):**
+**SobreContract exports (v11):**
 
 - **Lifecycle:** `init`, `close_wallet`, `upgrade`
+- **Admins:** `add_admin`, `remove_admin`
 - **Members:** `create_invite`, `cancel_invite`, `join_wallet`, `remove_member`
 - **Sub-accounts:** `create_subaccount_invite`, `cancel_subaccount_invite`, `join_as_subaccount`, `fund_subaccount`, `lock_subaccount`, `unlock_subaccount`, `withdraw_subaccount`
 - **Money movement:** `deposit_with_split`, `deposit_from_xlm`, `withdraw`
@@ -203,11 +213,17 @@ Current testnet deploy is the **v10 wasm** shipped 2026-07-13.
 
 **Upgrade model:** the factory stores the canonical SobreContract wasm hash. Admin can call `set_sobre_wasm(new_hash)` to swap which wasm new families deploy with. Each existing Sobre stores the factory address and can opt into the latest hash via its own admin-only `upgrade()`, which calls Soroban's `update_current_contract_wasm` in place. Same contract address, same storage, new code.
 
-📸 Screenshot: [Testnet SobreFactory on stellar.expert](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ)
+📸 **Screenshot — Stellar Expert (Testnet):**
 
-### Mainnet (previous hackathon deploy — pre-v10)
+![Testnet Screenshot](./screenshots/testnet.png)
 
-The mainnet deploy below is from the earlier Build the Future of Finance Hackathon PH (2026) and does **not** include Earn, Grow, PDAX, or sub-accounts. The APAC-track v10 wasm is testnet-only until the final hackathon deliverable.
+[View live on stellar.expert →](https://stellar.expert/explorer/testnet/contract/CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ)
+
+### Mainnet (previous hackathon deploy — pre-v11)
+
+- **Contract / App Address:** [`CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO`](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) (SobreFactory)
+
+The mainnet deploy below is from the earlier Build the Future of Finance Hackathon PH (2026) and does **not** include Earn, Grow, PDAX, sub-accounts, or multi-admin. The APAC-track v11 wasm is testnet-only for this hackathon because PDAX granted us UAT (testnet) access only — production PDAX credentials are the gate for a fresh mainnet promotion.
 
 | | |
 |---|---|
@@ -218,7 +234,9 @@ The mainnet deploy below is from the earlier Build the Future of Finance Hackath
 | **RPC** | `https://mainnet.sorobanrpc.com` |
 | **Factory explorer** | [stellar.expert](https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO) |
 
-📸 Screenshot: [Mainnet SobreFactory](./screenshots/mainnet.png)
+📸 **Screenshot — Stellar Expert (Mainnet):**
+
+![Mainnet Screenshot](./screenshots/mainnet.png)
 
 ## 🚀 How to Run Locally
 
