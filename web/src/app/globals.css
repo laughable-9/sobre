@@ -2029,9 +2029,10 @@ body { overflow-x: clip; min-width: 320px; }
 }
 /* The overlay's title is a <h1> with class="sobre-tour-title sobre-cover-text"
    so typography is inherited from .sobre-tour-title (guarantees the crossfade
-   never changes size or weight). This class only needs to override the color
-   to white — everything else comes from the tour styles above. */
-.sobre-cover-text {
+   never changes size or weight). Only override color → white. Compound
+   selector wins the specificity race against .sobre-tour-title which appears
+   later in this file and would otherwise force color back to --text-1. */
+.sobre-env-overlay .sobre-cover-text {
   color: #fff;
 }
 

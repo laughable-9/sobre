@@ -9,6 +9,7 @@ import {
 } from "react";
 import { usePathname, useRouter } from "next/navigation";
 
+import { Button } from "@/components/ui/button";
 import { registerFlyoutTrigger } from "@/hooks/useEnvelopeTransition";
 
 /**
@@ -203,9 +204,9 @@ export function EnvelopeTransition() {
           <span className="sobre-tour-dot" />
           <span className="sobre-tour-dot" />
         </div>
-        <button className="sobre-tour-cta" tabIndex={-1}>
+        <Button size="lg" className="sobre-tour-cta" tabIndex={-1}>
           Next
-        </button>
+        </Button>
       </div>
     </div>
   );
