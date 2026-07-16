@@ -43,6 +43,13 @@ export function EnvelopeTransition() {
   const navTimer = useRef<number | null>(null);
   const capTimer = useRef<number | null>(null);
   const targetPath = useRef<string | null>(null);
+  // Snapshot of the pathname when the cover was triggered. The readiness
+  // watcher requires pathname to move AWAY from this before flipping
+  // routeReadyRef — otherwise the phase-transition-to-cover itself re-runs
+  // the effect (with the source pathname still current) and immediately
+  // marks route ready, so the cover sweeps away as soon as its cover-in
+  // animation finishes (~1.25s) while the destination is still fetching.
+  const startPathname = useRef<string | null>(null);
   // Reveal only when BOTH are true: the cover panel has fully finished sweeping
   // in (so we never reveal from a half-covered state), AND the destination route
   // has mounted. Tracked as refs so either trigger can check the other.
@@ -74,6 +81,7 @@ export function EnvelopeTransition() {
       //    route is ready — see the readiness watcher below — so a slow load
       //    stays hidden behind the cover instead of revealing a blank page.
       targetPath.current = href;
+      startPathname.current = pathname;
       coveredRef.current = false;
       routeReadyRef.current = false;
       setPhase("cover");
@@ -101,16 +109,18 @@ export function EnvelopeTransition() {
     };
   }, [router]);
 
-  // Readiness watcher: when the URL actually changes to the target route (= the
-  // destination has mounted), mark the route ready and reveal IF the cover has
-  // also finished sweeping in. Gating on coveredRef prevents revealing from a
-  // half-covered panel (the "giant V stuck mid-screen" bug).
+  // Readiness watcher: pathname moving AWAY from the start snapshot means
+  // the router has settled on a new route (target or back-nav either way).
+  // Gating on this (rather than the naive "effect fires during cover")
+  // stops the effect from marking route-ready on the initial cover-phase
+  // render — which would let the cover sweep away as soon as the cover-in
+  // animation ends, before the destination page has actually mounted.
   //
-  // If pathname changes to ANYTHING (e.g. the user hits Back mid-cover) that
-  // still counts as "route settled" — force route-ready so the cover unmounts
-  // instead of hanging around for the full MAX_COVER_MS.
+  // Gating on coveredRef in maybeReveal prevents revealing from a half-
+  // covered panel (the "giant V stuck mid-screen" bug).
   useEffect(() => {
     if (phase !== "cover") return;
+    if (pathname === startPathname.current) return;
     if (!targetPath.current) return;
     targetPath.current = null;
     routeReadyRef.current = true;
