@@ -162,13 +162,51 @@ export function EnvelopeTransition() {
       onAnimationEnd={handleAnimationEnd}
       aria-hidden
     >
-      {/* Plain orange cover with the brand line. Sweeps in to cover, holds while
-          the route loads, then sweeps away to reveal — no envelope graphics. */}
-      <p className="sobre-cover-text">
-        One Sobre.
-        <br />
-        One Family.
-      </p>
+      {/* Structure mirrors .sobre-tour exactly (topbar / slide with visual +
+          title + body / footer) with everything but the title made invisible.
+          Guarantees the title lands at the same y as the tour title regardless
+          of viewport size or safe-area — no math on our part. */}
+      <div className="sobre-tour-topbar" style={{ visibility: "hidden" }}>
+        <button type="button" className="sobre-tour-skip" tabIndex={-1}>
+          Skip
+        </button>
+      </div>
+      <div className="sobre-tour-scroller">
+        <section className="sobre-tour-slide">
+          <div
+            className="sobre-tour-visual"
+            style={{ visibility: "hidden" }}
+            aria-hidden
+          />
+          <h1 className="sobre-tour-title sobre-cover-text">
+            One Sobre.
+            <br />
+            One Family.
+          </h1>
+          <p
+            className="sobre-tour-body"
+            style={{ visibility: "hidden" }}
+            aria-hidden
+          >
+            The shared family wallet built for overseas workers and the people
+            they send money home to.
+          </p>
+        </section>
+      </div>
+      <div
+        className="sobre-tour-footer"
+        style={{ visibility: "hidden" }}
+        aria-hidden
+      >
+        <div className="sobre-tour-dots">
+          <span className="sobre-tour-dot active" />
+          <span className="sobre-tour-dot" />
+          <span className="sobre-tour-dot" />
+        </div>
+        <button className="sobre-tour-cta" tabIndex={-1}>
+          Next
+        </button>
+      </div>
     </div>
   );
 }

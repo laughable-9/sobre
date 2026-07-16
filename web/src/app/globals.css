@@ -2004,19 +2004,14 @@ body { overflow-x: clip; min-width: 320px; }
 /* The overlay itself NEVER moves — it just holds the centered text in place.
    The sliding green panel is the ::before behind the text, so the text stays
    put while the green sweeps in/out around it.
-   padding-bottom biases the centered text UPWARD so it lands where the
-   AppTour first-slide title sits — the tour has a small topbar (~56px) and
-   a bigger footer (dots + CTA + safe area, ~130px), so its centered title
-   is above viewport-center. Matching means the cover text crossfades into
-   the tour title without shifting position. */
+   Structure mirrors .sobre-tour (topbar / scroller / footer) with invisible
+   placeholders so the visible title lands at the SAME y as the tour title,
+   without any hand-computed padding maths. */
 .sobre-env-overlay {
   position: fixed; inset: 0; z-index: 200;
-  display: grid; place-items: center;
-  /* AppTour: topbar ≈ 56px (padding 20 + skip button 36), footer ≈ 124px
-     + safe-bottom (padding 52 + dots 8 + gap 20 + lg CTA 44). To shift the
-     grid center up by (footer - topbar)/2, add padding-bottom of the full
-     (footer - topbar). */
-  padding-bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
   background: transparent;
   pointer-events: none;
 }
@@ -2032,19 +2027,12 @@ body { overflow-x: clip; min-width: 320px; }
   will-change: transform;
   backface-visibility: hidden;
 }
-/* Exact typography match to .sobre-tour-title so the cover text crossfades
-   into the AppTour headline without changing size, weight, or tracking —
-   the reveal reads as one continuous element that just changes color. */
+/* The overlay's title is a <h1> with class="sobre-tour-title sobre-cover-text"
+   so typography is inherited from .sobre-tour-title (guarantees the crossfade
+   never changes size or weight). This class only needs to override the color
+   to white — everything else comes from the tour styles above. */
 .sobre-cover-text {
-  font-family: var(--serif);
-  font-weight: 700;
   color: #fff;
-  text-align: center;
-  margin: 0;
-  font-size: clamp(32px, 7vw, 44px);
-  letter-spacing: -0.02em;
-  line-height: 1.05;
-  padding: 0 32px;
 }
 
 /* COVER: green panel slides in from the left to fully cover, then HOLDS. The
