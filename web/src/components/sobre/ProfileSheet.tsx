@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { HouseIcon, SignOutIcon } from "@phosphor-icons/react";
+import { HouseIcon, QuestionIcon, SignOutIcon } from "@phosphor-icons/react";
 
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
 import { Avatar } from "@/components/sobre/Avatar";
@@ -15,8 +15,13 @@ import { shortenAddress } from "@/lib/format";
  */
 export function ProfileSheet({
   wallet,
+  onReplayTour,
 }: {
   wallet: WalletConnectionState;
+  /** Optional parent-supplied handler that resets the dashboard tour
+   *  seen-flag and re-triggers it. When omitted (e.g. this component
+   *  used outside the dashboard route), the row is hidden. */
+  onReplayTour?: () => void;
 }) {
   const { address } = wallet;
   const router = useRouter();
@@ -48,6 +53,17 @@ export function ProfileSheet({
           <HouseIcon size={20} weight="regular" />
           <span>My Sobres</span>
         </button>
+        {onReplayTour ? (
+          <button
+            type="button"
+            className="row"
+            disabled={busy}
+            onClick={onReplayTour}
+          >
+            <QuestionIcon size={20} weight="regular" />
+            <span>Show app tour</span>
+          </button>
+        ) : null}
         <button
           type="button"
           className="row danger"

@@ -2205,6 +2205,211 @@ body { overflow-x: clip; min-width: 320px; }
   min-width: 200px;
 }
 
+/* ─── In-app dashboard tour (coach-mark walkthrough) ─────────────────
+   Fires on first entry to /dashboard/[contractId] and can be replayed
+   from the profile tab. Distinct from .sobre-tour above (the pre-login
+   pitch tour); this one anchors on real dashboard elements. */
+.sobre-dash-tour {
+  position: fixed;
+  inset: 0;
+  /* Above the app's shared modal/sheet layer (z:100) so tour steps that
+     open a sheet (e.g. "What's inside") can float the callout on top of
+     the open sheet. */
+  z-index: 110;
+  /* Scrim owns pointer events; the ring + callout render above it. */
+  pointer-events: none;
+}
+.sobre-dash-tour-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(15, 26, 20, 0.62);
+  z-index: 110;
+  animation: sobre-dash-tour-fade-in 160ms ease-out;
+}
+/* Soft variant for anchor-less "popup over the page" steps: lets the
+   underlying tab (e.g. Settings) show through so the copy references
+   what the user is actually looking at. */
+.sobre-dash-tour-scrim.is-soft {
+  background: rgba(15, 26, 20, 0.32);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+/* Transparent click-catcher, used when the parent has ALREADY opened
+   another overlay for this step (like the Sobre action sheet). We still
+   want to absorb stray clicks so the user can't fire an action mid-tour,
+   but nothing should dim: the sheet is the star. */
+.sobre-dash-tour-scrim.is-clear {
+  background: transparent;
+  animation: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+/* Transparent click-catcher. Absorbs stray clicks on the dimmed area
+   AND on the highlighted target (users interact via the tour card,
+   never the underlying UI). */
+.sobre-dash-tour-catcher {
+  position: fixed;
+  inset: 0;
+  pointer-events: auto;
+  animation: sobre-dash-tour-fade-in 160ms ease-out;
+}
+/* Single-element spotlight. The visible dim area is produced by the
+   ENORMOUS third box-shadow (0 spread 9999px); the two smaller shadows
+   stack a green ring on top. Because position + size are plain CSS
+   properties on ONE div, browsers can natively transition between
+   anchors: smooth slide + resize from step to step, no SVG mask
+   attribute animation required. */
+.sobre-dash-tour-spotlight {
+  position: fixed;
+  border-radius: 12px;
+  background: transparent;
+  pointer-events: none;
+  box-shadow:
+    0 0 0 2px var(--sobre-primary-bright, #3BC176),
+    0 0 0 6px rgba(59, 193, 118, 0.28),
+    0 0 0 9999px rgba(15, 26, 20, 0.62);
+  transition:
+    top 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    left 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    width 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    height 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: sobre-dash-tour-spotlight-in 180ms ease-out;
+}
+@keyframes sobre-dash-tour-spotlight-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-dash-tour-spotlight {
+    transition: none;
+    animation: none;
+  }
+}
+.sobre-dash-tour-card {
+  position: fixed;
+  background: var(--surface, #ffffff);
+  color: var(--text-1, #0F1A14);
+  border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(15, 26, 20, 0.25);
+  padding: 18px 18px 14px;
+  pointer-events: auto;
+  /* Slide along with the spotlight between steps. Same easing + duration
+     so the two elements track together instead of drifting apart. */
+  transition:
+    top 320ms cubic-bezier(0.4, 0, 0.2, 1),
+    left 320ms cubic-bezier(0.4, 0, 0.2, 1);
+  animation: sobre-dash-tour-card-in 180ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .sobre-dash-tour-card { transition: none; }
+}
+.sobre-dash-tour-card-centered {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(360px, calc(100vw - 32px));
+  max-width: 360px;
+  /* One tick above the tour scrim (110) so the callout floats above
+     any sheet the parent opened for this step. */
+  z-index: 111;
+  animation: sobre-dash-tour-card-center-in 220ms ease-out;
+}
+/* Pin near the top of the viewport instead of center, used when the
+   parent has opened a sheet/modal and we don't want the callout to
+   sit on top of it. Sheet stays centered, card floats up above. */
+.sobre-dash-tour-card-centered.is-top {
+  top: 24px;
+  transform: translate(-50%, 0);
+  animation: sobre-dash-tour-card-top-in 220ms ease-out;
+}
+@keyframes sobre-dash-tour-card-center-in {
+  from { opacity: 0; transform: translate(-50%, -46%); }
+  to   { opacity: 1; transform: translate(-50%, -50%); }
+}
+@keyframes sobre-dash-tour-card-top-in {
+  from { opacity: 0; transform: translate(-50%, -6px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
+}
+.sobre-dash-tour-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-3, #9C9C97);
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  border: 0;
+  transition: background 120ms ease, color 120ms ease;
+}
+.sobre-dash-tour-close:hover {
+  background: var(--surface-alt, #F4F4F2);
+  color: var(--text-1, #0F1A14);
+}
+.sobre-dash-tour-step-count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--sobre-primary, #22A45C);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.sobre-dash-tour-title {
+  font-family: var(--serif, "Fraunces", serif);
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0 0 8px;
+  color: var(--text-1, #0F1A14);
+}
+.sobre-dash-tour-body {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2, #3D4A42);
+  margin: 0 0 16px;
+}
+.sobre-dash-tour-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.sobre-dash-tour-back {
+  background: transparent;
+  color: var(--text-3, #9C9C97);
+  border: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+.sobre-dash-tour-back:hover { color: var(--text-1, #0F1A14); }
+.sobre-dash-tour-next {
+  min-width: 88px;
+}
+@keyframes sobre-dash-tour-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes sobre-dash-tour-card-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Narrow phones: shrink padding + type so the callout still fits
+   without shoving off-screen when the target is near an edge. */
+@media (max-width: 480px) {
+  .sobre-dash-tour-card {
+    padding: 14px 14px 12px;
+  }
+  .sobre-dash-tour-title { font-size: 18px; }
+  .sobre-dash-tour-body  { font-size: 13px; margin-bottom: 14px; }
+}
+
 @keyframes sobre-cover-text-in {
   0%   { opacity: 0; }
   100% { opacity: 1; }

@@ -44,7 +44,12 @@ export function EnvelopeSplitCard({
   const showUsd = currency === "USD";
 
   return (
-    <div className="sobre-v2-split" role="list" aria-label="Envelope split">
+    <div
+      className="sobre-v2-split"
+      role="list"
+      aria-label="Envelope split"
+      data-tour="envelope-split"
+    >
       {state.balances.map((_, i) => {
         const name = displayEnvelopeName(
           ENVELOPE_LABELS[i],

@@ -19,6 +19,7 @@ import { OutdatedSobreBanner } from "@/components/sobre/OutdatedSobreBanner";
 import { ActivityFeed } from "@/components/sobre/ActivityFeed";
 import { BackLink } from "@/components/sobre/BackLink";
 import { BottomDock, type DockTab } from "@/components/sobre/BottomDock";
+import { DashboardTour } from "@/components/sobre/DashboardTour";
 import { SupplementarySummary } from "@/components/sobre/SupplementarySummary";
 import { EarnGrowSummary } from "@/components/sobre/EarnGrowSummary";
 import { EarnInfoModal } from "@/components/sobre/EarnInfoModal";
@@ -73,6 +74,7 @@ import { ENVELOPE_LABELS, LOGO_SRC, type EnvelopeName } from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { expenseLogsToFeedEvents } from "@/lib/expenseLogFeed";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
+import { dashTourSeen } from "@/lib/dashTourSeen";
 import { envelopeTotalStroops } from "@/lib/walletTotals";
 
 // Sourced from Skeletons so the shared shape stays a single truth — the
@@ -144,15 +146,18 @@ function ActivitySegment({
   label,
   active,
   onClick,
+  dataTour,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
+  dataTour?: string;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      data-tour={dataTour}
       style={{
         padding: "10px 0",
         marginBottom: -1,
@@ -361,6 +366,9 @@ function Dashboard({ contractId }: { contractId: string }) {
   // Pencil on the balance hero → rename dialog (admin only).
   const [renameOpen, setRenameOpen] = useState(false);
   const [earnInfoOpen, setEarnInfoOpen] = useState(false);
+  // In-app dashboard tour (coach-mark walkthrough). Fires once per browser
+  // after `state` first resolves, and can be replayed from the profile tab.
+  const [showDashTour, setShowDashTour] = useState(false);
   // Member drafts collected during onboarding, handed off via sessionStorage
   // and ?invite=1. Pre-fill the invite modal so the admin can mint each link
   // on demand (one passkey prompt per link — see docs/onboarding-plan.md).
@@ -474,6 +482,19 @@ function Dashboard({ contractId }: { contractId: string }) {
       "",
       hash || window.location.pathname + window.location.search,
     );
+  };
+  // First-run dashboard tour: fires the first time state resolves for a
+  // browser that hasn't seen it. Deferred to state-ready so the anchors
+  // the tour spotlights (envelope cards, dock) are actually in the DOM.
+  useEffect(() => {
+    if (!state) return;
+    if (dashTourSeen.has()) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setShowDashTour(true);
+  }, [state]);
+  const replayDashTour = () => {
+    dashTourSeen.reset();
+    setShowDashTour(true);
   };
   const [celebration, setCelebration] = useState<
     { msg: string; kind: "ok" | "warn" } | null
@@ -858,6 +879,7 @@ function Dashboard({ contractId }: { contractId: string }) {
               label="Expenses"
               active={activityView === "expenses"}
               onClick={() => switchActivityView("expenses")}
+              dataTour="activity-expenses-tab"
             />
           </div>
 
@@ -961,6 +983,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                   type="button"
                   className="sobre-envs-settings"
                   data-badge={proposalNeedsMyVote ? "true" : undefined}
+                  data-tour="envelopes-settings-gear"
                   onClick={() => switchTab("settings")}
                   aria-label={
                     proposalNeedsMyVote
@@ -995,6 +1018,7 @@ function Dashboard({ contractId }: { contractId: string }) {
                   envelopeIcons={state.envelope_icons}
                   currency={currency}
                   earn={earnStrip}
+                  dataTour={i === 0 ? "envelope-card-first" : undefined}
                 />
               );
             })}
@@ -1039,7 +1063,7 @@ function Dashboard({ contractId }: { contractId: string }) {
           className="mx-auto w-full px-4 sm:px-7 pb-12 pt-6 space-y-5"
           style={{ maxWidth: 480 }}
         >
-          <ProfileSheet wallet={wallet} />
+          <ProfileSheet wallet={wallet} onReplayTour={replayDashTour} />
           <BankAccountSection />
           <MembersSection
             members={state.members}
@@ -1206,6 +1230,30 @@ function Dashboard({ contractId }: { contractId: string }) {
         onTab={(next) => switchTab(next as Tab)}
         onOpenSobre={() => setSobreSheetOpen(true)}
       />
+
+      {showDashTour ? (
+        <DashboardTour
+          isAdmin={isAdmin}
+          currentTab={tab}
+          onSwitchTab={switchTab}
+          onStepChange={(id) => {
+            // Step id-scoped side effects. Currently just: the
+            // "What's inside" step opens the Sobre action sheet so
+            // the user can actually SEE the four tiles instead of
+            // reading a description of them. Add another `if` here
+            // for any future step that needs to drive extra UI.
+            setSobreSheetOpen(id === "open-sobre-features");
+          }}
+          onFinish={() => {
+            setShowDashTour(false);
+            // Tour left the user on whichever tab the last step needed
+            // (settings for admins, or wherever they skipped from).
+            // Land them back on Home so the dashboard feels normal
+            // again the moment the tour closes.
+            switchTab("home");
+          }}
+        />
+      ) : null}
 
       {sobreSheetOpen ? (
         <OpenSobreSheet

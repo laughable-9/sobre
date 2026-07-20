@@ -39,7 +39,7 @@ export function OpenSobreSheet({
 
   return (
     <Sheet onClose={onClose} ariaLabel="Sobre actions">
-        <div className="sobre-sheet-actions">
+        <div className="sobre-sheet-actions" data-tour="sobre-sheet-actions">
           <SheetAction
             label="Add money"
             hint="Deposit through PDAX"
