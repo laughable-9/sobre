@@ -35,7 +35,11 @@ export function BalanceHero({
   const totalDisplay = showUsd ? totalToken : totalToken * PHP_PER_USDC;
 
   return (
-    <section className="sobre-v2-hero" aria-label="Total balance">
+    <section
+      className="sobre-v2-hero"
+      aria-label="Total balance"
+      data-tour="balance-hero"
+    >
       {header}
       <div className="label">Total balance</div>
       {/* Display number is Manrope (board Section 07) — NOT the Geist Mono

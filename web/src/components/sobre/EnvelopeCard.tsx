@@ -30,6 +30,7 @@ export function EnvelopeCard({
   envelopeIcons,
   currency = "PHP",
   earn,
+  dataTour,
 }: {
   index: number;
   balanceStroops: bigint;
@@ -44,6 +45,9 @@ export function EnvelopeCard({
   earn?: {
     interestEarnedStroops: bigint;
   };
+  /** Optional data-tour anchor id, set on the outer wrap so the
+   *  dashboard tour can spotlight a specific card. */
+  dataTour?: string;
 }) {
   const slot = ENVELOPE_LABELS[index];
   const name = displayEnvelopeName(slot, envelopeNames);
@@ -55,7 +59,7 @@ export function EnvelopeCard({
   const symbol = showUsd ? "$" : "₱";
 
   return (
-    <div className="sobre-env-row-wrap">
+    <div className="sobre-env-row-wrap" data-tour={dataTour}>
       <button type="button" onClick={onOpen} className="sobre-env-row-btn">
         <span className="ic">{renderEnvelopeIcon(iconKey, slot, 18)}</span>
         <span className="body">

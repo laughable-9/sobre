@@ -35,12 +35,14 @@ export function BottomDock({
           active={active === "home"}
           onClick={() => onTab("home")}
           Icon={HouseIcon}
+          dataTour="dock-home"
         />
         <DockTabBtn
           label="Envelopes"
           active={active === "envelopes"}
           onClick={() => onTab("envelopes")}
           Icon={EnvelopeIcon}
+          dataTour="dock-envelopes"
         />
 
         <button
@@ -48,6 +50,7 @@ export function BottomDock({
           onClick={onOpenSobre}
           className="sobre-dock-fab"
           aria-label="Open Sobre actions"
+          data-tour="dock-open-sobre"
         >
           <EnvelopeSimpleIcon weight="fill" size={26} />
         </button>
@@ -57,12 +60,14 @@ export function BottomDock({
           active={active === "activity"}
           onClick={() => onTab("activity")}
           Icon={ClockCounterClockwiseIcon}
+          dataTour="dock-activity"
         />
         <DockTabBtn
           label="User"
           active={active === "profile"}
           onClick={() => onTab("profile")}
           Icon={UserIcon}
+          dataTour="dock-profile"
         />
       </div>
     </nav>
@@ -74,11 +79,13 @@ function DockTabBtn({
   active,
   onClick,
   Icon,
+  dataTour,
 }: {
   label: string;
   active: boolean;
   onClick: () => void;
   Icon: PhosphorIcon;
+  dataTour?: string;
 }) {
   return (
     <button
@@ -87,6 +94,7 @@ function DockTabBtn({
       className="sobre-dock-tab"
       data-active={active}
       aria-current={active ? "page" : undefined}
+      data-tour={dataTour}
     >
       <Icon size={22} weight={active ? "fill" : "regular"} />
       <span>{label}</span>
