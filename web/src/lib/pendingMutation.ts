@@ -67,7 +67,7 @@ interface Envelope<T> {
 
 /**
  * Make a typed localStorage slot. `prefix` namespaces the mutation type
- * (e.g. `"sobre.pendingCreate"`); `owner` (passed per call) scopes to a
+ * (e.g. `"sobre.pendingCreate.v2"`); `owner` (passed per call) scopes to a
  * specific user so two accounts sharing a browser can't step on each
  * other's checkpoints. `validate` is a runtime shape check for the
  * parsed JSON — untrusted storage should never round-trip a partial value

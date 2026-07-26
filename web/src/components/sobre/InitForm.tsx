@@ -13,7 +13,6 @@ import { Check } from "lucide-react";
 import { useCreateSobre, type CreateSobrePhase } from "@/hooks/useCreateSobre";
 import { CenteredCopy } from "@/components/sobre/CenteredCopy";
 import { Sheet } from "@/components/sobre/Sheet";
-import { EARN_AVAILABLE } from "@/lib/config";
 import {
   DEFAULT_ENVELOPE_ICONS,
   DEFAULT_ENVELOPE_NAMES,
@@ -288,27 +287,15 @@ function StepDots({ current, total }: { current: number; total: number }) {
   );
 }
 
-type CreateStep = {
+const CREATE_STEPS: {
   key: Exclude<CreateSobrePhase, "idle" | "done">;
   label: string;
   hint: string;
-};
-
-const ALL_CREATE_STEPS: CreateStep[] = [
+}[] = [
   {
     key: "deploying",
     label: "Deploying your Sobre on Stellar",
-    hint: "You'll be asked to confirm with Face ID.",
-  },
-  {
-    key: "enabling-grow",
-    label: "Enabling auto-savings",
-    hint: "Another Face ID prompt so deposits work from day one.",
-  },
-  {
-    key: "enabling-earn",
-    label: "Turning on Savings yield",
-    hint: "One more Face ID prompt, the last one.",
+    hint: "One Face ID prompt covers everything.",
   },
   {
     key: "mirroring",
@@ -317,22 +304,14 @@ const ALL_CREATE_STEPS: CreateStep[] = [
   },
 ];
 
-// Earn availability tracks the payment token (see EARN_AVAILABLE); when the
-// pipeline skips that phase the checklist must not show it as done.
-const CREATE_STEPS = ALL_CREATE_STEPS.filter(
-  (s) => EARN_AVAILABLE || s.key !== "enabling-earn",
-);
-
 /** How long the success sheet holds before navigating to the new Sobre.
  *  Long enough to read the confirmation, short enough to not feel stuck. */
 const SUCCESS_REDIRECT_MS = 1800;
 
+// Derived from CREATE_STEPS so the two can't drift.
 const PHASE_ORDER: CreateSobrePhase[] = [
   "idle",
-  "deploying",
-  "enabling-grow",
-  "enabling-earn",
-  "mirroring",
+  ...CREATE_STEPS.map((s) => s.key),
   "done",
 ];
 

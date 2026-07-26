@@ -206,7 +206,7 @@ export function connect(opts: {
 
 /**
  * Sign a tx's auth entries with the user's passkey. Accepts any of:
- *   - an AssembledTransaction (from createFamilyWallet's Client.from path)
+ *   - an AssembledTransaction
  *   - a raw Transaction (from invokeWrite's Contract.call path)
  *   - a base64 XDR string
  *
@@ -508,9 +508,8 @@ export interface PasskeySignedTx {
 }
 
 /**
- * Rebuild a passkey-signed AT and submit it. This is the dance shared by
- * `invokeWrite` (one-off contract calls) and `createFamilyWallet` (factory
- * deploy). passkey-kit's `signAuthEntries` mutates `op.auth` on the JS side,
+ * Rebuild a passkey-signed AT and submit it (used by `invokeWrite`).
+ * passkey-kit's `signAuthEntries` mutates `op.auth` on the JS side,
  * but `Transaction.toXDR()` serialises from the underlying `_tx` XDR which
  * doesn't see those mutations — so we extract the signed entries, bake them
  * into a fresh InvokeHostFunction op, carry the simulated Soroban resource

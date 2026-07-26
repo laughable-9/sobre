@@ -55,7 +55,7 @@ type ATWithSim = import(
  * Passkey-signed contract write. Three phases, each owned by a different
  * module: build the raw tx here, hand to passkey-kit (FaceID prompt) which
  * returns an AT carrying signed auth entries, then post-sign rebuild +
- * submit lives in `submitPasskeySigned` (shared with `createFamilyWallet`).
+ * submit lives in `submitPasskeySigned`.
  *
  * Between sign and submit we re-simulate the AT: the buildWithOp simulate
  * passkey-kit runs internally executes without signatures, so it misses the

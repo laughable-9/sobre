@@ -270,7 +270,6 @@ export default function OnboardingFlow() {
       );
       const { familyContractId } = await createFamilyWallet({
         myWalletContractId: wallet.contract_id,
-        myWalletDbId: wallet.id,
         envelopeNames: trimmed,
         percents: split,
         walletName: walletName.trim(),

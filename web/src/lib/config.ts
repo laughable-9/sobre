@@ -10,11 +10,23 @@
  *
  * Testnet is the live deployment the web app talks to. Mainnet factory
  * `CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO` is also
- * deployed as proof-of-production; flip FACTORY_CONTRACT_ID + NETWORK
- * together to switch environments.
+ * deployed as proof-of-production; flip FACTORY_CONTRACT_ID +
+ * LAUNCHER_CONTRACT_ID + NETWORK together to switch environments.
  */
 export const FACTORY_CONTRACT_ID =
   "CAGQNXTXW422Q5RJP2AE3LZ3CGCSKPMUAWCPAVW6YGOPFDUU33TQFHAZ";
+
+/**
+ * SobreLauncher — stateless wrapper that chains factory deploy +
+ * grow_enable + earn_enable behind one admin auth entry, so opening a
+ * Sobre costs a single passkey prompt instead of three. The factory above
+ * still does the actual deploy (and keeps its AdminSobres directory);
+ * the launcher only orchestrates. Deployed 2026-07-26. No mainnet
+ * counterpart yet — deploy one and flip this alongside
+ * FACTORY_CONTRACT_ID + NETWORK when promoting.
+ */
+export const LAUNCHER_CONTRACT_ID =
+  "CCPVMULRNYJSJKK5DRHW2E3243ZUDEOAPKOYZ6QSANCQFMM4BV4H2WL3";
 
 /** Public path for the Sobre logo asset. Referenced from every splash /
  *  header / OG-image site; keeping it here means the next brand
@@ -140,11 +152,11 @@ export const MOCK_USDY_ID: string =
 
 /** Whether Earn can be enabled at all under the current payment token.
  *  MockUSDY's `underlying()` is pinned to Circle USDC, and the contract's
- *  `earn_enable` traps on an underlying mismatch — so flipping
- *  PAYMENT_TOKEN to XLM must hide every Earn entry point (create
- *  pipeline, EarnPanel CTA, checklist step) rather than let users burn a
- *  Face ID prompt on a guaranteed trap. Deploy a MockUSDY initialised
- *  with the XLM SAC and drop this gate if Earn needs to work on XLM. */
+ *  `earn_enable` traps on an underlying mismatch — under the launcher
+ *  that trap would take down the entire create transaction, so flipping
+ *  PAYMENT_TOKEN to XLM must skip the Earn leg (createSobreOnChain passes
+ *  None) and hide the EarnPanel CTA. Deploy a MockUSDY initialised with
+ *  the XLM SAC and drop this gate if Earn needs to work on XLM. */
 export const EARN_AVAILABLE: boolean = PAYMENT_TOKEN === "USDC";
 
 /**
@@ -179,7 +191,7 @@ export const NETWORK = {
  * verifier contract like OZ smart-account-kit needs).
  *
  * Mainnet uses a different hash; flip alongside FACTORY_CONTRACT_ID +
- * NETWORK when promoting to mainnet.
+ * LAUNCHER_CONTRACT_ID + NETWORK when promoting to mainnet.
  */
 export const PASSKEY_KIT = {
   // Protocol-27-compatible smart-wallet wasm published by kalepail

@@ -1,57 +1,26 @@
 "use client";
 
-import { Address, contract } from "@stellar/stellar-sdk";
+import { Address, xdr } from "@stellar/stellar-sdk";
 
 import {
   BLEND_POOL_ID,
   EARN_AVAILABLE,
   FACTORY_CONTRACT_ID,
+  LAUNCHER_CONTRACT_ID,
   MOCK_USDY_ID,
-  NETWORK,
   PAYMENT_TOKEN_SAC_ID,
   SOROSWAP_ROUTER_ID,
   XLM_SAC_ID,
 } from "@/lib/config";
 import { invokeWrite } from "@/lib/contract";
-import {
-  getDeployerAddress,
-  signTransaction,
-  submitPasskeySigned,
-} from "@/lib/passkey";
+import { makePendingSlot } from "@/lib/pendingMutation";
 
-/**
- * Family-wallet creation flow.
- *
- *   1. Load the factory contract's spec from chain (one network round-trip).
- *   2. Build an AssembledTransaction for `create_sobre(admin, payment_token,
- *      percents)` with the caller's smart wallet C-address as admin. Display
- *      fields (wallet name, envelope names, admin display name) are NO
- *      LONGER passed on-chain — they live in Supabase, written in step 6.
- *   3. Sign auth entries with the user's passkey via passkey-kit. The FaceID
- *      prompt fires inside this step.
- *   4. Re-simulate with the signed entries so the footprint covers the
- *      wallet's signer-storage reads (the initial sim ran without
- *      signatures so it never executed __check_auth).
- *   5. Rebuild the tx with the signed auth entries baked into a fresh
- *      InvokeHostFunction op (the JS-side `op.auth` mutations don't survive
- *      `Transaction.toXDR()`), sign envelope, submit.
- *   6. Decode the new Sobre contract address from the simulation result and
- *      insert a `public.family_wallets` row (carries the wallet display name).
- *      The `bootstrap_family_admin` trigger auto-inserts the matching
- *      `public.family_members` row with `role = 'admin'`. We then UPDATE that
- *      row with the admin's display name, and seed the three
- *      `family_envelope_names` rows with the chosen labels.
- *
- * Untyped indexed access on the Client is deliberate: `Client.from` returns a
- * generic Client and attaches the contract methods at runtime per the
- * on-chain spec. TypeScript can't see them without pre-generated bindings.
- */
+/** Family-wallet creation: one launcher transaction on chain, then the
+ *  Supabase mirror. See createSobreOnChain / createFamilyWallet below. */
 
 export interface CreateFamilyArgs {
   /** Smart wallet C-address that will sign + become admin on chain. */
   myWalletContractId: string;
-  /** Supabase `public.wallets.id` for the same wallet (created_by FK). */
-  myWalletDbId: string;
   envelopeNames: readonly [string, string, string];
   /** Per-envelope icon key; null slots take the built-in default. */
   envelopeIcons?: readonly [string | null, string | null, string | null];
@@ -71,165 +40,73 @@ export interface CreateFamilyResult {
   familyWalletId: string;
 }
 
-interface CreateSobreInvocable {
-  create_sobre: (params: {
-    admin: string;
-    payment_token: string;
-  }) => Promise<contract.AssembledTransaction<string>>;
+/** Resume checkpoint for the chain half of a create. If the launcher tx
+ *  lands but the Supabase mirror trips (RPC lag, tab reload), the retry
+ *  reuses the deployed contract instead of deploying a second one and
+ *  re-prompting Face ID. Lives here so BOTH create paths (dashboard hook
+ *  and onboarding) inherit it. Keyed `.v2`: the pre-launcher slot stored
+ *  per-step grow/earn flags, and resuming one of those partial records
+ *  would skip the enables. Old records just expire via the slot TTL. */
+const createSlot = makePendingSlot<string>(
+  "sobre.pendingCreate.v2",
+  (v): v is string => typeof v === "string" && v.startsWith("C"),
+);
+
+/** Call after the Supabase mirror succeeds so the next create starts
+ *  fresh instead of resuming a completed one. */
+export function clearCreateCheckpoint(adminWalletAddress: string): void {
+  createSlot.clear(adminWalletAddress);
 }
 
-/** Convenience cast — the runtime AT carries a `simulationData` block but
- *  it's not on the public type. Local alias keeps the call sites tidy. */
-type ATWithSim<T> = contract.AssembledTransaction<T> & {
-  simulationData?: {
-    result?: { retval?: import("@stellar/stellar-sdk").xdr.ScVal };
-    transactionData?: unknown;
-  };
-};
+/**
+ * One-transaction Sobre creation via the SobreLauncher: factory deploy +
+ * grow_enable + (when EARN_AVAILABLE) earn_enable, chained behind a single
+ * admin auth entry so the user's passkey prompts once. Grow must be on
+ * before the first PDAX deposit — `deposit_from_xlm` reads Blend +
+ * Soroswap addresses out of Grow storage — and Earn puts the Savings
+ * yield on from day one. Returns the new Sobre's contract address.
+ *
+ * Shared by `useCreateSobre` (dashboard create) and `createFamilyWallet`
+ * (onboarding) so the two paths can't drift. Resumes from the checkpoint
+ * above; callers clear it via clearCreateCheckpoint after their mirror.
+ */
+export async function createSobreOnChain(
+  adminWalletAddress: string,
+): Promise<string> {
+  const resumed = createSlot.read(adminWalletAddress);
+  if (resumed) return resumed;
+
+  const { returnValue } = await invokeWrite(
+    LAUNCHER_CONTRACT_ID,
+    "create_sobre_full",
+    [
+      Address.fromString(adminWalletAddress).toScVal(),
+      Address.fromString(FACTORY_CONTRACT_ID).toScVal(),
+      Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
+      Address.fromString(BLEND_POOL_ID).toScVal(),
+      Address.fromString(XLM_SAC_ID).toScVal(),
+      Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
+      // Option<Address>: scvVoid encodes None. Earn is skipped when the
+      // payment token can't back MockUSDY — earn_enable would trap and
+      // take the whole create down with it.
+      EARN_AVAILABLE
+        ? Address.fromString(MOCK_USDY_ID).toScVal()
+        : xdr.ScVal.scvVoid(),
+    ],
+  );
+  if (typeof returnValue !== "string" || !returnValue.startsWith("C")) {
+    throw new Error(
+      `create_sobre_full returned no contract address (got: ${String(returnValue)})`,
+    );
+  }
+  createSlot.write(adminWalletAddress, returnValue);
+  return returnValue;
+}
 
 export async function createFamilyWallet(
   args: CreateFamilyArgs,
 ): Promise<CreateFamilyResult> {
-  const deployerAddress = getDeployerAddress();
-
-  // Client.from fetches the factory's spec from chain. We pass the public
-  // deployer G-address as `publicKey` so the AT builds against a real
-  // funded account with a real sequence number. The smart wallet's
-  // authorization is independent — it comes via auth entries signed by
-  // the user's passkey, not the tx envelope signature.
-  let factoryClient;
-  try {
-    factoryClient = await contract.Client.from({
-      contractId: FACTORY_CONTRACT_ID,
-      networkPassphrase: NETWORK.passphrase,
-      rpcUrl: NETWORK.rpcUrl,
-      publicKey: deployerAddress,
-    });
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 1] Client.from failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  const invocable = factoryClient as unknown as CreateSobreInvocable;
-  let assembledTx: ATWithSim<string>;
-  try {
-    assembledTx = (await invocable.create_sobre({
-      admin: args.myWalletContractId,
-      payment_token: PAYMENT_TOKEN_SAC_ID,
-    })) as ATWithSim<string>;
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 2] build+simulate failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // FaceID prompt fires here. The returned AT carries the signed auth
-  // entries; we MUST reassign — see signTransaction's docstring for the
-  // instanceof-across-SDK-modules gotcha.
-  try {
-    assembledTx = (await signTransaction(assembledTx)) as ATWithSim<string>;
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 3] passkey sign failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Re-simulate with the signed entries so the footprint covers the
-  // wallet's signer-storage reads — the initial sim ran without
-  // signatures so it never executed __check_auth.
-  //
-  // The simulate RPC's response carries auth entries too, and the SDK
-  // applies them back to `.built.operations[0].auth` — wiping our signed
-  // signatures with recording-mode empty ones. Capture and restore them
-  // around the call so submit sees the actual passkey signature.
-  const signedAuth = (
-    assembledTx.built?.operations[0] as { auth?: unknown[] } | undefined
-  )?.auth;
-  // stellar-sdk 16 AT.simulate({restore:true}) hard-throws when the RPC
-  // returns a restorePreamble unless the AT carries a signTransaction
-  // option — which we can't wire up for a passkey-signed tx. Swallow
-  // the specific restore-related throw and proceed; the submit-time
-  // trap will surface a clearer error if archived state was actually
-  // the issue.
-  try {
-    await assembledTx.simulate({ restore: true });
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : String(err);
-    if (!/signTransaction|restore|automatic restore/i.test(msg)) {
-      throw new Error(
-        `[create_sobre step 3b] re-simulate after sign failed: ${msg}`,
-      );
-    }
-  }
-  if (signedAuth && assembledTx.built) {
-    (assembledTx.built.operations[0] as { auth?: unknown }).auth = signedAuth;
-  }
-
-  // Rebuild + submit. The shared `submitPasskeySigned` in passkey.ts handles
-  // the JS-side `op.auth` → fresh-op + setSorobanData + envelope-sign dance.
-  try {
-    await submitPasskeySigned(assembledTx);
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 4] rebuild+submit failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // The factory's `create_sobre` returns the new Sobre contract address.
-  // The AT we got back from passkey-kit doesn't carry `parseResultXdr` (it
-  // was rebuilt internally without our spec), so we decode the raw ScVal.
-  let familyContractId: string;
-  try {
-    const retval = assembledTx.simulationData?.result?.retval;
-    if (!retval) throw new Error("no simulation retval");
-    familyContractId = Address.fromScVal(retval).toString();
-    if (!familyContractId.startsWith("C")) {
-      throw new Error(`unexpected result: ${familyContractId}`);
-    }
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 5] parsing result failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Enable Grow inline so the PDAX ramp works on first deposit — the
-  // contract's `deposit_from_xlm` reads Blend + Soroswap addresses out
-  // of Grow storage, and skipping this would strand any freshly-created
-  // family at "PDAX credited, on-chain invoke panicked". Two FaceID
-  // prompts back-to-back is the trade-off; the alternative (a separate
-  // contract-side SwapConfig DataKey) would require a wasm redeploy for
-  // what is architecturally the same pin. Families that never use Grow
-  // just leave the bucket empty — enabling costs nothing beyond the fee.
-  try {
-    await invokeWrite(familyContractId, "grow_enable", [
-      Address.fromString(args.myWalletContractId).toScVal(),
-      Address.fromString(BLEND_POOL_ID).toScVal(),
-      Address.fromString(XLM_SAC_ID).toScVal(),
-      Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
-    ]);
-  } catch (err) {
-    throw new Error(
-      `[create_sobre step 6] auto-grow_enable failed: ${err instanceof Error ? err.message : String(err)}`,
-    );
-  }
-
-  // Enable Earn too so onboarding-created Sobres match the dashboard
-  // create path (useCreateSobre) — Savings yield on from day one. Gated on
-  // EARN_AVAILABLE: earn_enable traps when the payment token can't back
-  // MockUSDY, and a token flip must not brick onboarding.
-  if (EARN_AVAILABLE) {
-    try {
-      await invokeWrite(familyContractId, "earn_enable", [
-        Address.fromString(args.myWalletContractId).toScVal(),
-        Address.fromString(MOCK_USDY_ID).toScVal(),
-      ]);
-    } catch (err) {
-      throw new Error(
-        `[create_sobre step 7] auto-earn_enable failed: ${err instanceof Error ? err.message : String(err)}`,
-      );
-    }
-  }
+  const familyContractId = await createSobreOnChain(args.myWalletContractId);
 
   // Mirror via the server-side route that verifies caller is the on-chain
   // admin of the new contract (closes the "predict next salt + pre-insert"
@@ -245,6 +122,7 @@ export async function createFamilyWallet(
     budgetMin: args.budgetMin ?? null,
     budgetMax: args.budgetMax ?? null,
   });
+  clearCreateCheckpoint(args.myWalletContractId);
 
   return { familyContractId, familyWalletId };
 }
