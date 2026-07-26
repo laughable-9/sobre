@@ -4,7 +4,9 @@ import { Address, contract } from "@stellar/stellar-sdk";
 
 import {
   BLEND_POOL_ID,
+  EARN_AVAILABLE,
   FACTORY_CONTRACT_ID,
+  MOCK_USDY_ID,
   NETWORK,
   PAYMENT_TOKEN_SAC_ID,
   SOROSWAP_ROUTER_ID,
@@ -210,6 +212,23 @@ export async function createFamilyWallet(
     throw new Error(
       `[create_sobre step 6] auto-grow_enable failed: ${err instanceof Error ? err.message : String(err)}`,
     );
+  }
+
+  // Enable Earn too so onboarding-created Sobres match the dashboard
+  // create path (useCreateSobre) — Savings yield on from day one. Gated on
+  // EARN_AVAILABLE: earn_enable traps when the payment token can't back
+  // MockUSDY, and a token flip must not brick onboarding.
+  if (EARN_AVAILABLE) {
+    try {
+      await invokeWrite(familyContractId, "earn_enable", [
+        Address.fromString(args.myWalletContractId).toScVal(),
+        Address.fromString(MOCK_USDY_ID).toScVal(),
+      ]);
+    } catch (err) {
+      throw new Error(
+        `[create_sobre step 7] auto-earn_enable failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
   }
 
   // Mirror via the server-side route that verifies caller is the on-chain

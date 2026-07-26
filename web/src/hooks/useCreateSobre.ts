@@ -6,7 +6,9 @@ import { Address } from "@stellar/stellar-sdk";
 import { useSupabaseMutation } from "@/hooks/useSupabaseMutation";
 import {
   BLEND_POOL_ID,
+  EARN_AVAILABLE,
   FACTORY_CONTRACT_ID,
+  MOCK_USDY_ID,
   PAYMENT_TOKEN_SAC_ID,
   SOROSWAP_ROUTER_ID,
   XLM_SAC_ID,
@@ -19,6 +21,7 @@ export type CreateSobrePhase =
   | "idle"
   | "deploying"
   | "enabling-grow"
+  | "enabling-earn"
   | "mirroring"
   | "done";
 
@@ -29,6 +32,9 @@ export type CreateSobrePhase =
 interface CreateProgress {
   contractId: string;
   growEnabled: boolean;
+  /** Optional so checkpoints written before Earn joined the create flow
+   *  still resume (treated as not-yet-enabled). */
+  earnEnabled?: boolean;
 }
 
 const createSlot = makePendingSlot<CreateProgress>(
@@ -37,7 +43,8 @@ const createSlot = makePendingSlot<CreateProgress>(
     isRecord(v) &&
     typeof v.contractId === "string" &&
     v.contractId.startsWith("C") &&
-    typeof v.growEnabled === "boolean",
+    typeof v.growEnabled === "boolean" &&
+    (v.earnEnabled === undefined || typeof v.earnEnabled === "boolean"),
 );
 
 export interface CreateSobreArgs {
@@ -86,8 +93,15 @@ export function useCreateSobre(
       // but tripped later (mirror race, tab reload, etc). Skips redeploying
       // and any FaceID prompts already done — critical for demo retries.
       const resumed = createSlot.read(userAddress);
-      let newContractId = resumed?.contractId ?? "";
-      if (!resumed) {
+      // Single mutable checkpoint: each step flips its own flag and
+      // re-writes the whole record, so adding a step never means editing
+      // the other steps' write sites.
+      const progress: CreateProgress = resumed ?? {
+        contractId: "",
+        growEnabled: false,
+        earnEnabled: false,
+      };
+      if (!progress.contractId) {
         onPhase?.("deploying");
         const { returnValue } = await invokeWrite(
           FACTORY_CONTRACT_ID,
@@ -100,11 +114,12 @@ export function useCreateSobre(
         if (typeof returnValue !== "string") {
           throw new Error("create_sobre returned no contract address");
         }
-        newContractId = returnValue;
-        createSlot.write(userAddress, { contractId: newContractId, growEnabled: false });
+        progress.contractId = returnValue;
+        createSlot.write(userAddress, progress);
       }
+      const newContractId = progress.contractId;
 
-      if (!resumed?.growEnabled) {
+      if (!progress.growEnabled) {
         // Auto-enable Grow so PDAX deposits work on first try — the
         // contract's deposit_from_xlm reads Blend + Soroswap addresses
         // out of Grow storage. Second FaceID prompt is the trade-off.
@@ -115,7 +130,21 @@ export function useCreateSobre(
           Address.fromString(XLM_SAC_ID).toScVal(),
           Address.fromString(SOROSWAP_ROUTER_ID).toScVal(),
         ]);
-        createSlot.write(userAddress, { contractId: newContractId, growEnabled: true });
+        progress.growEnabled = true;
+        createSlot.write(userAddress, progress);
+      }
+
+      // Auto-enable Earn too so the Savings yield runs from day one.
+      // EARN_AVAILABLE (config.ts) skips this when the payment token
+      // can't back MockUSDY, so a token flip doesn't brick create.
+      if (EARN_AVAILABLE && !progress.earnEnabled) {
+        onPhase?.("enabling-earn");
+        await invokeWrite(newContractId, "earn_enable", [
+          Address.fromString(userAddress).toScVal(),
+          Address.fromString(MOCK_USDY_ID).toScVal(),
+        ]);
+        progress.earnEnabled = true;
+        createSlot.write(userAddress, progress);
       }
 
       onPhase?.("mirroring");

@@ -138,6 +138,15 @@ export const SOROSWAP_ROUTER_ID: string =
 export const MOCK_USDY_ID: string =
   "CCHFSDJIBR2YCGCNQ4IRYPPOQXG562LKBHDRCJL5TWBAI3RZ5G6ZALHA";
 
+/** Whether Earn can be enabled at all under the current payment token.
+ *  MockUSDY's `underlying()` is pinned to Circle USDC, and the contract's
+ *  `earn_enable` traps on an underlying mismatch — so flipping
+ *  PAYMENT_TOKEN to XLM must hide every Earn entry point (create
+ *  pipeline, EarnPanel CTA, checklist step) rather than let users burn a
+ *  Face ID prompt on a guaranteed trap. Deploy a MockUSDY initialised
+ *  with the XLM SAC and drop this gate if Earn needs to work on XLM. */
+export const EARN_AVAILABLE: boolean = PAYMENT_TOKEN === "USDC";
+
 /**
  * User-facing APY pill copies. Earn (USDY) and Grow (Blend lending) have
  * different risk/rate profiles per the PM's SEC-disclosure ask — never
