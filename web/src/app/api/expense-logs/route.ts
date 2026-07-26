@@ -199,7 +199,10 @@ export async function POST(req: Request) {
     }
     if (bytes.length > MAX_RECEIPT_BYTES) {
       return NextResponse.json(
-        { error: `Each receipt image must be ≤ ${MAX_RECEIPT_BYTES} bytes.` },
+        {
+          error:
+            "One of the receipt photos couldn't be shrunk enough to save. Try a closer shot of just the receipt.",
+        },
         { status: 413 },
       );
     }

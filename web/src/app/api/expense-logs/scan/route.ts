@@ -64,8 +64,14 @@ export async function POST(req: Request) {
     );
   }
   if (image.size > MAX_IMAGE_BYTES) {
+    // The client compresses to a target under this ceiling, so reaching
+    // here means a pathological photo that wouldn't shrink. Say what to
+    // do, not the byte count.
     return NextResponse.json(
-      { error: `Image too large. Max ${MAX_IMAGE_BYTES} bytes.` },
+      {
+        error:
+          "That photo couldn't be shrunk enough to read. Try a closer shot of just the receipt.",
+      },
       { status: 413 },
     );
   }
