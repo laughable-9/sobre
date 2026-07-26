@@ -215,12 +215,14 @@ export const STROOPS_PER_TOKEN = 10_000_000;
 export const STROOPS_PER_USDC = STROOPS_PER_TOKEN;
 
 /** First-paint fallback for PHP per token. Live rate comes from
- *  `GET /api/pdax/price` (which proxies PDAX's `/v1/trade/price`). Values
- *  here are roughly today's PDAX UAT indicative rates so the modal doesn't
- *  flash an obviously-wrong number before the live rate lands. */
+ *  `GET /api/pdax/price`. For USDC that route returns the EFFECTIVE rate
+ *  through our rails (PDAX PHP/XLM x Soroswap pool XLM-per-USDC), not
+ *  PDAX's USDC ticker — see effectivePhpPerUsdc in the route. Values here
+ *  are roughly today's effective rates so the modal doesn't flash an
+ *  obviously-wrong number before the live rate lands. */
 export const PHP_PER_TOKEN_FALLBACK: Record<"XLM" | "USDC", number> = {
   XLM: 7.575,
-  USDC: 62.205,
+  USDC: 75.3,
 };
 
 /** Back-compat alias. PHP_PER_USDC was hardcoded everywhere; now resolves

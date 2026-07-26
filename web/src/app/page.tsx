@@ -15,7 +15,7 @@ import {
 } from "@phosphor-icons/react";
 
 import type { WalletState } from "@/hooks/useWalletState";
-import { LOGO_SRC } from "@/lib/config";
+import { LOGO_SRC, PHP_PER_USDC, STROOPS_PER_TOKEN } from "@/lib/config";
 import { LandingHeader } from "@/components/sobre/LandingHeader";
 import { OpenSobreButton } from "@/components/sobre/OpenSobreButton";
 import { Reveal } from "@/components/sobre/Reveal";
@@ -451,17 +451,17 @@ function FeatureCopy({
   );
 }
 
-// Stroop targets calibrated so BalanceHero / EnvelopeSplitCard renders
-// hit clean-integer displays through the float drift in their
-// floor(stroops × PHP_PER_USDC / 1e10) formatter:
-//   - Total 1,607,588,000 stroops   → ₱10,000.00 exactly
-//   - Groceries   803,794,000       → ₱5,000.00
-//   - Tuition     482,276,400       → ₱3,000.00
-//   - Savings     321,517,600       → ₱2,000.00
-const TOTAL_STROOPS_TARGET = 1_607_588_000n;
-const G_STROOPS_TARGET = 803_794_000n;
-const T_STROOPS_TARGET = 482_276_400n;
-const S_STROOPS_TARGET = 321_517_600n;
+// Stroop targets derived from the display rate so the preview renders
+// clean peso figures (₱10,000 / ₱5,000 / ₱3,000 / ₱2,000) no matter where
+// PHP_PER_USDC sits. ceil keeps the formatter's floor from shaving a
+// centavo off the target.
+const phpToPreviewStroops = (php: number): bigint =>
+  BigInt(Math.ceil((php / PHP_PER_USDC) * STROOPS_PER_TOKEN));
+
+const TOTAL_STROOPS_TARGET = phpToPreviewStroops(10_000);
+const G_STROOPS_TARGET = phpToPreviewStroops(5_000);
+const T_STROOPS_TARGET = phpToPreviewStroops(3_000);
+const S_STROOPS_TARGET = phpToPreviewStroops(2_000);
 
 const PREVIEW_TOTAL_STATE: WalletState = {
   ...PREVIEW_STATE,
