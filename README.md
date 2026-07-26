@@ -140,9 +140,10 @@ USDC SAC     Router      (Ondo USDY       (Testnet V2         Smart
 
 Full detail below.
 
-**Smart contracts** — Rust with `soroban-sdk` v25, compiled to `wasm32v1-none`. Three crates in `contract/`:
+**Smart contracts** — Rust with `soroban-sdk` v25, compiled to `wasm32v1-none`. Four crates in `contract/`:
 - `sobre` — per-family wallet contract (~60KB wasm, 27 exports)
 - `sobre_factory` — deploys per-family instances via `deploy_v2`
+- `sobre_launcher` — stateless wrapper chaining factory deploy + Grow + Earn enables behind one auth entry, so opening a Sobre is a single passkey prompt
 - `mock_usdy` — Ondo USDY-shaped stand-in for testnet
 
 **Blockchain** — Stellar Soroban (testnet + mainnet). Reads via `simulateTransaction`, writes via passkey-signed transactions, events via `getEvents`. `@stellar/stellar-sdk` v15.
@@ -329,6 +330,18 @@ stellar contract invoke \
   --payment_token CBIELTK6YBZJU5UP2WWQEUCYKLPU6AUNZ2BQ4WWFEIE3USCIHMXQDAMA
 ```
 
-To point the web app at your own factory, update `FACTORY_CONTRACT_ID` in `web/src/lib/config.ts`.
+```bash
+# 4. Deploy the SobreLauncher (stateless, no init). The web app creates
+#    Sobres through it — one transaction bundles the factory deploy plus
+#    the Grow/Earn enables behind a single passkey prompt.
+stellar contract deploy \
+  --wasm target/wasm32v1-none/release/sobre_launcher.wasm \
+  --source alice \
+  --rpc-url https://soroban-testnet.stellar.org \
+  --network-passphrase "Test SDF Network ; September 2015" \
+  --alias sobre_launcher
+```
+
+To point the web app at your own deployment, update `FACTORY_CONTRACT_ID` and `LAUNCHER_CONTRACT_ID` in `web/src/lib/config.ts`.
 
 **CLI gotcha:** the stellar-cli's built-in `--network testnet` alias points at a dead RPC. Always pass explicit `--rpc-url` and `--network-passphrase` (or set them as env vars).

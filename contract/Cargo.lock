@@ -1323,6 +1323,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "sobre-launcher"
+version = "0.0.0"
+dependencies = [
+ "blend-contract-sdk",
+ "mock-usdy",
+ "sobre",
+ "sobre-factory",
+ "soroban-sdk",
+]
+
+[[package]]
 name = "soroban-builtin-sdk-macros"
 version = "25.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

@@ -4,7 +4,7 @@ import { TrendUpIcon } from "@phosphor-icons/react";
 
 import { useEarnEnable } from "@/hooks/useEarnEnable";
 import type { WalletState } from "@/hooks/useWalletState";
-import { displayEnvelopeName } from "@/lib/config";
+import { displayEnvelopeName, EARN_AVAILABLE } from "@/lib/config";
 import { friendlyError } from "@/lib/format";
 
 /**
@@ -55,6 +55,9 @@ export function EarnPanel({
 
   if (state.earn !== null) return null;
   if (!isAdmin) return null;
+  // Payment token can't back MockUSDY (see EARN_AVAILABLE) — hide the CTA
+  // instead of letting the admin burn a Face ID prompt on a guaranteed trap.
+  if (!EARN_AVAILABLE) return null;
 
   return (
     <section className="sobre-envs-section" aria-label="Earn">

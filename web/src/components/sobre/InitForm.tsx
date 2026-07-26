@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   CaretLeftIcon,
   CaretRightIcon,
@@ -8,7 +8,11 @@ import {
   CircleNotchIcon,
 } from "@phosphor-icons/react";
 
+import { Check } from "lucide-react";
+
 import { useCreateSobre, type CreateSobrePhase } from "@/hooks/useCreateSobre";
+import { CenteredCopy } from "@/components/sobre/CenteredCopy";
+import { Sheet } from "@/components/sobre/Sheet";
 import {
   DEFAULT_ENVELOPE_ICONS,
   DEFAULT_ENVELOPE_NAMES,
@@ -66,7 +70,27 @@ export function InitForm({
   );
   const [split, setSplit] = useState<Split>([50, 30, 20]);
   const [phase, setPhase] = useState<CreateSobrePhase>("idle");
+  // Set once the create fully lands. Drives the success sheet; the actual
+  // navigation fires from the timeout effect below so the user sees the
+  // confirmation instead of the checklist vanishing into a blank pause.
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const { createSobre, pending, error } = useCreateSobre(userAddress);
+
+  // Ref-stabilized so the redirect timer depends on createdId alone. The
+  // parent passes an inline arrow, and re-render cadence faster than the
+  // delay would otherwise clear + re-arm the timeout forever.
+  const onSuccessRef = useRef(onSuccess);
+  useEffect(() => {
+    onSuccessRef.current = onSuccess;
+  });
+  useEffect(() => {
+    if (!createdId) return;
+    const t = window.setTimeout(
+      () => onSuccessRef.current(createdId),
+      SUCCESS_REDIRECT_MS,
+    );
+    return () => window.clearTimeout(t);
+  }, [createdId]);
 
   const step1Valid =
     walletName.trim().length > 0 &&
@@ -89,7 +113,7 @@ export function InitForm({
         envelopeIcons,
         onPhase: setPhase,
       });
-      onSuccess(newContractId);
+      setCreatedId(newContractId);
     } catch {
       // error surfaces via hook; reset the checklist so a retry starts fresh
       setPhase("idle");
@@ -213,6 +237,23 @@ export function InitForm({
       </div>
 
       <StepDots current={step} total={2} />
+
+      {createdId ? (
+        // Backdrop tap skips the hold and navigates immediately; the timer
+        // covers everyone else. Both paths push the same route, so a
+        // double-fire is harmless.
+        <Sheet
+          onClose={() => onSuccess(createdId)}
+          role="alertdialog"
+          ariaLabel="Your Sobre is open"
+        >
+          <CenteredCopy
+            icon={<Check size={28} strokeWidth={2.5} />}
+            title="Your Sobre is open"
+            body="Taking you to it now."
+          />
+        </Sheet>
+      ) : null}
     </form>
   );
 }
@@ -254,12 +295,7 @@ const CREATE_STEPS: {
   {
     key: "deploying",
     label: "Deploying your Sobre on Stellar",
-    hint: "You'll be asked to confirm with Face ID.",
-  },
-  {
-    key: "enabling-grow",
-    label: "Enabling auto-savings",
-    hint: "One more Face ID prompt so deposits earn from day one.",
+    hint: "One Face ID prompt covers everything.",
   },
   {
     key: "mirroring",
@@ -268,11 +304,14 @@ const CREATE_STEPS: {
   },
 ];
 
+/** How long the success sheet holds before navigating to the new Sobre.
+ *  Long enough to read the confirmation, short enough to not feel stuck. */
+const SUCCESS_REDIRECT_MS = 1800;
+
+// Derived from CREATE_STEPS so the two can't drift.
 const PHASE_ORDER: CreateSobrePhase[] = [
   "idle",
-  "deploying",
-  "enabling-grow",
-  "mirroring",
+  ...CREATE_STEPS.map((s) => s.key),
   "done",
 ];
 

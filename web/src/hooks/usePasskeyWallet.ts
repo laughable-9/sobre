@@ -24,8 +24,8 @@ export interface WalletConnectionState {
    *  resolved. null while we're still hydrating the Supabase session, while
    *  passkey signup is in flight, or after sign-out. */
   address: string | null;
-  /** The full Supabase-side wallet row, useful for callers that need the DB
-   *  id (e.g. createFamilyWallet expects `myWalletDbId`). */
+  /** The full Supabase-side wallet row, useful for callers that need
+   *  fields beyond the contract address (display name, avatar, DB id). */
   wallet: WalletRow | null;
   /** The signed-in Supabase user's display name + email. Cheap to read off
    *  the session, so we expose it for consumers that would otherwise wire a
