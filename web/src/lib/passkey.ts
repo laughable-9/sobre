@@ -10,7 +10,13 @@ import {
   type Transaction,
 } from "@stellar/stellar-sdk";
 import { Buffer } from "buffer";
-import { PasskeyClient, PasskeyKit } from "passkey-kit";
+import {
+  PasskeyClient,
+  PasskeyKit,
+  PasskeyKitErrorCode,
+  ValidationError,
+  WebAuthnError,
+} from "passkey-kit";
 import { PasskeyServer } from "passkey-kit/server";
 
 import { NETWORK, PASSKEY_KIT } from "@/lib/config";
@@ -131,10 +137,9 @@ export async function signup(
   userIdentifier: string,
 ): Promise<SignupResult> {
   const kit = getKit();
-  const { keyIdBase64, contractId, signedTx } = await kit.createWallet(
-    "Sobre",
-    userIdentifier,
-  );
+  const { keyIdBase64, contractId, signedTx } = await kit
+    .createWallet("Sobre", userIdentifier)
+    .catch((err: unknown) => rethrowFriendlyCeremonyFailure(err, "register"));
   const patched = bumpDeployFeeAndResign(signedTx);
   const result = await submit(patched);
   return { keyIdBase64, contractId, hash: result.hash, ledger: result.ledger };
@@ -236,13 +241,61 @@ export async function signTransaction<T>(
   // `sign(txn, signer?, options?)` — the options bag (with `expiration`)
   // moved from the 2nd arg to the 3rd, and the signer defaults to the
   // connected passkey when undefined.
-  return (await kit.sign(
-    txn as unknown as Parameters<typeof kit.sign>[0],
-    undefined,
-    { expiration: sequence + SIG_EXPIRATION_WINDOW_LEDGERS },
-  )) as unknown as import(
-    "@stellar/stellar-sdk/contract"
-  ).AssembledTransaction<T>;
+  try {
+    return (await kit.sign(
+      txn as unknown as Parameters<typeof kit.sign>[0],
+      undefined,
+      { expiration: sequence + SIG_EXPIRATION_WINDOW_LEDGERS },
+    )) as unknown as import(
+      "@stellar/stellar-sdk/contract"
+    ).AssembledTransaction<T>;
+  } catch (err) {
+    rethrowFriendlyCeremonyFailure(err, "sign");
+  }
+}
+
+/**
+ * Rethrow a passkey ceremony failure with a message a non-technical user
+ * can act on, replacing passkey-kit's raw "WebAuthn authentication failed"
+ * / "Passkey registration failed" strings that otherwise leak through every
+ * mutation hook into the UI. The real-world causes:
+ *
+ *   - sign: the wallets row exists but the passkey lives on the device the
+ *     account was created on. Passkeys don't sync across ecosystems
+ *     (desktop Chrome vs iPhone Safari), so the OS authentication sheet
+ *     finds no credential and fails. WebAuthn reports user-cancel the same
+ *     way (NotAllowedError), so one message covers both.
+ *   - register: the device refused to create a passkey, usually because no
+ *     Face ID / fingerprint / screen lock is enrolled — plain cancel again
+ *     reports identically, so one message covers both.
+ *
+ * Matching notes (passkey-kit 0.14.0): registration ceremony failures are
+ * typed (WebAuthnError), but the signer mislabels its ceremony failure as
+ * ValidationError with INVALID_INPUT — a code shared with the expiration
+ * validator we feed via `expiration` above — so the sign arm also needs the
+ * message test to disambiguate. Keep the friendly copy under the 90-char
+ * toast truncation limit (Overlays.tsx); format.ts's friendlyError() lets
+ * these strings pass through untouched.
+ */
+const RX_SIGN_CEREMONY_FAILURE = /webauthn authentication failed/i;
+
+function rethrowFriendlyCeremonyFailure(
+  err: unknown,
+  phase: "sign" | "register",
+): never {
+  const isCeremonyFailure =
+    phase === "register"
+      ? err instanceof WebAuthnError
+      : err instanceof ValidationError &&
+        err.code === PasskeyKitErrorCode.INVALID_INPUT &&
+        RX_SIGN_CEREMONY_FAILURE.test(err.message);
+  if (!isCeremonyFailure) throw err;
+  throw new Error(
+    phase === "sign"
+      ? "Your passkey isn't on this device. Use the device you signed up on, or just try again."
+      : "Couldn't create a passkey. Set up Face ID or a screen lock, then try again.",
+    { cause: err },
+  );
 }
 
 /** How many ledgers ahead to set every passkey-signed TX's
