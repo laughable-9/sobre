@@ -109,6 +109,9 @@ export async function GET(
   }
 
   if (r.status === "funded") {
+    // While the row sits at `funded`, amount_usdc holds the XLM the
+    // relay expects from PDAX (the Horizon match amount below). It only
+    // becomes actual USDC when the credited flip overwrites it.
     if (r.amount_usdc === null) {
       // Shouldn't happen — kickoff sets amount_usdc when marking funded.
       // Bail rather than guess; surfaces in the row.
@@ -301,7 +304,10 @@ async function advanceFromFunded(args: {
       .from("pdax_deposits")
       .update({
         status: "credited",
-        amount_usdc: result.netAmount,
+        // The USDC the swap actually credited — NOT netAmount, which is
+        // the XLM the relay received. Storing XLM here made the success
+        // toast read "+ 66.38 USDC" for a P500 deposit.
+        amount_usdc: result.usdcCredited,
         withdraw_tx_hash: result.sacTransferHash,
       })
       .eq("identifier", args.identifier);

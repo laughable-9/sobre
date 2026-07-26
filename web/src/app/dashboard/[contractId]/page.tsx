@@ -541,10 +541,18 @@ function Dashboard({ contractId }: { contractId: string }) {
     setTimeout(() => setHeroPulse(false), 1500);
   };
 
-  const handleDepositSuccess = (usdcDeposited: number) => {
+  // Peso-first with the exact amount the user paid (same convention as
+  // the cashout toasts). The old copy showed the row's credited-token
+  // figure, which historically carried the XLM leg amount labeled USDC.
+  const handleDepositSuccess = (php: number) => {
     setDepositOpen(false);
     triggerHeroAnimation();
-    flash(`+ ${usdcDeposited.toFixed(2)} USDC auto-split across envelopes`, "ok");
+    flash(
+      php > 0
+        ? `+ ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} split across your envelopes`
+        : "Deposit received and split across your envelopes",
+      "ok",
+    );
     refreshAll();
   };
 
@@ -1338,9 +1346,9 @@ function Dashboard({ contractId }: { contractId: string }) {
             await activeDeposits.refresh();
             return { ok: true, alreadyPaid };
           }}
-          onSuccess={({ usdc }) => {
+          onSuccess={({ php }) => {
             setResumeDepositId(null);
-            handleDepositSuccess(usdc);
+            handleDepositSuccess(php);
           }}
         />
       ) : null}

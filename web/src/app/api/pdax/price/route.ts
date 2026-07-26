@@ -17,17 +17,15 @@
  */
 
 import { NextResponse } from "next/server";
-import { Address, nativeToScVal, xdr } from "@stellar/stellar-sdk";
 
 import {
   PAYMENT_TOKEN,
   PAYMENT_TOKEN_SAC_ID,
   PHP_PER_TOKEN_FALLBACK,
-  SOROSWAP_ROUTER_ID,
   STROOPS_PER_TOKEN,
   XLM_SAC_ID,
 } from "@/lib/config";
-import { simulateReadServer } from "@/lib/contractServer";
+import { soroswapAmountOut } from "@/lib/contractServer";
 import { pdaxEnv } from "@/lib/env";
 import { pdaxFetch, PdaxError } from "@/lib/pdax/client";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
@@ -183,24 +181,17 @@ async function pdaxPhpPerToken(quoteCurrency: string): Promise<number> {
  */
 async function effectivePhpPerUsdc(legs: RateLegs): Promise<number> {
   // Independent upstreams — quote them concurrently. A pool-leg failure
-  // resolves to null (simulateReadServer swallows) rather than rejecting,
+  // resolves to null (soroswapAmountOut swallows) rather than rejecting,
   // so Promise.all cannot mask the PDAX error path.
-  const [phpPerXlm, amounts] = await Promise.all([
+  const [phpPerXlm, xlmOut] = await Promise.all([
     pdaxPhpPerToken("XLM"),
-    simulateReadServer<bigint[]>(
-      SOROSWAP_ROUTER_ID,
-      "router_get_amounts_out",
-      [
-        nativeToScVal(STROOPS_PER_TOKEN, { type: "i128" }),
-        xdr.ScVal.scvVec([
-          Address.fromString(PAYMENT_TOKEN_SAC_ID).toScVal(),
-          Address.fromString(XLM_SAC_ID).toScVal(),
-        ]),
-      ],
+    soroswapAmountOut(
+      PAYMENT_TOKEN_SAC_ID,
+      XLM_SAC_ID,
+      BigInt(STROOPS_PER_TOKEN),
     ),
   ]);
-  const xlmOut = amounts?.[amounts.length - 1];
-  if (typeof xlmOut !== "bigint" || xlmOut <= 0n) {
+  if (xlmOut === null) {
     legs.effective = false;
     return pdaxPhpPerToken("USDC");
   }

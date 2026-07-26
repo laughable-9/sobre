@@ -10,11 +10,19 @@
 import type { WalletState } from "@/hooks/useWalletState";
 import { ENVELOPE_LABELS, type EnvelopeName } from "@/lib/config";
 
+/** The slice of WalletState the total math needs. Narrow so callers
+ *  holding only a raw get_state record (e.g. useSobreSummary) can build
+ *  it via normalizeEarnState + toBigInt without the full parse. */
+export type WalletBalancesView = Pick<
+  WalletState,
+  "balances" | "earn" | "grow_balance"
+>;
+
 /** Cache balance + USDY current value for one envelope. Everything the
  *  family can access from that envelope in the same tx (spends
  *  auto-redeem the shortfall). */
 export function envelopeTotalStroops(
-  state: WalletState,
+  state: Pick<WalletState, "balances" | "earn">,
   index: number,
 ): bigint {
   const cache = state.balances[index] ?? 0n;
@@ -29,14 +37,17 @@ export function envelopeTotalStroops(
 /** Grow's real value in USDC stroops. The contract already sums the
  *  idle cache and the Blend-XLM-underlying-in-USDC-terms via a live
  *  Soroswap quote, so this is just a passthrough. */
-export function growTotalStroops(state: WalletState): bigint {
+export function growTotalStroops(
+  state: Pick<WalletState, "grow_balance">,
+): bigint {
   return state.grow_balance;
 }
 
 /** Wallet-wide total: every envelope's real balance + Grow's real value.
- *  Used by BalanceHero's "Total balance" number so it lines up with what
- *  the yield cards and the envelope rows show individually. */
-export function walletTotalStroops(state: WalletState): bigint {
+ *  Used by BalanceHero's "Total balance" number and the My Sobres card
+ *  so they line up with what the yield cards and the envelope rows show
+ *  individually. */
+export function walletTotalStroops(state: WalletBalancesView): bigint {
   let sum = 0n;
   for (let i = 0; i < state.balances.length; i++) {
     sum += envelopeTotalStroops(state, i);

@@ -391,7 +391,7 @@ function normalizeGrowRequests(raw: unknown): GrowWithdrawRequest[] {
  * `envelope` inside each position is a Soroban enum unit variant — decoded
  * by `scValToNative` as `["Groceries"]`-style single-element array.
  */
-function normalizeEarnState(raw: unknown): EarnState | null {
+export function normalizeEarnState(raw: unknown): EarnState | null {
   if (!Array.isArray(raw) || raw.length === 0) return null;
   const outer = raw[0] as Record<string, unknown>;
   const positionsRaw = Array.isArray(outer.positions) ? outer.positions : [];
@@ -412,7 +412,7 @@ function normalizeEarnState(raw: unknown): EarnState | null {
   };
 }
 
-function toBigInt(v: unknown): bigint {
+export function toBigInt(v: unknown): bigint {
   if (typeof v === "bigint") return v;
   if (v === null || v === undefined) return 0n;
   return BigInt(String(v));
