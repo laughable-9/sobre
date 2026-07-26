@@ -12,15 +12,17 @@
 import "server-only";
 import {
   Account,
+  Address,
   BASE_FEE,
   Contract,
   TransactionBuilder,
+  nativeToScVal,
   rpc,
   scValToNative,
   xdr,
 } from "@stellar/stellar-sdk";
 
-import { NETWORK } from "@/lib/config";
+import { NETWORK, SOROSWAP_ROUTER_ID } from "@/lib/config";
 
 // Stub source account for read-only simulations. simulateTransaction
 // doesn't care about source sequence/signature, so any well-formed G
@@ -56,6 +58,32 @@ export async function simulateReadServer<T>(
   } catch {
     return null;
   }
+}
+
+/**
+ * Quote the Soroswap router: how much `toSacId` comes out for `amountIn`
+ * of `fromSacId`. Shared by the effective-rate price route (USDC → XLM)
+ * and the deposit pipeline's credited-amount fallback (XLM → USDC).
+ * Returns null on any simulate failure or non-positive quote.
+ */
+export async function soroswapAmountOut(
+  fromSacId: string,
+  toSacId: string,
+  amountIn: bigint,
+): Promise<bigint | null> {
+  const amounts = await simulateReadServer<bigint[]>(
+    SOROSWAP_ROUTER_ID,
+    "router_get_amounts_out",
+    [
+      nativeToScVal(amountIn, { type: "i128" }),
+      xdr.ScVal.scvVec([
+        Address.fromString(fromSacId).toScVal(),
+        Address.fromString(toSacId).toScVal(),
+      ]),
+    ],
+  );
+  const out = amounts?.[amounts.length - 1];
+  return typeof out === "bigint" && out > 0n ? out : null;
 }
 
 /** Delay schedule (ms between attempts) for a Soroban read that races the

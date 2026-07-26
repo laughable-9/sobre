@@ -124,7 +124,7 @@ export function PdaxDepositModal({
   ) => Promise<{ ok: boolean; alreadyPaid?: boolean }>;
   /** Fired when the modal reaches the credited terminal state. Parent
    *  uses it for post-success side effects (hero animation, refresh). */
-  onSuccess?: (info: { usdc: number; stroops: bigint }) => void;
+  onSuccess?: (info: { php: number }) => void;
   /** When set, the modal hydrates state from this existing deposit row
    *  and skips the input/preparing steps. The user lands on whichever
    *  phase matches the row's current status (typically `awaiting` or
@@ -222,14 +222,12 @@ export function PdaxDepositModal({
       setCelebration("funds_arrived");
       // Fire onSuccess exactly once on the funded → credited transition
       // so the parent can trigger the hero animation and refresh chains.
-      // row.amount_usdc is populated by phase-2 before we flip credited.
-      const amount = row?.amount_usdc;
+      // Passes the peso amount the user actually paid — exact, always
+      // present, and what the toast shows (same convention as the
+      // cashout flow's `php`). The credited-USDC figure lives on the row
+      // for accounting; display derives from the refreshed balances.
       const cb = onSuccessRef.current;
-      if (amount && cb) {
-        const usdc = Number(amount);
-        const stroops = BigInt(Math.round(usdc * 10_000_000));
-        cb({ usdc, stroops });
-      }
+      if (cb) cb({ php: Number(row?.amount_php ?? 0) });
       const t = setTimeout(() => setCelebration(null), 1500);
       return () => clearTimeout(t);
     }

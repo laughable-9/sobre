@@ -256,6 +256,10 @@ async function resurrectOne(
       .from("pdax_deposits")
       .update({
         status: "funded",
+        // XLM at this stage, despite the column name: poll-status feeds
+        // this into the Horizon incoming-payment match. Phase 2
+        // overwrites it with the credited USDC when flipping to
+        // `credited` — do not "fix" one side without the other.
         amount_usdc: netAmount,
         token_currency: PAYMENT_TOKEN,
         withdraw_tx_hash: null,

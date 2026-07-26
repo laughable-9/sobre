@@ -3,7 +3,12 @@
 import { useEffect, useState } from "react";
 
 import { simulateRead } from "@/lib/contract";
-import type { Member } from "@/hooks/useWalletState";
+import {
+  normalizeEarnState,
+  toBigInt,
+  type Member,
+} from "@/hooks/useWalletState";
+import { walletTotalStroops } from "@/lib/walletTotals";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 export interface SobreSummary {
@@ -144,8 +149,16 @@ export function useSobreSummary(
                     : BigInt(String(s.balance ?? 0)),
               }))
             : [];
-          const balances = (raw.balances as bigint[] | undefined) ?? [];
-          totalStroops = balances.reduce((acc, b) => acc + b, 0n);
+          // Same math as the dashboard hero, via the shared walletTotals
+          // helper: envelope caches + USDY positions + Grow. Summing raw
+          // `balances` alone understated wallets with Earn on (Savings'
+          // cache reads 0 right after every deposit routes it into USDY),
+          // which made this card disagree with the dashboard.
+          totalStroops = walletTotalStroops({
+            balances: (raw.balances as bigint[] | undefined) ?? [],
+            earn: normalizeEarnState(raw.earn),
+            grow_balance: toBigInt(raw.grow_balance),
+          });
           chainWalletName = String(raw.wallet_name ?? "");
         } else {
           chainFailed = true;

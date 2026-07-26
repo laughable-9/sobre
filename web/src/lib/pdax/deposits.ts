@@ -5,7 +5,13 @@
 
 import "server-only";
 
-import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
+import {
+  NETWORK,
+  PAYMENT_TOKEN_SAC_ID,
+  STROOPS_PER_TOKEN,
+  XLM_SAC_ID,
+} from "@/lib/config";
+import { soroswapAmountOut } from "@/lib/contractServer";
 import { pdaxFetch } from "@/lib/pdax/client";
 import {
   depositFromXlmToSobre,
@@ -238,7 +244,16 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   claimSacTransfer: () => Promise<boolean>;
 }): Promise<
   | { state: "still_pending" }
-  | { state: "completed"; sacTransferHash: string; netAmount: number }
+  | {
+      state: "completed";
+      sacTransferHash: string;
+      netAmount: number;
+      /** USDC the swap actually credited to the envelopes, in whole
+       *  tokens. From the deposit event in the invoke's simulation; falls
+       *  back to a router quote when extraction fails. This is what
+       *  `pdax_deposits.amount_usdc` must store — netAmount is XLM. */
+      usdcCredited: number;
+    }
 > {
   const horizonHit = await findIncomingPaymentAtRelay({
     expectedAmount: args.expectedNetAmount,
@@ -253,16 +268,37 @@ export async function tryCompleteWithdrawAndTransfer(args: {
   // Pass percentages straight through — the contract splits the actual
   // Soroswap payout so we don't need to pre-compute USDC amounts here
   // (which would need a live rate quote and risks mismatch).
-  const sacTransferHash = await depositFromXlmToSobre({
-    familyContractId: args.familyContractId,
-    relayXlmStroops: xlmStroops,
-    percents: args.percents,
-  });
+  const { hash: sacTransferHash, usdcCreditedStroops } =
+    await depositFromXlmToSobre({
+      familyContractId: args.familyContractId,
+      relayXlmStroops: xlmStroops,
+      percents: args.percents,
+    });
+  const usdcCredited =
+    usdcCreditedStroops !== null
+      ? Number(usdcCreditedStroops) / STROOPS_PER_TOKEN
+      : await quoteXlmToUsdc(xlmStroops);
   return {
     state: "completed",
     sacTransferHash,
     netAmount: horizonHit.amount,
+    usdcCredited,
   };
+}
+
+/** Router-quote fallback for the credited-USDC amount when the deposit
+ *  event couldn't be extracted from the executed transaction. Quoted
+ *  AFTER our own swap moved the pool, so it reads systematically low
+ *  (not just drift) — acceptable for a display figure on a rare path.
+ *  Last resort (quote also unavailable) is 0, which the UI treats as
+ *  "amount unknown" — better than an XLM amount labeled USDC. */
+async function quoteXlmToUsdc(xlmStroops: bigint): Promise<number> {
+  const usdcOut = await soroswapAmountOut(
+    XLM_SAC_ID,
+    PAYMENT_TOKEN_SAC_ID,
+    xlmStroops,
+  );
+  return usdcOut === null ? 0 : Number(usdcOut) / STROOPS_PER_TOKEN;
 }
 
 interface HorizonPayment {

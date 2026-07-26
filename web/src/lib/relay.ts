@@ -26,6 +26,9 @@ import {
   TransactionBuilder,
   nativeToScVal,
   rpc,
+  scValToNative,
+  StrKey,
+  xdr,
 } from "@stellar/stellar-sdk";
 
 import { NETWORK, STROOPS_PER_TOKEN } from "@/lib/config";
@@ -66,7 +69,7 @@ export async function depositFromXlmToSobre(args: {
   familyContractId: string;
   relayXlmStroops: bigint;
   percents: readonly [number, number, number];
-}): Promise<string> {
+}): Promise<{ hash: string; usdcCreditedStroops: bigint | null }> {
   const server = getServer();
   const kp = getRelayKeypair();
 
@@ -109,7 +112,22 @@ export async function depositFromXlmToSobre(args: {
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     const status = await server.getTransaction(hash);
-    if (status.status === "SUCCESS") return hash;
+    if (status.status === "SUCCESS") {
+      // The SUCCESS response carries the EXECUTED contract events —
+      // Sobre's `Deposit` event holds the USDC the swap actually
+      // credited (deposit_from_xlm itself returns nothing). Callers
+      // fall back to a router quote when extraction returns null.
+      const events =
+        (status as { events?: { contractEventsXdr?: xdr.ContractEvent[][] } })
+          .events?.contractEventsXdr ?? [];
+      return {
+        hash,
+        usdcCreditedStroops: extractDepositEventAmount(
+          events,
+          args.familyContractId,
+        ),
+      };
+    }
     if (status.status === "FAILED") {
       throw new Error(
         `relay deposit_from_xlm FAILED on chain: ${JSON.stringify(decodeResultXdr(status))}`,
@@ -118,6 +136,47 @@ export async function depositFromXlmToSobre(args: {
     await new Promise((r) => setTimeout(r, 1_000));
   }
   throw new Error(`relay deposit_from_xlm ${hash} did not confirm within 30s`);
+}
+
+/** Pull the USDC amount out of the FAMILY contract's `Deposit` event.
+ *  The contract-id filter is load-bearing: MockUSDY emits its own
+ *  `Deposit` event (the Savings slice routed into USDY) earlier in the
+ *  same transaction, and matching by topic alone would report that
+ *  slice as the whole deposit. Topic compare is case-insensitive to
+ *  match useTxFeed's decoding idiom. Returns null when nothing decodes
+ *  (wasm change, RPC shape drift) — callers treat that as "amount
+ *  unknown" rather than failing the deposit. */
+function extractDepositEventAmount(
+  eventGroups: xdr.ContractEvent[][],
+  familyContractId: string,
+): bigint | null {
+  for (const group of eventGroups) {
+    for (const evt of group) {
+      try {
+        const rawId = evt.contractId();
+        if (!rawId) continue;
+        // xdr Opaque accessors return the Buffer directly; keep the
+        // .value() branch in case a future SDK wraps it.
+        const idBuf = Buffer.isBuffer(rawId)
+          ? rawId
+          : (rawId as unknown as { value(): Buffer }).value();
+        if (StrKey.encodeContract(idBuf) !== familyContractId) continue;
+        const body = evt.body().v0();
+        const firstTopic = body.topics()[0];
+        if (!firstTopic || firstTopic.switch().name !== "scvSymbol") continue;
+        if (String(scValToNative(firstTopic)).toLowerCase() !== "deposit") {
+          continue;
+        }
+        const data = scValToNative(body.data()) as { amount?: unknown };
+        if (typeof data?.amount === "bigint" && data.amount > 0n) {
+          return data.amount;
+        }
+      } catch {
+        // skip undecodable events
+      }
+    }
+  }
+  return null;
 }
 
 function decodeResultXdr(status: {
