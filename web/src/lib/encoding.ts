@@ -31,11 +31,10 @@ export async function sha256(bytes: Uint8Array): Promise<Uint8Array> {
   return new Uint8Array(digest);
 }
 
-/** Build the invite URL the admin shares. Hardcoded to `APP_ORIGIN` so a
- *  link minted from `localhost:3000` during local dev still resolves to the
- *  deployed app when the recipient opens it. `variant` maps to the `?as=`
- *  query the landing page reads to pick the join flow. Owns the URL shape
- *  for every invite type — do not decorate `?as=` at the call site. */
+/** Build the invite URL the admin shares, on `APP_ORIGIN` (see config.ts
+ *  for why that stays hardcoded). `variant` maps to the `?as=` query the
+ *  landing page reads to pick the join flow. Owns the URL shape for every
+ *  invite type — do not decorate `?as=` at the call site. */
 export function buildInviteUrl(
   contractId: string,
   tokenBase64Url: string,
