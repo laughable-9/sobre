@@ -91,10 +91,11 @@ export const PAYMENT_TOKEN_SAC_ID: string =
  *  one-line change in this file, not a 9-site sweep. */
 export const PAYMENT_TOKEN_LABEL: string = PAYMENT_TOKEN;
 
-/** Origin used in invite URLs the admin shares. Hardcoded to the deployed
- *  domain so a link generated from `localhost:3000` during local dev still
- *  resolves to the production app when the recipient opens it. */
-export const APP_ORIGIN = "https://sobre-mocha.vercel.app";
+/** Canonical public origin of the deployed app: invite URLs the admin
+ *  shares, plus `metadataBase` / `og:url` in the root layout. Hardcoded so
+ *  a link generated from `localhost:3000` during local dev still resolves
+ *  to the production app when the recipient opens it. */
+export const APP_ORIGIN = "https://usesobre.xyz";
 
 /** Defensive client-side ceiling for `family_wallets.admin_cap`. The DB
  *  CHECK guards `>= 1` only, but the household model tops out well before

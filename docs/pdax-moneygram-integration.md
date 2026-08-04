@@ -173,7 +173,7 @@ Accept: application/json
 - Submit a KYB (Know Your Business) application at `business.moneygram.com`
 - Sign a legal agreement with MoneyGram
 - Add the Sobre app domain to their wallet allowlist — email `[email protected]`
-- Host a valid `stellar.toml` file at `https://sobre-mocha.vercel.app/.well-known/stellar.toml`
+- Host a valid `stellar.toml` file at `https://usesobre.xyz/.well-known/stellar.toml` (the app domain, `APP_ORIGIN` in `web/src/lib/config.ts`)
 - Pass certification by submitting test cases through their sandbox
 
 ### Sandbox limits
@@ -247,7 +247,7 @@ Both `deposit()` and `spend()` are already implemented and working. The integrat
 ## Open questions
 
 1. **PDAX USDC support** — the target path is USDC → PHP. This needs to be confirmed with PDAX before committing to the USDC contract redeploy. If PDAX does not support USDC → PHP, XLM remains the fallback and the three-step chain applies.
-2. **stellar.toml** — MoneyGram requires Sobre to host a valid `stellar.toml` at the app domain before the allowlist application can proceed. This file needs to be created at `https://sobre-mocha.vercel.app/.well-known/stellar.toml`.
+2. **stellar.toml** — MoneyGram requires Sobre to host a valid `stellar.toml` at the app domain before the allowlist application can proceed. This file needs to be created at `https://usesobre.xyz/.well-known/stellar.toml` (the app domain, `APP_ORIGIN` in `web/src/lib/config.ts`).
 3. **KYC on PDAX** — does the family member need a separate PDAX account, or can Sobre embed PDAX's hosted KYC flow inside the app?
 4. **USDC deposit address** — PDAX requires the token to arrive at the user's PDAX deposit address, not the Sobre contract. The spend() call sends tokens to the member's personal wallet first. A cleaner implementation would use the PDAX deposit address as the spend destination directly.
 5. **Exchange rate source** — the app currently shows XLM/PHP rates from CoinGecko. With the USDC path, this should switch to a USDC/PHP rate, and the PDAX quote rate should take precedence during cashout since that is the actual rate the member receives.
