@@ -6,6 +6,8 @@ Drop the deployment proof images here. The README references them by these exact
 |---|---|
 | `mainnet.png` | Stellar Expert page for the mainnet SobreFactory.<br>URL to screenshot: https://stellar.expert/explorer/public/contract/CBXBBFCFVDGJANUAQUJG7I6YQ5YV7SSUM4QXB4ZCQYZ7VXAM4O3NIAUO |
 | `testnet.png` | Stellar Expert page for the testnet SobreFactory.<br>URL to screenshot: https://stellar.expert/explorer/testnet/contract/CCPPCLVRQO7LPRHLGH7KXWZFSCXGODVZD7VAZOCV5JVDSWQ4NMZMBT2X |
+| `award.jpg` | Best Use of Stellar award moment, Build the Future of Finance Hackathon PH (2026) |
+| `apac-award.jpg` | 3rd Prize announcement, DeFi & Ecosystem Composability, APAC Stellar Grand Finale (2026) |
 
 ## How to capture
 

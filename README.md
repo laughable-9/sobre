@@ -1,4 +1,9 @@
-> ## 🏆 Winner — Best Use of Stellar
+> ## 🥉 3rd Prize · DeFi & Ecosystem Composability
+> **Rise In × Stellar APAC Grand Finale (2026)** · 30 finalists across APAC
+
+![Sobre wins 3rd Prize in DeFi & Ecosystem Composability at the APAC Stellar Grand Finale](./screenshots/apac-award.jpg)
+
+> ## 🏆 Winner · Best Use of Stellar
 > **Build the Future of Finance Hackathon PH (2026)** · [Read the recap on BitDigest →](https://www.bitdigest.io/posts/filipino-builders-are-ready-the-build-the-future-of-finance-hackathon-proved-it)
 
 ![Team Legends — Best Use of Stellar, Build the Future of Finance Hackathon PH](./screenshots/award.jpg)
@@ -11,7 +16,7 @@
 
 Sobre is a shared family wallet for OFW households, built on Stellar. Payment inflows arrive on chain and a Soroban contract atomically splits them across three named envelopes (e.g. Groceries, Tuition, Savings) by admin-set percentages. Both the OFW abroad and the family at home see the same balances update in real time, with the Savings envelope earning yield through Ondo's USDY (mocked on testnet) and an optional 48-hour-timelocked Grow bucket that supplies into Blend.
 
-Currently building for the [Rise In × Stellar APAC Hackathon](https://www.risein.com/programs/build-on-stellar-philippines-hackathon), Philippines track. Demo day May 23, 2026, PDAX Office, Manila.
+Built for the [Rise In × Stellar APAC Hackathon](https://www.risein.com/programs/build-on-stellar-philippines-hackathon), Philippines track (demo day May 23, 2026, PDAX Office, Manila). Sobre advanced to the APAC Grand Finale and took **3rd Prize in DeFi & Ecosystem Composability**.
 
 ## 🧩 Problem
 
@@ -261,9 +266,9 @@ You'll need Supabase credentials in `web/.env.local` for the family metadata + P
 
 ## 🎥 Demo
 
-- 🔗 **Live App:** [sobre-mocha.vercel.app](https://sobre-mocha.vercel.app) (testnet)
-- 🎬 **Demo Video:** in progress for APAC demo day
-- 🖼️ **Pitch Deck:** in progress
+- 🔗 **Live App:** [usesobre.xyz](https://usesobre.xyz) (testnet)
+- 🎬 **Demo Video:** [Watch on Google Drive](https://drive.google.com/file/d/1Hp3GsVzXy24QNTs9KDbIk4GO8r5CTFqH/view?usp=sharing)
+- 🖼️ **Pitch Deck:** [View on Canva](https://canva.link/cfi7w4oas9k7z5z)
 
 ## 👨‍💻 Team
 
