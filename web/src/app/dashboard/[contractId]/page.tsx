@@ -38,6 +38,8 @@ import { RenameWalletModal } from "@/components/sobre/RenameWalletModal";
 import { Reveal } from "@/components/sobre/Reveal";
 import { SplitLegendBar } from "@/components/sobre/SplitLegendBar";
 import { CloseWalletModal } from "@/components/sobre/CloseWalletModal";
+import { CryptoWithdrawModal } from "@/components/sobre/CryptoWithdrawModal";
+import { DepositModal } from "@/components/sobre/DepositModal";
 import { PdaxDepositModal } from "@/components/sobre/PdaxDepositModal";
 import { PdaxWithdrawModal } from "@/components/sobre/PdaxWithdrawModal";
 import {
@@ -70,7 +72,12 @@ import { useSplitProposals } from "@/hooks/useSplitProposals";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import { useTxFeed } from "@/hooks/useTxFeed";
 import { useWalletState } from "@/hooks/useWalletState";
-import { ENVELOPE_LABELS, LOGO_SRC, type EnvelopeName } from "@/lib/config";
+import {
+  ENVELOPE_LABELS,
+  LOGO_SRC,
+  pdaxFlowActive,
+  type EnvelopeName,
+} from "@/lib/config";
 import { isSobreClosed } from "@/lib/closedSobres";
 import { expenseLogsToFeedEvents } from "@/lib/expenseLogFeed";
 import { forgetJoinedSobre } from "@/lib/joinedSobres";
@@ -1282,108 +1289,142 @@ function Dashboard({ contractId }: { contractId: string }) {
         <Celebration message={celebration.msg} kind={celebration.kind} />
       ) : null}
 
+      {/* With the PDAX ramps off, Add money and Cash out route to the
+          crypto flows instead. Flipping RAMPS_AVAILABLE back to true
+          restores the fiat modals untouched. A resume id always wins:
+          a half-finished PDAX row from before the shutoff can only be
+          driven to completion by the PDAX modal. */}
       {depositOpen ? (
-        <PdaxDepositModal
-          state={state}
-          contractId={contractId}
-          resumeIdentifier={resumeDepositId ?? undefined}
-          onActiveIdentifierChange={setActiveDepositId}
-          onClose={() => {
-            setDepositOpen(false);
-            setResumeDepositId(null);
-            void activeDeposits.refresh();
-          }}
-          onAttemptCancel={async (identifier) => {
-            // Run /cancel, flash the right toast, and report
-            // alreadyPaid back to the modal. The modal decides
-            // whether to close (200) or stay open (409). Keeping
-            // the modal open in the 409 path avoids the misleading
-            // "Awaiting payment · tap to resume" entry in the
-            // activity feed for a row that's already paid — the
-            // user instead watches their deposit advance.
-            let alreadyPaid = false;
-            if (identifier) {
-              try {
-                const res = await fetch(
-                  `/api/pdax/deposits/${identifier}/cancel`,
-                  { method: "POST" },
-                );
-                if (res.status === 409) alreadyPaid = true;
-              } catch {
-                // best effort; the TTL sweep will catch it eventually
-                return { ok: false };
+        pdaxFlowActive(resumeDepositId) ? (
+          <PdaxDepositModal
+            state={state}
+            contractId={contractId}
+            resumeIdentifier={resumeDepositId ?? undefined}
+            onActiveIdentifierChange={setActiveDepositId}
+            onClose={() => {
+              setDepositOpen(false);
+              setResumeDepositId(null);
+              void activeDeposits.refresh();
+            }}
+            onAttemptCancel={async (identifier) => {
+              // Run /cancel, flash the right toast, and report
+              // alreadyPaid back to the modal. The modal decides
+              // whether to close (200) or stay open (409). Keeping
+              // the modal open in the 409 path avoids the misleading
+              // "Awaiting payment · tap to resume" entry in the
+              // activity feed for a row that's already paid — the
+              // user instead watches their deposit advance.
+              let alreadyPaid = false;
+              if (identifier) {
+                try {
+                  const res = await fetch(
+                    `/api/pdax/deposits/${identifier}/cancel`,
+                    { method: "POST" },
+                  );
+                  if (res.status === 409) alreadyPaid = true;
+                } catch {
+                  // best effort; the TTL sweep will catch it eventually
+                  return { ok: false };
+                }
               }
-            }
-            flash(
-              alreadyPaid
-                ? "PDAX already received your payment. Finishing your deposit."
-                : "Deposit cancelled.",
-              alreadyPaid ? "ok" : "warn",
-            );
-            if (alreadyPaid && identifier) {
-              // Fire-and-forget kick so the row advances from
-              // pending → funded server-side promptly, even if the
-              // user closes the tab. The modal's own poll-status
-              // loop is still firing in parallel; this is the
-              // belt-and-suspenders kick for the case where the
-              // user closes the modal right after the 409.
-              void fetch(
-                `/api/pdax/deposits/${identifier}/poll-status`,
-              ).catch(() => {});
-            } else if (identifier) {
-              // 200 OK cancel path: PDAX's /fiat/transactions reporting
-              // can lag the actual settlement, so the cancel went
-              // through even though the user really did pay. Schedule
-              // re-refreshes — the active route's resurrect pass scans
-              // recently-cancelled rows and re-checks PDAX, resurrecting
-              // any that PDAX has since marked COMPLETED. Two delays
-              // (5s + 15s) catch PDAX's typical reporting lag; the 30s
-              // tick is covered by useActiveDeposits' own heartbeat.
-              for (const delay of [5_000, 15_000]) {
-                setTimeout(() => void activeDeposits.refresh(), delay);
+              flash(
+                alreadyPaid
+                  ? "PDAX already received your payment. Finishing your deposit."
+                  : "Deposit cancelled.",
+                alreadyPaid ? "ok" : "warn",
+              );
+              if (alreadyPaid && identifier) {
+                // Fire-and-forget kick so the row advances from
+                // pending → funded server-side promptly, even if the
+                // user closes the tab. The modal's own poll-status
+                // loop is still firing in parallel; this is the
+                // belt-and-suspenders kick for the case where the
+                // user closes the modal right after the 409.
+                void fetch(
+                  `/api/pdax/deposits/${identifier}/poll-status`,
+                ).catch(() => {});
+              } else if (identifier) {
+                // 200 OK cancel path: PDAX's /fiat/transactions reporting
+                // can lag the actual settlement, so the cancel went
+                // through even though the user really did pay. Schedule
+                // re-refreshes — the active route's resurrect pass scans
+                // recently-cancelled rows and re-checks PDAX, resurrecting
+                // any that PDAX has since marked COMPLETED. Two delays
+                // (5s + 15s) catch PDAX's typical reporting lag; the 30s
+                // tick is covered by useActiveDeposits' own heartbeat.
+                for (const delay of [5_000, 15_000]) {
+                  setTimeout(() => void activeDeposits.refresh(), delay);
+                }
               }
-            }
-            await activeDeposits.refresh();
-            return { ok: true, alreadyPaid };
-          }}
-          onSuccess={({ php }) => {
-            setResumeDepositId(null);
-            handleDepositSuccess(php);
-          }}
-        />
+              await activeDeposits.refresh();
+              return { ok: true, alreadyPaid };
+            }}
+            onSuccess={({ php }) => {
+              setResumeDepositId(null);
+              handleDepositSuccess(php);
+            }}
+          />
+        ) : (
+          <DepositModal
+            userAddress={address}
+            state={state}
+            contractId={contractId}
+            onClose={() => setDepositOpen(false)}
+            onSuccess={({ php }) => handleDepositSuccess(php)}
+          />
+        )
       ) : null}
 
       {cashoutOpen ? (
-        <PdaxWithdrawModal
-          userAddress={address}
-          state={state}
-          contractId={contractId}
-          familyWalletId={familyWalletId}
-          memberWalletDbId={wallet.wallet?.id ?? null}
-          resumeIdentifier={resumeCashoutId ?? undefined}
-          onActiveIdentifierChange={setActiveCashoutId}
-          initialEnvelope={cashoutInitialEnvelope}
-          onClose={() => {
-            // Modal closes while the row may still be transferred /
-            // converted / processing. The activity feed picks it up and
-            // tracks it through to `paid`, at which point the toast
-            // below fires from the auto-driver path.
-            setCashoutOpen(false);
-            setResumeCashoutId(null);
-            void activeCashouts.refresh();
-          }}
-          onSuccess={({ php }) => {
-            // Only fires when the row hit `paid`, which now means
-            // PDAX confirmed bank settlement (webhook) OR the
-            // post-processing grace period elapsed without a failure.
-            setResumeCashoutId(null);
-            flash(
-              `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
-              "ok",
-            );
-            refreshAll();
-          }}
-        />
+        pdaxFlowActive(resumeCashoutId) ? (
+          <PdaxWithdrawModal
+            userAddress={address}
+            state={state}
+            contractId={contractId}
+            familyWalletId={familyWalletId}
+            memberWalletDbId={wallet.wallet?.id ?? null}
+            resumeIdentifier={resumeCashoutId ?? undefined}
+            onActiveIdentifierChange={setActiveCashoutId}
+            initialEnvelope={cashoutInitialEnvelope}
+            onClose={() => {
+              // Modal closes while the row may still be transferred /
+              // converted / processing. The activity feed picks it up and
+              // tracks it through to `paid`, at which point the toast
+              // below fires from the auto-driver path.
+              setCashoutOpen(false);
+              setResumeCashoutId(null);
+              void activeCashouts.refresh();
+            }}
+            onSuccess={({ php }) => {
+              // Only fires when the row hit `paid`, which now means
+              // PDAX confirmed bank settlement (webhook) OR the
+              // post-processing grace period elapsed without a failure.
+              setResumeCashoutId(null);
+              flash(
+                `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} landed in your bank`,
+                "ok",
+              );
+              refreshAll();
+            }}
+          />
+        ) : (
+          <CryptoWithdrawModal
+            userAddress={address}
+            contractId={contractId}
+            state={state}
+            familyWalletId={familyWalletId}
+            memberWalletDbId={wallet.wallet?.id ?? null}
+            initialEnvelope={cashoutInitialEnvelope}
+            onClose={() => setCashoutOpen(false)}
+            onSuccess={({ php }) => {
+              flash(
+                `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to the wallet`,
+                "ok",
+              );
+              refreshAll();
+            }}
+          />
+        )
       ) : null}
 
       {envActionsFor ? (

@@ -83,7 +83,7 @@ export const DASHBOARD_TOUR_STEPS: TourStep[] = [
     id: "envelope-card",
     anchor: "envelope-card-first",
     title: "Tap any envelope",
-    body: "Cash out to your bank, send to a family member, or move money between envelopes.",
+    body: "Cash out, send to a family member, or move money between envelopes.",
     placement: "top",
     requiresTab: "envelopes",
   },
@@ -121,7 +121,7 @@ export const DASHBOARD_TOUR_STEPS: TourStep[] = [
     id: "open-sobre-features",
     anchor: "sobre-sheet-actions",
     title: "What's inside",
-    body: "Add money (deposit via PDAX), Cash out to your bank, Send to a family member, or Log a household expense.",
+    body: "Add money, cash out, send to a family member, or log a household expense.",
     placement: "top",
   },
   {

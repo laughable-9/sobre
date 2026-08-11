@@ -160,6 +160,20 @@ export const MOCK_USDY_ID: string =
  *  the XLM SAC and drop this gate if Earn needs to work on XLM. */
 export const EARN_AVAILABLE: boolean = PAYMENT_TOKEN === "USDC";
 
+/** PDAX fiat ramps shut down after the hackathon. When false, the Add
+ *  money and Cash out entry points stay fully enabled but route to the
+ *  crypto flows (DepositModal / CryptoWithdrawModal) instead of the PDAX
+ *  bank modals. Flipping this back to true restores the fiat flows with
+ *  no other change; the PDAX code stays in place either way. */
+export const RAMPS_AVAILABLE = false;
+
+/** Which cashout/deposit flow should render: the PDAX bank modal or the
+ *  crypto one. A resume id means a legacy PDAX transaction must be driven
+ *  to completion, so it always wins even while the ramps are off. */
+export function pdaxFlowActive(resumeId?: string | null): boolean {
+  return RAMPS_AVAILABLE || Boolean(resumeId);
+}
+
 /**
  * User-facing APY pill copies. Earn (USDY) and Grow (Blend lending) have
  * different risk/rate profiles per the PM's SEC-disclosure ask — never
