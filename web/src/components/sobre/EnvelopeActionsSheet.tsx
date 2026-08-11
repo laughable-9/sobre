@@ -4,6 +4,7 @@ import { ArrowDownToLine, ArrowLeftRight, Send } from "lucide-react";
 
 import {
   PHP_PER_USDC,
+  RAMPS_AVAILABLE,
   STROOPS_PER_USDC,
   displayEnvelopeName,
   type EnvelopeName,
@@ -31,9 +32,9 @@ interface Props {
  * Bottom sheet that opens when the user taps an envelope card. Presents
  * the two real actions an OFW family cares about:
  *
- *  1. **Cash out to bank** — pull pesos into the registered InstaPay
- *     account. This is the only real off-ramp; the sole reason the
- *     wallet holds USDC underneath is to make this fast + cheap.
+ *  1. **Cash out** — pull money out of the envelope. With the PDAX
+ *     ramps live that means pesos into the registered InstaPay account;
+ *     with RAMPS_AVAILABLE off it means USDC to a wallet address.
  *
  *  2. **Send to family member** — top up a supplementary account's
  *     spendable balance from this envelope. Admin-only (members
@@ -108,8 +109,12 @@ export function EnvelopeActionsSheet({
       >
         <ActionRow
           icon={<ArrowDownToLine size={20} strokeWidth={2} />}
-          title="Cash out to bank"
-          subtitle="Send pesos to your InstaPay bank account"
+          title={RAMPS_AVAILABLE ? "Cash out to bank" : "Cash out"}
+          subtitle={
+            RAMPS_AVAILABLE
+              ? "Send pesos to your InstaPay bank account"
+              : "Withdraw to a crypto wallet"
+          }
           disabled={isEmpty}
           onClick={onCashOut}
         />

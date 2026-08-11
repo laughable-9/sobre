@@ -9,6 +9,7 @@ import {
 } from "@phosphor-icons/react";
 
 import { Sheet } from "@/components/sobre/Sheet";
+import { RAMPS_AVAILABLE } from "@/lib/config";
 
 /**
  * The "opened Sobre" — the action sheet that surfaces the four verbs a
@@ -42,13 +43,21 @@ export function OpenSobreSheet({
         <div className="sobre-sheet-actions" data-tour="sobre-sheet-actions">
           <SheetAction
             label="Add money"
-            hint="Deposit through PDAX"
+            hint={
+              RAMPS_AVAILABLE
+                ? "Deposit through PDAX"
+                : "Deposit crypto to your Sobre"
+            }
             Icon={ArrowDownIcon}
             onClick={act(onAddMoney)}
           />
           <SheetAction
             label="Cash out"
-            hint="Withdraw to your bank"
+            hint={
+              RAMPS_AVAILABLE
+                ? "Withdraw to your bank"
+                : "Withdraw to a crypto wallet"
+            }
             Icon={ArrowUpIcon}
             onClick={act(onCashOut)}
           />
@@ -66,6 +75,17 @@ export function OpenSobreSheet({
             onClick={act(onLogExpense)}
           />
         </div>
+        {!RAMPS_AVAILABLE ? (
+          <p
+            style={{
+              marginTop: 12,
+              fontSize: 12,
+              color: "var(--sobre-text-3)",
+            }}
+          >
+            Bank transfers are unavailable right now.
+          </p>
+        ) : null}
     </Sheet>
   );
 }

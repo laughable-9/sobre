@@ -3,8 +3,7 @@
 import { useCallback, useState } from "react";
 import { Address, nativeToScVal } from "@stellar/stellar-sdk";
 
-import { PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
-import { invokeWrite, simulateRead } from "@/lib/contract";
+import { invokeWrite, readTokenBalance } from "@/lib/contract";
 import { splitAmount } from "@/lib/split";
 
 export interface UseDepositResult {
@@ -95,11 +94,7 @@ async function waitForSacBalance(
   const deadline = Date.now() + 30_000;
   while (Date.now() < deadline) {
     try {
-      const balance = await simulateRead<bigint>(
-        PAYMENT_TOKEN_SAC_ID,
-        "balance",
-        [Address.fromString(userAddress).toScVal()],
-      );
+      const balance = await readTokenBalance(userAddress);
       if (balance >= neededStroops) return;
     } catch {
       // RPC blip — next tick retries

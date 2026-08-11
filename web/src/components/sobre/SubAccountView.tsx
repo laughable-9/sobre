@@ -14,13 +14,14 @@ import type { FamilySubaccountRow } from "@/hooks/useSubaccounts";
 import { useSubaccounts } from "@/hooks/useSubaccounts";
 import type { FeedEvent } from "@/hooks/useTxFeed";
 import type { SubAccount, WalletState } from "@/hooks/useWalletState";
-import { PHP_PER_USDC, STROOPS_PER_USDC } from "@/lib/config";
+import { PHP_PER_USDC, STROOPS_PER_USDC, pdaxFlowActive } from "@/lib/config";
 import { useCurrency } from "@/lib/currency";
 import { formatShortDateTime } from "@/lib/format";
 import { subaccountActivity } from "@/lib/sobre/subaccountActivity";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
 import { BankAccountSection } from "./BankAccountSection";
+import { CryptoWithdrawModal } from "./CryptoWithdrawModal";
 import { CurrencyToggle } from "./CurrencyToggle";
 import { MembersSection } from "./MembersSection";
 import { ProfileSheet } from "./ProfileSheet";
@@ -449,31 +450,50 @@ export function SubAccountView({
         </Reveal>
       ) : null}
 
-      <SubAccountDock
-        active={tab}
-        onTab={setTab}
-        onCashOut={onCashOutTap}
-      />
+      <SubAccountDock active={tab} onTab={setTab} onCashOut={onCashOutTap} />
 
+      {/* Same routing rule as the member dashboard: the PDAX modal when
+          the ramps are live or when a half-finished row needs finishing,
+          the crypto withdraw otherwise. */}
       {cashoutOpen && myRow ? (
-        <SubAccountCashoutModal
-          userAddress={userAddress}
-          contractId={contractId}
-          subaccountId={myRow.id}
-          balanceStroops={balanceStroops}
-          locked={locked}
-          resumeIdentifier={resumeCashoutId ?? undefined}
-          onClose={() => {
-            setCashoutOpen(false);
-            setResumeCashoutId(null);
-          }}
-          onSuccess={(php) => {
-            onFlash(
-              `Cashed out ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
-            );
-            onChange();
-          }}
-        />
+        pdaxFlowActive(resumeCashoutId) ? (
+          <SubAccountCashoutModal
+            userAddress={userAddress}
+            contractId={contractId}
+            subaccountId={myRow.id}
+            balanceStroops={balanceStroops}
+            locked={locked}
+            resumeIdentifier={resumeCashoutId ?? undefined}
+            onClose={() => {
+              setCashoutOpen(false);
+              setResumeCashoutId(null);
+            }}
+            onSuccess={(php) => {
+              onFlash(
+                `Cashed out ₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })}`,
+              );
+              onChange();
+            }}
+          />
+        ) : (
+          <CryptoWithdrawModal
+            userAddress={userAddress}
+            contractId={contractId}
+            state={state}
+            variant="subaccount"
+            familyWalletId={myRow.familyWalletId}
+            memberWalletDbId={myRow.walletDbId}
+            balanceStroops={balanceStroops}
+            locked={locked}
+            onClose={() => setCashoutOpen(false)}
+            onSuccess={({ php }) => {
+              onFlash(
+                `₱${php.toLocaleString("en-PH", { minimumFractionDigits: 2 })} sent to the wallet`,
+              );
+              onChange();
+            }}
+          />
+        )
       ) : null}
     </>
   );
