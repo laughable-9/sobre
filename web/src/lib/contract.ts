@@ -12,7 +12,7 @@ import {
 } from "@stellar/stellar-sdk";
 import { AssembledTransaction } from "@stellar/stellar-sdk/contract";
 
-import { NETWORK } from "@/lib/config";
+import { NETWORK, PAYMENT_TOKEN_SAC_ID } from "@/lib/config";
 import {
   getDeployerAddress,
   signTransaction,
@@ -202,6 +202,15 @@ export async function simulateRead<T = unknown>(
     throw new Error("simulation returned no value");
   }
   return scValToNative(sim.result.retval) as T;
+}
+
+/** Balance of the payment-token SAC for `address`, in stroops. Shared by
+ *  every polling loop that watches a wallet's on-chain balance land
+ *  (deposit balance pre-check, the deposit modal's receive-balance poll). */
+export async function readTokenBalance(address: string): Promise<bigint> {
+  return simulateRead<bigint>(PAYMENT_TOKEN_SAC_ID, "balance", [
+    Address.fromString(address).toScVal(),
+  ]);
 }
 
 /** Helper to build the ScVal for a `#[contracttype] enum Envelope::X` unit variant. */
