@@ -247,12 +247,21 @@ function StatCard({
  *  below — no hover state, so it works the same on touch as on desktop.
  *  Defaults to the most recent bar selected so the breakdown is never
  *  empty on first render. */
-/** Fixed per-bar width in pixels (not viewBox units) — the chart no longer
+const BAR_GAP_PX = 6;
+/** Per-bar width in pixels (not viewBox units) — the chart no longer
  *  squeezes an unbounded bucket count into a fixed-width box. Instead the
  *  SVG grows with the data and the container scrolls, so history isn't
- *  lost as the product accumulates months/years of Sobres. */
-const BAR_PX = 30;
-const BAR_GAP_PX = 6;
+ *  lost as the product accumulates months/years of Sobres.
+ *
+ * Width has to fit the WIDEST tick label for that granularity, not just a
+ * round number — a week bar can read "Jul 27–Aug 2" (~11 chars) and a
+ * month bar "August 2026" (~11 chars); a bar narrower than its own label
+ * lets the text spill into the neighboring bar and overlap it. */
+const BAR_PX_BY_GRANULARITY: Record<Granularity, number> = {
+  day: 26,
+  week: 64,
+  month: 72,
+};
 
 function BucketBarChart({
   data,
@@ -263,14 +272,21 @@ function BucketBarChart({
 }) {
   const [selected, setSelected] = useState<number | null>(null);
   const scrollRef = useRef<HTMLDivElement | null>(null);
+  const barPx = BAR_PX_BY_GRANULARITY[granularity];
 
   // Land on the most recent bars by default (scrolled fully right) —
   // whenever `data` changes (granularity switch, refresh), not just on
   // first mount, since a scroll position from a longer view wouldn't make
-  // sense carried into a shorter one.
+  // sense carried into a shorter one. Deferred a frame: setting scrollLeft
+  // in the same commit as the width change can read a stale scrollWidth
+  // before the browser has laid out the just-widened SVG.
   useEffect(() => {
     const el = scrollRef.current;
-    if (el) el.scrollLeft = el.scrollWidth;
+    if (!el) return;
+    const raf = requestAnimationFrame(() => {
+      el.scrollLeft = el.scrollWidth;
+    });
+    return () => cancelAnimationFrame(raf);
   }, [data]);
 
   if (data.every((d) => d.count === 0)) {
@@ -285,7 +301,7 @@ function BucketBarChart({
   const monthRowHeight = showMonthMarkers ? 12 : 0;
   const dayRowHeight = 16;
   const labelHeight = monthRowHeight + dayRowHeight;
-  const width = data.length * (BAR_PX + BAR_GAP_PX);
+  const width = data.length * (barPx + BAR_GAP_PX);
   const max = Math.max(...data.map((d) => d.count), 1);
   const activeIndex = selected ?? data.length - 1;
   const active = data[activeIndex];
@@ -302,7 +318,7 @@ function BucketBarChart({
         >
           {data.map((d, i) => {
             const barHeight = (d.count / max) * (height - 20 - labelHeight);
-            const x = i * (BAR_PX + BAR_GAP_PX);
+            const x = i * (barPx + BAR_GAP_PX);
             const y = height - labelHeight - barHeight;
             const isActive = activeIndex === i;
             const monthMarker = showMonthMarkers ? monthMarkerFor(d, data[i - 1]) : null;
@@ -326,21 +342,21 @@ function BucketBarChart({
                 <rect
                   x={x}
                   y={0}
-                  width={BAR_PX}
+                  width={barPx}
                   height={height - labelHeight}
                   fill="transparent"
                 />
                 <rect
                   x={x}
                   y={y}
-                  width={BAR_PX}
+                  width={barPx}
                   height={Math.max(barHeight, 1)}
                   rx={2}
                   fill="var(--sobre-accent)"
                   opacity={isActive ? 1 : 0.45}
                 />
                 <text
-                  x={x + BAR_PX / 2}
+                  x={x + barPx / 2}
                   y={height - 3}
                   textAnchor="middle"
                   fontSize={9}
