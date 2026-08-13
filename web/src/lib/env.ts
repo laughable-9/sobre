@@ -112,3 +112,19 @@ export function rateLimitBypassEmails(): Set<string> {
       .filter((s) => s.length > 0),
   );
 }
+
+/**
+ * Comma-separated list of caller emails allowed to view platform-wide admin
+ * pages (e.g. /admin/metrics). Distinct from RATE_LIMIT_BYPASS_EMAILS —
+ * bypassing rate limits and seeing every family's aggregate balance are
+ * different privileges. Empty / unset means nobody can reach those pages.
+ */
+export function platformAdminEmails(): Set<string> {
+  const raw = process.env.PLATFORM_ADMIN_EMAILS ?? "";
+  return new Set(
+    raw
+      .split(",")
+      .map((s) => s.trim().toLowerCase())
+      .filter((s) => s.length > 0),
+  );
+}

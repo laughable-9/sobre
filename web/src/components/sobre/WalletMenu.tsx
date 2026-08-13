@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Check, ChevronDown, Copy, LogOut, RefreshCw } from "lucide-react";
+import Link from "next/link";
+import { Check, ChevronDown, Copy, LogOut, RefreshCw, ShieldCheck } from "lucide-react";
 
 import type { WalletConnectionState } from "@/hooks/usePasskeyWallet";
+import { useIsPlatformAdmin } from "@/hooks/useIsPlatformAdmin";
 import { shortenAddress } from "@/lib/format";
 import { Avatar } from "@/components/sobre/Avatar";
 
@@ -27,6 +29,7 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
   const [copied, setCopied] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const wrapRef = useRef<HTMLDivElement | null>(null);
+  const isPlatformAdmin = useIsPlatformAdmin(Boolean(address));
 
   // Close on outside click + Escape.
   useEffect(() => {
@@ -162,6 +165,21 @@ export function WalletMenu({ wallet }: { wallet: WalletConnectionState }) {
             />
             <span>{refreshing ? "Refreshing…" : "Refresh"}</span>
           </button>
+
+          {isPlatformAdmin ? (
+            <>
+              <div className="sobre-wallet-menu-divider" />
+              <Link
+                href="/admin/metrics"
+                onClick={() => setOpen(false)}
+                className="sobre-wallet-menu-item"
+                role="menuitem"
+              >
+                <ShieldCheck size={15} strokeWidth={2} />
+                <span>Platform metrics</span>
+              </Link>
+            </>
+          ) : null}
 
           <div className="sobre-wallet-menu-divider" />
 
