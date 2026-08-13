@@ -258,7 +258,7 @@ const BAR_GAP_PX = 6;
  * month bar "August 2026" (~11 chars); a bar narrower than its own label
  * lets the text spill into the neighboring bar and overlap it. */
 const BAR_PX_BY_GRANULARITY: Record<Granularity, number> = {
-  day: 26,
+  day: 34,
   week: 64,
   month: 72,
 };
@@ -359,7 +359,8 @@ function BucketBarChart({
                   x={x + barPx / 2}
                   y={height - 3}
                   textAnchor="middle"
-                  fontSize={9}
+                  fontSize={11}
+                  style={{ textRendering: "optimizeLegibility" }}
                   fill={isActive ? "var(--text-1)" : "var(--text-3)"}
                 >
                   {d.label}
@@ -369,8 +370,9 @@ function BucketBarChart({
                     x={x}
                     y={height - dayRowHeight - 2}
                     textAnchor="start"
-                    fontSize={9}
+                    fontSize={10}
                     fontWeight={600}
+                    style={{ textRendering: "optimizeLegibility" }}
                     fill="var(--text-2)"
                   >
                     {monthMarker}
